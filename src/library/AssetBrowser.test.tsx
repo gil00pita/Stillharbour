@@ -1,6 +1,7 @@
+import { createRef } from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { AssetBrowser } from './AssetBrowser';
+import { AssetBrowser, type PhotoViewportHandle } from './AssetBrowser';
 import { libraryData } from '../ipc';
 import { fixtureAsset } from './__tests__/fixtures';
 import { photoRows } from './model';
@@ -120,6 +121,7 @@ it('pauses gallery thumbnail requests while an immersive viewer owns the foregro
 });
 
 it('coalesces resize bursts into one layout and retains the visible anchor', () => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   let resize: ResizeObserverCallback = () => {};
   let frame: FrameRequestCallback = () => {};
   const request = vi.fn((callback: FrameRequestCallback) => {
@@ -165,5 +167,55 @@ it('coalesces resize bursts into one layout and retains the visible anchor', () 
     `${photoRows(assets, 900, 'gallery')[0]!.widths[0]}px`,
   );
   unmount();
+  vi.unstubAllGlobals();
+});
+
+it('forwards timeline wheel deltas to the photo viewport in pixels, lines and pages', () => {
+  const handle = createRef<PhotoViewportHandle>();
+  const { container } = render(<AssetBrowser {...props()} viewportHandle={handle} />);
+  const viewport = container.querySelector<HTMLElement>('.asset-viewport')!;
+  const scroll = vi.fn();
+  viewport.scrollBy = scroll;
+  Object.defineProperty(viewport, 'clientHeight', { value: 500 });
+  handle.current!.scrollBy(120, 0);
+  handle.current!.scrollBy(2, 1);
+  handle.current!.scrollBy(2, 2);
+  expect(scroll.mock.calls).toEqual([
+    [{ top: 120, behavior: 'instant' }],
+    [{ top: 32, behavior: 'instant' }],
+    [{ top: 1000, behavior: 'instant' }],
+  ]);
+});
+
+it('updates a hidden WebView resize even when animation frames are suspended', () => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  let resize: ResizeObserverCallback = () => {};
+  const request = vi.fn();
+  vi.stubGlobal('requestAnimationFrame', request);
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: ResizeObserverCallback) {
+        resize = callback;
+      }
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const { container } = render(<AssetBrowser {...props()} />);
+  const element = container.querySelector<HTMLElement>('.asset-viewport')!;
+  const entry: ResizeObserverEntry = {
+    target: element,
+    contentRect: new DOMRectReadOnly(0, 0, 363, 450),
+    borderBoxSize: [],
+    contentBoxSize: [],
+    devicePixelContentBoxSize: [],
+  };
+  act(() => resize([entry], { observe() {}, unobserve() {}, disconnect() {} }));
+  expect(request).not.toHaveBeenCalled();
+  expect(container.querySelector<HTMLElement>('.asset')!.style.width).toBe(
+    `${photoRows(assets, 363, 'gallery')[0]!.widths[0]}px`,
+  );
   vi.unstubAllGlobals();
 });

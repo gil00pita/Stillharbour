@@ -295,8 +295,7 @@ textarea::placeholder {
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
-summary:focus-visible,
-.asset-viewport:focus-visible {
+summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -622,10 +621,10 @@ summary {
 }
 .gallery-viewport {
   scrollbar-gutter: auto;
-  scrollbar-width: none;
 }
-.gallery-viewport::-webkit-scrollbar {
-  display: none;
+.asset-viewport:focus,
+.viewer-canvas:focus {
+  outline: none;
 }
 .asset-row.gallery {
   gap: 4px;
@@ -1144,11 +1143,24 @@ input.switch-control:disabled {
 .fixed-search input {
   width: 100%;
 }
-.sidebar-toggle {
-  margin-top: 18px;
-  display: flex;
+.toolbar:has(> .sidebar-toggle) {
+  padding-inline-start: 4px;
+  gap: 8px;
+}
+:is(.toolbar, .settings-title-row):has(> .sidebar-toggle) > h1 {
+  margin-inline-end: auto;
+}
+:is(.toolbar, .settings-title-row) > button.sidebar-toggle {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
 }
 .sidebar nav {
   margin-top: 24px;
@@ -1181,10 +1193,6 @@ input.switch-control:disabled {
 .navigation-collapsed .sidebar nav[aria-label] button {
   justify-content: center;
   padding: 10px;
-}
-.navigation-collapsed .sidebar-toggle {
-  padding: 8px 10px;
-  justify-content: center;
 }
 .navigation-collapsed .sidebar-version {
   padding: 20px 0 0;
@@ -1373,7 +1381,7 @@ input.switch-control:disabled {
   background: transparent !important;
   writing-mode: vertical-lr;
   direction: ltr;
-  -webkit-appearance: slider-vertical;
+  touch-action: none;
   opacity: 0;
   z-index: 2;
 }
@@ -2286,4 +2294,115 @@ button.explorer-entry.asset-open:hover:enabled {
 }
 .text-list-row .text-list-selection {
   padding: 0;
+}
+
+:root {
+  --reveal-dur: 400ms;
+  --reveal-blur: 2px;
+  --reveal-ease: ease-in-out;
+}
+.photo-layers {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.photo-layers .t-skel-skeleton {
+  filter: blur(var(--reveal-blur));
+}
+.photo-layers .preview-fallback {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  filter: blur(0);
+}
+.photo-layers .t-skel-skeleton:has(.preview-fallback) {
+  filter: none;
+}
+/* The wrap stacks two layers on the same coordinates. The
+   skeleton owns the cold pulse + the fade-out side of the
+   reveal; the content owns the fade-in side. They share the
+   same duration / ease so the swap reads as one motion. */
+.t-skel {
+  position: relative;
+}
+.t-skel-skeleton,
+.t-skel-content {
+  position: absolute;
+  inset: 0;
+}
+
+.t-skel-skeleton {
+  z-index: 1;
+  opacity: 1;
+  filter: blur(0);
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter var(--reveal-dur) var(--reveal-ease);
+}
+.t-skel-content {
+  z-index: 2;
+  opacity: 0;
+  filter: blur(var(--reveal-blur));
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter var(--reveal-dur) var(--reveal-ease);
+}
+.t-skel.is-revealed .t-skel-skeleton {
+  opacity: 0;
+  filter: blur(var(--reveal-blur));
+}
+.t-skel.is-revealed .t-skel-content {
+  opacity: 1;
+  filter: blur(0);
+}
+/* Snap-back when replaying: kill transitions so the reverse
+   (revealed → skeleton) is instant. Drop `.is-resetting`
+   after a forced reflow and the next reveal animates again. */
+.t-skel.is-resetting .t-skel-skeleton,
+.t-skel.is-resetting .t-skel-content {
+  transition: none !important;
+}
+
+/* Pulse: place the animation on the bar/avatar children, not
+   on the skeleton itself, so the skeleton's opacity / filter
+   stay free for the cross-fade transition above. */
+.t-skel-skeleton.is-pulsing > * {
+  animation: t-skel-pulse var(--pulse-dur) ease-in-out var(--pulse-count);
+}
+@keyframes t-skel-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: var(--pulse-min);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-skel-skeleton,
+  .t-skel-content {
+    transition: none !important;
+  }
+  .t-skel-skeleton.is-pulsing > * {
+    animation: none !important;
+  }
+}
+
+.thumbnail-job-action {
+  display: grid;
+  gap: 8px;
+  margin-block: 16px;
+}
+.thumbnail-job-action label {
+  display: grid;
+  gap: 6px;
+}
+.thumbnail-job-action select {
+  width: 100%;
+  min-width: 0;
+}
+.thumbnail-job-action .help {
+  margin: 0;
 }

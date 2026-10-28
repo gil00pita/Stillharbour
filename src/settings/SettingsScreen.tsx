@@ -13,20 +13,9 @@ import { scanFilterFromForm } from '../library/scanForm';
 import { BrowserControls } from '../library/BrowserControls';
 import { LibraryMaintenance } from './LibraryMaintenance';
 import { ScanSettingsGroup } from './ScanSettingsGroup';
-export function SettingsScreen({
-  jobsControl,
-  preferences,
-  status,
-  onSave,
-  onAddFolder,
-  onRelink,
-  initialRootId,
-  onRescan,
-  locationBusy,
-  onMaintenance,
-  onError,
-}: {
+type SettingsScreenProps = {
   jobsControl?: ReactNode;
+  navigationControl?: ReactNode;
   preferences: AppPreferences;
   status: LibraryStatus | null;
   onSave: (value: AppPreferences) => Promise<AppPreferences>;
@@ -41,7 +30,22 @@ export function SettingsScreen({
   locationBusy: boolean;
   onMaintenance: (result: MaintenanceResult) => Promise<void>;
   onError: (error: unknown) => void;
-}) {
+};
+
+export function SettingsScreen({
+  jobsControl,
+  navigationControl,
+  preferences,
+  status,
+  onSave,
+  onAddFolder,
+  onRelink,
+  initialRootId,
+  onRescan,
+  locationBusy,
+  onMaintenance,
+  onError,
+}: SettingsScreenProps) {
   const [maintenanceTarget, setMaintenanceTarget] = useState<MaintenanceTarget | null>(null);
   const controlsBusy = locationBusy || Boolean(maintenanceTarget);
   const maintenanceOpener = useRef<HTMLButtonElement | null>(null);
@@ -79,7 +83,11 @@ export function SettingsScreen({
   }
   return (
     <div className="settings-page">
-      <SettingsHeading heading={heading} jobsControl={jobsControl} />
+      <SettingsHeading
+        heading={heading}
+        jobsControl={jobsControl}
+        navigationControl={navigationControl}
+      />
       <section className="settings-section" aria-labelledby="library-locations-title">
         <div className="settings-section-heading">
           <div>
@@ -157,7 +165,7 @@ export function SettingsScreen({
             busy ||
             Boolean(maintenanceTarget) ||
             !status ||
-            status.jobs.some((job) => ['running', 'cancel_requested'].includes(job.state))
+            status.jobs.some((job) => ['queued', 'running', 'cancel_requested'].includes(job.state))
           }
           onClick={(event) => {
             maintenanceOpener.current = event.currentTarget;
@@ -173,10 +181,12 @@ export function SettingsScreen({
           target={maintenanceTarget}
           onClose={() => {
             setMaintenanceTarget(null);
-            requestAnimationFrame(() => {
+            // Focus return needs the DOM commit, not a painted frame: native
+            // WebViews can suspend animation frames while occluded.
+            setTimeout(() => {
               if (maintenanceOpener.current?.isConnected) maintenanceOpener.current.focus();
               else heading.current?.focus();
-            });
+            }, 0);
           }}
           onComplete={async (result) => {
             if (result.removedRootId)
@@ -314,13 +324,16 @@ export function SettingsScreen({
 function SettingsHeading({
   heading,
   jobsControl,
+  navigationControl,
 }: {
   heading: Ref<HTMLHeadingElement>;
   jobsControl: ReactNode;
+  navigationControl: ReactNode;
 }) {
   return (
     <header className="settings-heading">
       <div className="settings-title-row">
+        {navigationControl}
         <h1 ref={heading} tabIndex={-1}>
           Settings
         </h1>

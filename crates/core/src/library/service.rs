@@ -24,7 +24,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub const THUMBNAIL_POLICY: &str = "m5-v2-oriented-native-srgb8-preview";
+#[path = "rendition_jobs.rs"]
+mod rendition_jobs;
+
+pub const THUMBNAIL_POLICY: &str = "p2-v1-file-backed-progressive-srgb8-preview";
 #[derive(Clone)]
 pub struct LibraryOptions {
     pub data_directory: PathBuf,
@@ -64,6 +67,8 @@ pub struct Library {
     pub(crate) catalog: Arc<Catalog>,
     options: LibraryOptions,
     active: Mutex<Option<ActiveScan>>,
+    thumbnail_jobs: Mutex<Vec<rendition_jobs::ThumbnailJob>>,
+    thumbnail_job_gate: JobScheduler,
     scan_gate: JobScheduler,
     media_gate: JobScheduler,
     thumbnails: Arc<ThumbnailQueue>,
@@ -107,6 +112,17 @@ impl Library {
             )
             .caused_by(error)
         })?;
+        if !self
+            .thumbnail_jobs
+            .lock()
+            .map_err(|_| lock_error())?
+            .is_empty()
+        {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Finish or cancel thumbnail jobs in Jobs, then review this action again.",
+            ));
+        }
         let (preview, revision) = store::maintenance_preview(&self.catalog, target)?;
         *self.maintenance_plan.lock().map_err(|_| lock_error())? = Some(MaintenancePlan {
             preview: preview.clone(),
@@ -123,6 +139,17 @@ impl Library {
             )
             .caused_by(error)
         })?;
+        if !self
+            .thumbnail_jobs
+            .lock()
+            .map_err(|_| lock_error())?
+            .is_empty()
+        {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Finish or cancel thumbnail jobs in Jobs, then review this action again.",
+            ));
+        }
         if self.maintenance.swap(true, Ordering::AcqRel) {
             return Err(AppError::new(
                 ErrorCode::Busy,
@@ -222,6 +249,8 @@ impl Library {
             catalog,
             options,
             active: Mutex::new(None),
+            thumbnail_jobs: Mutex::new(Vec::new()),
+            thumbnail_job_gate: JobScheduler::new(1)?,
             scan_gate: JobScheduler::new(1)?,
             media_gate: JobScheduler::new(2)?,
             thumbnails: Arc::new(ThumbnailQueue {
@@ -287,11 +316,9 @@ impl Library {
                             if let Err(error) = result
                                 && !task.cancel.load(Ordering::Relaxed)
                             {
-                                let _ = store::preview_state(
+                                let _ = store::preview_state_for_edge(
                                     &library.catalog,
-                                    task.key.asset_id.clone(),
-                                    task.key.revision.clone(),
-                                    "unavailable".into(),
+                                    task.key.clone(),
                                     Some(error.message),
                                 );
                             }
@@ -436,6 +463,7 @@ impl Library {
             .name("library-scan".into())
             .spawn(move || {
                 let _permit = permit;
+                let thumbnail_root = root.view.id.clone();
                 let context = ScanContext {
                     catalog: owner.catalog.clone(),
                     root,
@@ -455,11 +483,22 @@ impl Library {
                     batch: Vec::with_capacity(32),
                 };
                 if let Err(error) = context.run() {
-                    let _ =
-                        store::finish_job(&owner.catalog, job_id, "failed".into(), error.message);
+                    let _ = store::finish_job(
+                        &owner.catalog,
+                        job_id.clone(),
+                        "failed".into(),
+                        error.message,
+                    );
                 }
                 if let Ok(mut active) = owner.active.lock() {
                     *active = None;
+                }
+                // Enqueue only after the scan has published its inventory. A separate
+                // bounded worker owns all rendition decoding and its own progress.
+                if store::job(&owner.catalog, job_id.clone())
+                    .is_ok_and(|job| matches!(job.state.as_str(), "completed" | "partial"))
+                {
+                    let _ = owner.enqueue_thumbnails(thumbnail_root);
                 }
             });
         if let Err(error) = spawned {
@@ -479,6 +518,18 @@ impl Library {
         Ok(response)
     }
     pub fn cancel(&self, id: String) -> Result<()> {
+        if let Some(job) = self
+            .thumbnail_jobs
+            .lock()
+            .map_err(|_| lock_error())?
+            .iter()
+            .find(|job| job.id == id)
+        {
+            job.cancel.store(true, Ordering::Relaxed);
+            store::cancel_requested(&self.catalog, id)?;
+            return Ok(());
+        }
+
         if let Some(active) = self.active.lock().map_err(|_| lock_error())?.as_ref()
             && active.id == id
         {
@@ -489,6 +540,12 @@ impl Library {
         Err(invalid("This scan is no longer running."))
     }
     pub fn cancel_all(&self) {
+        if let Ok(jobs) = self.thumbnail_jobs.lock() {
+            for job in jobs.iter() {
+                job.cancel.store(true, Ordering::Relaxed);
+            }
+        }
+
         if let Ok(active) = self.active.lock()
             && let Some(active) = active.as_ref()
         {
@@ -717,7 +774,7 @@ impl Library {
         if uuid::Uuid::parse_str(&key.asset_id).is_err()
             || key.revision.len() != 64
             || !key.revision.bytes().all(|b| b.is_ascii_hexdigit())
-            || !matches!(key.edge, 256 | 512)
+            || !matches!(key.edge, 32 | 256 | 512)
         {
             return Err(invalid("Invalid thumbnail identity, revision or size."));
         }
@@ -741,7 +798,11 @@ impl Library {
         // M1 positives could only be oriented, untagged JPEG/PNG/WebP. Their
         // pixels satisfy the unchanged baseline contract; keep offline browsing
         // across this capability upgrade without copying or deleting cache files.
-        for policy in [THUMBNAIL_POLICY, "m1-v1-oriented-assumed-srgb-no-icc"] {
+        for policy in [
+            THUMBNAIL_POLICY,
+            "m5-v2-oriented-native-srgb8-preview",
+            "m1-v1-oriented-assumed-srgb-no-icc",
+        ] {
             let hash = Self::cache_key_for_policy(key, policy)?;
             if store::cache_touch(&self.catalog, hash.clone())? && self.cache_path(&hash)?.is_file()
             {
@@ -796,11 +857,8 @@ impl Library {
                 || !matches!(root.view.availability.as_str(), "online" | "scanning")
             {
                 Some("Reconnect the original to generate this preview.".into())
-            } else if asset.preview_state == "unavailable" {
-                asset
-                    .preview_error
-                    .clone()
-                    .or(Some("Preview unavailable.".into()))
+            } else if let Some(error) = store::preview_failure(&self.catalog, key.clone())? {
+                Some(error)
             } else if asset.metadata_state == "placeholder" {
                 Some("Download this original explicitly before generating a preview.".into())
             } else {
@@ -886,6 +944,9 @@ impl Library {
                 Err(e) => return Err(e),
             }
         };
+        if self.existing_preview(key)?.is_some() {
+            return Ok(());
+        }
         let (root_id, relative, revision) =
             store::asset_native(&self.catalog, key.asset_id.clone())?;
         if revision != key.revision {
@@ -902,9 +963,9 @@ impl Library {
                 "The original changed. Rescan the folder.",
             ));
         }
-        let report = runtime.block_on(workers::thumbnail(
+        let report = runtime.block_on(workers::thumbnail_file(
             &self.options.workers,
-            workers::read_input(file)?,
+            file,
             key.edge,
             crate::media::PreviewFormat::from_extension(
                 relative
@@ -983,13 +1044,10 @@ impl Library {
                 Err(error) => return Err(error.into()),
             }
         }
-        store::preview_state(
-            &self.catalog,
-            key.asset_id.clone(),
-            key.revision.clone(),
-            "ready".into(),
-            None,
-        )
+        if let Some((width, height)) = report.display_dimensions {
+            store::preview_dimensions(&self.catalog, key.clone(), width, height)?;
+        }
+        store::preview_state_for_edge(&self.catalog, key.clone(), None)
     }
     pub fn cached_thumbnail(&self, key: ThumbnailKey, policy: &str) -> Result<Vec<u8>> {
         let _perf_span = Span::new(Metric::Read, Endpoint::Cache);
@@ -1088,6 +1146,61 @@ mod maintenance_tests {
         assert_eq!(
             std::fs::read(unindexed).unwrap(),
             b"unindexed bytes preserved"
+        );
+    }
+    #[test]
+    #[cfg(all(feature = "fixture-probes", target_os = "macos"))]
+    fn queued_thumbnail_jobs_coalesce_cancel_and_block_maintenance_without_latching_it() {
+        let data = tempfile::tempdir().unwrap();
+        let catalog = Arc::new(Catalog::open(data.path().join("fixture.stillharbour")).unwrap());
+        let fixture =
+            super::super::performance_probe::seed_catalog(&catalog, data.path(), 10_000).unwrap();
+        let root = fixture["rootIds"][0].as_str().unwrap().to_owned();
+        let library = Library::new(
+            catalog,
+            LibraryOptions {
+                data_directory: data.path().to_owned(),
+                workers: workers::WorkerPaths {
+                    executable: data.path().join("missing-worker"),
+                    exiftool: None,
+                    working_directory: data.path().join("worker"),
+                },
+            },
+        )
+        .unwrap();
+        let review = library
+            .prepare_maintenance(MaintenanceTarget::PreviewCache)
+            .unwrap();
+        let gate = library.thumbnail_job_gate.try_start().unwrap();
+        let job = library.generate_thumbnails(root.clone()).unwrap();
+        assert_eq!(library.generate_thumbnails(root).unwrap().id, job.id);
+        assert_eq!(
+            library
+                .prepare_maintenance(MaintenanceTarget::PreviewCache)
+                .unwrap_err()
+                .code,
+            ErrorCode::Busy
+        );
+        assert_eq!(
+            library.apply_maintenance(review.id).unwrap_err().code,
+            ErrorCode::Busy
+        );
+        assert!(!library.maintenance.load(Ordering::Acquire));
+        library.cancel(job.id.clone()).unwrap();
+        let started = Instant::now();
+        while !library.thumbnail_jobs.lock().unwrap().is_empty() {
+            assert!(started.elapsed() < Duration::from_secs(5));
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(
+            store::job(&library.catalog, job.id).unwrap().state,
+            "canceled"
+        );
+        drop(gate);
+        assert!(
+            library
+                .prepare_maintenance(MaintenanceTarget::PreviewCache)
+                .is_ok()
         );
     }
 }

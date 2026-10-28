@@ -229,6 +229,9 @@ async fn library_request(
             LibraryRequest::Scan { root_id, filter } => {
                 LibraryResponse::Job(library.scan(root_id, filter)?)
             }
+            LibraryRequest::GenerateThumbnails { root_id } => {
+                LibraryResponse::Job(library.generate_thumbnails(root_id)?)
+            }
             LibraryRequest::Cancel { job_id } => {
                 library.cancel(job_id)?;
                 LibraryResponse::Done
@@ -433,6 +436,23 @@ async fn test_performance(
 
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
+    if args.get(1).is_some_and(|arg| arg == "--media-worker-file") {
+        let result = if (3..=4).contains(&args.len()) {
+            stillharbour_core::media::worker_file_arguments(
+                &args[2],
+                args.get(3).map(|s| s.as_os_str()),
+            )
+        } else {
+            Err(stillharbour_core::domain::AppError::new(
+                stillharbour_core::domain::ErrorCode::InvalidInput,
+                "Invalid preview worker arguments.",
+            ))
+        };
+        if result.is_err() {
+            std::process::exit(1);
+        }
+        return;
+    }
     if args.get(1).is_some_and(|arg| arg == "--diagnostic-sqlite") {
         if args.len() != 2 {
             eprintln!("SQLite diagnostics accepts no catalog or path arguments.");
@@ -464,6 +484,14 @@ fn main() {
             std::process::exit(1);
         }
         return;
+    }
+    if args
+        .get(1)
+        .and_then(|arg| arg.to_str())
+        .is_some_and(|arg| arg.starts_with("--media-worker"))
+    {
+        eprintln!("Invalid media worker invocation; app startup was not attempted.");
+        std::process::exit(2);
     }
     let builder = tauri::Builder::default().plugin(tauri_plugin_dialog::init());
     #[cfg(feature = "desktop-test")]

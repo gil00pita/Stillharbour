@@ -63,15 +63,31 @@ pub fn read_input_at(mut file: File, endpoint: crate::performance::Endpoint) -> 
     Ok(bytes)
 }
 
+enum WorkerInput {
+    Bytes(Vec<u8>),
+    #[cfg(target_os = "macos")]
+    File(File),
+}
+
 async fn run(
     mut command: Command,
-    input: Vec<u8>,
+    input: WorkerInput,
     limit: u64,
     monitor_decoder: bool,
     cancel: Arc<AtomicBool>,
 ) -> Result<Vec<u8>> {
+    let input = match input {
+        WorkerInput::Bytes(bytes) => {
+            command.stdin(std::process::Stdio::piped());
+            Some(bytes)
+        }
+        #[cfg(target_os = "macos")]
+        WorkerInput::File(file) => {
+            command.stdin(std::process::Stdio::from(file));
+            None
+        }
+    };
     command
-        .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::null())
         .kill_on_drop(true);
@@ -79,21 +95,21 @@ async fn run(
     let pid = child
         .id()
         .ok_or_else(|| invalid("Missing worker identity."))?;
-    let mut stdin = child
-        .stdin
-        .take()
-        .ok_or_else(|| invalid("Missing worker input."))?;
+    let stdin = child.stdin.take();
     let mut stdout = child
         .stdout
         .take()
         .ok_or_else(|| invalid("Missing worker output."))?;
     let processing = async {
         let writing = async move {
-            for chunk in input.chunks(65536) {
-                stdin.write_all(chunk).await?;
+            if let Some(input) = input {
+                let mut stdin =
+                    stdin.ok_or_else(|| std::io::Error::other("Missing worker input"))?;
+                for chunk in input.chunks(65536) {
+                    stdin.write_all(chunk).await?;
+                }
+                stdin.shutdown().await?;
             }
-            stdin.shutdown().await?;
-            drop(stdin);
             Ok::<_, std::io::Error>(())
         };
         let reading = async {
@@ -163,7 +179,14 @@ pub async fn metadata(
         .env_clear()
         .current_dir(&paths.working_directory);
     let digest = blake3::hash(&bytes).to_hex().to_string();
-    let output = run(command, bytes, 1024 * 1024, false, cancel).await?;
+    let output = run(
+        command,
+        WorkerInput::Bytes(bytes),
+        1024 * 1024,
+        false,
+        cancel,
+    )
+    .await?;
     let raw: String =
         String::from_utf8(output).map_err(|_| invalid("Metadata output is not UTF-8."))?;
     let values: Vec<Value> = serde_json::from_str(&raw)
@@ -280,6 +303,64 @@ pub fn normalize_date(raw: &str, subsec: Option<&str>) -> Option<String> {
     Some(format!("{}{fraction}", parsed.format("%Y-%m-%dT%H:%M:%S")))
 }
 
+pub async fn thumbnail_file(
+    paths: &WorkerPaths,
+    file: File,
+    edge: u32,
+    format: crate::media::PreviewFormat,
+    cancel: Arc<AtomicBool>,
+) -> Result<MediaReport> {
+    let _span = crate::performance::Span::new(
+        crate::performance::Metric::ThumbnailWorker,
+        crate::performance::Endpoint::Worker,
+    );
+    #[cfg(target_os = "macos")]
+    let observation = (
+        crate::performance::clock(),
+        crate::performance::file_volume(&file),
+    );
+    #[cfg(target_os = "macos")]
+    let (mode, input) = ("--media-worker-file", WorkerInput::File(file));
+    #[cfg(not(target_os = "macos"))]
+    let (mode, input) = (
+        "--media-worker-stdin",
+        WorkerInput::Bytes(read_input(file)?),
+    );
+    let mut command = Command::new(&paths.executable);
+    command
+        .arg(mode)
+        .arg(edge.to_string())
+        .arg((format as u32).to_string())
+        .env_clear()
+        .current_dir(&paths.working_directory);
+    let output = run(command, input, 8 * 1024 * 1024, true, cancel).await?;
+    let report = serde_json::from_slice::<Result<MediaReport>>(&output).map_err(|e| {
+        AppError::new(
+            ErrorCode::WorkerFailed,
+            "Preview worker returned invalid data.",
+        )
+        .caused_by(e)
+    })??;
+    #[cfg(target_os = "macos")]
+    if let (Some(started), volume) = observation {
+        crate::performance::record_at(
+            crate::performance::Metric::Read,
+            crate::performance::Endpoint::Source,
+            volume,
+            started.elapsed().as_micros().min(u64::MAX as u128) as u64,
+            report.input_read_bytes,
+        );
+    }
+    Ok(report)
+}
+
+pub fn helper_available(paths: &WorkerPaths) -> bool {
+    cfg!(target_os = "macos")
+        && Path::new("/usr/bin/perl").is_file()
+        && paths.exiftool.as_ref().is_some_and(|p| p.is_file())
+}
+
+#[cfg(feature = "fixture-probes")]
 pub async fn thumbnail(
     paths: &WorkerPaths,
     bytes: Vec<u8>,
@@ -298,7 +379,14 @@ pub async fn thumbnail(
         .arg((format as u32).to_string())
         .env_clear()
         .current_dir(&paths.working_directory);
-    let output = run(command, bytes, 8 * 1024 * 1024, true, cancel).await?;
+    let output = run(
+        command,
+        WorkerInput::Bytes(bytes),
+        8 * 1024 * 1024,
+        true,
+        cancel,
+    )
+    .await?;
     serde_json::from_slice::<Result<MediaReport>>(&output).map_err(|e| {
         AppError::new(
             ErrorCode::WorkerFailed,
@@ -306,12 +394,6 @@ pub async fn thumbnail(
         )
         .caused_by(e)
     })?
-}
-
-pub fn helper_available(paths: &WorkerPaths) -> bool {
-    cfg!(target_os = "macos")
-        && Path::new("/usr/bin/perl").is_file()
-        && paths.exiftool.as_ref().is_some_and(|p| p.is_file())
 }
 
 #[cfg(test)]

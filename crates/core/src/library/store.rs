@@ -205,6 +205,11 @@ pub fn relink(
 
 fn job_row(row: &Row<'_>) -> rusqlite::Result<ScanJob> {
     Ok(ScanJob {
+        kind: Some(if row.get::<_, String>("id")?.starts_with("thumbnail:") {
+            JobKind::Thumbnails
+        } else {
+            JobKind::Scan
+        }),
         id: row.get("id")?,
         root_id: row.get("root_id")?,
         state: row.get("state")?,
@@ -219,7 +224,7 @@ fn job_row(row: &Row<'_>) -> rusqlite::Result<ScanJob> {
 pub fn jobs(catalog: &Catalog) -> Result<Vec<ScanJob>> {
     catalog.call(|db| {
         Ok(db
-            .prepare("SELECT * FROM scans ORDER BY started_at DESC LIMIT 32")?
+            .prepare("SELECT * FROM scans ORDER BY CASE WHEN state IN ('queued','running','cancel_requested') THEN 0 ELSE 1 END, started_at DESC LIMIT 32")?
             .query_map([], job_row)?
             .collect::<rusqlite::Result<_>>()?)
     })
@@ -235,13 +240,13 @@ pub fn begin_job(catalog: &Catalog, root_id: String, filter: ScanFilter) -> Resu
     tx.execute("UPDATE assets SET preview_state='pending',preview_error=NULL WHERE root_id=? AND preview_state='unavailable'",[&root_id])?;
     tx.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?,?,'running','Discovering files',?)",params![id,root_id,started])?;
     tx.commit()?;
-    Ok(ScanJob{id,root_id,state:"running".into(),discovered:0,indexed:0,skipped:0,errors:0,message:"Discovering files".into(),started_at:started})
+    Ok(ScanJob{kind:Some(JobKind::Scan),id,root_id,state:"running".into(),discovered:0,indexed:0,skipped:0,errors:0,message:"Discovering files".into(),started_at:started})
 })
 }
 pub fn recover_jobs(catalog: &Catalog) -> Result<Vec<String>> {
     catalog.call(|db|{
-    let roots=db.prepare("SELECT DISTINCT root_id FROM scans WHERE state IN ('running','cancel_requested')")?.query_map([],|r|r.get(0))?.collect::<rusqlite::Result<Vec<String>>>()?;
-    db.execute("UPDATE scans SET state='interrupted',message='Interrupted; inventory retained. Rescan to reconcile.' WHERE state IN ('running','cancel_requested')",[])?;
+    let roots=db.prepare("SELECT DISTINCT root_id FROM scans WHERE id NOT LIKE 'thumbnail:%' AND state IN ('running','cancel_requested')")?.query_map([],|r|r.get(0))?.collect::<rusqlite::Result<Vec<String>>>()?;
+    db.execute("UPDATE scans SET state='interrupted',message=CASE WHEN id LIKE 'thumbnail:%' THEN 'Thumbnail generation interrupted; cached previews retained. Generate again to resume.' ELSE 'Interrupted; inventory retained. Rescan to reconcile.' END WHERE state IN ('queued','running','cancel_requested')",[])?;
     db.execute("UPDATE roots SET availability='unknown' WHERE availability='scanning'",[])?;Ok(roots)
 })
 }
@@ -263,7 +268,7 @@ pub fn progress(
     })
 }
 pub fn cancel_requested(catalog: &Catalog, id: String) -> Result<()> {
-    catalog.call(move|db|{db.execute("UPDATE scans SET state='cancel_requested',message='Stopping at a safe read boundary' WHERE id=? AND state='running'",[id])?;Ok(())})
+    catalog.call(move|db|{db.execute("UPDATE scans SET state='cancel_requested',message='Stopping at a safe read boundary' WHERE id=? AND state IN ('queued','running')",[id])?;Ok(())})
 }
 pub fn issue(
     catalog: &Catalog,
@@ -369,6 +374,9 @@ pub fn uncertain(catalog: &Catalog, root_id: String, path: PathBuf, job_id: Stri
 })
 }
 pub fn finish_job(catalog: &Catalog, id: String, state: String, message: String) -> Result<()> {
+    if id.starts_with("thumbnail:") {
+        return Err(invalid("Thumbnail jobs cannot reconcile inventory."));
+    }
     catalog.call(move|db|{
     let tx=db.transaction()?;let root_id:String=tx.query_row("SELECT root_id FROM scans WHERE id=?",[&id],|r|r.get(0))?;
     if state=="completed"||state=="partial" {
@@ -1010,14 +1018,18 @@ pub fn annotate(
 struct PreviewFailure {
     policy: String,
     message: String,
+    #[serde(default)]
+    edges: std::collections::BTreeMap<u32, String>,
 }
 
+#[cfg(test)]
 pub(crate) fn encode_preview_error(error: Option<String>) -> Result<Option<String>> {
     error
         .map(|message| {
             serde_json::to_string(&PreviewFailure {
                 policy: super::THUMBNAIL_POLICY.into(),
                 message,
+                edges: Default::default(),
             })
             .map_err(|e| invalid("Could not encode preview state.").caused_by(e))
         })
@@ -1039,18 +1051,72 @@ fn current_preview_state(state: String, error: Option<String>) -> (String, Optio
     ("pending".into(), None)
 }
 
-pub fn preview_state(
+pub fn preview_failure(catalog: &Catalog, key: ThumbnailKey) -> Result<Option<String>> {
+    catalog.call(move |db| {
+        let raw: Option<Option<String>> = db
+            .query_row(
+                "SELECT preview_error FROM assets WHERE id=? AND revision=?",
+                params![key.asset_id, key.revision],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(raw) = raw else {
+            return Ok(None);
+        };
+        Ok(raw
+            .and_then(|text| serde_json::from_str::<PreviewFailure>(&text).ok())
+            .filter(|failure| failure.policy == super::THUMBNAIL_POLICY)
+            .and_then(|failure| failure.edges.get(&key.edge).cloned()))
+    })
+}
+pub fn preview_state_for_edge(
     catalog: &Catalog,
-    id: String,
-    revision: String,
-    state: String,
+    key: ThumbnailKey,
     error: Option<String>,
 ) -> Result<()> {
-    let error = encode_preview_error(error)?;
+    if !matches!(key.edge, 32 | 256 | 512) {
+        return Err(invalid("Invalid preview tier."));
+    }
     catalog.call(move |db| {
+        let raw: Option<Option<String>> = db
+            .query_row(
+                "SELECT preview_error FROM assets WHERE id=? AND revision=?",
+                params![key.asset_id, key.revision],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let Some(raw) = raw else {
+            return Ok(());
+        };
+        let mut edges = raw
+            .and_then(|text| serde_json::from_str::<PreviewFailure>(&text).ok())
+            .filter(|failure| failure.policy == super::THUMBNAIL_POLICY)
+            .map(|failure| failure.edges)
+            .unwrap_or_default();
+        edges.retain(|edge, _| matches!(edge, 32 | 256 | 512));
+        if let Some(error) = error {
+            edges.insert(key.edge, error.chars().take(512).collect());
+        } else {
+            edges.remove(&key.edge);
+        }
+        let (state, encoded) = if let Some(message) = edges.values().next().cloned() {
+            (
+                "unavailable",
+                Some(
+                    serde_json::to_string(&PreviewFailure {
+                        policy: super::THUMBNAIL_POLICY.into(),
+                        message,
+                        edges,
+                    })
+                    .map_err(|error| invalid("Invalid preview state.").caused_by(error))?,
+                ),
+            )
+        } else {
+            ("ready", None)
+        };
         db.execute(
             "UPDATE assets SET preview_state=?,preview_error=? WHERE id=? AND revision=?",
-            params![state, error, id, revision],
+            params![state, encoded, key.asset_id, key.revision],
         )?;
         Ok(())
     })
@@ -1146,6 +1212,58 @@ pub fn finish_maintenance(
     })
 }
 
+// Existing durable job rows, namespaced independently from scan UUIDs. No schema
+// migration and, critically, no scan reconciliation/last_scan changes.
+pub fn begin_thumbnail_job(catalog: &Catalog, root_id: String) -> Result<ScanJob> {
+    catalog.call(move |db| {
+        let id = format!("thumbnail:{}", uuid::Uuid::new_v4());
+        db.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?,?,'queued','Waiting to generate tiny previews',?)", params![id,root_id,now()])?;
+        Ok(db.query_row("SELECT * FROM scans WHERE id=?",[id],job_row)?)
+    })
+}
+pub fn thumbnail_inventory(catalog: &Catalog, root_id: String) -> Result<(i64, u32)> {
+    catalog.call(move |db| {
+        Ok(db.query_row(
+            "SELECT coalesce(max(rowid),0),count(*) FROM assets WHERE root_id=? AND is_media=1 AND presence NOT IN ('excluded','missing')",
+            [root_id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?)
+    })
+}
+pub fn thumbnail_page(
+    catalog: &Catalog,
+    root_id: String,
+    after: i64,
+    high: i64,
+) -> Result<Vec<(i64, ThumbnailKey)>> {
+    catalog.call(move |db| Ok(db.prepare("SELECT rowid,id,revision FROM assets WHERE root_id=?1 AND is_media=1 AND presence NOT IN ('excluded','missing') AND rowid>?2 AND rowid<=?3 ORDER BY rowid LIMIT 64")?.query_map(params![root_id,after,high],|row|Ok((row.get(0)?,ThumbnailKey {asset_id:row.get(1)?,revision:row.get(2)?,edge:32})))?.collect::<rusqlite::Result<_>>()?))
+}
+pub fn thumbnail_job_state(
+    catalog: &Catalog,
+    id: String,
+    state: String,
+    message: String,
+) -> Result<()> {
+    if !id.starts_with("thumbnail:") {
+        return Err(invalid("Invalid thumbnail job."));
+    }
+    catalog.call(move |db| {
+        db.execute(
+            "UPDATE scans SET state=?,message=? WHERE id=?",
+            params![state, message, id],
+        )?;
+        bump(db)
+    })
+}
+pub fn preview_dimensions(
+    catalog: &Catalog,
+    key: ThumbnailKey,
+    width: u32,
+    height: u32,
+) -> Result<()> {
+    catalog.call(move |db| { db.execute("UPDATE assets SET width=coalesce(width,?),height=coalesce(height,?) WHERE id=? AND revision=?",params![width,height,key.asset_id,key.revision])?; Ok(()) })
+}
+
 #[cfg(test)]
 mod preview_policy_tests {
     use super::*;
@@ -1162,6 +1280,7 @@ mod preview_policy_tests {
             ("unavailable".into(), message)
         );
         let other = serde_json::to_string(&PreviewFailure {
+            edges: Default::default(),
             policy: "old-policy".into(),
             message: "legacy".into(),
         })
@@ -1173,6 +1292,72 @@ mod preview_policy_tests {
         assert_eq!(
             current_preview_state("ready".into(), None),
             ("ready".into(), None)
+        );
+    }
+    #[test]
+    #[cfg(all(feature = "fixture-probes", target_os = "macos"))]
+    fn tier_failures_and_thumbnail_recovery_never_reconcile_scan_inventory() {
+        let owned = tempfile::tempdir().unwrap();
+        let catalog = Catalog::open(owned.path().join("fixture.stillharbour")).unwrap();
+        let fixture =
+            super::super::performance_probe::seed_catalog(&catalog, owned.path(), 10_000).unwrap();
+        let roots = fixture["rootIds"].as_array().unwrap();
+        let root = roots[0].as_str().unwrap().to_owned();
+        let asset = asset(&catalog, "70000000-0000-4000-8000-000000000001".into()).unwrap();
+        let tiny = ThumbnailKey {
+            asset_id: asset.id,
+            revision: asset.revision,
+            edge: 32,
+        };
+        let clear = ThumbnailKey {
+            edge: 512,
+            ..tiny.clone()
+        };
+        preview_state_for_edge(&catalog, clear.clone(), Some("Clear budget".into())).unwrap();
+        assert!(preview_failure(&catalog, tiny.clone()).unwrap().is_none());
+        preview_state_for_edge(&catalog, tiny.clone(), None).unwrap();
+        assert_eq!(
+            preview_failure(&catalog, clear.clone()).unwrap().as_deref(),
+            Some("Clear budget")
+        );
+        preview_state_for_edge(&catalog, tiny.clone(), Some("Tiny failure".into())).unwrap();
+        preview_state_for_edge(&catalog, clear.clone(), None).unwrap();
+        assert_eq!(
+            preview_failure(&catalog, tiny).unwrap().as_deref(),
+            Some("Tiny failure")
+        );
+        assert!(preview_failure(&catalog, clear).unwrap().is_none());
+        let before = query(&catalog, AssetQuery::default(), None, 1)
+            .unwrap()
+            .total;
+        let queued = begin_thumbnail_job(&catalog, root.clone()).unwrap();
+        let active = begin_thumbnail_job(&catalog, root.clone()).unwrap();
+        thumbnail_job_state(&catalog, active.id.clone(), "running".into(), "Test".into()).unwrap();
+        assert!(
+            finish_job(
+                &catalog,
+                active.id.clone(),
+                "completed".into(),
+                "Test".into()
+            )
+            .is_err()
+        );
+        assert!(recover_jobs(&catalog).unwrap().is_empty());
+        for id in [queued.id, active.id] {
+            assert_eq!(job(&catalog, id).unwrap().state, "interrupted");
+        }
+        assert_eq!(
+            query(&catalog, AssetQuery::default(), None, 1)
+                .unwrap()
+                .total,
+            before
+        );
+        assert!(
+            super::root(&catalog, root)
+                .unwrap()
+                .view
+                .last_scan
+                .is_none()
         );
     }
 }

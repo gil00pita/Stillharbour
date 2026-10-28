@@ -98,7 +98,14 @@ export function ExplorerCanvas({
             (entry): entry is Extract<DirectoryEntry, { kind: 'file' }> =>
               entry.kind === 'file' && entry.media,
           )
-          .map((entry) => ({ assetId: entry.asset.id, revision: entry.asset.revision, edge: 256 }));
+          .slice(0, 240)
+          .flatMap((entry) =>
+            [32, 256].map((edge) => ({
+              assetId: entry.asset.id,
+              revision: entry.asset.revision,
+              edge,
+            })),
+          );
   const previews = usePreviews(keys, onError, !paused);
   useEffect(() => {
     virtualizer.measure();
@@ -143,6 +150,16 @@ export function ExplorerCanvas({
                     {mode === 'icons' &&
                       (entry.kind === 'file' && entry.media ? (
                         <TileImage
+                          key={`${entry.asset.revision}:256`}
+                          tinyPreview={
+                            previews.results[
+                              previewKey({
+                                assetId: entry.asset.id,
+                                revision: entry.asset.revision,
+                                edge: 32,
+                              })
+                            ]
+                          }
                           asset={entry.asset}
                           imageHeight={132}
                           edge={256}

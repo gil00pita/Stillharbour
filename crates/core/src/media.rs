@@ -14,6 +14,7 @@ use std::{
 use tokio::{io::AsyncReadExt, process::Command};
 
 pub const MAX_INPUT_BYTES: u64 = 32 * 1024 * 1024;
+pub const MAX_NATIVE_FILE_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_OUTPUT_BYTES: u64 = 2 * 1024 * 1024;
 
 /// Internal worker protocol; derived from catalog filename suffixes, not renderer input.
@@ -83,6 +84,10 @@ pub struct MediaReport {
     pub orientation_applied: bool,
     pub color_policy: String,
     pub png: Vec<u8>,
+    #[serde(default)]
+    pub display_dimensions: Option<(u32, u32)>,
+    #[serde(default)]
+    pub input_read_bytes: u64,
 }
 
 pub fn decode_thumbnail(path: &Path) -> Result<MediaReport> {
@@ -109,7 +114,7 @@ pub fn decode_thumbnail(path: &Path) -> Result<MediaReport> {
 }
 
 fn decode_bytes(bytes: &[u8], edge: u32, hint: PreviewFormat) -> Result<MediaReport> {
-    if bytes.len() as u64 > MAX_INPUT_BYTES || !matches!(edge, 256 | 512) {
+    if bytes.len() as u64 > MAX_INPUT_BYTES || !matches!(edge, 32 | 256 | 512) {
         return Err(AppError::new(
             ErrorCode::Unsupported,
             "Preview exceeds its input or size budget.",
@@ -162,10 +167,10 @@ fn decode_reader<R: std::io::BufRead + std::io::Seek>(
     edge: u32,
 ) -> Result<MediaReport> {
     let decode_start = crate::performance::clock();
-    if edge != 256 && edge != 512 {
+    if !matches!(edge, 32 | 256 | 512) {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
-            "Preview edge must be 256 or 512 pixels.",
+            "Preview edge must be 32, 256 or 512 pixels.",
         ));
     }
     if reader.format().is_some_and(|format| {
@@ -234,6 +239,8 @@ fn decode_reader<R: std::io::BufRead + std::io::Seek>(
         color_policy: "Untagged fixture RGB; ICC inputs are refused, not silently converted."
             .into(),
         png: output.into_inner(),
+        display_dimensions: None,
+        input_read_bytes: 0,
     })
 }
 
@@ -241,14 +248,45 @@ pub fn worker_stdin_arguments(
     edge: &std::ffi::OsStr,
     hint: Option<&std::ffi::OsStr>,
 ) -> Result<()> {
+    let (edge, hint) = worker_options(edge, hint)?;
+    worker_stdin(edge, hint)
+}
+
+pub fn worker_file_arguments(edge: &std::ffi::OsStr, hint: Option<&std::ffi::OsStr>) -> Result<()> {
+    let (edge, hint) = worker_options(edge, hint)?;
+    #[cfg(target_os = "macos")]
+    let report = {
+        use std::os::fd::FromRawFd;
+        // SAFETY: this dedicated worker owns stdin. The parent supplies only an
+        // authorised read-only regular file; the native bridge revalidates it.
+        let file = unsafe { std::fs::File::from_raw_fd(0) };
+        crate::native_preview::decode_file(&file, edge, hint)
+    };
+    #[cfg(not(target_os = "macos"))]
+    let report: Result<MediaReport> = {
+        let _ = (edge, hint);
+        Err(AppError::new(
+            ErrorCode::Unsupported,
+            "File-backed native previews require the macOS adapter.",
+        ))
+    };
+    serde_json::to_writer(std::io::stdout().lock(), &report).map_err(|e| {
+        AppError::new(ErrorCode::WorkerFailed, "Could not return preview data.").caused_by(e)
+    })
+}
+
+fn worker_options(
+    edge: &std::ffi::OsStr,
+    hint: Option<&std::ffi::OsStr>,
+) -> Result<(u32, PreviewFormat)> {
     let edge = edge
         .to_str()
         .and_then(|s| s.parse().ok())
         .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "Invalid preview size."))?;
-    if !matches!(edge, 256 | 512) {
+    if !matches!(edge, 32 | 256 | 512) {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
-            "Preview edge must be256 or512 pixels.",
+            "Preview edge must be32,256 or512 pixels.",
         ));
     }
     let hint = match hint {
@@ -259,7 +297,7 @@ pub fn worker_stdin_arguments(
         }
         None => PreviewFormat::Auto,
     };
-    worker_stdin(edge, hint)
+    Ok((edge, hint))
 }
 
 fn worker_stdin(edge: u32, hint: PreviewFormat) -> Result<()> {
@@ -284,7 +322,7 @@ fn worker_stdin(edge: u32, hint: PreviewFormat) -> Result<()> {
     })
 }
 
-fn decode_error(error: image::ImageError) -> AppError {
+pub(crate) fn decode_error(error: image::ImageError) -> AppError {
     AppError::new(
         ErrorCode::WorkerFailed,
         "The image could not be decoded; its original is unchanged.",

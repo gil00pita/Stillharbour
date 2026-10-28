@@ -16,6 +16,7 @@ import { type ViewMode, type Section } from './model';
 export type { Section } from './model';
 export function LibraryScreen({
   jobsControl,
+  navigationControl,
   defaults,
   status,
   section,
@@ -25,6 +26,7 @@ export function LibraryScreen({
   onRelink,
 }: {
   jobsControl?: ReactNode;
+  navigationControl?: ReactNode;
   defaults: import('../bindings').AppPreferences;
   status: LibraryStatus;
   section: Section;
@@ -69,6 +71,7 @@ export function LibraryScreen({
   const header = (
     <LibraryHeader
       jobsControl={jobsControl}
+      navigationControl={navigationControl}
       section={section}
       value={query.name}
       onSearch={(name) => filter({ name })}

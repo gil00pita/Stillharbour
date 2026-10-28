@@ -142,3 +142,16 @@ it.each(['5', '-1'])('discards size amount/unit/validity and pending tags (%s)',
 function defaults() {
   return within(screen.getByRole('form', { name: 'Application defaults' }));
 }
+
+it('returns focus after cancel even when animation frames are suspended', async () => {
+  vi.stubGlobal('requestAnimationFrame', vi.fn());
+  setup();
+  const opener = screen.getByRole('button', { name: 'Remove library Generated photos' });
+  fireEvent.click(opener);
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled());
+  fireEvent.keyDown(screen.getByRole('form', { name: 'Review library maintenance' }), {
+    key: 'Escape',
+  });
+  await waitFor(() => expect(opener).toHaveFocus());
+  vi.unstubAllGlobals();
+});

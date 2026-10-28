@@ -132,6 +132,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         std::thread::sleep(Duration::from_millis(30));
     }
+    // Inventory completion now starts a separate tiny-preview job. Keep its
+    // writes out of the controlled legacy-failure injection and clear-preview
+    // observations; never race that fixture with a background catalog writer.
+    while Arc::strong_count(&library) > 1 {
+        if started.elapsed() > Duration::from_secs(180) {
+            return Err("Owned thumbnail job deadline reached".into());
+        }
+        std::thread::sleep(Duration::from_millis(30));
+    }
     // Model an existing catalog's legacy HEIC failure, after the owned scan.
     let db = rusqlite::Connection::open(dbpath)?;
     db.execute("UPDATE assets SET preview_state='unavailable',preview_error='Legacy decoder does not support HEIC' WHERE extension='heic' AND name='generated.heic'",[])?;

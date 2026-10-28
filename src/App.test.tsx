@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { fixturePreferences } from './library/__tests__/fixtures';
@@ -163,4 +163,31 @@ it('opens Jobs in the current header without a sidebar destination or changing S
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.getByRole('button', { name: 'Jobs' })).toHaveFocus();
   expect(screen.getByRole('heading', { name: 'Settings' })).toBeVisible();
+});
+
+it('keeps an icon-only collapse control before the current header title and out of the sidebar', async () => {
+  render(<App />);
+  await ready();
+  const collapse = screen.getByRole('button', { name: 'Collapse navigation' });
+  expect(collapse.closest('header')).not.toBeNull();
+  expect(collapse.nextElementSibling).toHaveTextContent('Your library');
+  expect(collapse.textContent).toBe('');
+  expect(collapse).toHaveAttribute('aria-controls', 'app-sidebar');
+  expect(
+    within(screen.getByRole('complementary')).queryByRole('button', { name: /navigation/ }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(collapse);
+  expect(screen.getByRole('button', { name: 'Expand navigation' })).toHaveAttribute(
+    'aria-expanded',
+    'false',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
+  const expand = screen.getByRole('button', { name: 'Expand navigation' });
+  expect(expand.closest('header')).not.toBeNull();
+  expect(expand.nextElementSibling).toHaveTextContent('Settings');
+  fireEvent.click(expand);
+  expect(screen.getByRole('button', { name: 'Collapse navigation' })).toHaveAttribute(
+    'aria-expanded',
+    'true',
+  );
 });

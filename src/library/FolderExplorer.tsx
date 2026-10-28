@@ -10,17 +10,21 @@ import { FileDetails } from './FileDetails';
 import { useDirectoryPage, type FolderLocation } from './useDirectoryPage';
 const HOME: FolderLocation = { rootId: null, directoryId: 'd', cursor: null, search: '' };
 type Position = { location: FolderLocation; offset: number; focus: string | null };
-export function FolderExplorer({
-  jobsControl,
-  status,
-  onError,
-  onRefresh,
-}: {
+type FolderExplorerProps = {
   jobsControl?: ReactNode;
+  navigationControl?: ReactNode;
   status: LibraryStatus;
   onError: (error: unknown) => void;
   onRefresh: () => Promise<void>;
-}) {
+};
+
+export function FolderExplorer({
+  jobsControl,
+  navigationControl,
+  status,
+  onError,
+  onRefresh,
+}: FolderExplorerProps) {
   const [location, setLocation] = useState(HOME);
   const [history, setHistory] = useState<Position[]>([]);
   const [mode, setMode] = useState<'icons' | 'details'>('icons');
@@ -119,6 +123,7 @@ export function FolderExplorer({
   return (
     <>
       <header className="toolbar explorer-toolbar">
+        {navigationControl}
         <h1>Folders</h1>
         <label className="fixed-search">
           <span className="screen-reader-status">

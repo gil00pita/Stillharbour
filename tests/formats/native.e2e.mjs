@@ -54,6 +54,72 @@ describe('native common-format previews — generated sources only', () => {
         { timeout: 45000 },
       );
       assert.equal((await $$('.asset-open')).length, 1);
+      try {
+        await browser.waitUntil(
+          async () =>
+            browser.execute(() => {
+              const tiny = document.querySelector('.asset .t-skel-skeleton img');
+              const clear = document.querySelector('.asset img.t-skel-content');
+              return (
+                tiny?.complete &&
+                tiny.naturalWidth > 0 &&
+                tiny.naturalWidth <= 32 &&
+                clear?.complete &&
+                clear.naturalWidth > 0 &&
+                clear.naturalWidth <= 512 &&
+                Boolean(document.querySelector('.asset .t-skel.is-revealed'))
+              );
+            }),
+          { timeout: 45000, timeoutMsg: 'Native tiny-to-clear layers did not finish loading' },
+        );
+      } catch (error) {
+        const layers = await browser.execute(() => ({
+          html: document.querySelector('.asset')?.outerHTML,
+          images: [...document.querySelectorAll('.asset img')].map((image) => ({
+            complete: image.complete,
+            width: image.naturalWidth,
+            height: image.naturalHeight,
+            src: image.src,
+          })),
+          errors: [...document.querySelectorAll('.preview-error')].map((node) => node.textContent),
+        }));
+        await writeFile(`${output}/progressive-failure.json`, JSON.stringify(layers));
+        await browser.saveScreenshot(`${output}/progressive-failure.png`);
+        throw error;
+      }
+      await browser.waitUntil(
+        async () => {
+          const status = await browser.tauri.execute(async ({ core }) =>
+            core.invoke('library_request', { request: { kind: 'status' } }),
+          );
+          return status.data.jobs.every(
+            (job) => !['queued', 'running', 'cancel_requested'].includes(job.state),
+          );
+        },
+        { timeout: 45000 },
+      );
+      const beforeJobs = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('library_request', { request: { kind: 'status' } }),
+      );
+      const previousIds = beforeJobs.data.jobs.map((job) => job.id);
+      await $('button[aria-label="Jobs"]').click();
+      await $('button=Generate thumbnails').click();
+      await browser.waitUntil(
+        async () => {
+          const status = await browser.tauri.execute(async ({ core }) =>
+            core.invoke('library_request', { request: { kind: 'status' } }),
+          );
+          return status.data.jobs.some(
+            (job) =>
+              job.kind === 'thumbnails' &&
+              !previousIds.includes(job.id) &&
+              ['completed', 'partial'].includes(job.state),
+          );
+        },
+        { timeout: 45000, timeoutMsg: 'Separate native thumbnail backfill job did not finish' },
+      );
+      await browser.keys('Escape');
+
       await browser.saveScreenshot('.context/screenshots/native-heic-gallery.png');
       await $('.asset-open').click();
       await $('.photo-viewer[open]').waitForDisplayed();

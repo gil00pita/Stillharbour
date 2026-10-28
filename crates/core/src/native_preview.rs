@@ -13,8 +13,17 @@ struct Preview {
     width: u32,
     height: u32,
     orientation: u32,
+    bytes_read: u64,
 }
 unsafe extern "C" {
+    fn sh_imageio_file_preview(
+        fd: i32,
+        edge: u32,
+        hint: u32,
+        rgba: *mut u8,
+        capacity: usize,
+        result: *mut Preview,
+    ) -> i32;
     fn sh_valid_icc(bytes: *const u8, length: usize) -> i32;
     fn sh_imageio_preview(
         input: *const u8,
@@ -38,7 +47,7 @@ pub(crate) fn decode(
     edge: u32,
     hint: crate::media::PreviewFormat,
 ) -> Result<MediaReport> {
-    if !matches!(edge, 256 | 512) || bytes.len() as u64 > crate::media::MAX_INPUT_BYTES {
+    if !matches!(edge, 32 | 256 | 512) || bytes.len() as u64 > crate::media::MAX_INPUT_BYTES {
         return Err(AppError::new(
             ErrorCode::Unsupported,
             "Preview exceeds its input or size budget.",
@@ -60,6 +69,78 @@ pub(crate) fn decode(
             &mut report,
         )
     };
+    encode(status, report, rgba, edge)
+}
+
+pub(crate) fn decode_file(
+    file: &std::fs::File,
+    edge: u32,
+    hint: crate::media::PreviewFormat,
+) -> Result<MediaReport> {
+    use std::{io::Read, os::fd::AsRawFd};
+    if !matches!(edge, 32 | 256 | 512)
+        || !file.metadata()?.is_file()
+        || file.metadata()?.len() > crate::media::MAX_NATIVE_FILE_BYTES
+    {
+        return Err(AppError::new(
+            ErrorCode::Unsupported,
+            "This file exceeds the bounded native preview input limit.",
+        ));
+    }
+    let before = crate::library::native::revision(file)?;
+    // Header-only validation retains the strict explicit JPEG/PNG ICC policy.
+    // Never allocate an image-sized Rust pixel buffer on this path.
+    let mut prefix = Vec::new();
+    file.try_clone()?
+        .take(crate::media::MAX_INPUT_BYTES)
+        .read_to_end(&mut prefix)?;
+    let header_bytes = prefix.len() as u64;
+    if let Ok(format @ (image::ImageFormat::Jpeg | image::ImageFormat::Png)) =
+        image::guess_format(&prefix)
+    {
+        use image::ImageDecoder;
+        let mut reader = image::ImageReader::with_format(Cursor::new(prefix), format);
+        let mut limits = image::Limits::default();
+        limits.max_image_width = Some(12000);
+        limits.max_image_height = Some(12000);
+        limits.max_alloc = Some(128 * 1024 * 1024);
+        reader.limits(limits);
+        let mut decoder = reader.into_decoder().map_err(crate::media::decode_error)?;
+        if let Some(profile) = decoder.icc_profile().map_err(crate::media::decode_error)?
+            && !valid_icc(&profile)
+        {
+            return Err(AppError::new(
+                ErrorCode::Unsupported,
+                "The embedded color profile is invalid or exceeds the preview profile budget.",
+            ));
+        }
+    }
+    let mut rgba = vec![0u8; edge as usize * edge as usize * 4];
+    let mut report = Preview::default();
+    // SAFETY: a borrowed read-only regular fd and disjoint live output buffers.
+    // C duplicates the fd and owns its bounded provider through releaseInfo.
+    let status = unsafe {
+        sh_imageio_file_preview(
+            file.as_raw_fd(),
+            edge,
+            hint as u32,
+            rgba.as_mut_ptr(),
+            rgba.len(),
+            &mut report,
+        )
+    };
+    if crate::library::native::revision(file)? != before {
+        return Err(AppError::new(
+            ErrorCode::Conflict,
+            "The original changed during preview generation.",
+        ));
+    }
+    let mut result = encode(status, report, rgba, edge)?;
+    result.input_read_bytes += header_bytes;
+    Ok(result)
+}
+
+fn encode(status: i32, report: Preview, mut rgba: Vec<u8>, edge: u32) -> Result<MediaReport> {
     if status != 0 {
         let (code, message) = match status {
             1 => (
@@ -117,6 +198,8 @@ pub(crate) fn decode(
         color_policy: "macOS ImageIO / ColorSync → sRGB RGBA8 SDR; primary image / first animation frame, preview only."
             .into(),
         png: output.into_inner(),
+        display_dimensions: Some(if report.orientation >= 5 { (report.source_height, report.source_width) } else { (report.source_width, report.source_height) }),
+        input_read_bytes: report.bytes_read,
     })
 }
 
@@ -144,6 +227,58 @@ mod tests {
                 );
             }
         }
+    }
+    #[test]
+    fn file_provider_rejects_writable_handles_and_keeps_tiny_dimensions_and_rgba() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("owned.png");
+        let pixels = png(image::RgbaImage::from_pixel(
+            64,
+            32,
+            image::Rgba([20, 60, 200, 128]),
+        ));
+        std::fs::write(&path, &pixels).unwrap();
+        let file = crate::filesystem::open_readonly(&path).unwrap();
+        let report = decode_file(&file, 32, crate::media::PreviewFormat::Auto).unwrap();
+        assert_eq!((report.thumbnail_width, report.thumbnail_height), (32, 16));
+        assert_eq!(report.display_dimensions, Some((64, 32)));
+        let pixel = image::load_from_memory(&report.png)
+            .unwrap()
+            .to_rgba8()
+            .get_pixel(0, 0)
+            .0;
+        for (actual, expected) in pixel.into_iter().zip([20u8, 60, 200, 128]) {
+            assert!(actual.abs_diff(expected) <= 2);
+        }
+        let writable = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(&path)
+            .unwrap();
+        assert_eq!(
+            decode_file(&writable, 32, crate::media::PreviewFormat::Auto)
+                .unwrap_err()
+                .code,
+            ErrorCode::Unsupported
+        );
+        assert_eq!(std::fs::read(path).unwrap(), pixels);
+        use image::ImageEncoder;
+        let mut bad = Vec::new();
+        let mut encoder = image::codecs::png::PngEncoder::new(&mut bad);
+        encoder.set_icc_profile(vec![0; 128]).unwrap();
+        encoder
+            .write_image(&[20, 60, 200], 1, 1, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        let bad_path = temp.path().join("invalid-profile.png");
+        std::fs::write(&bad_path, &bad).unwrap();
+        let bad_file = crate::filesystem::open_readonly(&bad_path).unwrap();
+        assert_eq!(
+            decode_file(&bad_file, 32, crate::media::PreviewFormat::Auto)
+                .unwrap_err()
+                .code,
+            ErrorCode::Unsupported
+        );
+        assert_eq!(std::fs::read(bad_path).unwrap(), bad);
     }
     #[test]
     fn malformed_and_over_dimension_inputs_fail_closed() {

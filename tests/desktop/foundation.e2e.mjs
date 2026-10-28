@@ -286,7 +286,12 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           const status = await native({ kind: 'status' });
           return (
             status.data.jobs.length > 0 &&
-            status.data.jobs.every((job) => job.state === 'completed')
+            status.data.jobs
+              .filter((job) => job.kind !== 'thumbnails')
+              .every((job) => job.state === 'completed') &&
+            status.data.jobs.every(
+              (job) => !['queued', 'running', 'cancel_requested'].includes(job.state),
+            )
           );
         },
         { timeout: 45000 },
@@ -309,7 +314,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           await recent.$('summary').click();
         // Read one DOM snapshot: the scan may finish between driver requests.
         observedProgress = await browser.execute(() => {
-          const bar = document.querySelector('.jobs-dropdown .job-progress [role="progressbar"]');
+          const bar = document.querySelector(
+            '.jobs-dropdown .job-row[data-job-kind="scan"] .job-progress [role="progressbar"]',
+          );
           return bar && bar.getBoundingClientRect().height > 0
             ? { value: bar.getAttribute('aria-valuenow'), text: bar.getAttribute('aria-valuetext') }
             : null;
@@ -341,13 +348,15 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       async () => {
         const status = await native({ kind: 'status' });
         if (
-          status.data.jobs.some((job) => job.state === 'running') &&
+          status.data.jobs.some((job) => job.kind !== 'thumbnails' && job.state === 'running') &&
           status.data.roots.some((root) => root.fileCount > 0)
         )
           partial = true;
         return (
           status.data.jobs.length > 0 &&
-          status.data.jobs.every((job) => !['running', 'cancel_requested'].includes(job.state))
+          status.data.jobs.every(
+            (job) => !['queued', 'running', 'cancel_requested'].includes(job.state),
+          )
         );
       },
       { timeout: 45000, interval: 25, timeoutMsg: 'Generated scan did not finish' },
@@ -356,7 +365,18 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     observations.partialResultsWhileRunning = partial;
     const status = await native({ kind: 'status' });
     assert.equal(status.data.roots.length, 1);
-    assert.ok(status.data.jobs.every((job) => job.state === 'completed' && job.errors === 0));
+    assert.ok(
+      status.data.jobs
+        .filter((job) => job.kind !== 'thumbnails')
+        .every((job) => job.state === 'completed' && job.errors === 0),
+    );
+    const thumbnailJob = status.data.jobs.find((job) => job.kind === 'thumbnails');
+    assert.equal(thumbnailJob.state, 'partial');
+    assert.equal(
+      thumbnailJob.indexed + thumbnailJob.skipped + thumbnailJob.errors,
+      thumbnailJob.discovered,
+    );
+    assert.equal(thumbnailJob.errors, 2); // Deliberate malformed JPEG/HEIC fixtures remain explicit.
     assert.equal(status.data.roots[0].fileCount, 20);
     assert.equal(status.data.roots[0].mode, 'managed');
     assert.equal(status.data.roots[0].filter.fromDate, null);
@@ -596,6 +616,74 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     });
   });
 
+  it('scrolls the gallery from the timeline and completes a drag outside the narrow handle without a container outline', async () => {
+    await browser.setWindowSize(1180, 780);
+    await browser.execute(() => {
+      const viewport = document.querySelector('.asset-viewport');
+      viewport.scrollTop = 0;
+      const rail = document.querySelector('.date-rail');
+      rail.dispatchEvent(new WheelEvent('wheel', { deltaY: 180, bubbles: true, cancelable: true }));
+    });
+    await browser.waitUntil(async () =>
+      browser.execute(() => document.querySelector('.asset-viewport').scrollTop > 0),
+    );
+    const styles = await browser.execute(() => {
+      const viewport = document.querySelector('.asset-viewport');
+      viewport.focus({ preventScroll: true });
+      return {
+        outline: getComputedStyle(viewport).outlineStyle,
+        scrollbar: getComputedStyle(viewport).scrollbarWidth,
+        webkitScrollbar: getComputedStyle(viewport, '::-webkit-scrollbar').display,
+      };
+    });
+    assert.equal(styles.outline, 'none');
+    assert.notEqual(styles.scrollbar, 'none');
+    assert.notEqual(styles.webkitScrollbar, 'none');
+    const bounds = await browser.execute(() => {
+      const rect = document.querySelector('.date-scrubber').getBoundingClientRect();
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        top: Math.round(rect.top + 1),
+        bottom: Math.round(rect.bottom - 1),
+      };
+    });
+    await browser.performActions([
+      {
+        type: 'pointer',
+        id: 'timeline-mouse',
+        parameters: { pointerType: 'mouse' },
+        actions: [
+          { type: 'pointerMove', x: bounds.x, y: bounds.top, duration: 0 },
+          { type: 'pointerDown', button: 0 },
+          { type: 'pointerMove', x: bounds.x - 30, y: bounds.bottom, duration: 180 },
+          { type: 'pointerUp', button: 0 },
+        ],
+      },
+    ]);
+    await browser.releaseActions();
+    await browser.waitUntil(async () =>
+      browser.execute(() =>
+        document.querySelector('.gallery .asset')?.dataset.date?.startsWith('1964'),
+      ),
+    );
+    // A programmatic year click leaves the scrubber focused, just like wheel
+    // browsing after using the handle. Focus must not pin an obsolete draft.
+    await browser.execute(() => {
+      document.querySelector('.date-scrubber').focus({ preventScroll: true });
+      document.querySelector('.timeline-year-labels button').click();
+    });
+    await browser.waitUntil(async () =>
+      browser.execute(() => {
+        const slider = document.querySelector('.date-scrubber');
+        return (
+          document.querySelector('.gallery .asset')?.dataset.date?.startsWith('2026') &&
+          slider.value === '0'
+        );
+      }),
+    );
+    await browser.saveScreenshot('.context/screenshots/gallery-scroll-fixed.png');
+  });
+
   it('keeps Jobs in the header and Settings in the sidebar footer in expanded and collapsed navigation', async () => {
     for (const [width, height, label] of [
       [1180, 780, 'desktop'],
@@ -613,7 +701,18 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           const jobs = document.querySelector('header button[aria-label="Jobs"]');
           const settings = document.querySelector('.sidebar-footer button[aria-label="Settings"]');
           const version = document.querySelector('.sidebar-version').getBoundingClientRect();
+          const toggle = document.querySelector('button.sidebar-toggle');
+          const toggleRect = toggle.getBoundingClientRect();
+          const header = toggle.closest('header')?.getBoundingClientRect();
           return {
+            toggleInHeader: Boolean(header) && !toggle.closest('.sidebar'),
+            toggleAtTopEdge:
+              Boolean(header) &&
+              toggleRect.top >= header.top &&
+              toggleRect.bottom <= header.bottom &&
+              toggleRect.left >= sidebar.right &&
+              toggleRect.left <= sidebar.right + 8,
+            toggleBeforeTitle: toggle.nextElementSibling?.tagName === 'H1',
             inside: footer.top >= sidebar.top && footer.bottom <= sidebar.bottom + 1,
             jobsInHeader:
               Boolean(jobs) && !document.querySelector('.sidebar button[aria-label="Jobs"]'),
@@ -626,6 +725,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             footerTop: footer.top,
           };
         });
+        assert.equal(layout.toggleInHeader, true);
+        assert.equal(layout.toggleAtTopEdge, true);
+        assert.equal(layout.toggleBeforeTitle, true);
         assert.equal(layout.inside, true);
         assert.equal(layout.jobsInHeader, true);
         assert.equal(layout.aboveVersion, true);
@@ -670,7 +772,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
   });
   it('puts query and display controls in a keyboard-accessible side panel', async () => {
     assert.equal((await $$('.filter-bar')).length, 0);
-    assert.equal((await $$('.photo-toolbar button')).length, 2);
+    assert.equal((await $$('.photo-toolbar button')).length, 3);
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
     await browser.setWindowSize(1180, 780);
@@ -845,6 +947,15 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       return { id: article.dataset.assetId, position };
     });
     await $('.photo-viewer[open]').waitForDisplayed();
+    assert.equal(
+      await browser.execute(() => {
+        const canvas = document.querySelector('.viewer-canvas');
+        canvas.focus({ preventScroll: true });
+        return getComputedStyle(canvas).outlineStyle;
+      }),
+      'none',
+    );
+
     await browser.waitUntil(async () =>
       browser.execute(
         () => document.querySelector('.photo-viewer .viewer-zoom-plane img')?.naturalWidth > 0,
@@ -938,19 +1049,29 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     console.info('Native viewer restored gallery scroll and focus');
     await $('button[aria-label="Jobs"]').click();
     await $('.recent-jobs > summary').click();
-    await $('.job-row').waitForDisplayed();
-    const finalJob = (await native({ kind: 'status' })).data.jobs[0];
+    await $('.job-row[data-job-kind="scan"]').waitForDisplayed();
+    const finalJob = (await native({ kind: 'status' })).data.jobs.find(
+      (job) => job.kind !== 'thumbnails',
+    );
     if (finalJob.state === 'completed') {
       assert.equal(
-        await $('.job-progress [role="progressbar"]').getAttribute('aria-valuenow'),
+        await $('.job-row[data-job-kind="scan"] .job-progress [role="progressbar"]').getAttribute(
+          'aria-valuenow',
+        ),
         '100',
       );
-      assert.equal(await $('.job-progress .help').getText(), 'Scan complete');
+      assert.equal(
+        await $('.job-row[data-job-kind="scan"] .job-progress .help').getText(),
+        'Scan complete',
+      );
     } else {
       assert.equal(['partial', 'canceled', 'failed', 'interrupted'].includes(finalJob.state), true);
-      assert.equal((await $$('.job-progress [role="progressbar"]')).length, 0);
+      assert.equal(
+        (await $$('.job-row[data-job-kind="scan"] .job-progress [role="progressbar"]')).length,
+        0,
+      );
     }
-    await (await $('.job-row')).$('button=Details').click();
+    await (await $('.job-row[data-job-kind="scan"]')).$('button=Details').click();
     await $('.job-details').waitForDisplayed();
     await browser.saveScreenshot('.context/screenshots/jobs-dropdown-recent-desktop.png');
     await browser.keys('Escape');
@@ -968,7 +1089,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       true,
     );
     await browser.saveScreenshot('.context/screenshots/m1-list-minimum.png');
-    await $('button=Collapse navigation').click();
+    await $('button[aria-label="Collapse navigation"]').click();
     assert.equal(
       await browser.execute(() => document.querySelector('.sidebar').getBoundingClientRect().width),
       72,
@@ -1016,7 +1137,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await browser.waitUntil(
         async () =>
           !(await native({ kind: 'status' })).data.jobs.some((job) =>
-            ['running', 'cancel_requested'].includes(job.state),
+            ['queued', 'running', 'cancel_requested'].includes(job.state),
           ),
       );
     } finally {
@@ -1223,7 +1344,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(
       async () =>
         !(await native({ kind: 'status' })).data.jobs.some((job) =>
-          ['running', 'cancel_requested'].includes(job.state),
+          ['queued', 'running', 'cancel_requested'].includes(job.state),
         ),
     );
     const after = (await native({ kind: 'status' })).data.roots[0];
@@ -1484,7 +1605,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(
       async () =>
         !(await native({ kind: 'status' })).data.jobs.some((job) =>
-          ['running', 'cancel_requested'].includes(job.state),
+          ['queued', 'running', 'cancel_requested'].includes(job.state),
         ),
     );
     const jobs = (await native({ kind: 'status' })).data.jobs.length;

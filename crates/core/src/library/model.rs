@@ -63,9 +63,20 @@ pub struct LibraryRoot {
     pub file_count: u32,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum JobKind {
+    #[default]
+    Scan,
+    Thumbnails,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ScanJob {
+    #[serde(default)]
+    #[ts(optional)]
+    pub kind: Option<JobKind>,
     pub id: String,
     pub root_id: String,
     pub state: String,
@@ -434,6 +445,9 @@ pub enum LibraryRequest {
     Scan {
         root_id: String,
         filter: ScanFilter,
+    },
+    GenerateThumbnails {
+        root_id: String,
     },
     Cancel {
         job_id: String,

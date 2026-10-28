@@ -35,16 +35,23 @@ export function usePhotoViewport({
     if (!element) return;
     let pendingWidth = widthRef.current;
     let frame = 0;
+    function applyWidth() {
+      frame = 0;
+      if (Math.abs(pendingWidth - widthRef.current) < 0.5) return;
+      remember.current();
+      widthRef.current = pendingWidth;
+      setWidth(pendingWidth);
+    }
     const observer = new ResizeObserver((entries) => {
       pendingWidth = Math.max(160, entries[0]?.contentRect.width ?? 700);
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        frame = 0;
-        if (Math.abs(pendingWidth - widthRef.current) < 0.5) return;
-        remember.current();
-        widthRef.current = pendingWidth;
-        setWidth(pendingWidth);
-      });
+      // Occluded native WebViews can suspend animation frames while still
+      // delivering resize observations. Do not retain stale row geometry.
+      if (document.visibilityState === 'hidden') {
+        cancelAnimationFrame(frame);
+        applyWidth();
+        return;
+      }
+      if (!frame) frame = requestAnimationFrame(applyWidth);
     });
     observer.observe(element);
     return () => {

@@ -268,3 +268,20 @@ The bounded catalog-read update must satisfy P1-01 through P1-07 in [PERFORMANCE
 - Day headings retain date provenance and exact shown-photo selection membership. Compact visible captions keep full accessible names/title, including historical years and unknown dates. Suppress secondary shown counts when there is insufficient heading width; retain the count in the checkbox label.
 - Multiple resize notifications before a frame trigger one layout using the latest width and preserve the existing visible-ID/offset anchor. Cancel pending work on unmount. Gallery/viewer return, date seeks, ordered range selection and true image-free Text list remain covered by native regression checks.
 - Check1180×780 and660×560 in the real Mac test app and independently compare generated-source manifests before/after, including failed runs. Record unrun OS/accessibility/performance gates. Article benchmark numbers are not acceptance evidence for Stillharbour.
+
+### Progressive preview slice — owner revision, 2026-10-28
+
+[PRV-01–PRV-05](PROGRESSIVE_PREVIEWS.md#acceptance) cover separate durable thumbnail jobs, explicit backfill/cancel/recovery, large generated JPEG/PNG/TIFF, per-tier failures, actual-load reveal/reduced motion and independent original manifests. Thumbnail jobs never reconcile missing files or update last-scan history; maintenance must reject concurrent publication. Keep existing text-only, offline, viewer-position, orientation/ICC and retained positive-cache acceptance. Platform and broader P2 gates require their own evidence.
+
+### Gallery scrollbar and focus — owner revision, 2026-10-28
+
+- Scrolling within one dense day/month has a standard native scrollbar; its visibility follows OS overlay settings. Wheel input over photos keeps normal viewport scrolling, and wheel input over the date rail forwards pixel/line/page distances without hijacking Control-wheel zoom.
+- A focused date handle follows subsequent visible-date changes; top-to-bottom pointer motion selects newest-to-oldest periods. Release outside the rail commits once; cancellation performs no seek. Preserve keyboard navigation and bounded release-based date queries.
+- Clicking/returning to a photo never draws a focus outline around the whole photo viewport. The viewport remains keyboard reachable and individual photo/selection/date controls retain their focus indicators. Existing viewer return, chronology, selection, paging, resize and source-manifest tests still pass.
+
+- Native hidden/restore resizing must update row width even when animation frames are suspended; visible resize bursts still coalesce and retain the photo/pixel anchor. Canceling a Settings review must restore its invoking-control focus without waiting for a painted frame.
+
+### Header navigation toggle — owner revision, 2026-10-28
+
+- One icon-only collapse/expand button appears before the current header title near the sidebar divider, with no duplicate or text collapse row under the logo. It controls the same sidebar, reports its expanded state and retains an accessible action name/tooltip.
+- Expanded and collapsed layouts work at desktop and minimum native window sizes; the control remains available across onboarding and application sections. Search, Filter, Jobs, navigation footer, gallery position and saved-default behavior remain functional.

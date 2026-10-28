@@ -40,7 +40,19 @@ fn wait(library: &Arc<Library>, id: &str) -> ScanJob {
     let start = Instant::now();
     loop {
         let job = library.job_details(id.into()).unwrap().job;
-        if !matches!(job.state.as_str(), "running" | "cancel_requested") {
+        if !matches!(
+            job.state.as_str(),
+            "queued" | "running" | "cancel_requested"
+        ) {
+            // A completed scan now queues a separate derived-cache job. Fixture
+            // maintenance/reopen assertions require both background owners gone.
+            while Arc::strong_count(library) > 1 {
+                assert!(
+                    start.elapsed() < Duration::from_secs(45),
+                    "background work stalled"
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
             return job;
         }
         assert!(
@@ -1195,12 +1207,15 @@ fn reviewed_removal_clears_only_its_indexed_cache_and_promotes_another_root_with
     );
     assert!(library.root_exists(root.clone()).unwrap());
     let preview = library.prepare_maintenance(target).unwrap();
-    assert_eq!(preview.cached_previews, 1);
+    assert!(
+        preview.cached_previews > 1,
+        "tiny and clear previews must both be reviewed"
+    );
     assert!(preview.asset_count >= 20);
     assert!(library.apply_maintenance("invented".into()).is_err());
     let result = library.apply_maintenance(preview.id.clone()).unwrap();
     assert_eq!(result.removed_root_id, Some(root.clone()));
-    assert_eq!(result.cleared_entries, 1);
+    assert_eq!(result.cleared_entries, preview.cached_previews);
     assert!(library.apply_maintenance(preview.id).is_err());
     assert!(!library.root_exists(root.clone()).unwrap());
     assert!(
@@ -1285,10 +1300,11 @@ fn cache_clear_retains_notes_and_sources_rebuilds_previews_and_keeps_unindexed_f
     let plan = library
         .prepare_maintenance(MaintenanceTarget::PreviewCache)
         .unwrap();
-    assert_eq!(plan.cached_previews, 1);
+    assert!(plan.cached_previews > 1);
+    let expected_previews = plan.cached_previews;
     let result = library.apply_maintenance(plan.id).unwrap();
     assert!(result.removed_root_id.is_none());
-    assert_eq!(result.cleared_entries, 1);
+    assert_eq!(result.cleared_entries, expected_previews);
     assert!(library.cached_thumbnail(key, THUMBNAIL_POLICY).is_err());
     let detail = library.detail(asset.id.clone()).unwrap();
     assert!(detail.asset.favorite);
@@ -1333,6 +1349,7 @@ fn cleanup_failure_keeps_root_and_index_for_retry_and_offline_removal_never_open
         root_id: job.root_id.clone(),
     };
     let plan = library.prepare_maintenance(target.clone()).unwrap();
+    let expected_previews = plan.cached_previews;
     assert_eq!(
         library.apply_maintenance(plan.id).unwrap_err().code,
         ErrorCode::Conflict
@@ -1351,7 +1368,7 @@ fn cleanup_failure_keeps_root_and_index_for_retry_and_offline_removal_never_open
             .prepare_maintenance(target.clone())
             .unwrap()
             .cached_previews,
-        1
+        expected_previews
     );
     assert!(!path.exists());
     db.execute_batch("DROP TRIGGER fixture_refuse_removal")
@@ -1626,4 +1643,77 @@ fn compatible_m1_positive_previews_remain_available_in_catalog_offline_state() {
         expected
     );
     assert_eq!(fixture.verify_unchanged().unwrap(), 32);
+}
+
+#[test]
+fn tiny_previews_are_a_separate_durable_job_with_warm_resume_and_no_inventory_reconciliation() {
+    let fixture = LibraryFixture::generate().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let (_catalog, library) = open(data.path());
+    let scan = register(&library, &fixture);
+    wait(&library, &scan.id);
+    let start = Instant::now();
+    let auto = loop {
+        if let Some(job) = library
+            .status()
+            .unwrap()
+            .jobs
+            .into_iter()
+            .find(|job| matches!(job.kind, Some(JobKind::Thumbnails)))
+        {
+            break job;
+        }
+        assert!(start.elapsed() < Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let finished = wait(&library, &auto.id);
+    assert!(
+        matches!(finished.state.as_str(), "completed" | "partial"),
+        "{finished:?}"
+    );
+    let root = library.status().unwrap().roots.remove(0);
+    let last_scan = root.last_scan.clone();
+    let total = library
+        .query(AssetQuery::default(), None, 64)
+        .unwrap()
+        .total;
+    // Wait for the terminal job to release its queue slot, then start a warm pass.
+    let warm = loop {
+        let next = library.generate_thumbnails(root.id.clone()).unwrap();
+        if next.id != auto.id {
+            break next;
+        }
+        assert!(start.elapsed() < Duration::from_secs(45));
+        std::thread::sleep(Duration::from_millis(20));
+    };
+    let warm = wait(&library, &warm.id);
+    assert!(warm.skipped > 0, "{warm:?}");
+    assert_eq!(warm.indexed, 0, "successful tiny previews should be reused");
+    assert_eq!(library.status().unwrap().roots[0].last_scan, last_scan);
+    assert_eq!(
+        library
+            .query(AssetQuery::default(), None, 64)
+            .unwrap()
+            .total,
+        total
+    );
+    let asset = library
+        .query(AssetQuery::default(), None, 64)
+        .unwrap()
+        .assets
+        .into_iter()
+        .find(|asset| asset.extension == "png")
+        .unwrap();
+    let tiny = library
+        .thumbnails(
+            vec![ThumbnailKey {
+                asset_id: asset.id,
+                revision: asset.revision,
+                edge: 32,
+            }],
+            "999".into(),
+        )
+        .unwrap();
+    assert_eq!(tiny[0].state, "ready");
+    fixture.verify_unchanged().unwrap();
 }

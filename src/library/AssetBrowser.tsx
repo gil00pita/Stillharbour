@@ -23,7 +23,10 @@ import { DEFAULT_TEXT_COLUMNS, textListLayout, type TextColumn } from './textCol
 import { restoreAssetFocus } from './focus';
 import { usePhotoViewport } from './usePhotoViewport';
 import type { GalleryDisplay } from './FilterPanel';
-export type PhotoViewportHandle = { remember: () => void };
+export type PhotoViewportHandle = {
+  remember: () => void;
+  scrollBy: (delta: number, mode: number) => void;
+};
 
 export function AssetBrowser({
   display,
@@ -97,10 +100,24 @@ export function AssetBrowser({
       ? []
       : visibleAssets
           .slice(0, 240)
-          .map((asset) => ({ assetId: asset.id, revision: asset.revision, edge }));
+          .flatMap((asset) =>
+            [32, edge].map((size) => ({ assetId: asset.id, revision: asset.revision, edge: size })),
+          );
   const previews = usePreviews(keys, onError, !previewPaused);
   const previousScroll = useRef(0);
-  useImperativeHandle(viewportHandle, () => ({ remember }), [remember]);
+  useImperativeHandle(
+    viewportHandle,
+    () => ({
+      remember,
+      scrollBy: (delta, mode) => {
+        const element = viewport.current;
+        if (!element) return;
+        const distance = delta * (mode === 1 ? 16 : mode === 2 ? element.clientHeight : 1);
+        element.scrollBy({ top: distance, behavior: 'instant' });
+      },
+    }),
+    [remember, viewport],
+  );
   function endEdge() {
     const element = viewport.current;
     if (
@@ -255,6 +272,11 @@ export function AssetBrowser({
                         offline={unavailableRoots.has(asset.rootId)}
                         edge={edge}
                         fit={mode === 'gallery' ? 'contain' : fit}
+                        tinyPreview={
+                          previews.results[
+                            previewKey({ assetId: asset.id, revision: asset.revision, edge: 32 })
+                          ]
+                        }
                         preview={
                           previews.results[
                             previewKey({ assetId: asset.id, revision: asset.revision, edge })

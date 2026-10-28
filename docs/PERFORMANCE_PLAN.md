@@ -248,3 +248,7 @@ The owner authorised P0 only. The earlier “no source supplied” statement des
 ## P1 authorisation — 2026-10-28
 
 After the P0 report, the owner's “Move to next plan” instruction authorises P1 only. Use existing schema2 indexes, explicit display projections, versioned compact page transport and connection-owned bounded summary caching. Preserve current views, stable IDs, selection membership, full startup validation and durability. No user-catalog migration or source-root enumeration is needed for these reads. See [ADR-0009](decisions/ADR-0009-catalog-read-performance.md) and [P1 evidence](PERFORMANCE_P1.md). P2–P4 remain unapproved.
+
+## Bounded P2 rendition authorisation — 2026-10-28
+
+The owner's thumbnail/background-job request authorises only [progressive previews](PROGRESSIVE_PREVIEWS.md) and [ADR-0011](decisions/ADR-0011-progressive-renditions.md): tiny derived-cache generation, demand-driven clear renditions and bounded macOS JPEG/PNG/TIFF downsampling. No full P2 acceptance, new decoder dependency, schema migration or P3/P4 scheduling claim follows from this slice. Existing P0/P1 measurements remain historical and must not be presented as measurements of the new pipeline.

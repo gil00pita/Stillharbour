@@ -23,6 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         RootMode::decl(&config),
         ScanFilter::decl(&config),
         LibraryRoot::decl(&config),
+        JobKind::decl(&config),
         ScanJob::decl(&config),
         LibraryStatus::decl(&config),
         AssetQuery::decl(&config),

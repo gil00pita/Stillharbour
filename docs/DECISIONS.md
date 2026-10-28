@@ -108,3 +108,7 @@ The owner authorised the common-format portion of M5. [ADR-0010](decisions/ADR-0
 ## Bounded gallery row balancing — 2026-10-28
 
 Reuse the existing photoRows/usePhotoViewport/AssetBrowser seam and virtualizer. A bounded shortest-path row-break helper replaces the greedy gallery partition; retain64 candidate successors per photo, the720-summary feed cap and unchanged selection/order/preview safety. Up to125% target height trades small local stretching for fewer abrupt row sizes/orphans. Compact date headings and frame-coalesced resize notifications refine the existing surface. [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md) records implementation, tests and scope; this is not P2–P4 completion or a new caching/scheduling system.
+
+## Owner-authorised progressive preview slice — 2026-10-28
+
+[ADR-0011](decisions/ADR-0011-progressive-renditions.md) records bounded file-backed macOS JPEG/PNG/TIFF downsampling, separate tiny-thumbnail jobs and per-tier derived failures without a catalog migration. [PROGRESSIVE_PREVIEWS.md](PROGRESSIVE_PREVIEWS.md) defines requirements, resource limits and executable checks. This extends only the authorised P2 rendition slice; preservation, platform and remaining roadmap gates stay intact.

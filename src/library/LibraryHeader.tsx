@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { Section } from './model';
 export function LibraryHeader({
   jobsControl,
+  navigationControl,
   section,
   value,
   onSearch,
@@ -11,6 +12,7 @@ export function LibraryHeader({
   activeCount,
 }: {
   jobsControl?: ReactNode;
+  navigationControl?: ReactNode;
   section: Section;
   value: string;
   onSearch: (value: string) => void;
@@ -21,6 +23,7 @@ export function LibraryHeader({
 }) {
   return (
     <header className="toolbar photo-toolbar">
+      {navigationControl}
       <h1>{section === 'Tags' ? 'Albums / Tags' : section}</h1>
       <label className="fixed-search">
         <span className="screen-reader-status">Search filenames</span>

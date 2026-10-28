@@ -55,3 +55,25 @@ describe('scan job progress', () => {
     expect(screen.getByText(description)).toBeVisible();
   });
 });
+
+it('uses a known thumbnail inventory and includes cached and unavailable items in progress', () => {
+  const { rerender } = render(
+    <ScanJobProgress
+      job={{ ...job, kind: 'thumbnails', discovered: 100, indexed: 20, skipped: 15, errors: 5 }}
+      label="Library"
+    />,
+  );
+  expect(
+    screen.getByRole('progressbar', { name: 'Thumbnail progress for Library' }),
+  ).toHaveAttribute('aria-valuenow', '40');
+  expect(screen.getByText('Preparing thumbnails · 40 of 100')).toBeVisible();
+  rerender(
+    <ScanJobProgress job={{ ...job, kind: 'thumbnails', state: 'queued' }} label="Library" />,
+  );
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+  rerender(
+    <ScanJobProgress job={{ ...job, kind: 'thumbnails', state: 'partial' }} label="Library" />,
+  );
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  expect(screen.getByText('Thumbnails finished with unavailable items')).toBeVisible();
+});

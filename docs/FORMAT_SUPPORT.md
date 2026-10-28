@@ -68,3 +68,7 @@ npm run release:check
 ```
 
 Run the native suites as separate CLI invocations, serially; do not rebuild `dist` while a native driver is active. Executable diagnostics: [runner](../scripts/formats/run.py), [catalog/worker probe](../crates/core/examples/format_probe.rs), [native viewer spec](../tests/formats/native.e2e.mjs), [separate config](../wdio.formats.conf.mjs), [independent manifest tool](../scripts/performance/manifest.py). Read [ADR-0010](decisions/ADR-0010-native-format-previews.md) for the adapter decision and retained safety gates.
+
+## Large-image progressive renditions — 2026-10-28
+
+The owner's large JPEG/PNG/TIFF request adds the bounded macOS handle-backed downsampling path in [PROGRESSIVE_PREVIEWS.md](PROGRESSIVE_PREVIEWS.md) and [ADR-0011](decisions/ADR-0011-progressive-renditions.md). Its explicit file/read limits replace the earlier full-source estimate for those three types only; other adapters retain prior limits. Tiny placeholders are prepared as a separate background job and clear previews remain demand-driven. Old M5-v2/M1 positive caches remain usable; old failures retry under the new policy. Existing evidence above remains historical, not proof of the changed path; current runs are recorded in the new document.

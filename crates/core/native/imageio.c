@@ -1,13 +1,20 @@
-// Read-only, byte-buffer-only bridge. All output storage belongs to the caller.
+// Read-only buffer/authorised-handle bridge. All output storage belongs to the caller.
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
 #include <ImageIO/ImageIO.h>
 #include <ColorSync/ColorSync.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdatomic.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdlib.h>
 
 typedef struct {
     uint32_t source_width, source_height, width, height, orientation;
+    uint64_t bytes_read;
 } SHPreview;
 
 static int allowed_type(CFStringRef type) {
@@ -34,14 +41,62 @@ static int number(CFDictionaryRef values, CFStringRef key, int64_t *out) {
         && CFNumberGetValue((CFNumberRef)value, kCFNumberSInt64Type, out);
 }
 
+// The file provider borrows only the already-authorised, read-only stdin
+// descriptor. It never receives a pathname, maps the entire file, or writes.
+#define SH_FILE_LIMIT (512ull * 1024ull * 1024ull)
+#define SH_READ_LIMIT (480ull * 1024ull * 1024ull) // 32 MiB reserved for header/ICC validation
+struct SHReader {
+    int fd;
+    uint64_t length;
+    _Atomic uint64_t charged, actual;
+    _Atomic int exhausted;
+};
+static size_t sh_read_at(void *info, void *buffer, off_t position, size_t count) {
+    struct SHReader *reader = info;
+    if (position < 0 || (uint64_t)position >= reader->length) return 0;
+    uint64_t available = reader->length - (uint64_t)position;
+    if (count > available) count = (size_t)available;
+    uint64_t charged = atomic_load(&reader->charged);
+    do {
+        if (count > SH_READ_LIMIT - charged) {
+            atomic_store(&reader->exhausted, 1); return 0;
+        }
+    } while (!atomic_compare_exchange_weak(&reader->charged, &charged, charged + count));
+    ssize_t result;
+    do { result = pread(reader->fd, buffer, count, position); } while (result < 0 && errno == EINTR);
+    if (result > 0) atomic_fetch_add(&reader->actual, (uint64_t)result);
+    return result > 0 ? (size_t)result : 0;
+}
+
+static void sh_release_reader(void *info) {
+    struct SHReader *reader = info;
+    if (reader) { close(reader->fd); free(reader); }
+}
+
 // 1 unsupported type, 2 invalid/decode failure, 3 budget, 4 color conversion setup.
-int sh_imageio_preview(const uint8_t *input, size_t length, uint32_t edge, uint32_t hint,
+static int sh_preview(const uint8_t *input, size_t length, int fd, uint32_t edge, uint32_t hint,
                        uint8_t *rgba, size_t capacity, SHPreview *result) {
     if (hint > 10) return 1;
-    if (!input || !rgba || !result || length == 0 || length > 32u * 1024u * 1024u
-        || (edge != 256 && edge != 512) || capacity < (size_t)edge * edge * 4u) return 3;
+    if (!rgba || !result || (edge != 32 && edge != 256 && edge != 512)
+        || capacity < (size_t)edge * edge * 4u) return 3;
+    struct SHReader *reader = NULL;
+    struct stat details;
+    if (fd < 0) {
+        if (!input || length == 0 || length > 32u * 1024u * 1024u) return 3;
+    } else {
+        int flags = fcntl(fd, F_GETFL);
+        if (flags < 0 || (flags & O_ACCMODE) != O_RDONLY || fstat(fd, &details) != 0
+            || !S_ISREG(details.st_mode) || details.st_size <= 0
+            || (uint64_t)details.st_size > SH_FILE_LIMIT) return 3;
+        reader = calloc(1, sizeof(*reader));
+        if (!reader) return 3;
+        reader->fd = fcntl(fd, F_DUPFD_CLOEXEC, 0);
+        if (reader->fd < 0) { free(reader); return 2; }
+        reader->length = (uint64_t)details.st_size;
+    }
     int status = 2;
     CFDataRef data = NULL;
+    CGDataProviderRef provider = NULL;
     CFDictionaryRef source_options = NULL, properties = NULL, options = NULL;
     CFNumberRef size = NULL;
     CGImageSourceRef source = NULL;
@@ -49,8 +104,14 @@ int sh_imageio_preview(const uint8_t *input, size_t length, uint32_t edge, uint3
     CGColorSpaceRef srgb = NULL;
     CGContextRef context = NULL;
     memset(result, 0, sizeof(*result));
-    data = CFDataCreateWithBytesNoCopy(NULL, input, (CFIndex)length, kCFAllocatorNull);
-    if (!data) goto done;
+    if (fd < 0) {
+        data = CFDataCreateWithBytesNoCopy(NULL, input, (CFIndex)length, kCFAllocatorNull);
+        if (!data) goto done;
+    } else {
+        const CGDataProviderDirectCallbacks callbacks = {0, NULL, NULL, sh_read_at, sh_release_reader};
+        provider = CGDataProviderCreateDirect(reader, (off_t)reader->length, &callbacks);
+        if (!provider) goto done;
+    }
     // The backend passes a validated numeric enum, never an arbitrary UTI/path.
     // TIFF-based RAW files (notably ARW) need a hint to avoid the generic TIFF codec.
     const CFStringRef hints[] = {NULL, CFSTR("com.canon.cr2-raw-image"),
@@ -64,10 +125,14 @@ int sh_imageio_preview(const uint8_t *input, size_t length, uint32_t edge, uint3
     source_options = CFDictionaryCreate(NULL, source_keys, source_values, hint ? 3 : 2,
         &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
     if (!source_options) goto done;
-    source = CGImageSourceCreateWithData(data, source_options);
+    source = provider ? CGImageSourceCreateWithDataProvider(provider, source_options)
+        : CGImageSourceCreateWithData(data, source_options);
     if (!source || CGImageSourceGetCount(source) == 0) goto done;
     CFStringRef type = CGImageSourceGetType(source); // borrowed, never release
     if (!type || !allowed_type(type)) { status = 1; goto done; }
+    int downsample = fd >= 0 && (CFEqual(type, CFSTR("public.jpeg"))
+        || CFEqual(type, CFSTR("public.png")) || CFEqual(type, CFSTR("public.tiff")));
+    if (fd >= 0 && !downsample && reader->length > 32u * 1024u * 1024u) { status = 3; goto done; }
     size_t primary = CGImageSourceGetPrimaryImageIndex(source);
     if (primary >= CGImageSourceGetCount(source)) goto done;
     properties = CGImageSourceCopyPropertiesAtIndex(source, primary, source_options);
@@ -76,7 +141,7 @@ int sh_imageio_preview(const uint8_t *input, size_t length, uint32_t edge, uint3
     if (!number(properties, kCGImagePropertyPixelWidth, &width)
         || !number(properties, kCGImagePropertyPixelHeight, &height)) { status = 6; goto done; }
     if (width <= 0 || height <= 0 || width > 12000 || height > 12000
-        || (uint64_t)width * (uint64_t)height * 4u > 128u * 1024u * 1024u) {
+        || (!downsample && (uint64_t)width * (uint64_t)height * 4u > 128u * 1024u * 1024u)) {
         status = 3; goto done;
     }
     if (CFDictionaryContainsKey(properties, kCGImagePropertyOrientation)
@@ -86,7 +151,7 @@ int sh_imageio_preview(const uint8_t *input, size_t length, uint32_t edge, uint3
     if (maximum > edge) maximum = edge; // never upscale small originals
     size = CFNumberCreate(NULL, kCFNumberSInt64Type, &maximum);
     if (!size) goto done;
-    const void *keys[] = {kCGImageSourceCreateThumbnailFromImageIfAbsent,
+    const void *keys[] = {downsample ? kCGImageSourceCreateThumbnailFromImageAlways : kCGImageSourceCreateThumbnailFromImageIfAbsent,
         kCGImageSourceCreateThumbnailWithTransform, kCGImageSourceThumbnailMaxPixelSize,
         kCGImageSourceShouldCache, kCGImageSourceShouldAllowFloat};
     const void *values[] = {kCFBooleanTrue, kCFBooleanTrue, size,
@@ -139,8 +204,23 @@ done:
     if (properties) CFRelease(properties);
     if (source) CFRelease(source);
     if (source_options) CFRelease(source_options);
+    if (reader) {
+        result->bytes_read = atomic_load(&reader->actual);
+        if (atomic_load(&reader->exhausted)) status = 3;
+    }
+    if (provider) CGDataProviderRelease(provider);
+    else if (reader) sh_release_reader(reader);
     if (data) CFRelease(data);
     return status;
+}
+
+int sh_imageio_preview(const uint8_t *input, size_t length, uint32_t edge, uint32_t hint,
+                      uint8_t *rgba, size_t capacity, SHPreview *result) {
+    return sh_preview(input, length, -1, edge, hint, rgba, capacity, result);
+}
+int sh_imageio_file_preview(int fd, uint32_t edge, uint32_t hint,
+                           uint8_t *rgba, size_t capacity, SHPreview *result) {
+    return sh_preview(NULL, 0, fd, edge, hint, rgba, capacity, result);
 }
 
 // Validate explicit baseline ICC data before allowing a native color fallback.

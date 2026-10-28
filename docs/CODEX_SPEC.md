@@ -631,3 +631,15 @@ The common-image/HEIC/CR2 request authorises the bounded M5 format slice in [FOR
 ## Gallery balancing refinement — owner request, 2026-10-28
 
 Refine the existing chronological canvas using the owner's Google Photos engineering reference; see [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md). Choose row breaks across the bounded retained photo sequence, allow up to125% target height for ordinary rows, preserve aspect ratios/order/4px gutters and keep sparse final rows at or below target. Panoramas must not be forced into an already crowded row by a greedy threshold. Compact narrow date captions retain full accessible dates and exact shown-group membership. Coalesce resize notifications per animation frame while preserving the existing stable-ID/offset anchor. Keep the current bounded feed/virtualizer, timeline, selection, text-only behavior and read-only preview pipeline. No new cache/scheduler, catalog migration or later performance-phase completion is implied.
+
+### Owner revision — progressive derived previews, 2026-10-28
+
+Add the bounded P2 slice in [PROGRESSIVE_PREVIEWS.md](PROGRESSIVE_PREVIEWS.md): a separate cancelable thumbnail-generation job after completed scans, manual existing-library backfill through header Jobs, 32 px cached placeholders and demand-driven clear previews with an accessible blur-to-clear transition. Read-only macOS JPEG/PNG/TIFF downsampling may use an authorised inherited file handle under explicit input/read/output/deadline/memory-watchdog limits. Per-tier failures must not blank a usable cached preview. Preserve originals, offline states, retained compatible cache entries and all preservation gates; no schema/dependency migration or all-P2/P4 approval is implied.
+
+### Owner revision — gallery scrolling and focus, 2026-10-28
+
+Keep the gallery's native scrollbar available for precise scrolling alongside the year/month navigator. The date handle follows browsing after focus, maps top-to-bottom consistently, commits a drag released outside its narrow bounds, and cancels interrupted gestures without navigating. Wheel input over the date rail scrolls the photo viewport. Remove the container-wide focus outline while retaining the viewport tab stop and visible keyboard focus on actual controls. See [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md#gallery-scrollbar-and-focus-repair--2026-10-28); original-file access and bounded paging stay unchanged.
+
+### Owner revision — navigation toggle placement, 2026-10-28
+
+Move the existing navigation collapse/expand control from the wide sidebar row to an icon-only button at the leading edge of the current page header, immediately before its title, matching the owner's annotated screenshot. Keep it available when navigation is collapsed and across Photos, Folders, Albums / Tags, Settings and onboarding; preserve accessible action names, expanded state, keyboard focus and existing preference behavior. The sidebar retains branding, destinations, footer Settings and version. This is a placement change only.

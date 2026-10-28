@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { LibraryStatus, ScanJob } from '../bindings';
 import { library, libraryData } from '../ipc';
 import { JobsDropdown } from './JobsDropdown';
+import { defaultFilter } from './model';
 
 vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
@@ -133,4 +134,36 @@ it('loads issue details lazily, renders them as text and handles failure', async
   expect(await screen.findByText('<script>untrusted</script>')).toBeVisible();
   expect(screen.getAllByRole('listitem')).toHaveLength(1);
   expect(libraryData).toHaveBeenCalledWith({ kind: 'job_details', job_id: job.id }, 'job_details');
+});
+
+it('starts a separate thumbnail job for a selected saved library and exposes thumbnail cancellation', async () => {
+  render(
+    <JobsDropdown
+      status={{
+        ...status,
+        roots: [
+          {
+            id: 'fixture-root',
+            label: 'Generated library',
+            displayPath: '/generated',
+            mode: 'referenced',
+            isBase: true,
+            availability: 'online',
+            filter: defaultFilter,
+            lastScan: null,
+            fileCount: 40,
+          },
+        ],
+        jobs: [{ ...job, kind: 'thumbnails', state: 'queued' }],
+      }}
+      onRefresh={refresh}
+    />,
+  );
+  open();
+  fireEvent.click(screen.getByRole('button', { name: 'Generate thumbnails' }));
+  await waitFor(() =>
+    expect(library).toHaveBeenCalledWith({ kind: 'generate_thumbnails', root_id: 'fixture-root' }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel thumbnails' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'cancel', job_id: job.id }));
 });

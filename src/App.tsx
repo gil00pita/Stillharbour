@@ -47,6 +47,9 @@ export default function App() {
   const collapsed = navigationOverride ?? preferences?.navigationCollapsed ?? false;
   const hasLibrary = Boolean(status?.roots.length);
   const jobsControl = <JobsDropdown status={status} onRefresh={refresh} />;
+  const navigationControl = (
+    <NavigationToggle collapsed={collapsed} onToggle={() => setNavigationOverride(!collapsed)} />
+  );
   const configuring = Boolean(selected) || (!hasLibrary && section !== 'Settings');
   return (
     <div
@@ -57,7 +60,6 @@ export default function App() {
         version={foundation?.version}
         section={section}
         collapsed={collapsed}
-        onToggle={() => setNavigationOverride(!collapsed)}
         onNavigate={(item) => {
           setSection(item);
           setSelected(null);
@@ -76,6 +78,7 @@ export default function App() {
             section={section}
             busy={busy}
             jobsControl={jobsControl}
+            navigationControl={navigationControl}
             onChoose={() => void chooseFolder()}
           />
         )}
@@ -86,6 +89,7 @@ export default function App() {
           onReconnect={reconnect}
         />
         <WorkspaceContent
+          navigationControl={navigationControl}
           app={app}
           settings={settings}
           jobsControl={jobsControl}
@@ -101,6 +105,28 @@ export default function App() {
         </p>
       </main>
     </div>
+  );
+}
+
+function NavigationToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const label = collapsed ? 'Expand navigation' : 'Collapse navigation';
+  return (
+    <button
+      className="sidebar-toggle"
+      aria-label={label}
+      title={label}
+      aria-expanded={!collapsed}
+      aria-controls="app-sidebar"
+      onClick={onToggle}
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d={collapsed ? 'm9 6 6 6-6 6' : 'm15 6-6 6 6 6'}
+          stroke="currentColor"
+          strokeWidth="1.5"
+        />
+      </svg>
+    </button>
   );
 }
 
@@ -125,40 +151,21 @@ function Sidebar({
   section,
   onNavigate,
   collapsed,
-  onToggle,
 }: {
   hasLibrary: boolean;
   version: string | undefined;
   section: AppSection;
   onNavigate: (section: AppSection) => void;
   collapsed: boolean;
-  onToggle: () => void;
 }) {
   return (
-    <aside className="sidebar" aria-label="Stillharbour">
+    <aside id="app-sidebar" className="sidebar" aria-label="Stillharbour">
       <div className="brand">
         <img src={logo} alt="" width="32" height="34" />
         <span>
           Stillharbour<small>Photo &amp; Video Library</small>
         </span>
       </div>
-      {
-        <button
-          className="sidebar-toggle"
-          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
-          aria-expanded={!collapsed}
-          onClick={onToggle}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d={collapsed ? 'm9 6 6 6-6 6' : 'm15 6-6 6 6 6'}
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-          </svg>
-          <span className="nav-label">Collapse navigation</span>
-        </button>
-      }
       <nav aria-label="Main navigation">
         {hasLibrary ? (
           <>
@@ -326,6 +333,7 @@ function LibraryOnboarding({
 
 function SetupHeader({
   jobsControl,
+  navigationControl,
   hasLibrary,
   section,
   busy,
@@ -334,11 +342,13 @@ function SetupHeader({
   hasLibrary: boolean;
   section: AppSection;
   jobsControl: ReactNode;
+  navigationControl: ReactNode;
   busy: boolean;
   onChoose: () => void;
 }) {
   return (
     <header className="toolbar">
+      {navigationControl}
       <h1>{hasLibrary ? (section === 'Tags' ? 'Albums / Tags' : section) : 'Your library'}</h1>
       <div className="header-actions">
         {hasLibrary && (
@@ -354,6 +364,7 @@ function SetupHeader({
 
 function WorkspaceContent({
   jobsControl,
+  navigationControl,
   app,
   settings,
   section,
@@ -361,6 +372,7 @@ function WorkspaceContent({
   onSettings,
 }: {
   jobsControl: ReactNode;
+  navigationControl: ReactNode;
   app: ReturnType<typeof useFoundation>;
   settings: ReturnType<typeof usePreferences>;
   section: AppSection;
@@ -419,6 +431,7 @@ function WorkspaceContent({
     return (
       <SettingsScreen
         jobsControl={jobsControl}
+        navigationControl={navigationControl}
         preferences={preferences}
         status={status}
         onSave={async (value) => {
@@ -442,6 +455,7 @@ function WorkspaceContent({
     return (
       <FolderExplorer
         jobsControl={jobsControl}
+        navigationControl={navigationControl}
         status={status}
         onError={showError}
         onRefresh={refresh}
@@ -451,6 +465,7 @@ function WorkspaceContent({
     status && (
       <LibraryScreen
         jobsControl={jobsControl}
+        navigationControl={navigationControl}
         defaults={preferences}
         status={status}
         section={section}

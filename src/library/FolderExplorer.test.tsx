@@ -9,6 +9,9 @@ vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
   libraryData: vi.fn(),
 }));
+// The canvas below is deliberately structural; native tests cover focus/scroll
+// restoration. Do not leave real retry timers looking for its absent asset DOM.
+vi.mock('./focus', () => ({ restoreAssetFocus: vi.fn() }));
 vi.mock('./ExplorerCanvas', () => ({
   ExplorerCanvas: ({
     items,

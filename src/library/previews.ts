@@ -23,7 +23,7 @@ export function usePreviews(
   const [results, setResults] = useState<Record<string, ThumbnailResult>>({});
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const serialized = JSON.stringify(keys.slice(0, 240));
+  const serialized = JSON.stringify(keys.slice(0, 480));
   useEffect(() => {
     if (!enabled) return;
     let active = true;

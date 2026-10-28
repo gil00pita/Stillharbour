@@ -58,3 +58,58 @@ it('commits a real month seek on scrubber keyboard release rather than loading i
   fireEvent.keyUp(slider, { key: 'ArrowDown' });
   expect(onYear).toHaveBeenCalledWith('1964-07');
 });
+
+it('follows gallery scrolling after the scrubber has received focus', () => {
+  const { rerender } = render(
+    <DateTimeline buckets={buckets} date="2026-03-01" scrolling={false} onYear={vi.fn()} />,
+  );
+  const slider = screen.getByRole('slider', { name: 'Jump to year or month' });
+  fireEvent.focus(slider);
+  rerender(<DateTimeline buckets={buckets} date="1964-07-01" scrolling onYear={vi.fn()} />);
+  expect(slider).toHaveValue('1');
+  expect(slider).toHaveAttribute('aria-valuetext', 'Jul 1964');
+});
+it('commits a drag released outside the original hit area', () => {
+  const onYear = vi.fn();
+  render(<DateTimeline buckets={buckets} date="2026-03-01" scrolling={false} onYear={onYear} />);
+  const slider = screen.getByRole('slider', { name: 'Jump to year or month' });
+  fireEvent.pointerDown(slider, { pointerId: 1 });
+  fireEvent.change(slider, { target: { value: '1' } });
+  fireEvent.pointerUp(document, { pointerId: 1 });
+  expect(onYear).toHaveBeenLastCalledWith('1964-07');
+});
+
+it('forwards wheel input on the rail without zoom interception or duplicate default scrolling', () => {
+  const onScroll = vi.fn();
+  render(
+    <DateTimeline
+      buckets={buckets}
+      date="2026-03-01"
+      scrolling={false}
+      onYear={vi.fn()}
+      onScroll={onScroll}
+    />,
+  );
+  const rail = screen.getByRole('navigation', { name: 'Photo timeline' });
+  const wheel = new WheelEvent('wheel', {
+    deltaY: 120,
+    deltaMode: 0,
+    bubbles: true,
+    cancelable: true,
+  });
+  rail.dispatchEvent(wheel);
+  expect(onScroll).toHaveBeenCalledWith(120, 0);
+  expect(wheel.defaultPrevented).toBe(true);
+  fireEvent.wheel(rail, { deltaY: 50, ctrlKey: true });
+  expect(onScroll).toHaveBeenCalledTimes(1);
+});
+it.each(['pointercancel', 'lostpointercapture'])('cancels %s without seeking', (type) => {
+  const onYear = vi.fn();
+  render(<DateTimeline buckets={buckets} date="2026-03-01" scrolling={false} onYear={onYear} />);
+  const slider = screen.getByRole('slider', { name: 'Jump to year or month' });
+  fireEvent.pointerDown(slider, { pointerId: 1 });
+  fireEvent.change(slider, { target: { value: '1' } });
+  fireEvent(document, new PointerEvent(type, { bubbles: true, pointerId: 1 }));
+  expect(onYear).not.toHaveBeenCalled();
+  expect(slider).toHaveValue('0');
+});

@@ -17,9 +17,15 @@ export function JobsDropdown({
   const id = useId();
   const [position, setPosition] = useState({ top: 64, right: 16, maxHeight: 400 });
   const active =
-    status?.jobs.filter((job) => job.state === 'running' || job.state === 'cancel_requested') ?? [];
+    status?.jobs.filter(
+      (job) =>
+        job.state === 'queued' || job.state === 'running' || job.state === 'cancel_requested',
+    ) ?? [];
   const recent =
-    status?.jobs.filter((job) => job.state !== 'running' && job.state !== 'cancel_requested') ?? [];
+    status?.jobs.filter(
+      (job) =>
+        job.state !== 'queued' && job.state !== 'running' && job.state !== 'cancel_requested',
+    ) ?? [];
   useLayoutEffect(() => {
     if (!open) return;
     function place() {
@@ -145,6 +151,7 @@ export function JobsDropdown({
                     ? `${active.length} running ${active.length === 1 ? 'job' : 'jobs'}`
                     : 'No running jobs.'}
                 </p>
+                <ThumbnailJobAction status={status} onRefresh={onRefresh} />
                 {entries(active)}
                 {recent.length > 0 && (
                   <details className="recent-jobs">
@@ -203,15 +210,16 @@ function JobEntry({
     }
   }
   return (
-    <section className="job-row" aria-label={`Scan job for ${label}`}>
+    <section
+      data-job-kind={job.kind ?? 'scan'}
+      className="job-row"
+      aria-label={`${job.kind === 'thumbnails' ? 'Thumbnail' : 'Scan'} job for ${label}`}
+    >
       <h3>
         <bdi>{label}</bdi>
       </h3>
       <ScanJobProgress job={job} label={label} />
-      <p className="job-counts">
-        {job.discovered.toLocaleString()} found · {job.indexed.toLocaleString()} indexed ·{' '}
-        {job.skipped.toLocaleString()} skipped · {job.errors.toLocaleString()} issues
-      </p>
+      <JobCounts job={job} />
       <p className="help">{job.message}</p>
       <div className="job-actions">
         <button
@@ -225,12 +233,16 @@ function JobEntry({
         >
           {expanded ? 'Hide details' : 'Details'}
         </button>
-        {(job.state === 'running' || job.state === 'cancel_requested') && (
+        {['queued', 'running', 'cancel_requested'].includes(job.state) && (
           <button
             disabled={canceling || job.state === 'cancel_requested'}
             onClick={() => void cancel()}
           >
-            {canceling || job.state === 'cancel_requested' ? 'Stopping…' : 'Cancel scan'}
+            {canceling || job.state === 'cancel_requested'
+              ? 'Stopping…'
+              : job.kind === 'thumbnails'
+                ? 'Cancel thumbnails'
+                : 'Cancel scan'}
           </button>
         )}
       </div>
@@ -239,27 +251,111 @@ function JobEntry({
           {cancelError}
         </p>
       )}
-      {expanded && (
-        <div id={detailId} className="job-details">
-          {detailError ? (
-            <p className="error" role="alert">
-              {detailError}
-            </p>
-          ) : !detail ? (
-            <p role="status">Loading scan details…</p>
-          ) : detail.issues.length ? (
-            <ul>
-              {Array.from(new Set(detail.issues)).map((issue) => (
-                <li key={issue}>
-                  <bdi>{issue}</bdi>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p>No file issues recorded.</p>
-          )}
-        </div>
-      )}
+      {expanded && <JobDetails id={detailId} detail={detail} error={detailError} />}
     </section>
+  );
+}
+
+function ThumbnailJobAction({
+  status,
+  onRefresh,
+}: {
+  status: LibraryStatus;
+  onRefresh: () => Promise<void>;
+}) {
+  const [rootId, setRootId] = useState('');
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const selected = status.roots.find((root) => root.id === rootId) ?? status.roots[0];
+  if (!selected) return null;
+  async function generate() {
+    if (!selected) return;
+    setPending(true);
+    setError(null);
+    try {
+      await library({ kind: 'generate_thumbnails', root_id: selected.id });
+      await onRefresh();
+    } catch (error) {
+      setError(errorMessage(error));
+    } finally {
+      setPending(false);
+    }
+  }
+  return (
+    <div className="thumbnail-job-action">
+      <label>
+        Preview library
+        <select
+          value={selected.id}
+          onChange={(event) => setRootId(event.target.value)}
+          disabled={pending}
+        >
+          {status.roots.map((root) => (
+            <option value={root.id} key={root.id}>
+              {root.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button onClick={() => void generate()} disabled={pending}>
+        {pending ? 'Starting…' : 'Generate thumbnails'}
+      </button>
+      <p className="help">Prepare tiny previews in the background. Originals stay read-only.</p>
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function JobCounts({ job }: { job: ScanJob }) {
+  return (
+    <p className="job-counts">
+      {job.kind === 'thumbnails' ? (
+        <>
+          {job.indexed.toLocaleString()} generated · {job.skipped.toLocaleString()} cached ·{' '}
+          {job.errors.toLocaleString()} unavailable
+        </>
+      ) : (
+        <>
+          {job.discovered.toLocaleString()} found · {job.indexed.toLocaleString()} indexed ·{' '}
+          {job.skipped.toLocaleString()} skipped · {job.errors.toLocaleString()} issues
+        </>
+      )}
+    </p>
+  );
+}
+
+function JobDetails({
+  id,
+  detail,
+  error,
+}: {
+  id: string;
+  detail: JobDetail | null;
+  error: string | null;
+}) {
+  return (
+    <div id={id} className="job-details">
+      {error ? (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      ) : !detail ? (
+        <p role="status">Loading job details…</p>
+      ) : detail.issues.length ? (
+        <ul>
+          {Array.from(new Set(detail.issues)).map((issue) => (
+            <li key={issue}>
+              <bdi>{issue}</bdi>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p>No file issues recorded.</p>
+      )}
+    </div>
   );
 }

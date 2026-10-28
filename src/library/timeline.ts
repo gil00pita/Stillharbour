@@ -30,3 +30,21 @@ export function timelineYears(
   }
   return placed.sort((a, b) => a.top - b.top);
 }
+
+// Match the visible rail: newest at its top, oldest at its bottom. Do not rely
+// on legacy WebView slider appearance to interpret pointer coordinates.
+export function timelineIndexAt(
+  y: number,
+  bounds: { top: number; height: number },
+  count: number,
+  fallback = 0,
+): number {
+  if (!Number.isFinite(y) || bounds.height <= 0) return fallback;
+  return Math.max(
+    0,
+    Math.min(
+      Math.max(0, count - 1),
+      Math.round(((y - bounds.top) / bounds.height) * Math.max(0, count - 1)),
+    ),
+  );
+}

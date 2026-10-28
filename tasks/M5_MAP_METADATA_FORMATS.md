@@ -29,3 +29,7 @@ N2 extends catalog files and photo/video tags, with catalog-only edits and prote
 ## Approved partial format slice — 2026-10-28
 
 The owner's HEIC/CR2/common-preview request authorises only read-only format previews. Implemented the bounded macOS native worker adapter, typed RAW hints, negative-policy retry and compatible M1 positive cache reuse; see [format capability/evidence](../docs/FORMAT_SUPPORT.md) and [ADR-0010](../docs/decisions/ADR-0010-native-format-previews.md). Local packaged tests pass the declared generated formats and six camera samples; native generated HEIC gallery/viewer passes independently. M5-F01–F05 have scoped local evidence. M5-F06/AC-083 cross-platform/clean-machine/full-validation gates remain open. Maps, provider selection, metadata export, other M5 work and P2–P4 are not authorised by this slice. Stop at this partial gate.
+
+## Owner-approved rendition follow-on — 2026-10-28
+
+The subsequent large JPEG/PNG/TIFF and separate-thumbnail-task request authorises the bounded P2 slice in [PROGRESSIVE_PREVIEWS.md](../docs/PROGRESSIVE_PREVIEWS.md), with the file-handle/job decision in [ADR-0011](../docs/decisions/ADR-0011-progressive-renditions.md). This extends preview generation only; the remaining M5 format/platform/map/metadata gates and broader P2–P4 work stay open.

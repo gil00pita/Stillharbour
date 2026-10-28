@@ -33,6 +33,9 @@ export function PhotoCollection({
       previous.date === date && previous.scrolling === scrolling ? previous : { date, scrolling },
     );
   }, []);
+  function scrollTimeline(delta: number, mode: number) {
+    viewportHandle.current?.scrollBy(delta, mode);
+  }
   return (
     <div className="collection-layout">
       <div className="collection-main" data-feed-count={page?.assets.length ?? 0}>
@@ -61,6 +64,7 @@ export function PhotoCollection({
               c.buckets.length && ['capture', 'added'].includes(query.sort) ? (
                 <CollectionTimeline
                   controller={c}
+                  onScroll={scrollTimeline}
                   date={visibleDate.date}
                   scrolling={visibleDate.scrolling}
                 />
@@ -77,7 +81,9 @@ export function PhotoCollection({
         ) : (
           <CollectionEmpty
             loading={loading}
-            scanning={status.jobs.some((job) => job.state === 'running')}
+            scanning={status.jobs.some(
+              (job) => job.kind !== 'thumbnails' && job.state === 'running',
+            )}
           />
         )}
         {(feed.busy || feed.error) && (
@@ -123,11 +129,21 @@ function CollectionTimeline({
   controller: c,
   date,
   scrolling,
+  onScroll,
 }: {
   controller: LibraryController;
   date: string;
   scrolling: boolean;
+  onScroll: (delta: number, mode: number) => void;
 }) {
   if (!['capture', 'added'].includes(c.query.sort) || !c.buckets.length) return null;
-  return <DateTimeline buckets={c.buckets} date={date} scrolling={scrolling} onYear={c.jump} />;
+  return (
+    <DateTimeline
+      buckets={c.buckets}
+      date={date}
+      scrolling={scrolling}
+      onYear={c.jump}
+      onScroll={onScroll}
+    />
+  );
 }
