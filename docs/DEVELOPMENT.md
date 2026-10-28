@@ -182,4 +182,16 @@ The owned C11 adapter uses installed ImageIO/CoreGraphics/CoreFoundation/ColorSy
 
 ## Git publication hygiene
 
-Commit application sources, specifications, tests, pinned lockfiles and reviewed vendor resources. Keep .context evidence/attachments, build output, installed dependencies and local settings excluded through .gitignore. .gitattributes preserves vendor bytes without line-ending conversion or upstream whitespace rewriting, so helper manifests remain authoritative; Markdown hard breaks are intentional. Owned-file validation still rejects accidental whitespace. Check the staged diff before publication and use a normal push on the existing branch.
+Commit application sources, specifications, tests, pinned lockfiles and reviewed vendor resources. Keep .context evidence/attachments, build output, installed dependencies and local settings excluded through .gitignore. .gitattributes enforces LF for owned text on both Windows and macOS regardless of core.autocrlf, while preserving vendor bytes without line-ending conversion or upstream whitespace rewriting, so helper manifests remain authoritative; Markdown hard breaks are intentional. Owned-file validation still rejects accidental whitespace. Check the staged diff before publication and use a normal push on the existing branch.
+
+## Node download-cache cleanup
+
+To reclaim space from shared npm/npx download caches with the installed npm11.16 toolchain, inspect the configured location, then use npm's own cleanup commands:
+
+```sh
+npm config get cache
+npm cache clean --force
+npm cache npx rm --force
+```
+
+These remove downloaded package/execution caches, not the project's node_modules, Node installations, source files, lockfiles or photo preview cache. Later installs and one-off npx tools may download again. Keep installed dependencies and running development processes in place when only reclaiming download-cache space; inspect cache paths for links/ownership and active one-off npx tools before cleanup. Do not substitute a broad process kill or recursive deletion of unrelated build/library data.

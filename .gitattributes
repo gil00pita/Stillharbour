@@ -1,3 +1,6 @@
+# Keep owned text identical on Windows and macOS, regardless of core.autocrlf.
+* text=auto eol=lf
+
 # Preserve reviewed third-party bytes, including helper checksums and licenses.
 vendor/** -text -whitespace
 
