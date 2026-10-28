@@ -195,3 +195,9 @@ npm cache npx rm --force
 ```
 
 These remove downloaded package/execution caches, not the project's node_modules, Node installations, source files, lockfiles or photo preview cache. Later installs and one-off npx tools may download again. Keep installed dependencies and running development processes in place when only reclaiming download-cache space; inspect cache paths for links/ownership and active one-off npx tools before cleanup. Do not substitute a broad process kill or recursive deletion of unrelated build/library data.
+
+## Cross-platform CI and filesystem gates
+
+Windows checkout must pass the same LF formatter, strict frontend checks and denied-warning Rust checks as macOS. Keep platform-only imports in their implementation/test branches. The native path codec preserves UTF-16 units, including non-Unicode surrogates, and rejects odd byte lengths; portable unit tests exercise pair decoding on either host. Physical Windows fixtures use valid Win32 names, while Unix fixtures retain quote/newline coverage.
+
+Successful native write/publication tests run only where that primitive is implemented; Windows explicitly tests Unsupported results and unchanged files/preferences rather than treating an unverified durability or identity implementation as available. This is not a claim of Windows original-file mutation, root traversal, settings-write or broad-format support. Keep those platform gates in place when fixing CI.

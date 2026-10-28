@@ -9,7 +9,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    io::{Read, Write},
+    io::Read,
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -163,6 +163,7 @@ impl PreferencesStore {
         ));
         #[cfg(unix)]
         {
+            use std::io::Write;
             let mut staged = tempfile::NamedTempFile::new_in(&self.directory)?;
             staged.write_all(&bytes)?;
             staged.as_file().sync_all()?;
@@ -180,6 +181,30 @@ impl PreferencesStore {
 mod tests {
     use super::*;
     #[test]
+    fn defaults_are_valid_and_roundtrip_without_filesystem_mutation() {
+        let settings = AppPreferences::default();
+        settings.validate().unwrap();
+        assert_eq!(settings.scan_filter.extensions.len(), 33);
+        let encoded = serde_json::to_vec(&settings).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<AppPreferences>(&encoded).unwrap(),
+            settings
+        );
+    }
+    #[test]
+    #[cfg(not(unix))]
+    fn unverified_durability_cannot_publish_preferences_or_claim_success() {
+        let data = tempfile::tempdir().unwrap();
+        let store = PreferencesStore::new(data.path()).unwrap();
+        let before = store.get().unwrap();
+        let mut draft = before.clone();
+        draft.gallery_view = GalleryView::List;
+        assert_eq!(store.save(draft).unwrap_err().code, ErrorCode::Unsupported);
+        assert_eq!(store.get().unwrap(), before);
+        assert!(!data.path().join("preferences.json").exists());
+    }
+    #[test]
+    #[cfg(unix)]
     fn defaults_roundtrip_and_invalid_updates_preserve_saved_settings() {
         let data = tempfile::tempdir().unwrap();
         let store = PreferencesStore::new(data.path()).unwrap();

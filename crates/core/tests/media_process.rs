@@ -4,7 +4,14 @@ use stillharbour_core::{domain::ErrorCode, media::MediaWorker};
 #[tokio::test]
 async fn malformed_worker_is_replaced_and_originals_survive() {
     let temp = tempfile::tempdir().unwrap();
-    let broken = temp.path().join("-broken\"%\n港📷.jpg");
+    // Windows forbids quotes/control characters in filesystem names; retain the
+    // hostile Unix name there and a valid Unicode/leading-hyphen case on Windows.
+    let name = if cfg!(windows) {
+        "-broken%港📷.jpg"
+    } else {
+        "-broken\"%\n港📷.jpg"
+    };
+    let broken = temp.path().join(name);
     std::fs::write(&broken, b"not a valid image").unwrap();
     let valid = temp.path().join("generated.png");
     image::RgbImage::from_pixel(64, 32, image::Rgb([20, 80, 50]))

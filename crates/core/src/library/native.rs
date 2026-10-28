@@ -32,19 +32,23 @@ pub fn decode_path(bytes: &[u8]) -> Result<PathBuf> {
     #[cfg(windows)]
     {
         use std::os::windows::ffi::OsStringExt;
-        if bytes.len() % 2 != 0 {
-            return Err(AppError::new(
-                ErrorCode::InvalidInput,
-                "Invalid stored native path.",
-            ));
-        }
-        let wide: Vec<u16> = bytes
-            .chunks_exact(2)
-            .map(|x| u16::from_le_bytes([x[0], x[1]]))
-            .collect();
+        let wide = decode_utf16_units(bytes)?;
         Ok(std::ffi::OsString::from_wide(&wide).into())
     }
 }
+// Keep the lossless byte-to-unit seam testable on both host platforms.
+#[cfg(any(windows, test))]
+fn decode_utf16_units(bytes: &[u8]) -> Result<Vec<u16>> {
+    let (units, remainder) = bytes.as_chunks::<2>();
+    if !remainder.is_empty() {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Invalid stored native path.",
+        ));
+    }
+    Ok(units.iter().map(|&unit| u16::from_le_bytes(unit)).collect())
+}
+
 pub fn open_root(path: &Path, expected: Option<&FileIdentity>) -> Result<File> {
     let file = filesystem::open_readonly(path)?;
     if !file.metadata()?.is_dir() {
@@ -228,4 +232,42 @@ pub fn unix_time(time: Option<std::time::SystemTime>) -> Option<String> {
             .format("%Y-%m-%dT%H:%M:%S%.fZ")
             .to_string()
     })
+}
+
+#[cfg(test)]
+mod path_codec_tests {
+    use super::*;
+    #[test]
+    fn utf16_units_remain_exact_including_non_unicode_and_empty_paths() {
+        for units in [
+            vec![],
+            vec![0x43, 0x3a, 0x5c, 0x6e2f],
+            vec![0xd800, 0x0061, 0xdc00, 0xffff],
+        ] {
+            let encoded: Vec<u8> = units
+                .iter()
+                .flat_map(|unit: &u16| unit.to_le_bytes())
+                .collect();
+            assert_eq!(decode_utf16_units(&encoded).unwrap(), units);
+        }
+    }
+    #[test]
+    fn odd_length_utf16_is_an_error_instead_of_truncation() {
+        for bytes in [vec![0], vec![0x43, 0, 0x5c]] {
+            assert_eq!(
+                decode_utf16_units(&bytes).unwrap_err().code,
+                ErrorCode::InvalidInput
+            );
+        }
+    }
+    #[test]
+    #[cfg(windows)]
+    fn windows_path_roundtrip_never_uses_a_lossy_display_string() {
+        use std::os::windows::ffi::OsStringExt;
+        let path = PathBuf::from(std::ffi::OsString::from_wide(&[
+            0x43, 0x3a, 0x5c, 0xd800, 0x0061, 0xdc00,
+        ]));
+        assert_eq!(decode_path(&encode_path(&path)).unwrap(), path);
+        assert_eq!(decode_path(&[1]).unwrap_err().code, ErrorCode::InvalidInput);
+    }
 }

@@ -151,6 +151,30 @@ mod tests {
     use std::fs;
 
     #[test]
+    #[cfg(not(unix))]
+    fn unverified_native_primitives_fail_closed_without_changing_files() {
+        let data = tempfile::tempdir().unwrap();
+        let source = data.path().join("source");
+        let destination = data.path().join("destination");
+        fs::write(&source, b"source preserved").unwrap();
+        fs::write(&destination, b"existing destination preserved").unwrap();
+        let handle = open_readonly(&source).unwrap();
+        assert_eq!(identity(&handle).unwrap_err().code, ErrorCode::Unsupported);
+        assert_eq!(
+            publish_noreplace(&source, &destination).unwrap_err().code,
+            ErrorCode::Unsupported
+        );
+        assert_eq!(
+            sync_directory(data.path()).unwrap_err().code,
+            ErrorCode::Unsupported
+        );
+        assert_eq!(fs::read(&source).unwrap(), b"source preserved");
+        assert_eq!(
+            fs::read(&destination).unwrap(),
+            b"existing destination preserved"
+        );
+    }
+    #[test]
     #[cfg(target_os = "macos")]
     fn late_arrival_cannot_be_overwritten() {
         let temp = tempfile::tempdir().unwrap();
