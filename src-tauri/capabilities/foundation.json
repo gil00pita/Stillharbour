@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "foundation",
+  "description": "Only the local main window may read foundation status or open a native picker.",
+  "windows": ["main"],
+  "local": true,
+  "permissions": ["allow-foundation-request", "allow-library-request"]
+}

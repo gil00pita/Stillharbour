@@ -1,0 +1,55 @@
+[package]
+name = "stillharbour-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[features]
+default = []
+fixture-probes = []
+
+[[example]]
+name = "foundation_probe"
+required-features = ["fixture-probes"]
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+rusqlite = { version = "=0.41.0", features = ["bundled", "backup"] }
+image = { version = "=0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+globset = "=0.4.20"
+blake3 = "=1.8.7"
+chrono = { version = "=0.4.45", default-features = false, features = ["std", "clock"] }
+ts-rs = { version = "=12.0.1", features = ["no-serde-warnings"] }
+uuid = { version = "=1.29.0", features = ["v4"] }
+fs2 = "=0.4.3"
+tempfile.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "=0.2.191"
+rustix = { version = "=1.1.6", features = ["fs"] }
+
+[lints]
+workspace = true
+
+[[example]]
+name = "library_probe"
+required-features = ["fixture-probes"]
+
+[[example]]
+name = "packaged_library_probe"
+required-features = ["fixture-probes"]
+
+[[example]]
+name = "performance_probe"
+required-features = ["fixture-probes"]
+
+[build-dependencies]
+cc = "=1.10.0"
+
+[[example]]
+name = "format_probe"
+required-features = ["fixture-probes"]

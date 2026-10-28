@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "example_only": true,
+  "note": "Design example, not an implemented or dependency-specific configuration.",
+  "source_root_uuid": "RESOLVE_CURRENT_BASE_ROOT_AT_PROFILE_CREATION",
+  "additional_root_uuids": [],
+  "destination": "SELECT_WITH_NATIVE_PICKER",
+  "mode": "safe_copy_one_way",
+  "scope": "all_eligible_regular_files",
+  "include_hidden_files": true,
+  "gallery_filters_apply": false,
+  "comparison": "verified_content",
+  "destination_only": "retain",
+  "different_content": "require_review",
+  "replacement": "retain_previous_version",
+  "retain_source": true,
+  "automatic_history_expiry": false,
+  "source_mutation_requires_independent_recovery_evidence": true,
+  "transfer": {
+    "preset": "quiet",
+    "logical_transfer_bytes_per_second": 10485760,
+    "active_transfers": 1,
+    "per_file_streams": 1,
+    "maximum_burst_bytes": 262144,
+    "maximum_burst_seconds": 0.25,
+    "shared_job_budget": true,
+    "verification_io_accounted": true,
+    "unsupported_controls": "show_unavailable_not_fake_enforced"
+  },
+  "verification": "full_read_back_and_byte_compare",
+  "on_integrity_mismatch": "stop_affected_operation_preserve_all_versions",
+  "on_skip": "report_partial_unprotected_scope"
+}

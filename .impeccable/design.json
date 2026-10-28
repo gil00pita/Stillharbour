@@ -1,0 +1,598 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-28T15:02:23Z",
+  "title": "Design System: Stillharbour",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Background",
+        "tonalRamp": [
+          "#090c0d",
+          "#222528",
+          "#3f4345",
+          "#5e6264",
+          "#7f8385",
+          "#a1a5a8",
+          "#c6cacd",
+          "#ebeff2"
+        ]
+      },
+      "sidebar": {
+        "role": "neutral",
+        "displayName": "Sidebar",
+        "tonalRamp": [
+          "#090c0d",
+          "#222627",
+          "#3f4344",
+          "#5e6263",
+          "#7f8384",
+          "#a2a6a7",
+          "#c6cacb",
+          "#ebeff1"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "tonalRamp": [
+          "#080c0e",
+          "#222628",
+          "#3e4345",
+          "#5d6264",
+          "#7e8386",
+          "#a1a6a8",
+          "#c5cacd",
+          "#eaeff2"
+        ]
+      },
+      "text": {
+        "role": "neutral",
+        "displayName": "Text",
+        "tonalRamp": [
+          "#0a0b0b",
+          "#242525",
+          "#414242",
+          "#606261",
+          "#818382",
+          "#a3a5a4",
+          "#c8cac9",
+          "#edefee"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "tonalRamp": [
+          "#070c0e",
+          "#202628",
+          "#3d4345",
+          "#5c6365",
+          "#7d8486",
+          "#9fa6a9",
+          "#c3cbcd",
+          "#e8f0f3"
+        ]
+      },
+      "muted": {
+        "role": "neutral",
+        "displayName": "Muted",
+        "tonalRamp": [
+          "#060d0c",
+          "#1f2726",
+          "#3c4443",
+          "#5a6363",
+          "#7b8584",
+          "#9da7a6",
+          "#c1cccb",
+          "#e6f1f0"
+        ]
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Accent",
+        "tonalRamp": [
+          "#001008",
+          "#0f2b21",
+          "#2d493e",
+          "#4c695d",
+          "#6c8a7d",
+          "#8eada0",
+          "#b2d2c4",
+          "#d7f7e9"
+        ]
+      },
+      "action-text": {
+        "role": "primary",
+        "displayName": "Action Text",
+        "tonalRamp": [
+          "#000f08",
+          "#152a21",
+          "#32483e",
+          "#51675d",
+          "#71897d",
+          "#93aca0",
+          "#b7d0c4",
+          "#dcf6e9"
+        ]
+      },
+      "action-hover": {
+        "role": "primary",
+        "displayName": "Action Hover",
+        "tonalRamp": [
+          "#010f08",
+          "#172922",
+          "#34473e",
+          "#52675d",
+          "#73887e",
+          "#95aba1",
+          "#b9cfc5",
+          "#def5ea"
+        ]
+      },
+      "navigation": {
+        "role": "primary",
+        "displayName": "Navigation",
+        "tonalRamp": [
+          "#040e0a",
+          "#1c2824",
+          "#394541",
+          "#576560",
+          "#788681",
+          "#9aa9a4",
+          "#becdc8",
+          "#e3f3ed"
+        ]
+      },
+      "navigation-text": {
+        "role": "neutral",
+        "displayName": "Navigation Text",
+        "tonalRamp": [
+          "#070d0a",
+          "#202723",
+          "#3c4440",
+          "#5b645f",
+          "#7c8580",
+          "#9ea7a3",
+          "#c2ccc7",
+          "#e7f1ec"
+        ]
+      },
+      "library-navigation": {
+        "role": "primary",
+        "displayName": "Library Navigation",
+        "tonalRamp": [
+          "#000f07",
+          "#162a20",
+          "#33473d",
+          "#52675c",
+          "#72887d",
+          "#94ab9f",
+          "#b8d0c3",
+          "#ddf5e8"
+        ]
+      },
+      "control": {
+        "role": "neutral",
+        "displayName": "Control",
+        "tonalRamp": [
+          "#070d0a",
+          "#202724",
+          "#3d4441",
+          "#5b6360",
+          "#7c8581",
+          "#9fa7a3",
+          "#c3ccc8",
+          "#e8f1ed"
+        ]
+      },
+      "control-border": {
+        "role": "neutral",
+        "displayName": "Control Border",
+        "tonalRamp": [
+          "#050d0b",
+          "#1e2725",
+          "#3b4542",
+          "#596461",
+          "#7a8582",
+          "#9ca8a4",
+          "#c0ccc9",
+          "#e5f2ee"
+        ]
+      },
+      "control-hover": {
+        "role": "neutral",
+        "displayName": "Control Hover",
+        "tonalRamp": [
+          "#040e08",
+          "#1c2822",
+          "#39463f",
+          "#57655e",
+          "#78867e",
+          "#9aa9a1",
+          "#becec5",
+          "#e3f3ea"
+        ]
+      },
+      "pressed": {
+        "role": "primary",
+        "displayName": "Pressed",
+        "tonalRamp": [
+          "#000f08",
+          "#162a21",
+          "#33473e",
+          "#51675d",
+          "#72887d",
+          "#94aba0",
+          "#b8d0c4",
+          "#ddf5e9"
+        ]
+      },
+      "selected": {
+        "role": "primary",
+        "displayName": "Selected",
+        "tonalRamp": [
+          "#010f07",
+          "#172a20",
+          "#33483c",
+          "#52675b",
+          "#72887c",
+          "#94ab9e",
+          "#b8d0c2",
+          "#ddf6e7"
+        ]
+      },
+      "field": {
+        "role": "neutral",
+        "displayName": "Field",
+        "tonalRamp": [
+          "#080c0e",
+          "#222628",
+          "#3e4345",
+          "#5d6265",
+          "#7e8386",
+          "#a0a6a8",
+          "#c5cacd",
+          "#eaeff2"
+        ]
+      },
+      "field-border": {
+        "role": "neutral",
+        "displayName": "Field Border",
+        "tonalRamp": [
+          "#050d0c",
+          "#1e2726",
+          "#3b4443",
+          "#596463",
+          "#7a8584",
+          "#9ca8a6",
+          "#c0cccb",
+          "#e5f1f0"
+        ]
+      },
+      "switch-border": {
+        "role": "neutral",
+        "displayName": "Switch Border",
+        "tonalRamp": [
+          "#040e09",
+          "#1c2823",
+          "#384640",
+          "#57655f",
+          "#77867f",
+          "#9aa9a2",
+          "#becec6",
+          "#e2f3eb"
+        ]
+      },
+      "tag": {
+        "role": "primary",
+        "displayName": "Tag",
+        "tonalRamp": [
+          "#010f07",
+          "#172a20",
+          "#34473d",
+          "#53675c",
+          "#73887d",
+          "#95ab9f",
+          "#b9d0c3",
+          "#def5e8"
+        ]
+      },
+      "preview": {
+        "role": "neutral",
+        "displayName": "Preview",
+        "tonalRamp": [
+          "#080c0b",
+          "#212625",
+          "#3e4342",
+          "#5d6361",
+          "#7e8482",
+          "#a0a6a5",
+          "#c4cbc9",
+          "#e9f0ef"
+        ]
+      },
+      "availability-background": {
+        "role": "neutral",
+        "displayName": "Availability Background",
+        "tonalRamp": [
+          "#110903",
+          "#2c231a",
+          "#4a4037",
+          "#695f55",
+          "#8b8076",
+          "#aea398",
+          "#d3c7bc",
+          "#f8ece0"
+        ]
+      },
+      "availability-text": {
+        "role": "neutral",
+        "displayName": "Availability Text",
+        "tonalRamp": [
+          "#160700",
+          "#32210a",
+          "#513e27",
+          "#715d45",
+          "#937e65",
+          "#b7a187",
+          "#dcc5aa",
+          "#ffeacf"
+        ]
+      },
+      "sidebar-version": {
+        "role": "neutral",
+        "displayName": "Sidebar Version",
+        "tonalRamp": [
+          "#060d0c",
+          "#1f2726",
+          "#3c4443",
+          "#5a6363",
+          "#7b8584",
+          "#9da7a6",
+          "#c1cccb",
+          "#e6f1f0"
+        ]
+      },
+      "error-border": {
+        "role": "neutral",
+        "displayName": "Error Border",
+        "tonalRamp": [
+          "#1b0300",
+          "#391c10",
+          "#59392c",
+          "#7a584b",
+          "#9d796b",
+          "#c19b8c",
+          "#e6c0b0",
+          "#ffe5d4"
+        ]
+      },
+      "error-background": {
+        "role": "neutral",
+        "displayName": "Error Background",
+        "tonalRamp": [
+          "#130805",
+          "#2e221d",
+          "#4d3e39",
+          "#6d5d58",
+          "#8e7e78",
+          "#b2a19a",
+          "#d7c5be",
+          "#fceae3"
+        ]
+      },
+      "error-text": {
+        "role": "neutral",
+        "displayName": "Error Text",
+        "tonalRamp": [
+          "#1d0200",
+          "#3b1a0d",
+          "#5c382a",
+          "#7d5748",
+          "#a07768",
+          "#c59a8a",
+          "#ebbead",
+          "#ffe3d1"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "First-run headline",
+        "purpose": "The existing native setup welcome, not a new display voice."
+      },
+      "title": {
+        "displayName": "Shell title",
+        "purpose": "Compact native toolbar heading."
+      },
+      "control": {
+        "displayName": "Compact controls",
+        "purpose": "Working-library buttons and fields."
+      },
+      "label": {
+        "displayName": "Quiet metadata",
+        "purpose": "Provenance, dates and status."
+      },
+      "filter-title": {
+        "displayName": "Filters title",
+        "purpose": "Heading in the right-side browsing dialog."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "scan-activity",
+        "value": "1.8s ease-in-out infinite alternate",
+        "purpose": "Indeterminate scan segment only; reduced motion uses a static centred segment."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "compact-type",
+        "value": "850px"
+      },
+      {
+        "name": "reduced-list",
+        "value": "1050px"
+      },
+      {
+        "name": "compact-library",
+        "value": "760px"
+      },
+      {
+        "name": "below-native-minimum",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary folder action",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The spacious first-run action.",
+      "html": "<button class=\"ds-primary\">Choose a folder</button>",
+      "css": ".ds-primary{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;border:0;background:var(--accent, #b6d6c8);color:#162b22;font-weight:600;font-size:13px;border-radius:6px;padding:13px 23px;min-height:44px;cursor:pointer}.ds-primary:hover:enabled{background:#cee5da}.ds-primary:focus-visible{outline:2px solid var(--accent, #b6d6c8);outline-offset:2px;outline-offset:5px}.ds-primary:disabled{opacity:.55;cursor:default}"
+    },
+    {
+      "name": "Secondary action",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Compact working-library Filter and viewer controls.",
+      "html": "<button class=\"ds-secondary\" aria-haspopup=\"dialog\" aria-expanded=\"false\">Filter</button>",
+      "css": ".ds-secondary{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;border:1px solid #3c4643;background:#242b28;color:#e2ece7;border-radius:5px;padding:8px 12px;font-size:12px;min-height:34px;cursor:pointer;}.ds-secondary:hover:enabled{background:#35423b}.ds-secondary:focus-visible{outline:2px solid var(--accent, #b6d6c8);outline-offset:2px;outline-offset:5px}.ds-secondary:disabled{opacity:.55;cursor:default}"
+    },
+    {
+      "name": "Filename search",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Persistent filename search in Photos; Folders reuses the field for direct-file filtering or library-label search.",
+      "html": "<input class=\"ds-search\" type=\"search\" aria-label=\"Search filenames\" placeholder=\"Search filenames…\">",
+      "css": ".ds-search{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;font-size:12px;color:#e7e9e8;background:#161a1c;border:1px solid #46504f;border-radius:5px;padding:9px 10px;min-width:0;width:100%}.ds-search::placeholder{color:var(--muted, #a9b3b2);opacity:1}.ds-search:hover{border-color:#46504f}.ds-search:focus-visible{outline:2px solid var(--accent, #b6d6c8);outline-offset:2px;}.ds-search:disabled{opacity:.55}"
+    },
+    {
+      "name": "Library navigation",
+      "kind": "nav",
+      "refersTo": "library-navigation-current",
+      "description": "Flat main navigation with a separately named, bottom-anchored Settings footer and runtime version. Only primary navigation scrolls; collapsed source retains names and active state. Jobs uses the shared header dropdown on every screen, including onboarding.",
+      "html": "<aside class=\"ds-nav\" aria-label=\"Navigation example\"><nav class=\"ds-nav-main\" aria-label=\"Main navigation\"><button type=\"button\" aria-label=\"Photos\" aria-current=\"page\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"M4 4h16v16H4ZM4 15l5-5 5 5 3-3 3 3\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg><span>Photos</span></button><button type=\"button\" aria-label=\"Folders\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"M3 7h7l2 2h9v11H3ZM3 7V4h7l2 3\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg><span>Folders</span></button><button type=\"button\" aria-label=\"Albums / Tags\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"M3 3h8l10 10-8 8L3 11ZM7 7h.01\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg><span>Albums / Tags</span></button><button type=\"button\" disabled title=\"Map browsing is planned for a later milestone\">Map <small>Coming later</small></button><button type=\"button\" disabled title=\"File operations remain unavailable in this read-only release\">Utilities <small>Coming later</small></button></nav><footer class=\"ds-nav-footer\"><nav aria-label=\"Workspace actions\"><button type=\"button\" aria-label=\"Settings\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg><span>Settings</span></button></nav><p aria-label=\"Application version\">Version 0.1.0</p></footer></aside>",
+      "css": ".ds-nav{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;flex-direction:column;min-height:0;width:188px;max-width:100%;height:460px;padding:24px 20px;background:var(--sidebar,#121516);color:var(--text,#e7e9e8);overflow:hidden}.ds-nav nav{display:flex;flex-direction:column;gap:5px}.ds-nav-main{flex:1;min-height:0;overflow-y:auto}.ds-nav-footer{flex-shrink:0;margin-top:auto;padding-top:16px;border-top:1px solid var(--border,#303638)}.ds-nav button{position:relative;flex-shrink:0;display:flex;align-items:center;justify-content:flex-start;gap:12px;width:100%;font-family:inherit;font-size:12px;min-height:34px;background:transparent;color:var(--navigation-text,#e2ece7);border:0;border-radius:5px;padding:12px;text-align:left;cursor:pointer}.ds-nav button[aria-current=\"page\"]{background:var(--library-navigation,#263a30)}.ds-nav button:hover:enabled{background:var(--control-hover,#35423b)}.ds-nav button:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:5px}.ds-nav button:disabled{opacity:.55;cursor:default}.ds-nav svg{flex-shrink:0}.ds-nav small{font-size:10px;color:var(--muted,#a9b3b2)}.ds-nav-footer p{margin:0;padding:20px 6px 4px;font-size:11px;color:var(--muted,#a9b3b2)}"
+    },
+    {
+      "name": "Selected folder container",
+      "kind": "card",
+      "refersTo": "selected-folder",
+      "description": "The existing setup boundary, not a photo-card pattern.",
+      "html": "<section class=\"ds-folder\"><h3>Selected library</h3><p>Not scanned</p><button>Save &amp; Start scanning</button></section>",
+      "css": ".ds-folder{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;color:#e7e9e8;border:1px solid var(--border, #303638);border-radius:8px;padding:18px 20px}.ds-folder h3{font-size:13px;font-weight:550;margin:0}.ds-folder p{color:var(--accent, #b6d6c8);font-size:11px}.ds-folder button{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;border:1px solid #3c4643;background:#242b28;color:#e2ece7;border-radius:5px;padding:8px 12px;font-size:12px;min-height:34px;cursor:pointer;}.ds-folder button:hover:enabled{background:#35423b}.ds-folder button:focus-visible{outline:2px solid var(--accent, #b6d6c8);outline-offset:2px;}"
+    },
+    {
+      "name": "Scan-list tag",
+      "kind": "chip",
+      "refersTo": "tag",
+      "description": "Catalog/setup tag chip with a separately named removal control.",
+      "html": "<span class=\"ds-tag\"><bdi>jpg</bdi><button aria-label=\"Remove jpg\"><svg width=\"12\" height=\"12\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" aria-hidden=\"true\"><path d=\"m4 4 8 8M12 4l-8 8\"/></svg></button></span>",
+      "css": ".ds-tag{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:inline-flex;align-items:center;gap:3px;max-width:100%;background:#2d4036;color:#e2ece7;border-radius:4px;padding:0 0 0 8px;font-size:12px}.ds-tag bdi{overflow-wrap:anywhere}.ds-tag button{border:0;background:transparent;color:inherit;display:grid;place-items:center;width:28px;height:28px;padding:0;cursor:pointer}.ds-tag button:hover:enabled{background:#35423b}.ds-tag button:focus-visible{outline:2px solid var(--accent, #b6d6c8);outline-offset:2px;outline-offset:-2px}.ds-tag button:disabled{opacity:.55}"
+    },
+    {
+      "name": "Shown-date heading",
+      "kind": "custom",
+      "refersTo": "field",
+      "description": "Compact day context and scoped selection above Timeline images.",
+      "html": "<div class=\"ds-date\"><input type=\"checkbox\" aria-label=\"Select 3 shown photos from Today\"><h2>Today</h2><small>3 shown</small></div>",
+      "css": ".ds-date{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;align-items:center;gap:7px;height:36px;min-width:0;color:#e7e9e8}.ds-date h2{font-size:13px;font-weight:550;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;margin:0}.ds-date small{font-size:10px;color:var(--muted, #a9b3b2);white-space:nowrap}.ds-date input{width:16px;height:16px;margin:0;accent-color:var(--accent, #b6d6c8);opacity:0}.ds-date:hover input,.ds-date:focus-within input,.ds-date input:checked{opacity:1}.ds-date input:focus-visible{outline:2px solid var(--accent, #b6d6c8);outline-offset:2px;}"
+    },
+    {
+      "name": "Native switch",
+      "kind": "input",
+      "refersTo": "switch-off",
+      "description": "Shared native-checkbox switch for scan options and Settings defaults.",
+      "html": "<label class=\"ds-switch\"><span>Read only by default</span><input type=\"checkbox\" role=\"switch\"></label>",
+      "css": ".ds-switch{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;align-items:center;justify-content:space-between;gap:14px;min-height:38px;color:#c7cecb;font-size:12px;cursor:pointer}.ds-switch input{appearance:none;position:relative;width:36px;height:22px;flex:0 0 36px;padding:0;margin:0;border:1px solid #75847d;border-radius:12px;background:#3c4643;cursor:pointer}.ds-switch input::before{content:\"\";position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#e7e9e8}.ds-switch input:checked{border-color:var(--accent,#b6d6c8);background:var(--accent,#b6d6c8)}.ds-switch input:checked::before{transform:translateX(14px);background:#162b22}.ds-switch input:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:2px}.ds-switch input:disabled{opacity:.55;cursor:default}@media(forced-colors:active){.ds-switch input{background:Canvas;border-color:CanvasText}.ds-switch input:checked{background:Highlight}.ds-switch input::before,.ds-switch input:checked::before{background:CanvasText}}"
+    },
+    {
+      "name": "Indexed photo folder",
+      "kind": "custom",
+      "description": "Flat Settings location row with root details, reconnect and explicitly named removal actions; scan controls live in the separate inline Scan settings group.",
+      "html": "<div class=\"ds-location\"><div><h3>Photo folder</h3><p class=\"ds-location-path\"><bdi>/Photos</bdi></p><p class=\"ds-location-help\">online · 20 indexed · Managed</p></div><div class=\"ds-location-actions\"><button aria-label=\"Change location for Photo folder\">Change location</button><button class=\"ds-location-remove\" aria-label=\"Remove library Photo folder\">Remove library</button></div></div>",
+      "css": ".ds-location{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:18px;padding:16px 0;border-top:1px solid var(--border,#303638);color:#e7e9e8}.ds-location h3{font-size:13px;font-weight:550;margin:0 0 6px}.ds-location-path{font-size:12px;line-height:1.6;overflow-wrap:anywhere;white-space:pre-wrap;margin:9px 0 0;color:var(--muted,#a9b3b2)}.ds-location-help{font-size:12px;line-height:1.6;margin:10px 0;color:var(--muted,#a9b3b2)}.ds-location-actions{display:flex;flex-wrap:wrap;align-items:start;gap:8px}.ds-location button{font-family:inherit;border:1px solid #3c4643;background:#242b28;color:#e2ece7;border-radius:5px;padding:8px 12px;font-size:12px;min-height:34px;cursor:pointer}.ds-location button:hover:enabled{background:#35423b}.ds-location button:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:5px}.ds-location button:disabled{opacity:.55;cursor:default}@media(max-width:760px){.ds-location{grid-template-columns:minmax(0,1fr);gap:10px}}.ds-location .ds-location-remove{color:#ead3b8}"
+    },
+    {
+      "name": "Filter panel",
+      "kind": "custom",
+      "refersTo": "filter-panel",
+      "description": "Right-side modal browsing surface: persistent header/footer, scrolling draft fields and explicit Apply; Close and Escape discard edits.",
+      "html": "<section class=\"ds-filter\" aria-label=\"Filters panel example\"><header class=\"ds-filter-header\"><h2>Filters</h2><button type=\"button\">Close</button></header><div class=\"ds-filter-body\"><p>20 matching photos &amp; videos</p><section><h3>Library &amp; sorting</h3><label>Library<select><option>All libraries</option></select></label><label>Sort<select><option>Capture Date · newest first</option><option>Filename</option><option>Size · largest first</option><option>Recently added</option><option>Modified Date · newest first</option></select></label></section><section><h3>Display</h3><div class=\"ds-filter-views\"><button type=\"button\" aria-pressed=\"true\">Timeline</button><button type=\"button\" aria-pressed=\"false\">Uniform grid</button><button type=\"button\" aria-pressed=\"false\">Text list</button></div></section></div><footer class=\"ds-filter-actions\"><button type=\"button\">Reset filters</button><button type=\"button\" class=\"ds-filter-apply\">Apply filters</button></footer></section>",
+      "css": ".ds-filter{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;flex-direction:column;width:min(380px,92vw);max-width:100%;height:440px;background:var(--surface,#1d2123);color:var(--text,#e7e9e8);border-left:1px solid var(--border,#303638);margin-left:auto}.ds-filter-header{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border,#303638)}.ds-filter h2{margin:0;font-size:18px}.ds-filter-body{flex:1;min-height:0;overflow-y:auto;padding:16px 20px}.ds-filter-body p{font-size:12px;line-height:1.6;color:var(--muted,#a9b3b2)}.ds-filter-body section{padding:16px 0;border-bottom:1px solid var(--border,#303638)}.ds-filter h3{font-size:13px;margin:0 0 12px}.ds-filter label{display:grid;gap:7px;font-size:12px;margin-bottom:14px}.ds-filter select{min-width:0;background:var(--field,#161a1c);color:var(--text,#e7e9e8);border:1px solid var(--field-border,#46504f);border-radius:5px;font:inherit}.ds-filter button{font-family:inherit;border:1px solid var(--control-border,#3c4643);background:var(--control,#242b28);color:var(--navigation-text,#e2ece7);border-radius:5px;padding:8px 12px;font-size:12px;min-height:34px;cursor:pointer}.ds-filter button:hover:enabled{background:var(--control-hover,#35423b)}.ds-filter button[aria-pressed=\"true\"]{background:var(--pressed,#3c5147)}.ds-filter button:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:5px}.ds-filter select:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:2px}.ds-filter button:disabled{opacity:.55;cursor:default}.ds-filter-views{display:flex;flex-wrap:wrap;gap:6px}.ds-filter-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:14px 20px;border-top:1px solid var(--border,#303638)}.ds-filter button.ds-filter-apply{border:0;background:var(--accent,#b6d6c8);color:var(--action-text,#162b22);padding:13px 23px;min-height:44px;font-size:13px;font-weight:600;border-radius:6px}.ds-filter button.ds-filter-apply:hover:enabled{background:var(--action-hover,#cee5da)}"
+    },
+    {
+      "name": "Library maintenance review",
+      "kind": "custom",
+      "description": "Inline Settings review for removing a named library or clearing indexed previews for all libraries. Source owns plan loading, counts, confirmation, failure states and focus restoration.",
+      "html": "<section class=\"ds-maintenance\" aria-labelledby=\"ds-maintenance-title\"><h3 id=\"ds-maintenance-title\" tabindex=\"-1\">Remove this library?</h3><p>This forgets the selected folder, its indexed records, catalog favorites, ratings, tags and scan history, and clears its indexed cached previews. You can add the folder again, but its catalog notes will not return.</p><p class=\"ds-maintenance-help\">Original photos and sidecars stay unchanged. Only indexed previews are cleared; unexpected files are retained.</p><p class=\"ds-maintenance-path\"><bdi>/Photos</bdi></p><p class=\"ds-maintenance-help\"><strong><bdi>Photo folder</bdi></strong> · 20 catalog records · 0 cached previews · 0 bytes</p><div class=\"ds-maintenance-actions\"><button type=\"button\">Cancel</button><button type=\"button\" class=\"ds-maintenance-remove\">Remove library and its previews</button></div></section>",
+      "css": ".ds-maintenance{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;color:#e7e9e8;margin:22px 0;padding:20px;border:1px solid var(--border,#303638)}.ds-maintenance h3{font-size:13px;font-weight:550;margin:0}.ds-maintenance p{font-size:16px;max-width:72ch;line-height:1.6}.ds-maintenance .ds-maintenance-help{font-size:12px;color:var(--muted,#a9b3b2);margin:10px 0}.ds-maintenance .ds-maintenance-path{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere;margin:9px 0 0;color:var(--muted,#a9b3b2)}.ds-maintenance-actions{display:flex;flex-wrap:wrap;align-items:start;gap:8px;margin-top:18px}.ds-maintenance button{font-family:inherit;border:1px solid #3c4643;background:#242b28;color:#e2ece7;border-radius:5px;padding:8px 12px;font-size:12px;min-height:34px;cursor:pointer}.ds-maintenance button:hover:enabled{background:#35423b}.ds-maintenance button:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:5px}.ds-maintenance button:disabled{opacity:.55;cursor:default}.ds-maintenance .ds-maintenance-remove{color:#ead3b8}"
+    },
+    {
+      "name": "Folders explorer",
+      "kind": "custom",
+      "refersTo": "explorer-entry",
+      "description": "Named immediate-child navigation in the native shell. Icons uses contained cached media or SVG glyphs; Details is image-free. Source owns bounded paging, directory scope and state handling.",
+      "html": "<section class=\"ds-explorer\"><div class=\"ds-explorer-controls\"><button type=\"button\">Back</button><button type=\"button\">Up</button><div class=\"ds-explorer-views\" aria-label=\"Folder view\"><button type=\"button\" aria-pressed=\"true\">Icons</button><button type=\"button\" aria-pressed=\"false\">Details</button></div></div><nav aria-label=\"Folder path\"><button type=\"button\">Libraries</button><span aria-hidden=\"true\">/</span><span aria-current=\"location\"><bdi>Photo folder</bdi></span></nav><p class=\"ds-explorer-help\">online · 2 indexed items in this folder</p><div class=\"ds-explorer-items\"><button type=\"button\" class=\"ds-explorer-entry\" aria-label=\"Open folder Coast\"><span class=\"ds-explorer-glyph\"><svg width=\"42\" height=\"42\" viewBox=\"0 0 48 48\" fill=\"none\" aria-hidden=\"true\"><path d=\"M5 14h15l5 5h18v23H5ZM5 14V8h15l5 6\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg></span><span class=\"ds-explorer-name\"><bdi>Coast</bdi></span><span class=\"ds-explorer-kind\">Folder</span></button><button type=\"button\" class=\"ds-explorer-entry\" aria-label=\"Open notes.xmp\"><span class=\"ds-explorer-glyph\"><svg width=\"42\" height=\"42\" viewBox=\"0 0 48 48\" fill=\"none\" aria-hidden=\"true\"><path d=\"M12 5h17l9 9v29H12ZM29 5v10h9\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg></span><span class=\"ds-explorer-name\"><bdi>notes.xmp</bdi></span><span class=\"ds-explorer-kind\">File</span></button></div><div class=\"ds-explorer-details\"><button type=\"button\" class=\"ds-explorer-entry\"><span class=\"ds-explorer-name\"><bdi>notes.xmp</bdi></span><span class=\"ds-explorer-kind\">38 B · File</span></button></div></section>",
+      "css": ".ds-explorer{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;background:var(--background,#16191b);color:var(--text,#e7e9e8);padding:16px 24px 12px;min-width:0}.ds-explorer-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.ds-explorer-views{display:flex;gap:6px;margin-left:auto}.ds-explorer button{font-family:inherit;font-size:12px;border:1px solid var(--control-border,#3c4643);background:var(--control,#242b28);color:var(--navigation-text,#e2ece7);border-radius:5px;padding:8px 12px;min-height:34px;cursor:pointer}.ds-explorer button:hover:enabled{background:var(--control-hover,#35423b)}.ds-explorer button:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:5px}.ds-explorer button[aria-pressed=\"true\"]{background:var(--pressed,#3c5147)}.ds-explorer button:disabled{opacity:.55;cursor:default}.ds-explorer nav{display:flex;align-items:center;gap:6px;overflow-x:auto;white-space:nowrap;font-size:12px;margin-top:8px;max-width:100%}.ds-explorer nav>*{flex-shrink:0}.ds-explorer-help{font-size:12px;color:var(--muted,#a9b3b2);margin:14px 0 4px}.ds-explorer-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.ds-explorer button.ds-explorer-entry{display:flex;flex-direction:column;width:100%;min-width:0;gap:6px;padding:8px;border:1px solid transparent;border-radius:4px;text-align:left;background:transparent;color:inherit}.ds-explorer button.ds-explorer-entry:hover:enabled{background:var(--surface,#1d2123);border-color:var(--border,#303638)}.ds-explorer-glyph{display:flex;align-items:center;justify-content:center;width:100%;height:132px;color:var(--accent,#b6d6c8)}.ds-explorer-name,.ds-explorer-kind{width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.ds-explorer-name{font-size:12px}.ds-explorer-kind{font-size:11px;color:var(--muted,#a9b3b2)}.ds-explorer-details{margin-top:12px}.ds-explorer-details button.ds-explorer-entry{flex-direction:row;align-items:center;gap:18px;height:64px;border-bottom-color:var(--border,#303638);border-radius:0}.ds-explorer-details .ds-explorer-name{flex:1}.ds-explorer-details .ds-explorer-kind{width:40%;text-align:right}"
+    },
+    {
+      "name": "Text list",
+      "kind": "custom",
+      "description": "Image-free 54px catalog rows with actual Modified Date by default, a shared native Sort control and a scrollable Columns checkbox disclosure. Name stays visible; header and rows scroll horizontally together. Source owns column updates/reset, mounted-screen lifetime, fixed-direction native sorting/aria-sort, busy states, menu dismissal/focus and independent selection/open behavior; the specimen shows generated fixture data.",
+      "html": "<section class=\"ds-text-list\" aria-label=\"Text list example\"><div class=\"ds-text-controls\"><label>Sort <select aria-label=\"Text list sort\"><option>Capture Date · newest first</option><option>Filename</option><option>Size · largest first</option><option>Recently added</option><option selected>Modified Date · newest first</option></select></label><details class=\"ds-text-columns\"><summary>Columns</summary><fieldset><legend>Visible columns</legend><label><input type=\"checkbox\" checked disabled> Name (always shown)</label><label><input type=\"checkbox\" checked> Modified Date</label><label><input type=\"checkbox\" checked> Size</label><label><input type=\"checkbox\" checked> Dimensions</label><label><input type=\"checkbox\" checked> Folder</label><label><input type=\"checkbox\" checked> Status</label><label><input type=\"checkbox\"> Capture Date</label><label><input type=\"checkbox\"> Date Source</label><label><input type=\"checkbox\"> Added Date</label><label><input type=\"checkbox\"> File Format</label><label><input type=\"checkbox\"> Camera</label><label><input type=\"checkbox\"> Rating</label><label><input type=\"checkbox\"> Tags</label><button type=\"button\">Reset columns</button></fieldset></details></div><div class=\"ds-text-scroll\"><div class=\"ds-text-table\" role=\"table\" aria-label=\"Library files\"><div class=\"ds-text-head\" role=\"row\"><span role=\"columnheader\" aria-label=\"Selection\"></span><span role=\"columnheader\"><button type=\"button\" title=\"Sort by filename, A to Z\">Name</button></span><span role=\"columnheader\" aria-sort=\"descending\"><button type=\"button\" title=\"Sort by Modified Date, newest first\">Modified Date<svg width=\"12\" height=\"12\" viewBox=\"0 0 16 16\" fill=\"none\" aria-hidden=\"true\"><path d=\"m4 6 4 4 4-4\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg></button></span><span role=\"columnheader\"><button type=\"button\" title=\"Sort by size, largest first\">Size</button></span><span role=\"columnheader\">Dimensions</span><span role=\"columnheader\">Folder</span><span role=\"columnheader\">Status</span></div><div class=\"ds-text-row\" role=\"row\"><span role=\"cell\" class=\"ds-text-selection\"><input type=\"checkbox\" aria-label=\"Select Generated-00.jpg\"></span><span role=\"cell\"><button type=\"button\" class=\"ds-text-open\" aria-label=\"Open Generated-00.jpg\"><bdi>Generated-00.jpg</bdi></button></span><span role=\"cell\" title=\"2026-10-28T12:47:57Z\"><bdi>2026-10-28 12:47:57</bdi></span><span role=\"cell\">8.4 KB</span><span role=\"cell\">600 × 380</span><span role=\"cell\"><bdi>Coast</bdi></span><span role=\"cell\">ready</span></div></div></div></section>",
+      "css": ".ds-text-list{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;background:var(--background,#16191b);color:var(--text,#e7e9e8);min-width:0;font-size:12px}.ds-text-controls{display:flex;align-items:end;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:12px}.ds-text-controls>label{display:flex;align-items:center;gap:8px;color:var(--muted,#a9b3b2)}.ds-text-list select{background:var(--field,#161a1c);color:var(--text,#e7e9e8);border:1px solid var(--field-border,#46504f);border-radius:5px;font:inherit;min-width:0}.ds-text-list button{font-family:inherit;font-size:12px;border:1px solid var(--control-border,#3c4643);background:var(--control,#242b28);color:var(--navigation-text,#e2ece7);border-radius:5px;padding:8px 12px;min-height:34px;cursor:pointer}.ds-text-list button:hover:enabled{background:var(--control-hover,#35423b)}.ds-text-list button:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:5px}.ds-text-columns summary:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:2px}.ds-text-list select:focus-visible,.ds-text-list input:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:2px}.ds-text-list button:disabled,.ds-text-list select:disabled,.ds-text-list input:disabled{opacity:.55;cursor:default}.ds-text-columns{position:relative}.ds-text-columns summary{padding:8px 12px;border:1px solid var(--border,#303638);border-radius:5px;cursor:pointer}.ds-text-columns fieldset{position:absolute;top:100%;right:0;z-index:5;width:240px;max-width:calc(100vw - 48px);max-height:min(350px,55vh);overflow-y:auto;margin:6px 0 0;padding:12px;background:var(--surface,#1d2123);border:1px solid var(--border,#303638);border-radius:5px}.ds-text-columns legend{float:left;width:100%;margin-bottom:8px;font-size:12px;font-weight:600}.ds-text-columns label{clear:both;display:flex;align-items:center;gap:10px;padding:6px 0}.ds-text-columns button{margin-top:8px}.ds-text-list input{width:16px;height:16px;accent-color:var(--accent,#b6d6c8)}.ds-text-scroll{overflow-x:auto}.ds-text-table{min-width:826px}.ds-text-head,.ds-text-row{display:grid;grid-template-columns:36px minmax(180px,1fr) 170px 80px 100px 130px 130px;align-items:center;border-bottom:1px solid var(--border,#303638);font-size:12px}.ds-text-head{min-height:40px;color:var(--muted,#a9b3b2)}.ds-text-row{height:54px}.ds-text-head>span,.ds-text-row>span{min-width:0;padding-right:12px}.ds-text-row>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.ds-text-head button,.ds-text-row .ds-text-open{display:flex;align-items:center;gap:6px;padding:0;border:0;border-radius:0;background:transparent;color:inherit;text-align:left}.ds-text-head button{min-height:36px}.ds-text-head [aria-sort]{color:var(--accent,#b6d6c8)}.ds-text-row .ds-text-open{display:block;max-width:100%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.ds-text-list .ds-text-open:focus-visible{outline-offset:-3px}.ds-text-row .ds-text-selection{padding:0}.ds-text-selection input{display:block;margin:0 auto}"
+    },
+    {
+      "name": "Header Jobs",
+      "kind": "custom",
+      "description": "Shared nonmodal header dropdown with an active scan count, plain progress rows and collapsed Recent jobs. Generated fixture specimen; source owns native status polling, viewport positioning, focus entry/return, outside dismissal, details loading/errors and ID-only cancellation. No separate Jobs page or scan banner.",
+      "html": "<div class=\"ds-jobs\"><div class=\"ds-jobs-header\"><button type=\"button\" class=\"ds-jobs-trigger\" aria-label=\"Jobs\" aria-expanded=\"true\" aria-haspopup=\"dialog\" aria-controls=\"ds-jobs-panel\" aria-describedby=\"ds-jobs-status\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"M8 6V3h8v3M3 6h18v14H3ZM3 11h18M10 10v4h4v-4\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linejoin=\"round\"/></svg><span class=\"ds-jobs-count\" aria-hidden=\"true\">1</span></button></div><dialog open id=\"ds-jobs-panel\" class=\"ds-jobs-panel\" aria-labelledby=\"ds-jobs-title\"><header class=\"ds-jobs-heading\"><h2 id=\"ds-jobs-title\" tabindex=\"-1\">Jobs</h2><button type=\"button\" aria-label=\"Close jobs\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" aria-hidden=\"true\"><path d=\"m6 6 12 12M18 6 6 18\" stroke=\"currentColor\" stroke-width=\"1.5\"/></svg></button></header><p id=\"ds-jobs-status\" class=\"ds-jobs-help\">1 running job</p><section class=\"ds-jobs-row\" aria-label=\"Scan job for Generated test library\"><h3>Generated test library</h3><div class=\"ds-jobs-progress\" role=\"progressbar\" aria-label=\"Scan progress for Generated test library\" aria-describedby=\"ds-jobs-progress-text\" aria-valuetext=\"Scanning · total files not yet known\" aria-valuemin=\"0\" aria-valuemax=\"100\"><span></span></div><p id=\"ds-jobs-progress-text\" class=\"ds-jobs-help\">Scanning · total files not yet known</p><p>0 found · 0 indexed · 0 skipped · 0 issues</p><p class=\"ds-jobs-help\">Discovering files</p><div class=\"ds-jobs-actions\"><button type=\"button\" aria-expanded=\"false\">Details</button><button type=\"button\">Cancel scan</button></div></section><details class=\"ds-jobs-recent\"><summary>Recent jobs (1)</summary><section class=\"ds-jobs-row\"><h3>Generated test library</h3><p>Scan complete</p><p>20 found · 20 indexed · 0 skipped · 0 issues</p><button type=\"button\">Details</button></section></details></dialog></div>",
+      "css": ".ds-jobs{font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;color:var(--text,#e7e9e8);padding:8px;max-width:100%}.ds-jobs-header{display:flex;justify-content:flex-end}.ds-jobs button{font-family:inherit;font-size:12px;min-height:34px;padding:8px 12px;background:var(--control,#242b28);color:var(--navigation-text,#e2ece7);border:1px solid var(--control-border,#3c4643);border-radius:5px;cursor:pointer}.ds-jobs button:hover:enabled{background:var(--control-hover,#35423b)}.ds-jobs button:focus-visible,.ds-jobs summary:focus-visible{outline:2px solid var(--accent,#b6d6c8);outline-offset:5px}.ds-jobs button:disabled{opacity:.55;cursor:default}.ds-jobs button.ds-jobs-trigger{position:relative;display:inline-flex;align-items:center;justify-content:center;min-width:38px;min-height:38px;background:var(--pressed,#3c5147)}.ds-jobs-count{position:absolute;top:-6px;right:-6px;min-width:18px;padding:1px 4px;border-radius:12px;background:var(--accent,#b6d6c8);color:var(--action-text,#162b22);font-size:10px;font-weight:600;text-align:center}.ds-jobs-panel{box-sizing:border-box;position:static;width:min(390px,calc(100vw - 32px));max-width:100%;max-height:400px;overflow-y:auto;overscroll-behavior:contain;margin:8px 0 0 auto;padding:18px;background:var(--surface,#1d2123);color:inherit;border:1px solid var(--field-border,#46504f);border-radius:8px}.ds-jobs-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.ds-jobs h2{font-size:17px;letter-spacing:-.02em;margin:0}.ds-jobs h3{font-size:13px;font-weight:550;margin:0;overflow-wrap:anywhere}.ds-jobs p{font-size:12px;line-height:1.7;overflow-wrap:anywhere}.ds-jobs-help,.ds-jobs-recent summary{color:var(--muted,#a9b3b2)}.ds-jobs-panel>.ds-jobs-help{margin:8px 0 0}.ds-jobs-row{padding:18px 0;border-bottom:1px solid var(--border,#303638)}.ds-jobs-row:last-child{border-bottom:0;padding-bottom:0}.ds-jobs-progress{margin-top:14px;height:6px;overflow:hidden;border-radius:4px;background:var(--border,#303638)}.ds-jobs-progress span{display:block;height:100%;width:32%;background:var(--accent,#b6d6c8);animation:ds-jobs-activity 1.8s ease-in-out infinite alternate}.ds-jobs-progress+.ds-jobs-help{margin:7px 0 0}.ds-jobs-actions{display:flex;align-items:center;gap:10px;margin-top:12px}.ds-jobs-recent{margin-top:18px}.ds-jobs-recent summary{font-size:12px;cursor:pointer}@keyframes ds-jobs-activity{from{transform:translateX(0)}to{transform:translateX(212.5%)}}@media(prefers-reduced-motion:reduce){.ds-jobs-progress span{animation:none;transform:translateX(106%)}}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Photo canvas inside the native workspace",
+    "overview": "The working library lets photographs lead inside Stillharbour’s restrained native shell. Graphite surfaces, warm white system text and sparse sea-green state treatments carry the controls; aspect-preserving rows and small day headings carry the collection. The spacious first-run folder choice gives way to compact browsing, explicit selection and an immersive cached-preview viewer. Settings extends the same flat native workspace with divided folder rows, shared controls and explicit defaults. Folders uses that shell for named libraries, immediate child folders and indexed files, with an image-free Details view beside Icons.\n\nReact renders inside Tauri; the backend owns the catalog, filesystem access and preview work. The owner confirmed the gallery/viewer scope on 2026-10-28 and kept similarity grouping unavailable. Compare supports visual inspection of explicit selections only.",
+    "keyCharacteristics": [
+      "Photographs lead; compact controls remain quiet and reachable.",
+      "Four-pixel gutters, real date context and left-aligned incomplete rows preserve the image rhythm.",
+      "Availability, selection and catalog-only edits have explicit words and semantics.",
+      "Settings separates indexed-folder actions, selected-library scan settings and saved browsing/new-folder defaults.",
+      "Folders preserves directory context through Back/Up, breadcrumbs and named entries; Photos retains its chronological canvas.",
+      "Gallery row breaks balance the retained chronological sequence, with 4px gutters, up to 125% target stretch, restrained final rows and fully named compact dates."
+    ],
+    "rules": [
+      {
+        "name": "The State Has Words Rule",
+        "body": "Selection, availability, job progress and errors must have textual or semantic states alongside their color treatment.",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "**Do** preserve the owner logo, British spelling, graphite surfaces, system typography and restrained sea-green state treatments.",
+      "**Do** keep the spacious first-run action and the denser working-library layout appropriate to their different tasks.",
+      "**Do** keep Photos search, Filter and Jobs in the fixed header, place browsing controls in the right-side panel and show batch actions only for an active selection.",
+      "**Do** keep Folders as immediate-child catalog navigation with named entries, horizontal breadcrumbs and bounded pages; retain Photos as the chronological scroll feed.",
+      "**Do** keep indexed-folder actions, the inline selected-library scan draft and saved defaults distinct, and reuse the shared scan and browsing controls in Settings.",
+      "**Do** keep selected, scanned, loading, failed, missing, offline and preview-unavailable states explicit and distinct.",
+      "**Do** make catalog-only notes and their preservation boundary clear at the point of editing.",
+      "**Do** name the library and preview scope before maintenance confirmation, disclose catalog-note loss, and state that originals and sidecars remain unchanged.",
+      "**Do** preserve visible keyboard focus, distinct selection scopes and exact gallery position/focus when returning from the viewer."
+    ],
+    "donts": [
+      "**Don't** imply that selecting a folder already saves, scans, imports or changes its contents.",
+      "**Don't** present Change location as moving photos or relocating the catalog/cache, or let saved defaults rewrite existing roots.",
+      "**Don't** request thumbnails in Text list or Folders Details or treat cached previews as surviving originals.",
+      "**Don't** describe library removal as deleting photos, cache clearing as clearing every app file, or a completed action’s refresh failure as an unapplied action.",
+      "**Don't** replace exact Folders navigation with recursive display-path filtering, or describe indexed coverage as every file on disk.",
+      "**Don't** turn query, directory or Inspector failures into empty results, stale success or perpetual loading.",
+      "**Don't** present similarity groups, saved albums, edit/export, full-resolution decoding, original-file mutations, map, backup, mobile or Windows scanning as delivered capabilities."
+    ]
+  }
+}

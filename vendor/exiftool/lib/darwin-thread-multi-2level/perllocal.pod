@@ -1,0 +1,110 @@
+=head2 Tue Apr  7 19:54:51 2026: C<Module> L<Compress::Raw::Lzma|Compress::Raw::Lzma>
+
+=over 4
+
+=item *
+
+C<installed into: /opt/homebrew/Cellar/exiftool/13.55_1/libexec/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 2.225>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Tue Apr  7 19:54:51 2026: C<Module> L<File::Slurper|File::Slurper>
+
+=over 4
+
+=item *
+
+C<installed into: /opt/homebrew/Cellar/exiftool/13.55_1/libexec/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 0.014>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Tue Apr  7 19:54:51 2026: C<Module> L<IO::Compress::Brotli|IO::Compress::Brotli>
+
+=over 4
+
+=item *
+
+C<installed into: /opt/homebrew/Cellar/exiftool/13.55_1/libexec/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 0.022>
+
+=item *
+
+C<EXE_FILES: bin/bro-perl>
+
+=back
+
+=head2 Tue Apr  7 19:54:51 2026: C<Module> L<POSIX::strptime|POSIX::strptime>
+
+=over 4
+
+=item *
+
+C<installed into: /opt/homebrew/Cellar/exiftool/13.55_1/libexec/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 0.13>
+
+=item *
+
+C<EXE_FILES: >
+
+=back
+
+=head2 Tue Apr  7 19:54:51 2026: C<Module> L<Image::ExifTool|Image::ExifTool>
+
+=over 4
+
+=item *
+
+C<installed into: /opt/homebrew/Cellar/exiftool/13.55_1/libexec/lib/perl5>
+
+=item *
+
+C<LINKTYPE: dynamic>
+
+=item *
+
+C<VERSION: 13.55>
+
+=item *
+
+C<EXE_FILES: exiftool>
+
+=back
+

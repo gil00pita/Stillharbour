@@ -1,0 +1,14 @@
+.DS_Store
+.context/
+node_modules/
+dist/
+target/
+src-tauri/gen/
+coverage/
+*.log
+*.tsbuildinfo
+.conductor/settings.local.toml
+
+# Generated Python diagnostic bytecode.
+__pycache__/
+*.pyc

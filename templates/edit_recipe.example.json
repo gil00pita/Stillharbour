@@ -1,0 +1,36 @@
+{
+  "example_only": true,
+  "schema_version": 1,
+  "asset_id": "example-asset-1",
+  "source": {
+    "file_revision_id": "example-file-revision-1",
+    "digest_algorithm": "sha256",
+    "digest": "<full-sha256-required-at-runtime>",
+    "oriented_width": 6000,
+    "oriented_height": 4000
+  },
+  "pipeline_order": [
+    "exif_orientation",
+    "rotate_clockwise",
+    "mirror_in_rotated_space",
+    "crop"
+  ],
+  "rotation_degrees_clockwise": 90,
+  "mirror_horizontal": true,
+  "mirror_vertical": false,
+  "crop": {
+    "coordinate_space": "normalized_after_rotate_and_mirror",
+    "x": 0.1,
+    "y": 0.1,
+    "width": 0.8,
+    "height": 0.8
+  },
+  "renderer_policy_version": 1,
+  "original_file_write": false,
+  "export": {
+    "mode": "new_derivative_only",
+    "target_format": "jpeg",
+    "metadata_policy": "review_required",
+    "collision_policy": "no_replace"
+  }
+}

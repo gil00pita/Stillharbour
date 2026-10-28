@@ -1,0 +1,24 @@
+{
+  "identifier": "local.stillharbour.foundation.test",
+  "build": { "beforeBuildCommand": "npm run build -- --mode desktop-test" },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": [
+        "foundation",
+        {
+          "identifier": "desktop-instrumentation",
+          "windows": ["main"],
+          "permissions": [
+            "allow-test-library-fixture",
+            "allow-test-scroll-catalog",
+            "allow-test-performance",
+            "core:default",
+            "wdio:default",
+            "wdio-webdriver:default"
+          ]
+        }
+      ]
+    }
+  }
+}

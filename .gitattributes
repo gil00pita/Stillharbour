@@ -1,0 +1,6 @@
+# Preserve reviewed third-party bytes, including helper checksums and licenses.
+vendor/** -text -whitespace
+
+# Two trailing spaces are intentional Markdown hard breaks; owned-file checks
+# distinguish these from accidental whitespace.
+*.md whitespace=-blank-at-eol
