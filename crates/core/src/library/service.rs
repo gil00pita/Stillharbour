@@ -1044,6 +1044,8 @@ mod maintenance_tests {
             },
         )
         .unwrap();
+        let unindexed = data.path().join("thumbnails/unindexed.png");
+        std::fs::write(&unindexed, b"unindexed bytes preserved").unwrap();
         let preview = library
             .prepare_maintenance(MaintenanceTarget::PreviewCache)
             .unwrap();
@@ -1063,6 +1065,29 @@ mod maintenance_tests {
             ErrorCode::Busy
         );
         drop(permit);
+        #[cfg(unix)]
         library.apply_maintenance(preview.id).unwrap();
+        #[cfg(not(unix))]
+        {
+            let revision = store::revision(&library.catalog).unwrap();
+            assert_eq!(
+                library.apply_maintenance(preview.id).unwrap_err().code,
+                ErrorCode::Unsupported
+            );
+            assert_eq!(store::revision(&library.catalog).unwrap(), revision);
+            // Failure releases admission and allows an explicit new review;
+            // unverified native cleanup must remain unavailable on retry.
+            let next = library
+                .prepare_maintenance(MaintenanceTarget::PreviewCache)
+                .unwrap();
+            assert_eq!(
+                library.apply_maintenance(next.id).unwrap_err().code,
+                ErrorCode::Unsupported
+            );
+        }
+        assert_eq!(
+            std::fs::read(unindexed).unwrap(),
+            b"unindexed bytes preserved"
+        );
     }
 }

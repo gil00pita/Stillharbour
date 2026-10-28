@@ -596,7 +596,12 @@ mod tests {
     #[test]
     fn generated_image_is_bounded_and_source_bytes_survive() {
         let temp = tempfile::tempdir().unwrap();
-        let path = temp.path().join("-weird\"%\n港📷.png");
+        let name = if cfg!(windows) {
+            "-weird%港📷.png"
+        } else {
+            "-weird\"%\n港📷.png"
+        };
+        let path = temp.path().join(name);
         image::RgbImage::from_pixel(640, 320, image::Rgb([30, 130, 90]))
             .save(&path)
             .unwrap();
