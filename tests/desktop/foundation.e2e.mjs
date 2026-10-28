@@ -277,23 +277,62 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     } finally {
       await picker.mockRestore();
     }
+    await $('.asset-viewport').waitForDisplayed();
+    // Diagnostic schedule: deterministically exercise completion before opening
+    // Jobs, instead of relying on how fast the host scans the fixture.
+    if (process.env.STILLHARBOUR_TEST_JOBS_COMPLETED === '1') {
+      await browser.waitUntil(
+        async () => {
+          const status = await native({ kind: 'status' });
+          return (
+            status.data.jobs.length > 0 &&
+            status.data.jobs.every((job) => job.state === 'completed')
+          );
+        },
+        { timeout: 45000 },
+      );
+      await browser.waitUntil(async () =>
+        browser.execute(() => {
+          const trigger = document.querySelector('button[aria-label="Jobs"]');
+          const id = trigger?.getAttribute('aria-describedby');
+          return id && document.getElementById(id)?.textContent === '0 running jobs';
+        }),
+      );
+    }
     await $('button[aria-label="Jobs"]').waitForDisplayed();
     await $('button[aria-label="Jobs"]').click();
-    await $('.job-progress').waitForDisplayed();
-    const progress = await $('.job-progress [role="progressbar"]');
-    assert.equal(await progress.getAttribute('aria-valuenow'), null);
-    assert.equal(
-      await progress.getAttribute('aria-valuetext'),
-      'Scanning · total files not yet known',
+    let observedProgress;
+    await browser.waitUntil(
+      async () => {
+        const recent = await $('.jobs-dropdown .recent-jobs');
+        if ((await recent.isExisting()) && (await recent.getAttribute('open')) === null)
+          await recent.$('summary').click();
+        // Read one DOM snapshot: the scan may finish between driver requests.
+        observedProgress = await browser.execute(() => {
+          const bar = document.querySelector('.jobs-dropdown .job-progress [role="progressbar"]');
+          return bar && bar.getBoundingClientRect().height > 0
+            ? { value: bar.getAttribute('aria-valuenow'), text: bar.getAttribute('aria-valuetext') }
+            : null;
+        });
+        return Boolean(observedProgress);
+      },
+      { timeout: 15000, timeoutMsg: 'The real scan has no reachable job progress' },
     );
+    assert.ok(
+      ['Scanning · total files not yet known', 'Scan complete'].includes(observedProgress.text),
+    );
+    assert.equal(observedProgress.value, observedProgress.text === 'Scan complete' ? '100' : null);
+    if (process.env.STILLHARBOUR_TEST_JOBS_COMPLETED === '1')
+      assert.deepEqual(observedProgress, { value: '100', text: 'Scan complete' });
+    observations.progressAtOpen = observedProgress;
     assert.equal(await $('header button[aria-label="Jobs"]').getAttribute('aria-expanded'), 'true');
-    await browser.saveScreenshot('.context/screenshots/jobs-dropdown-running-desktop.png');
+    await browser.saveScreenshot('.context/screenshots/jobs-dropdown-after-save-desktop.png');
     await browser.setWindowSize(660, 560);
     assert.equal(
       await browser.execute(() => document.documentElement.scrollWidth <= innerWidth),
       true,
     );
-    await browser.saveScreenshot('.context/screenshots/jobs-dropdown-running-minimum.png');
+    await browser.saveScreenshot('.context/screenshots/jobs-dropdown-after-save-minimum.png');
     await browser.setWindowSize(1180, 780);
     await browser.keys('Escape');
     const scanObservedAt = Date.now();
@@ -317,6 +356,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     observations.partialResultsWhileRunning = partial;
     const status = await native({ kind: 'status' });
     assert.equal(status.data.roots.length, 1);
+    assert.ok(status.data.jobs.every((job) => job.state === 'completed' && job.errors === 0));
     assert.equal(status.data.roots[0].fileCount, 20);
     assert.equal(status.data.roots[0].mode, 'managed');
     assert.equal(status.data.roots[0].filter.fromDate, null);
@@ -414,7 +454,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       });
       await browser.execute(() => {
         const viewport = document.querySelector('.asset-viewport');
-        viewport.scrollTop = Math.min(200, viewport.scrollHeight - viewport.clientHeight);
+        const destination = Math.min(200, viewport.scrollHeight - viewport.clientHeight);
+        viewport.scrollTop = Math.abs(viewport.scrollTop - destination) < 1 ? 0 : destination;
       });
       await browser.waitUntil(async () =>
         (await $('.date-rail').getAttribute('class')).includes('is-scrolling'),
