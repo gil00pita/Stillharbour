@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-test-scroll-catalog"
+description = "Enables the test_scroll_catalog command without any pre-configured scope."
+commands.allow = ["test_scroll_catalog"]
+
+[[permission]]
+identifier = "deny-test-scroll-catalog"
+description = "Denies the test_scroll_catalog command without any pre-configured scope."
+commands.deny = ["test_scroll_catalog"]

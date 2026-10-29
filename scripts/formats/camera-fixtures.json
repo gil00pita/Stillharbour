@@ -1,0 +1,56 @@
+[
+  {
+    "id": "canon-cr2",
+    "camera": "Canon EOS 5D Mark III",
+    "archiveId": 771,
+    "url": "https://raw.pixls.us/getfile.php/771/nice/Canon - EOS 5D Mark III.CR2",
+    "sha256": "ec069b178b9383d80c72f8cdc1b79bd54ca451e7c20793b109d8ad73bef6bdf6",
+    "license": "CC0-1.0",
+    "extension": "cr2"
+  },
+  {
+    "id": "nikon-nef",
+    "camera": "Nikon Z 6",
+    "archiveId": 3581,
+    "url": "https://raw.pixls.us/getfile.php/3581/nice/Nikon - Z 6 - 14bit 14bit compressed (3:2).NEF",
+    "sha256": "8ca94584578b35a422744c1a610174ce37df0691588edfdecaec3111b3fbbb02",
+    "license": "CC0-1.0",
+    "extension": "nef"
+  },
+  {
+    "id": "sony-arw",
+    "camera": "Sony ILCE-7M3",
+    "archiveId": 2414,
+    "url": "https://raw.pixls.us/getfile.php/2414/nice/Sony - ILCE-7M3 - 14bit 14bit compressed (3:2).ARW",
+    "sha256": "250784580ea527442c09004417bb0eead484f2bf3ee8f9121a776ac65bb50d0f",
+    "license": "CC0-1.0",
+    "extension": "arw"
+  },
+  {
+    "id": "ricoh-dng",
+    "camera": "Ricoh GR III",
+    "archiveId": 3115,
+    "url": "https://raw.pixls.us/getfile.php/3115/nice/Ricoh - GR III - 14bit (3:2).DNG",
+    "sha256": "05513ee72f7cac4165534c9f64995412084f414a033c80c473c79fd94154292e",
+    "license": "CC0-1.0",
+    "extension": "dng"
+  },
+  {
+    "id": "canon-cr3",
+    "camera": "Canon EOS R",
+    "archiveId": 4611,
+    "url": "https://raw.pixls.us/getfile.php/4611/nice/Canon - EOS R - 3:2.CR3",
+    "sha256": "cfd118af4477ef37538eb953421572a7a5c80694e59764049223107cc0c9ae83",
+    "license": "CC0-1.0",
+    "extension": "cr3"
+  },
+  {
+    "id": "fuji-raf",
+    "camera": "Fujifilm X-T4",
+    "archiveId": 3918,
+    "url": "https://raw.pixls.us/getfile.php/3918/nice/Fujifilm - X-T4 - 14bit 14bit compressed (3:2).RAF",
+    "sha256": "871836938ffa695f4c41765ddb107c2703ce755f7f3ced7e10f9e04746f1734e",
+    "license": "CC0-1.0",
+    "extension": "raf"
+  }
+]

@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Stillharbour",
+  "version": "0.1.0",
+  "identifier": "local.stillharbour.foundation",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "Stillharbour",
+        "width": 1180,
+        "height": 780,
+        "minWidth": 660,
+        "minHeight": 560,
+        "backgroundColor": "#16191b"
+      }
+    ],
+    "security": {
+      "capabilities": ["foundation"],
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: thumbnail: http://thumbnail.localhost; connect-src ipc: http://ipc.localhost; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'",
+      "devCsp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: thumbnail: http://thumbnail.localhost; connect-src ipc: http://ipc.localhost http://127.0.0.1:* ws://127.0.0.1:*; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "resources": { "../vendor/exiftool/": "helpers/exiftool/" },
+    "targets": ["app"],
+    "icon": ["icons/icon.png", "icons/icon.icns", "icons/icon.ico"],
+    "macOS": { "minimumSystemVersion": "13.0" },
+    "shortDescription": "Photo & Video Library — read-only library"
+  }
+}

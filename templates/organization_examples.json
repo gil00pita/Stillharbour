@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "status": "example data for the proposed DSL; not a running implementation",
+  "datePolicy": "capture_local_preserve_unknown_offset",
+  "allowedDateDirectives": [
+    "%Y",
+    "%m",
+    "%d",
+    "%H",
+    "%M",
+    "%S"
+  ],
+  "defaultCollisionPolicy": "stable_suffix_no_overwrite",
+  "defaultMissingCapturePolicy": "undated_folder",
+  "templates": [
+    {
+      "id": "year-day-original",
+      "version": 1,
+      "name": "Year / Day / Original name",
+      "pattern": "{capture:%Y}/{capture:%Y-%m-%d}/{original_stem}.{ext}",
+      "example": "2025/2025-04-30/IMG_1234.jpg"
+    },
+    {
+      "id": "year-month-capture-sequence",
+      "version": 1,
+      "name": "Year / Month / Capture time and sequence",
+      "pattern": "{capture:%Y}/{capture:%m}/{capture:%Y%m%d_%H%M%S}_{sequence:04}.{ext}",
+      "example": "2025/04/20250430_143025_0001.jpg"
+    },
+    {
+      "id": "event-day-original",
+      "version": 1,
+      "name": "Event / Day / Original name",
+      "pattern": "{event}/{capture:%Y-%m-%d}/{original_stem}.{ext}",
+      "missingEventPolicy": "require_input",
+      "example": "Summer Holiday/2025-04-30/IMG_1234.jpg"
+    },
+    {
+      "id": "camera-year-original",
+      "version": 1,
+      "name": "Camera / Year / Original name",
+      "pattern": "{camera_make}/{camera_model}/{capture:%Y}/{original_stem}.{ext}",
+      "missingCameraPolicy": "unknown_camera",
+      "example": "Example Brand/Example Model/2025/IMG_1234.jpg"
+    },
+    {
+      "id": "undated-original",
+      "version": 1,
+      "name": "Undated / Original name",
+      "pattern": "Undated/{original_stem}.{ext}",
+      "example": "Undated/IMG_1234.jpg"
+    }
+  ],
+  "notes": [
+    "A sequence is allocated and persisted in the plan; execution does not rerender it.",
+    "Date directives are an allowlist, not unrestricted strftime.",
+    "Tokens are sanitized as path components; templates cannot execute code.",
+    "Examples are illustrative data, not real user files.",
+    "Missing capture dates use the explicit undated fallback rather than an invented date."
+  ]
+}

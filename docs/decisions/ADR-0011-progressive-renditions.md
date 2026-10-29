@@ -1,0 +1,13 @@
+# ADR-0011 — File-backed progressive renditions and separate jobs
+
+Date: 2026-10-28. Status: accepted for the owner's thumbnail/large-preview request, a bounded P2 slice. Preservation and later milestone gates remain in force.
+
+Large JPEG/PNG/TIFF originals can exceed the old full-raster estimate or 32 MiB buffer limit even when only a small rendition is needed. On macOS, pass the backend-authorised read-only handle to the isolated child as stdin and use a bounded direct ImageIO data provider for downsampling. Retain identity/revision checks, native path containment, explicit ICC/color/orientation policy, timeout, shared media permits, output cap and sampled child-memory watchdog. Keep byte-based workers and their existing limits on other platforms. No dependency or original mutation is introduced.
+
+Prepare 32 px placeholders in a separate durable job after inventory publication; clearer renditions stay demand-driven. Bound admission to eight jobs, one background runner, 64-row pages and a row high-water mark. Store failures per rendition edge in the existing derived-error column. Reuse compatible positive cache policies and retain the existing bounded indexed-cache publication/cleanup workflow. Maintenance requires thumbnail jobs to finish/cancel before a new review.
+
+Avoid a user-catalog schema migration for this slice: reserve backend-generated `thumbnail:<UUID>` job IDs in the existing scans/scan_issues tables, exposing an explicit typed job kind. Separate begin/finish/recovery functions prohibit scan reconciliation for these rows. Recovery interrupts queued/running thumbnail jobs without scheduling a scan; manual generation reuses cached positives. Legacy UUID scan jobs retain their behavior. A future reviewed job-schema migration can replace the namespace without changing persisted original identities.
+
+[Progressive preview requirements, limits and executable evidence](../PROGRESSIVE_PREVIEWS.md) supersede ADR-0010's byte-only contract for this bounded macOS JPEG/PNG/TIFF path. This is not full P2/P4 scheduling, full-media validation, an instantaneous process-tree memory quota or cross-platform format certification.
+
+Primary API rationale: [Apple, Image and Graphics Best Practices](https://developer.apple.com/videos/play/wwdc2018/416/) describes ImageIO thumbnail downsampling; [Apple, reducing memory use](https://developer.apple.com/documentation/xcode/making-changes-to-reduce-memory-use) distinguishes image preparation and memory cost. The implementation also checks the installed SDK's `CGDataProviderDirectCallbacks`/`CGDataProviderCreateDirect` declarations and read-only callback ownership rules. No source's benchmark numbers are claimed for Stillharbour.

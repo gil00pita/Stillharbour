@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-test-library-fixture"
+description = "Enables the test_library_fixture command without any pre-configured scope."
+commands.allow = ["test_library_fixture"]
+
+[[permission]]
+identifier = "deny-test-library-fixture"
+description = "Denies the test_library_fixture command without any pre-configured scope."
+commands.deny = ["test_library_fixture"]

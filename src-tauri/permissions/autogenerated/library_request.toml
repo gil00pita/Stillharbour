@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-library-request"
+description = "Enables the library_request command without any pre-configured scope."
+commands.allow = ["library_request"]
+
+[[permission]]
+identifier = "deny-library-request"
+description = "Denies the library_request command without any pre-configured scope."
+commands.deny = ["library_request"]

@@ -1,0 +1,19 @@
+"$schema" = "https://conductor.build/schemas/settings.repo.schema.json"
+
+[scripts]
+setup = "npm ci && npm run bindings:check"
+run_mode = "concurrent"
+
+[scripts.run.dev]
+available_in = ["local"]
+command = "npm run desktop:dev"
+default = true
+icon = "play"
+
+[scripts.run.check]
+command = "npm run check"
+icon = "check"
+
+[scripts.run.fixtures]
+command = "npm run fixtures:smoke"
+icon = "test-tube"

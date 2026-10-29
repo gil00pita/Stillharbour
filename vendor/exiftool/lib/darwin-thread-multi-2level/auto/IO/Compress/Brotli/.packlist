@@ -1,0 +1,4 @@
+@@HOMEBREW_CELLAR@@/exiftool/13.55_1/libexec/bin/bro-perl
+@@HOMEBREW_CELLAR@@/exiftool/13.55_1/libexec/lib/perl5/darwin-thread-multi-2level/IO/Compress/Brotli.pm
+@@HOMEBREW_CELLAR@@/exiftool/13.55_1/libexec/lib/perl5/darwin-thread-multi-2level/IO/Uncompress/Brotli.pm
+@@HOMEBREW_CELLAR@@/exiftool/13.55_1/libexec/lib/perl5/darwin-thread-multi-2level/auto/IO/Compress/Brotli/Brotli.bundle

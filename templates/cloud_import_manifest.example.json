@@ -1,0 +1,44 @@
+{
+  "example_only": true,
+  "schema_version": 1,
+  "provider": "google_takeout",
+  "session_id": "example-session-1",
+  "scope": {
+    "kind": "user_supplied_archives",
+    "whole_cloud_completeness": "unknown",
+    "expected_parts": null,
+    "supplied_parts": 2
+  },
+  "source_policy": {
+    "keep_archives": true,
+    "provider_deletion_allowed": false,
+    "rewrite_media_metadata": false
+  },
+  "destination": {
+    "library_root_id": "example-default-root",
+    "publication": "verified_no_replace"
+  },
+  "verification": {
+    "algorithm": "sha256",
+    "verify_acquired_bytes": true,
+    "independent_readback": true,
+    "copy_byte_compare": true,
+    "upstream_original_identity": "not_proven_by_local_hash"
+  },
+  "metadata": {
+    "preserve_raw_json": true,
+    "ambiguous_associations": "needs_review",
+    "preserve_variants": true
+  },
+  "repeat_batches": {
+    "preserve_known_first_added": true,
+    "retain_previous_versions": true,
+    "propagate_absence_as_deletion": false
+  },
+  "io": {
+    "use_global_budget": true,
+    "inherit_profile_limits": true,
+    "provider_download_throttle_guaranteed": false
+  },
+  "status": "example_not_executed"
+}
