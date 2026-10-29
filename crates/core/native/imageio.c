@@ -140,7 +140,11 @@ static int sh_preview(const uint8_t *input, size_t length, int fd, uint32_t edge
     int64_t width = 0, height = 0, orientation = 1;
     if (!number(properties, kCGImagePropertyPixelWidth, &width)
         || !number(properties, kCGImagePropertyPixelHeight, &height)) { status = 6; goto done; }
-    if (width <= 0 || height <= 0 || width > 12000 || height > 12000
+    // Match the Rust header/frame envelope: only file-backed JPEG gets a
+    // longer side; retain the previous 12000×12000 total source-pixel ceiling.
+    int64_t side_limit = downsample && CFEqual(type, CFSTR("public.jpeg")) ? 16384 : 12000;
+    if (width <= 0 || height <= 0 || width > side_limit || height > side_limit
+        || (uint64_t)width * (uint64_t)height > 144000000ull
         || (!downsample && (uint64_t)width * (uint64_t)height * 4u > 128u * 1024u * 1024u)) {
         status = 3; goto done;
     }

@@ -16,6 +16,8 @@ use tokio::{io::AsyncReadExt, process::Command};
 pub const MAX_INPUT_BYTES: u64 = 32 * 1024 * 1024;
 pub const MAX_NATIVE_FILE_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_OUTPUT_BYTES: u64 = 2 * 1024 * 1024;
+const ICC_POLICY_UNSUPPORTED: &str =
+    "ICC-managed previews require the later tested color pipeline.";
 
 /// Internal worker protocol; derived from catalog filename suffixes, not renderer input.
 #[repr(u32)]
@@ -132,7 +134,8 @@ fn decode_bytes(bytes: &[u8], edge: u32, hint: PreviewFormat) -> Result<MediaRep
         // Only an explicit unsupported color policy may use the native color
         // transform. Never bypass malformed-image or allocation-limit failures.
         #[cfg(target_os = "macos")]
-        if matches!(&result,Err(error) if error.code == ErrorCode::Unsupported) {
+        if matches!(&result,Err(error) if error.code == ErrorCode::Unsupported && error.message == ICC_POLICY_UNSUPPORTED)
+        {
             let mut decoder = ImageReader::new(Cursor::new(bytes))
                 .with_guessed_format()?
                 .into_decoder()
@@ -195,7 +198,7 @@ fn decode_reader<R: std::io::BufRead + std::io::Seek>(
     if decoder.icc_profile().map_err(decode_error)?.is_some() {
         return Err(AppError::new(
             ErrorCode::Unsupported,
-            "ICC-managed previews require the later tested color pipeline.",
+            ICC_POLICY_UNSUPPORTED,
         ));
     }
     let orientation = decoder.orientation().map_err(decode_error)?;
@@ -353,11 +356,18 @@ fn worker_stdin(edge: u32, hint: PreviewFormat) -> Result<()> {
 }
 
 pub(crate) fn decode_error(error: image::ImageError) -> AppError {
-    AppError::new(
-        ErrorCode::WorkerFailed,
-        "The image could not be decoded; its original is unchanged.",
-    )
-    .caused_by(error)
+    let (code, message) = if matches!(error, image::ImageError::Limits(_)) {
+        (
+            ErrorCode::Unsupported,
+            "This image exceeds the preview dimension or memory budget.",
+        )
+    } else {
+        (
+            ErrorCode::WorkerFailed,
+            "The image could not be decoded; its original is unchanged.",
+        )
+    };
+    AppError::new(code, message).caused_by(error)
 }
 
 pub struct MediaWorker {
@@ -511,6 +521,20 @@ pub fn worker_main(path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn byte_path_dimension_limits_do_not_enter_the_icc_fallback() {
+        let mut bytes = Cursor::new(Vec::new());
+        image::RgbaImage::from_pixel(1, 12001, image::Rgba([20, 60, 130, 255]))
+            .write_to(&mut bytes, image::ImageFormat::Png)
+            .unwrap();
+        let error = decode_bytes(bytes.get_ref(), 32, PreviewFormat::Auto).unwrap_err();
+        assert_eq!(error.code, ErrorCode::Unsupported);
+        assert_eq!(
+            error.message,
+            "This image exceeds the preview dimension or memory budget."
+        );
+    }
+
     use image::ImageEncoder;
 
     #[tokio::test]

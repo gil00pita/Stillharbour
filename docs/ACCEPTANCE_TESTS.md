@@ -317,3 +317,10 @@ The bounded catalog-read update must satisfy P1-01 through P1-07 in [PERFORMANCE
 - Existing catalog rows with retained EXIF orientations 1–8 return display dimensions consistent with rotation/mirroring through the common page/detail/neighbor/folder projection. Stored source dimensions/raw metadata remain unchanged by these reads, with no catalog migration, source re-read or required rescan.
 - Already-oriented dimensions do not transpose twice. Missing/invalid JSON, missing sensor dimensions, unknown orientation and incomplete stored dimensions retain their geometry without query failure. Strict numeric strings from retained metadata are accepted; malformed orientation strings are not coerced.
 - Keep original bytes/paths/metadata unchanged through native generated-fixture browsing. Uniform grid Fit/Crop, selection, sticky dates, bounded paging and unavailable states remain intact. Native Windows and physical-input evidence must be reported separately.
+
+### High-resolution JPEG preview correction — 2026-10-29
+
+- A generated tall JPEG and the specifically authorized8192×12288 attachment produce bounded native file previews, including32px placeholder and2048px viewer tier, without original changes or a Rust full-resolution raster.
+- Enforce16384px maximum JPEG side and144000000 source pixels independently in header/native/frame guards; reject over-axis/over-pixel inputs. Preserve PNG/TIFF/byte-path geometry limits, malformed/ICC/writable-handle checks, read/output caps, timeout, child RSS watchdog and shared admission.
+- Limit failures are Unsupported preview-budget results, distinct from genuine WorkerFailed decode errors; backend causes stay private. Obsolete p2-v2 negatives retry under p2-v3 on the next request while positive prior-policy caches remain usable and historical job outcomes remain truthful.
+- Keep the supplied photo out of Git and all normal test fixtures; use generated committed regressions and independent manifests for the authorized disposable copy. Local worker/native results do not establish Windows, cold-cache or full process-tree evidence.

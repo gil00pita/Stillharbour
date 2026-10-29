@@ -670,3 +670,7 @@ When the gallery reaches the known matching-catalog end, the timeline must reach
 ### Owner correction — oriented gallery proportions, 2026-10-29
 
 Catalog display summaries must use the same oriented width/height as previews. For retained EXIF orientations 5–8, transpose dimensions only when the stored pair still matches the retained sensor width/height. Apply the same read projection to gallery pages, seeks/neighbors, details and folder browsing, including existing catalogs. Retain original stored metadata/dimensions; browsing must not migrate or rewrite a catalog or read originals to repair layout. Malformed/missing metadata and already-oriented dimensions retain their existing geometry. Timeline preserves composition; Uniform grid remains intentionally square with its explicit Fit/Crop control. See [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md).
+
+### Owner correction — high-resolution JPEG previews, 2026-10-29
+
+Allow read-only macOS file-backed JPEG downsampling up to16384px per side under the retained144000000 source-pixel ceiling, existing read/input/time/memory/admission/output limits and ICC/orientation/revision checks. Other adapters and byte/full-raster paths retain their current geometry bounds. Report true limit failures explicitly as unsupported preview budgets. A versioned policy retries obsolete negative observations on demand while retaining compatible positive caches and historical job outcomes; no original conversion, rescan, blanket purge, migration or new phase. Follow [ADR-0015](decisions/ADR-0015-tall-jpeg-previews.md).

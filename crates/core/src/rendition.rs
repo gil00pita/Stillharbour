@@ -10,6 +10,10 @@ pub const EDGES: &[u32] = &[32, 256, 512, 1024, 2048];
 pub const GALLERY_MAX_EDGE: u32 = 1024;
 pub const VIEWER_EDGE: u32 = 2048;
 pub const GALLERY_DECODED_BYTES: usize = 128 * 1024 * 1024;
+// Source geometry envelope for file-backed JPEG downsampling; pixel count
+// stays below the previous 12000×12000 envelope. Other adapters keep 12000.
+pub const NATIVE_JPEG_MAX_SIDE: u32 = 16384;
+pub const NATIVE_MAX_SOURCE_PIXELS: u64 = 12000 * 12000;
 const MAGIC: &[u8; 8] = b"SHRP\0\0\0\x02";
 const HEADER_LIMIT: usize = 4096;
 
@@ -78,8 +82,10 @@ pub fn validate(report: &MediaReport, edge: u32) -> Result<()> {
         || report.thumbnail_height > edge
         || report.source_width == 0
         || report.source_height == 0
-        || report.source_width > 12000
-        || report.source_height > 12000
+        || report.source_width > NATIVE_JPEG_MAX_SIDE
+        || report.source_height > NATIVE_JPEG_MAX_SIDE
+        || u64::from(report.source_width) * u64::from(report.source_height)
+            > NATIVE_MAX_SOURCE_PIXELS
         || u32::from_be_bytes(png[16..20].try_into().map_err(|_| invalid())?)
             != report.thumbnail_width
         || u32::from_be_bytes(png[20..24].try_into().map_err(|_| invalid())?)
@@ -214,6 +220,21 @@ mod tests {
         assert!(validate(&wrong, 2048).is_err());
         assert!(read_frame(&bytes, 2049).is_err());
     }
+    #[test]
+    fn frame_geometry_keeps_both_axis_and_total_source_pixel_caps() {
+        let mut value = report();
+        value.source_width = 8192;
+        value.source_height = 12288;
+        value.display_dimensions = None;
+        assert!(validate(&value, 32).is_ok());
+        value.source_width = 16385;
+        value.source_height = 1;
+        assert!(validate(&value, 32).is_err());
+        value.source_width = 12000;
+        value.source_height = 12001;
+        assert!(validate(&value, 32).is_err());
+    }
+
     #[test]
     fn typed_errors_have_no_image_body_and_png_limits_are_tier_specific() {
         let mut bytes = Vec::new();

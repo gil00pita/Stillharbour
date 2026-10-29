@@ -20,3 +20,5 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 - [ADR-0009: Bounded catalog read performance](ADR-0009-catalog-read-performance.md).
 
 - [ADR-0010: Read-only native format previews](ADR-0010-native-format-previews.md).
+
+- [ADR-0015: Bounded tall-JPEG previews](ADR-0015-tall-jpeg-previews.md).

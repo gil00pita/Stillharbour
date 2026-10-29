@@ -1471,16 +1471,18 @@ mod preview_policy_tests {
             current_preview_state("unavailable".into(), encoded),
             ("unavailable".into(), message)
         );
-        let other = serde_json::to_string(&PreviewFailure {
-            edges: Default::default(),
-            policy: "old-policy".into(),
-            message: "legacy".into(),
-        })
-        .unwrap();
-        assert_eq!(
-            current_preview_state("unavailable".into(), Some(other)),
-            ("pending".into(), None)
-        );
+        for policy in ["old-policy", "p2-v2-bounded-pyramid-srgb8-preview"] {
+            let other = serde_json::to_string(&PreviewFailure {
+                edges: Default::default(),
+                policy: policy.into(),
+                message: "legacy".into(),
+            })
+            .unwrap();
+            assert_eq!(
+                current_preview_state("unavailable".into(), Some(other)),
+                ("pending".into(), None)
+            );
+        }
         assert_eq!(
             current_preview_state("ready".into(), None),
             ("ready".into(), None)

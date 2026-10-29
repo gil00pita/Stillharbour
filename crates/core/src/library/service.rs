@@ -30,9 +30,10 @@ use std::{
 #[path = "rendition_jobs.rs"]
 mod rendition_jobs;
 
-pub const THUMBNAIL_POLICY: &str = "p2-v2-bounded-pyramid-srgb8-preview";
+pub const THUMBNAIL_POLICY: &str = "p2-v3-tall-jpeg-srgb8-preview";
 const CACHE_POLICIES: &[&str] = &[
     THUMBNAIL_POLICY,
+    "p2-v2-bounded-pyramid-srgb8-preview",
     "p2-v1-file-backed-progressive-srgb8-preview",
     "m5-v2-oriented-native-srgb8-preview",
     "m1-v1-oriented-assumed-srgb-no-icc",

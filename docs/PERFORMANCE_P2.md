@@ -169,3 +169,7 @@ node scripts/performance/packaged-sqlite.mjs
 The format command downloads only the pinned CC0 camera fixtures described by its manifest. For retained sources, use --reuse-fixtures <owned-UUID> after its identity/manifest checks; no real library path is accepted.
 
 Final owned-file verification passes 237 text/local-link checks, 70 retained independent before/after manifest pairs and fresh inventories of all three P2 rendition source trees, with zero findings. Both lockfiles remain unchanged. Repository formatting and git diff --check pass. All requested source/specification/evidence changes are saved locally; no commit or push.
+
+## Tall JPEG correction — 2026-10-29
+
+The attached-image bug fix in [ADR-0015](decisions/ADR-0015-tall-jpeg-previews.md) changes only file-backed macOS JPEG source geometry to16384px/side with the previous144000000-pixel ceiling. Existing12-second/sampled512MiB/input/read/output/admission safeguards remain. The old12000px measurements above remain historical, and other adapters/byte paths keep that bound. Policy p2-v3-tall-jpeg-srgb8-preview retains positive old caches and retries obsolete failures on demand. One warm debug invocation per tier on the authorized attached copy passes;2048px takes2.627s with119521280 bytes sampled direct-child peak and47188102 input-read bytes. No new percentile, cold-cache, full-process memory, native presented-frame or Windows performance claim follows.

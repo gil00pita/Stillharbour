@@ -102,11 +102,23 @@ pub(crate) fn decode_file(
         use image::ImageDecoder;
         let mut reader = image::ImageReader::with_format(Cursor::new(prefix), format);
         let mut limits = image::Limits::default();
-        limits.max_image_width = Some(12000);
-        limits.max_image_height = Some(12000);
+        let side = if format == image::ImageFormat::Jpeg {
+            crate::rendition::NATIVE_JPEG_MAX_SIDE
+        } else {
+            12000
+        };
+        limits.max_image_width = Some(side);
+        limits.max_image_height = Some(side);
         limits.max_alloc = Some(128 * 1024 * 1024);
         reader.limits(limits);
         let mut decoder = reader.into_decoder().map_err(crate::media::decode_error)?;
+        let (width, height) = decoder.dimensions();
+        if u64::from(width) * u64::from(height) > crate::rendition::NATIVE_MAX_SOURCE_PIXELS {
+            return Err(AppError::new(
+                ErrorCode::Unsupported,
+                "This image exceeds the preview dimension or memory budget.",
+            ));
+        }
         if let Some(profile) = decoder.icc_profile().map_err(crate::media::decode_error)?
             && !valid_icc(&profile)
         {
@@ -281,6 +293,70 @@ mod tests {
         );
         assert_eq!(std::fs::read(bad_path).unwrap(), bad);
     }
+    #[test]
+    fn file_backed_tall_jpeg_downsamples_without_a_full_raster() {
+        use image::ImageEncoder;
+        let owned = tempfile::tempdir().unwrap();
+        let pixels = image::RgbImage::from_pixel(64, 12288, image::Rgb([20, 60, 130]));
+        let mut bytes = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut bytes)
+            .write_image(pixels.as_raw(), 64, 12288, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        let path = owned.path().join("generated-tall.jpg");
+        std::fs::write(&path, &bytes).unwrap();
+        let file = crate::filesystem::open_readonly(&path).unwrap();
+        let result = decode_file(&file, 32, crate::media::PreviewFormat::Auto);
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        let report = result.unwrap();
+        assert_eq!(report.display_dimensions, Some((64, 12288)));
+        assert_eq!((report.thumbnail_width, report.thumbnail_height), (1, 32));
+        crate::rendition::validate(&report, 32).unwrap();
+    }
+
+    #[test]
+    fn file_jpeg_still_rejects_excessive_sides_pixels_and_other_format_limits() {
+        use image::ImageEncoder;
+        let owned = tempfile::tempdir().unwrap();
+        let mut seed = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new(&mut seed)
+            .write_image(&[20, 60, 130], 1, 1, image::ExtendedColorType::Rgb8)
+            .unwrap();
+        let sof = seed
+            .windows(2)
+            .position(|pair| pair == [0xff, 0xc0])
+            .unwrap();
+        for (width, height) in [(16385u16, 1u16), (12000, 12001)] {
+            let mut bytes = seed.clone();
+            bytes[sof + 5..sof + 7].copy_from_slice(&height.to_be_bytes());
+            bytes[sof + 7..sof + 9].copy_from_slice(&width.to_be_bytes());
+            let path = owned.path().join(format!("generated-{width}-{height}.jpg"));
+            std::fs::write(&path, &bytes).unwrap();
+            let file = crate::filesystem::open_readonly(&path).unwrap();
+            let error = decode_file(&file, 32, crate::media::PreviewFormat::Auto).unwrap_err();
+            assert_eq!(error.code, ErrorCode::Unsupported);
+            assert_eq!(
+                error.message,
+                "This image exceeds the preview dimension or memory budget."
+            );
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        }
+        let bytes = png(image::RgbaImage::from_pixel(
+            1,
+            12001,
+            image::Rgba([20, 60, 130, 255]),
+        ));
+        let path = owned.path().join("generated-tall.png");
+        std::fs::write(&path, &bytes).unwrap();
+        let file = crate::filesystem::open_readonly(&path).unwrap();
+        assert_eq!(
+            decode_file(&file, 32, crate::media::PreviewFormat::Auto)
+                .unwrap_err()
+                .code,
+            ErrorCode::Unsupported
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+    }
+
     #[test]
     fn malformed_and_over_dimension_inputs_fail_closed() {
         assert!(decode(b"invalid", 256, crate::media::PreviewFormat::Auto).is_err());

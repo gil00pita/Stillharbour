@@ -76,3 +76,7 @@ The owner's large JPEG/PNG/TIFF request adds the bounded macOS handle-backed dow
 ## P2 higher rendition tiers — 2026-10-29
 
 The owner's P2 continuation adds1024px gallery and2048px viewer requests through the same bounded adapter and read-only cache. [PERFORMANCE_P2.md](PERFORMANCE_P2.md) records generated JPEG/PNG/TIFF tier/output evidence and the exact native/package checks completed for this stage. Earlier512px camera/format evidence is retained at its original scope; higher-tier camera variants, clean machines, minimum OS and Windows require their own evidence. A larger derived image is still a preview, not full-media validation or original-resolution/HDR support. Decoder source/read/dimension/time/concurrency/RSS gates remain; only the tier-specific output/transport caps change under ADR-0012.
+
+## Tall JPEG follow-up — 2026-10-29
+
+The macOS file-backed JPEG adapter can downsample up to16384px per side, capped at144000000 source pixels; the reported8192×12288 progressive JPEG passes every32–2048px tier on this host. Other adapters/byte paths keep their earlier geometry bounds. Preserve source files and all existing ICC/read/time/memory/output limits; this is derived preview evidence, not full-media integrity or Windows support. See [ADR-0015](decisions/ADR-0015-tall-jpeg-previews.md) and [progressive preview evidence](PROGRESSIVE_PREVIEWS.md). Previous format/package timings remain historical.
