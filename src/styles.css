@@ -560,6 +560,14 @@ summary {
   min-height: 0;
   scrollbar-gutter: stable;
 }
+/* The timeline is the visible scroll control for chronological collections. */
+.asset-viewport.with-timeline {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+.asset-viewport.with-timeline::-webkit-scrollbar {
+  display: none;
+}
 .virtual-canvas {
   width: 100%;
   position: relative;
@@ -2405,4 +2413,89 @@ button.explorer-entry.asset-open:hover:enabled {
 }
 .thumbnail-job-action .help {
   margin: 0;
+}
+
+.viewer-renditions {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.viewer-renditions img {
+  position: absolute;
+  inset: 0;
+}
+.viewer-rendition-high {
+  opacity: 0;
+  filter: blur(2px);
+  transition:
+    opacity 400ms ease,
+    filter 400ms ease;
+}
+.viewer-renditions.is-revealed .viewer-rendition-high {
+  opacity: 1;
+  filter: blur(0);
+}
+.viewer-renditions.is-revealed .viewer-rendition-small {
+  opacity: 0;
+}
+.viewer-quality {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  right: 8px;
+  font-size: 12px;
+  background: var(--surface);
+  padding: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .viewer-rendition-high {
+    transition: none;
+    filter: none;
+  }
+}
+
+.viewer-rendition-small {
+  transition: opacity 400ms ease;
+}
+.viewer-renditions.without-motion .viewer-rendition-high,
+.viewer-renditions.without-motion .viewer-rendition-small {
+  transition: none;
+  filter: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .viewer-rendition-small {
+    transition: none;
+  }
+}
+
+.library-changes {
+  padding-block: 12px;
+  border-top: 1px solid var(--border);
+}
+.library-changes summary {
+  cursor: pointer;
+}
+.library-monitor {
+  overflow-wrap: anywhere;
+}
+.library-monitor strong {
+  font-weight: 600;
+}
+.library-change-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+}
+.library-change-list li {
+  padding-block: 10px;
+  border-bottom: 1px solid var(--border);
+  overflow-wrap: anywhere;
+}
+.library-change-list p {
+  margin: 4px 0;
+}
+.library-change-navigation {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }

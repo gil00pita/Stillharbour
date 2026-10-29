@@ -17,6 +17,7 @@ const events = vi.hoisted(() => {
 
 const engine = vi.hoisted(() => ({
   scrollOffset: 0,
+  scrollRect: { height: 200, width: 700 },
   isScrolling: false,
   measure: vi.fn(),
   scrollToOffset: vi.fn(),
@@ -81,13 +82,13 @@ it('reports the first actually visible row rather than an overscan row', async (
   const callbacks = props();
   render(<AssetBrowser {...callbacks} />);
   act(() => events.onChange?.(engine));
-  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('2026-03-01', false);
+  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('2026-03-01', false, 0);
   engine.scrollOffset = 200;
   engine.isScrolling = true;
   act(() => events.onChange?.(engine));
   const visibleDate = photoRows(assets, 700, 'gallery')[1]!.assets[0]!.date;
   expect(visibleDate).not.toBe(assets[0]!.date);
-  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(visibleDate, true);
+  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(visibleDate, true, expect.any(Number));
   await waitFor(() => expect(libraryData).toHaveBeenCalled());
 });
 it('retains selection controls in Grid and makes no nonempty thumbnail batch in Text list', async () => {
@@ -104,6 +105,29 @@ it('retains selection controls in Grid and makes no nonempty thumbnail batch in 
       'thumbnails',
     ),
   );
+});
+
+it('requests only visible tiny previews while scrolling and restores overscan upgrades on settle', async () => {
+  const callbacks = props();
+  engine.isScrolling = true;
+  const { rerender } = render(<AssetBrowser {...callbacks} />);
+  await waitFor(() => expect(libraryData).toHaveBeenCalled());
+  const moving = vi.mocked(libraryData).mock.calls.at(-1)?.[0];
+  expect(moving?.kind).toBe('thumbnails');
+  if (moving?.kind !== 'thumbnails') throw new Error('Expected preview request');
+  expect(moving.keys.length).toBeGreaterThan(0);
+  expect(moving.keys.every((key) => key.edge === 32)).toBe(true);
+  const visibleIds = photoRows(assets, 700, 'gallery')[0]!.assets.map((asset) => asset.id);
+  expect(moving.keys.map((key) => key.assetId)).toEqual(visibleIds);
+  engine.isScrolling = false;
+  rerender(<AssetBrowser {...callbacks} />);
+  await waitFor(() => {
+    const settled = vi.mocked(libraryData).mock.calls.at(-1)?.[0];
+    expect(settled?.kind === 'thumbnails' && settled.keys.some((key) => key.edge > 32)).toBe(true);
+    expect(settled?.kind === 'thumbnails' && settled.keys.length).toBeGreaterThan(
+      moving.keys.length,
+    );
+  });
 });
 
 it('toggles a photo instead of opening it when selection is active, and supports Shift ranges', async () => {
@@ -218,4 +242,110 @@ it('updates a hidden WebView resize even when animation frames are suspended', (
     `${photoRows(assets, 363, 'gallery')[0]!.widths[0]}px`,
   );
   vi.unstubAllGlobals();
+});
+
+it.each(['capture', 'added', 'undated'] as const)(
+  'maps %s scrolling and dragging within a dense period to retained rows',
+  (kind) => {
+    const handle = createRef<PhotoViewportHandle>();
+    const callbacks = props();
+    const date = kind === 'undated' ? '' : '2026-03-01';
+    const period = kind === 'undated' ? 'Undated' : '2026-03';
+    const grouping = kind === 'added' ? 'added' : 'capture';
+    const dense = Array.from({ length: 30 }, (_, index) => ({
+      ...fixtureAsset(`${index}`, kind === 'added' ? '1964-07-01' : date),
+      addedAt: date,
+    }));
+    const { container } = render(
+      <AssetBrowser
+        {...callbacks}
+        assets={dense}
+        grouping={grouping}
+        mode="list"
+        viewportHandle={handle}
+        timeline={<nav />}
+      />,
+    );
+    const viewport = container.querySelector<HTMLElement>('.asset-viewport')!;
+    Object.defineProperty(viewport, 'clientHeight', { value: 200 });
+    expect(viewport).toHaveClass('with-timeline');
+    const rows = photoRows(dense, 700, 'list', undefined, grouping);
+    const maximum = rows.reduce((sum, row) => sum + row.height + 4, 0) - 200;
+    engine.scrollOffset = maximum / 2;
+    act(() => events.onChange?.(engine));
+    expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(date, false, 0.5);
+    expect(handle.current!.scrollToPeriod(period, 0.75)).toBe(true);
+    expect(engine.scrollToOffset).toHaveBeenLastCalledWith(maximum * 0.75);
+    expect(handle.current!.scrollToPeriod('1964-07', 0.5)).toBe(false);
+  },
+);
+
+it('loads earlier rows on upward timeline wheel input even when already at the retained top', () => {
+  const handle = createRef<PhotoViewportHandle>();
+  const onNearStart = vi.fn();
+  const { container } = render(
+    <AssetBrowser {...props()} viewportHandle={handle} onNearStart={onNearStart} />,
+  );
+  const viewport = container.querySelector<HTMLElement>('.asset-viewport')!;
+  viewport.scrollBy = vi.fn();
+  Object.defineProperty(viewport, 'clientHeight', { value: 500 });
+  handle.current!.scrollBy(-120, 0);
+  expect(onNearStart).toHaveBeenCalledOnce();
+});
+
+it('updates rendition requests when display density changes without altering row CSS width', async () => {
+  const previous = window.devicePixelRatio;
+  Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 1 });
+  const { unmount } = render(<AssetBrowser {...props()} />);
+  await waitFor(() => expect(libraryData).toHaveBeenCalled());
+  Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: 2 });
+  fireEvent(window, new Event('resize'));
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(libraryData)
+        .mock.calls.some(
+          ([request]) =>
+            request.kind === 'thumbnails' && request.keys.some((key) => key.edge === 1024),
+        ),
+    ).toBe(true),
+  );
+  unmount();
+  Object.defineProperty(window, 'devicePixelRatio', { configurable: true, value: previous });
+});
+
+it('requests visible rows before earlier overscan rows under preview admission bounds', async () => {
+  const callbacks = props();
+  const { rerender } = render(<AssetBrowser {...callbacks} />);
+  await waitFor(() => expect(libraryData).toHaveBeenCalled());
+  vi.mocked(libraryData).mockClear();
+  engine.scrollOffset = 200;
+  rerender(<AssetBrowser {...callbacks} />);
+  const expected = photoRows(assets, 700, 'gallery')[1]!.assets[0]!.id;
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(libraryData)
+        .mock.calls.some(
+          ([request]) => request.kind === 'thumbnails' && request.keys[0]?.assetId === expected,
+        ),
+    ).toBe(true),
+  );
+});
+
+it('keeps the beginning visible when live updates insert newer photos', async () => {
+  const handle = createRef<PhotoViewportHandle>();
+  const original = props();
+  const { rerender } = render(<AssetBrowser {...original} viewportHandle={handle} />);
+  await waitFor(() => expect(handle.current).not.toBeNull());
+  engine.scrollToOffset.mockClear();
+  act(() => handle.current?.remember(true));
+  rerender(
+    <AssetBrowser
+      {...original}
+      assets={[fixtureAsset('new', '2026-10-29'), ...original.assets]}
+      viewportHandle={handle}
+    />,
+  );
+  expect(engine.scrollToOffset).toHaveBeenLastCalledWith(0);
 });

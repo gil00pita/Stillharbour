@@ -65,3 +65,21 @@ it('reports a failed cached comparison image without implying original damage', 
     'Cached preview failed to load. The original has not been changed.',
   );
 });
+
+it('keeps smaller indexed comparison previews available when the512px tier is unavailable', async () => {
+  vi.mocked(libraryData).mockImplementation(async (request) =>
+    request.kind === 'thumbnails'
+      ? request.keys.map((key) => ({
+          ...key,
+          state: 'unavailable',
+          fallbackEdge: 32,
+          error: 'Reconnect the original',
+        }))
+      : [],
+  );
+  render(<ComparisonViewer assets={assets} status={status} onClose={vi.fn()} onError={vi.fn()} />);
+  expect(await screen.findByRole('img', { name: assets[0]!.name })).toHaveAttribute(
+    'src',
+    expect.stringContaining('/32/'),
+  );
+});

@@ -10,7 +10,7 @@ use crate::filesystem;
 use crate::{
     catalog::Catalog,
     domain::{AppError, ErrorCode, Result},
-    jobs::JobScheduler,
+    jobs::resources::{Class, ResourceScheduler, Work},
 };
 #[cfg(unix)]
 use std::io::{Read, Seek, SeekFrom};
@@ -21,7 +21,6 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
 };
 
 pub struct ScanContext {
@@ -35,7 +34,7 @@ pub struct ScanContext {
     #[cfg(unix)]
     pub data_identity: filesystem::FileIdentity,
     pub canceled: Arc<AtomicBool>,
-    pub gate: JobScheduler,
+    pub resources: ResourceScheduler,
     pub discovered: u32,
     pub indexed: u32,
     pub skipped: u32,
@@ -116,23 +115,17 @@ impl ScanContext {
                 continue;
             }
             let operation = (|| -> Result<_> {
-                let _permit = loop {
-                    if self.canceled.load(Ordering::Relaxed) {
-                        return Err(AppError::new(ErrorCode::Busy, "Scan canceled."));
-                    }
-                    match self.gate.try_start() {
-                        Ok(p) => break p,
-                        Err(e) if e.code == ErrorCode::Busy => {
-                            std::thread::sleep(Duration::from_millis(30))
-                        }
-                        Err(e) => return Err(e),
-                    }
-                };
                 let file = native::open_asset(
                     &self.root.path,
                     &self.root.identity,
                     &self.root.volume,
                     &entry.relative,
+                )?;
+                let _lease = self.resources.acquire(
+                    crate::filesystem::identity(&file)?.volume,
+                    Class::Background,
+                    Work::Metadata,
+                    &self.canceled,
                 )?;
                 if native::revision(&file)? != revision {
                     return Err(AppError::new(
@@ -140,7 +133,7 @@ impl ScanContext {
                         "The original changed before metadata extraction.",
                     ));
                 }
-                let bytes = workers::read_input(file)?;
+                let bytes = workers::read_input_cancellable(file, &self.canceled)?;
                 let result = runtime.block_on(workers::metadata(
                     &self.paths,
                     bytes,
@@ -217,6 +210,15 @@ impl ScanContext {
         }
         self.walk(root, PathBuf::new(), 0, &runtime)?;
         self.flush(&runtime)?;
+        // An open directory handle is not proof that its volume/root still exists
+        // at the authorised location after traversal. Revalidate before absence.
+        let current = native::open_root(&self.root.path, Some(&self.root.identity))?;
+        if native::volume_token(&current)? != self.root.volume {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "Root identity changed during scanning; inventory retained.",
+            ));
+        }
         let state = if self.canceled.load(Ordering::Relaxed) {
             "canceled"
         } else if self.errors > 0 {

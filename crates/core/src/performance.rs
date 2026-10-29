@@ -18,6 +18,8 @@ pub enum Metric {
     ThumbnailQueueWait,
     ThumbnailBuild,
     ThumbnailWorker,
+    ResourceWaitInteractive,
+    ResourceWaitBackground,
     WorkerRss,
     Decode,
     Resize,

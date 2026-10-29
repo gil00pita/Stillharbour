@@ -130,7 +130,8 @@ impl Library {
                 if self.existing_preview(&key)?.is_some() {
                     cached += 1;
                 } else {
-                    let result = self.build_thumbnail(&key, &runtime, cancel.clone());
+                    let result =
+                        self.build_thumbnail(&key, &runtime, cancel.clone(), Class::Background);
                     if cancel.load(Ordering::Relaxed) {
                         break;
                     }

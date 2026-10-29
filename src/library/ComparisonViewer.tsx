@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AssetSummary, LibraryStatus } from '../bindings';
-import { previewKey, previewUrl, usePreviews } from './previews';
+import { previewEdges, previewKey, previewUrl, usePreviews } from './previews';
 
 export function ComparisonViewer({
   assets,
@@ -51,11 +51,16 @@ export function ComparisonViewer({
             previews.results[
               previewKey({ assetId: asset.id, revision: asset.revision, edge: 512 })
             ];
+          const edge = previewEdges([preview])[0];
           return (
             <figure key={asset.id}>
               <div>
-                {preview?.state === 'ready' ? (
-                  <ComparisonImage asset={asset} />
+                {edge ? (
+                  <ComparisonImage
+                    key={`${asset.id}:${asset.revision}:${edge}`}
+                    asset={asset}
+                    edge={edge}
+                  />
                 ) : (
                   <p>{preview?.error ?? 'Preparing cached preview…'}</p>
                 )}
@@ -73,9 +78,9 @@ export function ComparisonViewer({
   );
 }
 
-function ComparisonImage({ asset }: { asset: AssetSummary }) {
+function ComparisonImage({ asset, edge }: { asset: AssetSummary; edge: number }) {
   const [failed, setFailed] = useState(false);
   if (failed)
     return <p role="status">Cached preview failed to load. The original has not been changed.</p>;
-  return <img src={previewUrl(asset, 512)} alt={asset.name} onError={() => setFailed(true)} />;
+  return <img src={previewUrl(asset, edge)} alt={asset.name} onError={() => setFailed(true)} />;
 }

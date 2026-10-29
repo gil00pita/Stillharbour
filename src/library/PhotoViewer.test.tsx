@@ -76,7 +76,7 @@ it('opens an immersive read-only preview and navigates beyond the initial galler
   const callbacks = props();
   render(<PhotoViewer {...callbacks} />);
   expect(screen.getByRole('dialog', { name: 'Photo viewer' })).toBeVisible();
-  expect(screen.getByText(/up to 512 px, not a full-resolution original/)).toBeVisible();
+  expect(screen.getByText(/up to 2,048 px, not a full-resolution original/)).toBeVisible();
   await waitFor(() => expect(screen.getByRole('button', { name: 'Next photo' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: 'Next photo' }));
   expect(screen.getByRole('heading', { name: b.name })).toBeVisible();
@@ -151,4 +151,28 @@ it('shows navigation failure without pretending the collection ended', async () 
   render(<PhotoViewer {...props()} />);
   expect(await screen.findByRole('alert')).toHaveTextContent('Catalog temporarily unavailable');
   expect(screen.getByRole('button', { name: 'Retry navigation' })).toBeVisible();
+});
+
+it('enables viewer controls for a cached gallery tier when all requested tiers are unavailable offline', async () => {
+  vi.mocked(libraryData).mockImplementation(async (request) =>
+    request.kind === 'thumbnails'
+      ? request.keys.map((key) => ({
+          ...key,
+          state: 'unavailable',
+          ...(key.edge === 2048 ? { fallbackEdge: 1024 } : {}),
+          error: 'Reconnect the original',
+        }))
+      : { previous: null, next: b },
+  );
+  render(
+    <PhotoViewer
+      {...props()}
+      status={{ ...status, roots: [{ ...root, availability: 'offline' }] }}
+    />,
+  );
+  expect(await screen.findByRole('img', { name: a.name })).toHaveAttribute(
+    'src',
+    expect.stringContaining('/1024/'),
+  );
+  expect(screen.getByRole('slider', { name: 'Preview zoom' })).toBeEnabled();
 });

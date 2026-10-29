@@ -1,5 +1,26 @@
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
+    if args
+        .get(1)
+        .is_some_and(|arg| arg == "--media-worker-file-v2" || arg == "--media-worker-stdin-v2")
+    {
+        let result = if (3..=4).contains(&args.len()) {
+            stillharbour_core::media::worker_v2_arguments(
+                &args[2],
+                args.get(3).map(|s| s.as_os_str()),
+                args[1] == "--media-worker-file-v2",
+            )
+        } else {
+            Err(stillharbour_core::domain::AppError::new(
+                stillharbour_core::domain::ErrorCode::InvalidInput,
+                "Invalid rendition worker arguments.",
+            ))
+        };
+        if result.is_err() {
+            std::process::exit(1);
+        }
+        return;
+    }
     if args.get(1).is_some_and(|arg| arg == "--media-worker-file") {
         let result = if (3..=4).contains(&args.len()) {
             stillharbour_core::media::worker_file_arguments(

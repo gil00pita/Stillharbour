@@ -7,7 +7,7 @@ use crate::{
 };
 use rusqlite::{OptionalExtension, params, params_from_iter, types::Value};
 use serde::{Deserialize, Serialize};
-fn encode_id(bytes: &[u8]) -> String {
+pub(super) fn encode_id(bytes: &[u8]) -> String {
     let mut out = String::from("d");
     for byte in bytes {
         out.push_str(&format!("{byte:02x}"));
@@ -56,7 +56,7 @@ fn node(raw: &[u8], name: Option<&str>, state: String) -> Result<CatalogDirector
         state,
     })
 }
-const CONTENTS: &str = "SELECT 0 AS kind,native_path AS native,'' AS asset_id,CASE WHEN state NOT IN ('blocked','excluded') AND seen_scan<>coalesce((SELECT seen_scan FROM directories r WHERE r.root_id=?1 AND r.native_path=x''),seen_scan) THEN 'retained' ELSE state END AS state FROM directories WHERE root_id=?1 AND parent_native=?2 AND state<>'excluded' UNION ALL SELECT 1 AS kind,relative_native AS native,id AS asset_id,'' AS state FROM assets WHERE root_id=?1 AND folder_native=?2 AND presence<>'excluded' AND name LIKE ?3 ESCAPE '\\'";
+const CONTENTS: &str = "SELECT 0 AS kind,native_path AS native,'' AS asset_id,CASE WHEN state NOT IN ('blocked','excluded','missing') AND seen_scan<>coalesce((SELECT seen_scan FROM directories r WHERE r.root_id=?1 AND r.native_path=x''),seen_scan) THEN 'retained' ELSE state END AS state FROM directories WHERE root_id=?1 AND parent_native=?2 AND state NOT IN ('excluded','missing') UNION ALL SELECT 1 AS kind,relative_native AS native,id AS asset_id,'' AS state FROM assets WHERE root_id=?1 AND folder_native=?2 AND presence NOT IN ('excluded','missing') AND name LIKE ?3 ESCAPE '\\'";
 pub fn browse(
     catalog: &Catalog,
     root_id: String,
@@ -93,7 +93,7 @@ pub fn browse(
         .transpose()?;
     catalog.call(move|db| {
         let root_label:String=db.query_row("SELECT label FROM roots WHERE id=?",[&root_id],|r|r.get(0))?;
-        let state:Option<String>=db.query_row("SELECT CASE WHEN d.state NOT IN ('blocked','excluded') AND d.seen_scan<>coalesce((SELECT seen_scan FROM directories r WHERE r.root_id=d.root_id AND r.native_path=x''),d.seen_scan) THEN 'retained' ELSE d.state END FROM directories d WHERE d.root_id=? AND d.native_path=?",params![root_id,raw],|r|r.get(0)).optional()?;
+        let state:Option<String>=db.query_row("SELECT CASE WHEN d.state NOT IN ('blocked','excluded','missing') AND d.seen_scan<>coalesce((SELECT seen_scan FROM directories r WHERE r.root_id=d.root_id AND r.native_path=x''),d.seen_scan) THEN 'retained' ELSE d.state END FROM directories d WHERE d.root_id=? AND d.native_path=?",params![root_id,raw],|r|r.get(0)).optional()?;
         if !raw.is_empty() && state.is_none() {return Err(invalid("This folder is not in the indexed catalog."));}
         let directory=node(&raw,raw.is_empty().then_some(root_label.as_str()),state.clone().unwrap_or_else(||"incomplete".into()))?;
         if directory.state=="excluded" || directory.state=="blocked" {return Err(AppError::new(ErrorCode::Unsupported,"This catalog entry cannot be browsed."));}

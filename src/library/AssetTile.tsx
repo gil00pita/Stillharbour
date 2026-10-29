@@ -1,7 +1,7 @@
 import { useState, type KeyboardEvent } from 'react';
 import type { AssetSummary, ThumbnailResult } from '../bindings';
 import type { ViewMode } from './model';
-import { previewUrl } from './previews';
+import { previewEdges, previewUrl } from './previews';
 import { TextListRow } from './TextList';
 import type { TextColumn } from './textColumns';
 
@@ -120,9 +120,12 @@ export function TileImage({
   offline: boolean;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
-  const [tinyFailed, setTinyFailed] = useState(false);
+  const [failedFallbacks, setFailedFallbacks] = useState<ReadonlySet<number>>(new Set());
   const [clearLoaded, setClearLoaded] = useState(false);
-  const tinyReady = tinyPreview?.state === 'ready' && !tinyFailed;
+  const fallbackEdge = previewEdges([preview, tinyPreview], failedFallbacks).find(
+    (size) => size < edge,
+  );
+  const tinyReady = fallbackEdge !== undefined;
   const unavailable = imageFailed || preview?.state === 'unavailable';
   const status = imageFailed
     ? 'Cached preview failed to load'
@@ -133,12 +136,14 @@ export function TileImage({
         <span className="t-skel-skeleton">
           {tinyReady ? (
             <img
-              src={previewUrl(asset, 32)}
+              src={previewUrl(asset, fallbackEdge!)}
               alt=""
               decoding="async"
               style={{ objectFit: fit }}
-              onError={() => setTinyFailed(true)}
-              title={unavailable ? `Small preview · ${status}` : undefined}
+              onError={() =>
+                setFailedFallbacks((previous) => new Set([...previous, fallbackEdge!]))
+              }
+              title={unavailable ? `Smaller preview · ${status}` : undefined}
             />
           ) : (
             <span className="preview-fallback" title={status}>

@@ -90,7 +90,52 @@ pub struct ScanJob {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
+pub struct RootMonitor {
+    pub root_id: String,
+    pub mode: String,
+    pub message: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum LibraryChangeKind {
+    Added,
+    Moved,
+    Updated,
+    Removed,
+    Reappeared,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LibraryChange {
+    pub version: u32,
+    pub sequence: String,
+    pub root_id: String,
+    pub root_label: String,
+    pub asset_id: Option<String>,
+    pub entry_kind: String,
+    pub kind: LibraryChangeKind,
+    pub previous_native: Option<String>,
+    pub native_path: Option<String>,
+    pub previous_path: Option<String>,
+    pub path: Option<String>,
+    pub previous_revision: Option<String>,
+    pub revision: Option<String>,
+    pub observed_at: String,
+    pub scan_id: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryChangePage {
+    pub changes: Vec<LibraryChange>,
+    pub next_before: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
 pub struct LibraryStatus {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub monitoring: Option<Vec<RootMonitor>>,
     pub roots: Vec<LibraryRoot>,
     pub jobs: Vec<ScanJob>,
     pub revision: String,
@@ -345,6 +390,9 @@ pub struct ThumbnailKey {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ThumbnailResult {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub fallback_edge: Option<u32>,
     pub asset_id: String,
     pub revision: String,
     pub edge: u32,
@@ -416,6 +464,10 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    Changes {
+        before: Option<String>,
+        limit: u32,
+    },
     BrowseDirectory {
         root_id: String,
         directory_id: Option<String>,
@@ -516,6 +568,7 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    Changes(LibraryChangePage),
     Directory(DirectoryPage),
     MaintenancePreview(MaintenancePreview),
     MaintenanceDone(MaintenanceResult),

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { AssetSummary } from '../bindings';
+import { timelinePeriod, timelineScrollRange } from './timeline';
 import { PHOTO_GUTTER, photoRows, type DateGrouping, type ViewMode } from './model';
 
 export function usePhotoViewport({
@@ -15,7 +16,7 @@ export function usePhotoViewport({
   mode: ViewMode;
   target: number;
   grouping: DateGrouping;
-  onVisibleDate: (date: string, scrolling: boolean) => void;
+  onVisibleDate: (date: string, scrolling: boolean, progress: number) => void;
   pageKey: string;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
@@ -23,6 +24,7 @@ export function usePhotoViewport({
   const visibleAnchor = useRef<string | null>(null);
   const visibleOffset = useRef(0);
   const anchorOffset = useRef(0);
+  const followBeginning = useRef(false);
   const remember = useRef<() => void>(() => {});
   const previousAssets = useRef(assets);
   const previousPage = useRef(pageKey);
@@ -81,20 +83,36 @@ export function usePhotoViewport({
         visibleAnchor.current = asset?.id ?? null;
         visibleOffset.current = Math.max(0, (instance.scrollOffset ?? 0) - (first?.start ?? 0));
       }
-      onVisibleDate(
-        (grouping === 'added' ? asset?.addedAt : asset?.date) ?? '',
-        instance.isScrolling,
+      const date = (grouping === 'added' ? asset?.addedAt : asset?.date) ?? '';
+      const range = timelineScrollRange(
+        rows,
+        timelinePeriod(date),
+        grouping,
+        viewport.current?.clientHeight ?? 0,
       );
+      const progress =
+        range && range.end > range.start
+          ? Math.max(
+              0,
+              Math.min(1, ((instance.scrollOffset ?? 0) - range.start) / (range.end - range.start)),
+            )
+          : 0;
+      onVisibleDate(date, instance.isScrolling, progress);
     },
   });
   const virtual = virtualizer.getVirtualItems();
-  const rememberAnchor = useCallback(() => {
-    const first = virtualizer
-      .getVirtualItems()
-      .find((row) => row.end > (viewport.current?.scrollTop ?? 0));
-    anchor.current = first ? (rows[first.index]?.assets[0]?.id ?? null) : null;
-    anchorOffset.current = Math.max(0, (viewport.current?.scrollTop ?? 0) - (first?.start ?? 0));
-  }, [rows, virtualizer]);
+  const rememberAnchor = useCallback(
+    (followTop = false) => {
+      followBeginning.current = followTop && (viewport.current?.scrollTop ?? 0) <= 1;
+
+      const first = virtualizer
+        .getVirtualItems()
+        .find((row) => row.end > (viewport.current?.scrollTop ?? 0));
+      anchor.current = first ? (rows[first.index]?.assets[0]?.id ?? null) : null;
+      anchorOffset.current = Math.max(0, (viewport.current?.scrollTop ?? 0) - (first?.start ?? 0));
+    },
+    [rows, virtualizer],
+  );
   useLayoutEffect(() => {
     remember.current = rememberAnchor;
   }, [rememberAnchor]);
@@ -118,7 +136,7 @@ export function usePhotoViewport({
     const preservedOffset = anchor.current ? anchorOffset.current : visibleOffset.current;
     virtualizer.measure();
     const changed = previousAssets.current !== assets;
-    if (pageReset.current && changed) {
+    if ((pageReset.current || followBeginning.current) && changed) {
       pageReset.current = false;
       anchor.current = null;
       visibleAnchor.current = null;
@@ -132,6 +150,7 @@ export function usePhotoViewport({
         scrollToOffset(start + Math.min(offset, Math.max(0, (rows[index]?.height ?? 1) - 1)));
       }
     }
+    followBeginning.current = false;
     previousAssets.current = assets;
     anchor.current = null;
   }, [assets, mode, rows, virtualizer, scrollToOffset]);
@@ -140,7 +159,25 @@ export function usePhotoViewport({
     rows,
     virtual,
     height: virtualizer.getTotalSize(),
+    visibleStart: virtualizer.scrollOffset ?? 0,
+    visibleHeight: virtualizer.scrollRect?.height ?? 0,
+    isScrolling: virtualizer.isScrolling,
     remember: rememberAnchor,
+    scrollToPeriod: (period: string, progress: number) => {
+      const range = timelineScrollRange(
+        rows,
+        period,
+        grouping,
+        viewport.current?.clientHeight ?? 0,
+      );
+      if (!range) return false;
+      // This is user scrolling, not anchor restoration: edge loading must run.
+      restoredScroll.current = null;
+      virtualizer.scrollToOffset(
+        range.start + Math.max(0, Math.min(1, progress)) * (range.end - range.start),
+      );
+      return true;
+    },
     isRestorationScroll: () => {
       const expected = restoredScroll.current;
       restoredScroll.current = null;

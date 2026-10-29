@@ -1,6 +1,13 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AnnotationPatch, AssetSummary, DirectoryEntry, LibraryStatus } from '../bindings';
+import type {
+  AnnotationPatch,
+  AssetSummary,
+  DirectoryEntry,
+  LibraryStatus,
+  LibraryRoot,
+  DirectoryPage,
+} from '../bindings';
 import { libraryData } from '../ipc';
 import { defaultQuery } from './model';
 import { PhotoViewer } from './PhotoViewer';
@@ -45,7 +52,7 @@ export function FolderExplorer({
       directoryId: page?.directory.id ?? 'd',
       name: location.search,
       sort: 'name',
-      includeMissing: true,
+      includeMissing: false,
     }),
     [root?.id, page?.directory.id, location.search],
   );
@@ -197,29 +204,7 @@ export function FolderExplorer({
             )}
           </nav>
         </div>
-        <p className="explorer-status" role="status">
-          {root
-            ? `${root.label} · ${root.availability.replaceAll('_', ' ')} · ${page?.total.toLocaleString() ?? '…'} indexed items in this folder`
-            : `${status.roots.length} indexed libraries`}
-        </p>
-        {root && !['online', 'scanning'].includes(root.availability) && (
-          <p className="availability-note">
-            Originals are {root.availability.replaceAll('_', ' ')}. Showing retained catalog
-            contents and available cached previews.
-          </p>
-        )}
-        {root && (root.availability === 'scanning' || page?.directory.state === 'incomplete') && (
-          <p className="help">Indexing is incomplete. These catalog contents may be partial.</p>
-        )}
-        {page?.directory.state === 'retained' && (
-          <p className="help">
-            This folder was not seen in the latest scan. Showing retained catalog contents.
-          </p>
-        )}
-        <p className="explorer-help help">
-          Only items allowed by your scan settings are indexed. Filename filtering keeps folders
-          visible.
-        </p>
+        <FolderStatus root={root} page={page} libraryCount={status.roots.length} />
         {browse.error && (
           <p role="alert" className="error">
             {browse.error} <button onClick={browse.retry}>Retry folder</button>
@@ -311,6 +296,50 @@ export function FolderExplorer({
           }}
         />
       )}
+    </>
+  );
+}
+
+function FolderStatus({
+  root,
+  page,
+  libraryCount,
+}: {
+  root: LibraryRoot | undefined;
+  page: DirectoryPage | null;
+  libraryCount: number;
+}) {
+  return (
+    <>
+      <p className="explorer-status" role="status">
+        {root
+          ? `${root.label} · ${root.availability.replaceAll('_', ' ')} · ${page?.total.toLocaleString() ?? '…'} indexed items in this folder`
+          : `${libraryCount} indexed libraries`}
+      </p>
+      {root && !['online', 'scanning'].includes(root.availability) && (
+        <p className="availability-note">
+          Originals are {root.availability.replaceAll('_', ' ')}. Showing retained catalog contents
+          and available cached previews.
+        </p>
+      )}
+      {root && (root.availability === 'scanning' || page?.directory.state === 'incomplete') && (
+        <p className="help">Indexing is incomplete. These catalog contents may be partial.</p>
+      )}
+      {page?.directory.state === 'missing' && (
+        <p className="availability-note">
+          This folder is no longer at this location. Go Up to see current folders; its changes
+          remain in Jobs.
+        </p>
+      )}
+      {page?.directory.state === 'retained' && (
+        <p className="help">
+          This folder was not seen in the latest scan. Showing retained catalog contents.
+        </p>
+      )}
+      <p className="explorer-help help">
+        Only items allowed by your scan settings are indexed. Filename filtering keeps folders
+        visible.
+      </p>
     </>
   );
 }

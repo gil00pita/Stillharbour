@@ -47,7 +47,8 @@ pub(crate) fn decode(
     edge: u32,
     hint: crate::media::PreviewFormat,
 ) -> Result<MediaReport> {
-    if !matches!(edge, 32 | 256 | 512) || bytes.len() as u64 > crate::media::MAX_INPUT_BYTES {
+    if !crate::rendition::supported_edge(edge) || bytes.len() as u64 > crate::media::MAX_INPUT_BYTES
+    {
         return Err(AppError::new(
             ErrorCode::Unsupported,
             "Preview exceeds its input or size budget.",
@@ -78,7 +79,7 @@ pub(crate) fn decode_file(
     hint: crate::media::PreviewFormat,
 ) -> Result<MediaReport> {
     use std::{io::Read, os::fd::AsRawFd};
-    if !matches!(edge, 32 | 256 | 512)
+    if !crate::rendition::supported_edge(edge)
         || !file.metadata()?.is_file()
         || file.metadata()?.len() > crate::media::MAX_NATIVE_FILE_BYTES
     {
@@ -183,7 +184,7 @@ fn encode(status: i32, report: Preview, mut rgba: Vec<u8>, edge: u32) -> Result<
     image
         .write_to(&mut output, image::ImageFormat::Png)
         .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Could not encode preview pixels."))?;
-    if output.get_ref().len() as u64 > crate::media::MAX_OUTPUT_BYTES {
+    if output.get_ref().len() > crate::rendition::png_budget(edge)? {
         return Err(AppError::new(
             ErrorCode::WorkerFailed,
             "The preview exceeded its output budget.",

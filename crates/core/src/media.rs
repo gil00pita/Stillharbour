@@ -114,7 +114,7 @@ pub fn decode_thumbnail(path: &Path) -> Result<MediaReport> {
 }
 
 fn decode_bytes(bytes: &[u8], edge: u32, hint: PreviewFormat) -> Result<MediaReport> {
-    if bytes.len() as u64 > MAX_INPUT_BYTES || !matches!(edge, 32 | 256 | 512) {
+    if bytes.len() as u64 > MAX_INPUT_BYTES || !crate::rendition::supported_edge(edge) {
         return Err(AppError::new(
             ErrorCode::Unsupported,
             "Preview exceeds its input or size budget.",
@@ -167,10 +167,10 @@ fn decode_reader<R: std::io::BufRead + std::io::Seek>(
     edge: u32,
 ) -> Result<MediaReport> {
     let decode_start = crate::performance::clock();
-    if !matches!(edge, 32 | 256 | 512) {
+    if !crate::rendition::supported_edge(edge) {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
-            "Preview edge must be 32, 256 or 512 pixels.",
+            "Unknown rendition tier.",
         ));
     }
     if reader.format().is_some_and(|format| {
@@ -222,6 +222,7 @@ fn decode_reader<R: std::io::BufRead + std::io::Seek>(
     let encode_start = crate::performance::clock();
     let mut output = Cursor::new(Vec::new());
     thumbnail
+        .to_rgba8()
         .write_to(&mut output, image::ImageFormat::Png)
         .map_err(decode_error)?;
     crate::performance::since(
@@ -254,25 +255,49 @@ pub fn worker_stdin_arguments(
 
 pub fn worker_file_arguments(edge: &std::ffi::OsStr, hint: Option<&std::ffi::OsStr>) -> Result<()> {
     let (edge, hint) = worker_options(edge, hint)?;
+    if edge > 512 {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Use the versioned rendition protocol for larger tiers.",
+        ));
+    }
+    let report = file_report(edge, hint);
+    serde_json::to_writer(std::io::stdout().lock(), &report).map_err(|e| {
+        AppError::new(ErrorCode::WorkerFailed, "Could not return preview data.").caused_by(e)
+    })
+}
+
+pub fn worker_v2_arguments(
+    edge: &std::ffi::OsStr,
+    hint: Option<&std::ffi::OsStr>,
+    file_backed: bool,
+) -> Result<()> {
+    let (edge, hint) = worker_options(edge, hint)?;
+    let report = if file_backed {
+        file_report(edge, hint)
+    } else {
+        stdin_report(edge, hint)
+    };
+    crate::rendition::write_frame(std::io::stdout().lock(), report, edge)
+}
+
+fn file_report(edge: u32, hint: PreviewFormat) -> Result<MediaReport> {
     #[cfg(target_os = "macos")]
-    let report = {
+    {
         use std::os::fd::FromRawFd;
-        // SAFETY: this dedicated worker owns stdin. The parent supplies only an
-        // authorised read-only regular file; the native bridge revalidates it.
+        // SAFETY: this dedicated worker owns stdin; the native bridge verifies
+        // that the inherited original handle is read-only and a regular file.
         let file = unsafe { std::fs::File::from_raw_fd(0) };
         crate::native_preview::decode_file(&file, edge, hint)
-    };
+    }
     #[cfg(not(target_os = "macos"))]
-    let report: Result<MediaReport> = {
+    {
         let _ = (edge, hint);
         Err(AppError::new(
             ErrorCode::Unsupported,
             "File-backed native previews require the macOS adapter.",
         ))
-    };
-    serde_json::to_writer(std::io::stdout().lock(), &report).map_err(|e| {
-        AppError::new(ErrorCode::WorkerFailed, "Could not return preview data.").caused_by(e)
-    })
+    }
 }
 
 fn worker_options(
@@ -283,10 +308,10 @@ fn worker_options(
         .to_str()
         .and_then(|s| s.parse().ok())
         .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "Invalid preview size."))?;
-    if !matches!(edge, 32 | 256 | 512) {
+    if !crate::rendition::supported_edge(edge) {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
-            "Preview edge must be32,256 or512 pixels.",
+            "Unknown rendition tier.",
         ));
     }
     let hint = match hint {
@@ -300,23 +325,28 @@ fn worker_options(
     Ok((edge, hint))
 }
 
+fn stdin_report(edge: u32, hint: PreviewFormat) -> Result<MediaReport> {
+    let mut bytes = Vec::new();
+    std::io::stdin()
+        .lock()
+        .take(MAX_INPUT_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_INPUT_BYTES {
+        return Err(AppError::new(
+            ErrorCode::Unsupported,
+            "Preview input exceeds 32 MiB.",
+        ));
+    }
+    decode_bytes(&bytes, edge, hint)
+}
 fn worker_stdin(edge: u32, hint: PreviewFormat) -> Result<()> {
-    use std::io::Read;
-    let report = (|| -> Result<MediaReport> {
-        let mut bytes = Vec::new();
-        std::io::stdin()
-            .lock()
-            .take(MAX_INPUT_BYTES + 1)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() as u64 > MAX_INPUT_BYTES {
-            return Err(AppError::new(
-                ErrorCode::Unsupported,
-                "Preview input exceeds 32 MiB.",
-            ));
-        }
-        decode_bytes(&bytes, edge, hint)
-    })();
-    // Typed errors cross the bounded worker channel; private parser causes do not.
+    if edge > 512 {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Use the versioned rendition protocol for larger tiers.",
+        ));
+    }
+    let report = stdin_report(edge, hint);
     serde_json::to_writer(std::io::stdout().lock(), &report).map_err(|e| {
         AppError::new(ErrorCode::WorkerFailed, "Could not return preview output.").caused_by(e)
     })

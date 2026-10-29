@@ -66,7 +66,7 @@ describe('native common-format previews — generated sources only', () => {
                 tiny.naturalWidth <= 32 &&
                 clear?.complete &&
                 clear.naturalWidth > 0 &&
-                clear.naturalWidth <= 512 &&
+                clear.naturalWidth <= 1024 &&
                 Boolean(document.querySelector('.asset .t-skel.is-revealed'))
               );
             }),
@@ -126,15 +126,46 @@ describe('native common-format previews — generated sources only', () => {
       await browser.waitUntil(
         async () =>
           browser.execute(() => {
-            const image = document.querySelector('.photo-stage img');
+            const image = document.querySelector('.photo-stage .viewer-rendition-high');
             return (
               image?.complete &&
               image.naturalWidth > 0 &&
-              image.naturalWidth <= 512 &&
-              image.naturalHeight <= 512
+              image.naturalWidth <= 2048 &&
+              image.naturalHeight <= 2048
             );
           }),
         { timeout: 45000 },
+      );
+      const geometry = await browser.execute(() => {
+        const image = document.querySelector('.viewer-rendition-high');
+        const small = document.querySelector('.viewer-rendition-small');
+        const plane = document.querySelector('.viewer-zoom-plane');
+        const canvas = document.querySelector('.viewer-canvas');
+        return {
+          imageHeight: image.getBoundingClientRect().height,
+          imageWidth: image.getBoundingClientRect().width,
+          opacity: getComputedStyle(image).opacity,
+          smallOpacity: small ? getComputedStyle(small).opacity : null,
+          planeHeight: plane.getBoundingClientRect().height,
+          canvasHeight: canvas.getBoundingClientRect().height,
+          visibility: document.visibilityState,
+        };
+      });
+      await writeFile(`${output}/viewer-geometry.json`, JSON.stringify(geometry));
+      await browser.waitUntil(
+        async () =>
+          browser.execute(() => {
+            const image = document.querySelector('.viewer-rendition-high');
+            return (
+              image?.getBoundingClientRect().height > 100 &&
+              image.getBoundingClientRect().width > 100 &&
+              Number(getComputedStyle(image).opacity) >= 0.99
+            );
+          }),
+        {
+          timeout: 15000,
+          timeoutMsg: 'Decoded viewer image must have visible geometry and opacity',
+        },
       );
       await browser.saveScreenshot('.context/screenshots/native-heic-viewer.png');
       await browser.keys('Escape');

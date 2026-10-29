@@ -26,6 +26,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         JobKind::decl(&config),
         ScanJob::decl(&config),
         LibraryStatus::decl(&config),
+        RootMonitor::decl(&config),
+        LibraryChangeKind::decl(&config),
+        LibraryChange::decl(&config),
+        LibraryChangePage::decl(&config),
         AssetQuery::decl(&config),
         AssetSummary::decl(&config),
         AssetDetail::decl(&config),
@@ -53,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         LibraryResponse::decl(&config),
     ];
     let mut output = String::from(
-        "// Generated from crates/core/src/{contract,domain,preferences,library/model}.rs. Run npm run bindings.\n",
+        "// Generated from crates/core/src/{contract,domain,preferences,library/model,rendition}.rs. Run npm run bindings.\n",
     );
     output.push_str(&format!(
         "export const FOUNDATION_COMMAND = {FOUNDATION_COMMAND:?};\n"
@@ -63,6 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "export const DEFAULT_PHOTO_EXTENSIONS: string[] = {};\n",
         serde_json::to_string(DEFAULT_PHOTO_EXTENSIONS)?
     ));
+    output.push_str(&format!("export const RENDITION_EDGES = {:?} as const;\nexport const GALLERY_MAX_EDGE = {};\nexport const VIEWER_EDGE = {};\nexport const GALLERY_DECODED_BYTES = {};\n", stillharbour_core::rendition::EDGES, stillharbour_core::rendition::GALLERY_MAX_EDGE, stillharbour_core::rendition::VIEWER_EDGE, stillharbour_core::rendition::GALLERY_DECODED_BYTES));
     for declaration in declarations {
         output.push_str("export ");
         output.push_str(&declaration);

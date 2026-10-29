@@ -113,3 +113,75 @@ it.each(['pointercancel', 'lostpointercapture'])('cancels %s without seeking', (
   expect(onYear).not.toHaveBeenCalled();
   expect(slider).toHaveValue('0');
 });
+
+it('moves within a single month instead of disabling the only scroll handle', () => {
+  const onPosition = vi.fn().mockReturnValue(true);
+  const { rerender } = render(
+    <DateTimeline
+      buckets={[buckets[0]!]}
+      date="2026-03-01"
+      scrolling={false}
+      progress={0}
+      onPosition={onPosition}
+      onYear={vi.fn()}
+    />,
+  );
+  const slider = screen.getByRole('slider', { name: 'Jump to year or month' });
+  expect(slider).not.toBeDisabled();
+  rerender(
+    <DateTimeline
+      buckets={[buckets[0]!]}
+      date="2026-03-01"
+      scrolling
+      progress={0.6}
+      onPosition={onPosition}
+      onYear={vi.fn()}
+    />,
+  );
+  expect(Number((slider as HTMLInputElement).value)).toBeCloseTo(0.6);
+  fireEvent.change(slider, { target: { value: '0.8' } });
+  fireEvent.keyUp(slider, { key: 'ArrowDown' });
+  expect(onPosition).toHaveBeenLastCalledWith('2026-03', 0.8);
+});
+
+it('scrolls loaded photos during a drag and seeks an unloaded month only on release', () => {
+  const onPosition = vi.fn().mockReturnValue(false);
+  const onYear = vi.fn();
+  render(
+    <DateTimeline
+      buckets={buckets}
+      date="2026-03-01"
+      scrolling={false}
+      progress={0}
+      onPosition={onPosition}
+      onYear={onYear}
+    />,
+  );
+  const slider = screen.getByRole('slider', { name: 'Jump to year or month' });
+  vi.spyOn(slider, 'getBoundingClientRect').mockReturnValue({ top: 0, height: 300 } as DOMRect);
+  fireEvent.pointerDown(slider, { pointerId: 1, clientY: 0 });
+  fireEvent.pointerMove(document, { pointerId: 1, clientY: 50 });
+  expect(onPosition).toHaveBeenLastCalledWith('2026-03', 0.5);
+  expect(onYear).not.toHaveBeenCalled();
+  fireEvent.pointerUp(document, { pointerId: 1, clientY: 150 });
+  expect(onYear).toHaveBeenCalledExactlyOnceWith('1964-07');
+});
+
+it('keeps a distant month seek even when another month has some loaded rows', () => {
+  const onYear = vi.fn();
+  const onPosition = vi.fn().mockReturnValue(true);
+  render(
+    <DateTimeline
+      buckets={buckets}
+      date="2026-03-01"
+      scrolling={false}
+      onYear={onYear}
+      onPosition={onPosition}
+    />,
+  );
+  const slider = screen.getByRole('slider', { name: 'Jump to year or month' });
+  fireEvent.change(slider, { target: { value: '1' } });
+  fireEvent.keyUp(slider, { key: 'ArrowDown' });
+  expect(onYear).toHaveBeenCalledExactlyOnceWith('1964-07');
+  expect(onPosition).not.toHaveBeenCalled();
+});

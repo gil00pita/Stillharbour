@@ -12,9 +12,9 @@ assert.equal(
 );
 const rows = Number(process.env.STILLHARBOUR_PERF_ROWS ?? '10000');
 const phase = process.env.STILLHARBOUR_PERF_PHASE ?? 'P0';
-assert.ok(['P0', 'P1'].includes(phase));
+assert.ok(['P0', 'P1', 'P2'].includes(phase));
 const steps = Number(process.env.STILLHARBOUR_PERF_STEPS ?? '120');
-assert.ok([6, 120].includes(steps));
+assert.ok([6, 24, 120].includes(steps));
 assert.ok([10000, 100000, 1000000].includes(rows));
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function native(request) {
@@ -103,7 +103,7 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
       await browser.waitUntil(
         async () =>
           !(await native({ kind: 'status' })).data.jobs.some((job) =>
-            ['running', 'cancel_requested'].includes(job.state),
+            ['queued', 'running', 'cancel_requested'].includes(job.state),
           ),
         { timeout: 45000 },
       );
@@ -133,8 +133,16 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
       const seeded = await browser.execute(() => window.__p0Seed.value);
       assert.ok(seeded, 'Owned seed operation failed');
       await progress('seed_finished');
+      assert.equal(seeded.seedVersion, 2, 'Use genuinely offline synthetic roots');
+      const roots = (await native({ kind: 'status' })).data.roots;
+      assert.ok(
+        seeded.rootIds.every(
+          (id) => roots.find((root) => root.id === id)?.availability === 'offline',
+        ),
+      );
       measurements.fixture = {
         rows: seeded.rows,
+        seedVersion: seeded.seedVersion,
         synthetic: true,
         seed: seeded.seed,
         realGeneratedSourceEntries: before.entries.length,
@@ -152,17 +160,52 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
       // 120 alternating steps, at least 60 seconds. This is a scripted scrollTop route,
       // not evidence about physical wheel input or actual presented frames.
       for (let step = 0; step < steps; step++) {
-        await browser.execute((step) => {
-          const viewport = document.querySelector('.asset-viewport');
-          viewport.scrollTop += step % 40 < 25 ? 330 : -250;
-        }, step);
+        const geometry = await browser.execute(
+          (step, capture) => {
+            const viewport = document.querySelector('.asset-viewport');
+            viewport.scrollTop += step % 40 < 25 ? 330 : -250;
+            if (!capture || document.querySelectorAll('[data-asset-id]').length < 300) return null;
+            const bounds = viewport.getBoundingClientRect();
+            const mounted = [...document.querySelectorAll('.asset-row')];
+            const rectangles = mounted.map((row) => row.getBoundingClientRect());
+            return {
+              step,
+              assets: document.querySelectorAll('[data-asset-id]').length,
+              rows: mounted.length,
+              viewportHeight: bounds.height,
+              viewportWidth: bounds.width,
+              scrollHeight: viewport.scrollHeight,
+              scrollTop: viewport.scrollTop,
+              outsideRows: rectangles.filter(
+                (row) => row.bottom < bounds.top || row.top > bounds.bottom,
+              ).length,
+              firstRowHeight: rectangles[0]?.height,
+              lastRowHeight: rectangles.at(-1)?.height,
+            };
+          },
+          step,
+          process.env.STILLHARBOUR_PERF_GEOMETRY === '1',
+        );
+        if (geometry && (measurements.galleryGeometry?.length ?? 0) < 8)
+          (measurements.galleryGeometry ??= []).push(geometry);
         await pause(500);
       }
       measurements.scrollRouteSteps = steps;
       measurements.scrollRouteMs = Date.now() - started;
+      assert.ok(
+        await browser.execute(() =>
+          [...document.querySelectorAll('.asset[data-asset-id]')].some((asset) =>
+            asset.dataset.assetId.startsWith('70000000-'),
+          ),
+        ),
+        'The scroll route must actually display synthetic rows',
+      );
       await progress('scroll_finished');
       measurements.randomJumpCompletionsMs = [];
-      for (const fraction of [0.8, 0.2, 0.65, 0.4, 0.9, 0.1, 0.5, 0.3, 0.7, 0]) {
+      for (const [jumpIndex, fraction] of [
+        0.8, 0.2, 0.65, 0.4, 0.9, 0.1, 0.5, 0.3, 0.7, 0,
+      ].entries()) {
+        await progress(`jump_${jumpIndex}_started`);
         const started = Date.now();
         const target = await browser.execute((fraction) => {
           const buttons = [...document.querySelectorAll('.date-rail button')].filter(
@@ -187,6 +230,7 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
           { timeout: 45000 },
         );
         measurements.randomJumpCompletionsMs.push(Date.now() - started);
+        await progress(`jump_${jumpIndex}_finished`);
       }
       measurements.resizeCommandMs = [];
       for (const [width, height] of [
@@ -213,25 +257,31 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
           (job) => job.id === scan.id && job.state === 'running',
         );
         const started = Date.now();
-        await native({
-          kind: 'query',
-          query: {
-            rootId: null,
-            folder: '',
-            name: '',
-            fromDate: '',
-            throughDate: '',
-            minBytes: '',
-            maxBytes: '',
-            extension: '',
-            favoritesOnly: false,
-            tag: '',
-            sort: 'capture',
-            includeMissing: false,
-          },
-          cursor: null,
-          limit: 240,
-        });
+        const observedPage = (
+          await native({
+            kind: 'query',
+            query: {
+              rootId: null,
+              folder: '',
+              name: '',
+              fromDate: '',
+              throughDate: '',
+              minBytes: '',
+              maxBytes: '',
+              extension: '',
+              favoritesOnly: false,
+              tag: '',
+              sort: 'capture',
+              includeMissing: false,
+            },
+            cursor: null,
+            limit: 240,
+          })
+        ).data;
+        assert.ok(
+          observedPage.total >= rows,
+          'Synthetic observations must remain visible throughout browsing and the bounded scan',
+        );
         measurements.scanOverlapSamples.push({
           runningAtQueryStart: running,
           queryMs: Date.now() - started,
@@ -240,7 +290,8 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
       await browser.waitUntil(
         async () =>
           !(await native({ kind: 'status' })).data.jobs.some(
-            (job) => job.id === scan.id && ['running', 'cancel_requested'].includes(job.state),
+            (job) =>
+              job.id === scan.id && ['queued', 'running', 'cancel_requested'].includes(job.state),
           ),
       );
       measurements.backend = await diagnostic('read');

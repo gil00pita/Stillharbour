@@ -1,5 +1,5 @@
 import type { DateBucket, MonthBucket } from '../bindings';
-import { timelineDate } from './model';
+import { PHOTO_GUTTER, timelineDate, type DateGrouping, type PhotoRow } from './model';
 export function periodLabel(period?: string) {
   if (!period || period === 'Undated') return 'Undated';
   return period.length === 7 ? timelineDate(`${period}-01`).label : period;
@@ -20,7 +20,7 @@ export function timelineYears(
           0,
           periods.findIndex((period) => period.period.startsWith(bucket.year)),
         ) /
-          Math.max(1, periods.length - 1)) *
+          Math.max(1, periods.length)) *
         Math.max(0, height - 28),
     }))
     .sort((a, b) => a.priority - b.priority || a.top - b.top);
@@ -31,20 +31,33 @@ export function timelineYears(
   return placed.sort((a, b) => a.top - b.top);
 }
 
-// Match the visible rail: newest at its top, oldest at its bottom. Do not rely
-// on legacy WebView slider appearance to interpret pointer coordinates.
-export function timelineIndexAt(
-  y: number,
-  bounds: { top: number; height: number },
-  count: number,
-  fallback = 0,
-): number {
-  if (!Number.isFinite(y) || bounds.height <= 0) return fallback;
-  return Math.max(
-    0,
-    Math.min(
-      Math.max(0, count - 1),
-      Math.round(((y - bounds.top) / bounds.height) * Math.max(0, count - 1)),
-    ),
-  );
+export function timelinePeriod(date: string) {
+  return date ? date.slice(0, 7) : 'Undated';
+}
+
+// Only retained row geometry is inspected (at most 720 summaries). A month
+// outside this window still uses the existing indexed catalog seek.
+export function timelineScrollRange(
+  rows: PhotoRow[],
+  period: string,
+  grouping: DateGrouping,
+  viewportHeight: number,
+) {
+  let offset = 0;
+  let start: number | undefined;
+  let end = 0;
+  for (const row of rows) {
+    if (
+      row.assets.some(
+        (asset) => timelinePeriod(grouping === 'added' ? asset.addedAt : asset.date) === period,
+      )
+    ) {
+      start ??= offset;
+      end = offset + row.height + PHOTO_GUTTER;
+    }
+    offset += row.height + PHOTO_GUTTER;
+  }
+  if (start === undefined) return null;
+  const maximum = Math.max(0, offset - viewportHeight);
+  return { start: Math.min(start, maximum), end: Math.min(end, maximum) };
 }

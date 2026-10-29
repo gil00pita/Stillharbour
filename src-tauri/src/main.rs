@@ -181,6 +181,9 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::Changes { before, limit } => {
+                LibraryResponse::Changes(library.changes(before, limit)?)
+            }
             LibraryRequest::BrowseDirectory {
                 root_id,
                 directory_id,
@@ -401,6 +404,14 @@ async fn test_performance(
             let catalog = state._catalog.clone();
             tauri::async_runtime::spawn_blocking(move || -> Result<_> { Ok(serde_json::json!({"trace":stillharbour_core::performance::snapshot(),"sqlite":stillharbour_core::library::performance_probe::sqlite_info(&catalog)?})) }).await.map_err(|e|AppError::new(ErrorCode::WorkerFailed,"Diagnostic read stopped.").caused_by(e))?
         }
+        "monitor_stop" => {
+            state.library.cancel_all();
+            Ok(serde_json::json!({"stopped":true}))
+        }
+        "monitor" => {
+            state.library.start_monitoring()?;
+            Ok(serde_json::json!({"started":true}))
+        }
         "fixture_location" => {
             let fixture = state
                 .fixture
@@ -410,7 +421,16 @@ async fn test_performance(
                 .as_ref()
                 .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "Generate fixture first."))?;
             // Private harness channel only, never included in exported observations.
-            Ok(serde_json::json!({"fixtureRoot":fixture.path()}))
+            let selection_id = state
+                .selection
+                .lock()
+                .map_err(|_| {
+                    AppError::new(ErrorCode::WorkerFailed, "Fixture selection unavailable.")
+                })?
+                .as_ref()
+                .filter(|selection| selection.path == fixture.path())
+                .map(|selection| selection.id.clone());
+            Ok(serde_json::json!({"fixtureRoot":fixture.path(),"selectionId":selection_id}))
         }
         "seed" => {
             let rows = rows
@@ -436,6 +456,27 @@ async fn test_performance(
 
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
+    if args
+        .get(1)
+        .is_some_and(|arg| arg == "--media-worker-file-v2" || arg == "--media-worker-stdin-v2")
+    {
+        let result = if (3..=4).contains(&args.len()) {
+            stillharbour_core::media::worker_v2_arguments(
+                &args[2],
+                args.get(3).map(|s| s.as_os_str()),
+                args[1] == "--media-worker-file-v2",
+            )
+        } else {
+            Err(stillharbour_core::domain::AppError::new(
+                stillharbour_core::domain::ErrorCode::InvalidInput,
+                "Invalid rendition worker arguments.",
+            ))
+        };
+        if result.is_err() {
+            std::process::exit(1);
+        }
+        return;
+    }
     if args.get(1).is_some_and(|arg| arg == "--media-worker-file") {
         let result = if (3..=4).contains(&args.len()) {
             stillharbour_core::media::worker_file_arguments(
@@ -606,6 +647,8 @@ fn main() {
                     },
                 },
             )?;
+            #[cfg(not(feature = "desktop-test"))]
+            library.start_monitoring()?;
             app.manage(Foundation {
                 #[cfg(feature = "desktop-test")]
                 _test_data: test_data,

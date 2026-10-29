@@ -252,3 +252,11 @@ After the P0 report, the owner's “Move to next plan” instruction authorises 
 ## Bounded P2 rendition authorisation — 2026-10-28
 
 The owner's thumbnail/background-job request authorises only [progressive previews](PROGRESSIVE_PREVIEWS.md) and [ADR-0011](decisions/ADR-0011-progressive-renditions.md): tiny derived-cache generation, demand-driven clear renditions and bounded macOS JPEG/PNG/TIFF downsampling. No full P2 acceptance, new decoder dependency, schema migration or P3/P4 scheduling claim follows from this slice. Existing P0/P1 measurements remain historical and must not be presented as measurements of the new pipeline.
+
+## P2 continuation — owner confirmation, 2026-10-29
+
+The owner explicitly selects “Finish P2: gallery and preview performance.” [The bounded stage](../tasks/P2_GALLERY_RENDITIONS.md) completes rendition-tier/transport and gallery admission work over the existing virtualizer/anchors. [ADR-0012](decisions/ADR-0012-bounded-rendition-pyramid.md) defines limits; [PERFORMANCE_P2.md](PERFORMANCE_P2.md) records actual evidence and unresolved gates. Preserve earlier evidence, original-file access, schema/locks and existing cache/resource safety. P3/P4 and original mutations remain separate approvals.
+
+## P3 read-only scheduling stage — 2026-10-29
+
+The owner's “Start new stage” continues the selected performance track. [P3 scope](../tasks/P3_SHARED_RESOURCES.md) implements shared admission for existing metadata/renditions and scroll-aware requests. [PERFORMANCE_P3.md](PERFORMANCE_P3.md) records actual evidence and acceptance dispositions. Production backup remains unavailable; explicit read fixtures cannot pass native backup/NAS/HDD or hard-byte-pacing gates. Preserve P0–P2 history and all preservation rules. Stop before P4 or original mutations.

@@ -77,7 +77,7 @@ static void sh_release_reader(void *info) {
 static int sh_preview(const uint8_t *input, size_t length, int fd, uint32_t edge, uint32_t hint,
                        uint8_t *rgba, size_t capacity, SHPreview *result) {
     if (hint > 10) return 1;
-    if (!rgba || !result || (edge != 32 && edge != 256 && edge != 512)
+    if (!rgba || !result || (edge != 32 && edge != 256 && edge != 512 && edge != 1024 && edge != 2048)
         || capacity < (size_t)edge * edge * 4u) return 3;
     struct SHReader *reader = NULL;
     struct stat details;

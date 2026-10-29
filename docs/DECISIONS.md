@@ -112,3 +112,16 @@ Reuse the existing photoRows/usePhotoViewport/AssetBrowser seam and virtualizer.
 ## Owner-authorised progressive preview slice — 2026-10-28
 
 [ADR-0011](decisions/ADR-0011-progressive-renditions.md) records bounded file-backed macOS JPEG/PNG/TIFF downsampling, separate tiny-thumbnail jobs and per-tier derived failures without a catalog migration. [PROGRESSIVE_PREVIEWS.md](PROGRESSIVE_PREVIEWS.md) defines requirements, resource limits and executable checks. This extends only the authorised P2 rendition slice; preservation, platform and remaining roadmap gates stay intact.
+
+
+## P2 gallery/rendition continuation — 2026-10-29
+
+The owner confirms P2 as the next stage. [ADR-0012](decisions/ADR-0012-bounded-rendition-pyramid.md) adds bounded high-DPI/viewer tiers, explicit decoded-pixel admission, indexed smaller-cache fallbacks and binary worker framing. Retain the existing virtualizer, anchors, decoder/cache safety limits, schema and dependencies. [PERFORMANCE_P2.md](PERFORMANCE_P2.md) records evidence and remaining release/platform gates. P3 scheduling and all original-preservation operations remain separate.
+
+## Live library observations — 2026-10-29
+
+[ADR-0013](decisions/ADR-0013-live-library-reconciliation.md) adds native invalidation/periodic reconciliation over the existing scanner and durable, namespaced change observations in the existing schema-2 journal. History is distinct from filesystem events, integrity baselines and recovery evidence. Preserve originals and all prior gates; no P3 scheduler or user-catalog migration.
+
+## P3 shared source admission — 2026-10-29
+
+[ADR-0014](decisions/ADR-0014-shared-source-admission.md) replaces separate media admission with atomic source-volume/CPU/memory reservations, visible preference and background aging. Keep job/maintenance gates and current helper/source safety. Scroll-aware tiny-first requests reuse existing viewport signals. Synthetic read contention is explicitly separated from the missing production backup adapter, physical topology/pacing and native NAS/HDD evidence.

@@ -303,11 +303,18 @@ pub fn discover_batch(
     entries: Vec<Discovery>,
 ) -> Result<Vec<(String, String)>> {
     catalog.call(move|db|{
-    let tx=db.transaction()?;let mut ids=Vec::with_capacity(entries.len());
+    let tx=db.transaction()?;let mut ids=Vec::with_capacity(entries.len());let mut changed=false;
     for item in entries {
         let relative=native::encode_path(&item.relative);let name=item.relative.file_name().unwrap_or_default().to_string_lossy().into_owned();
         let folder=item.relative.parent().unwrap_or_else(||Path::new(""));let date=item.modified.clone().or(item.born.clone()).unwrap_or_default();
         let source=if item.modified.is_some(){"filesystem_modified"}else if item.born.is_some(){"filesystem_birth"}else{"undated"};
+        let mut previous:Option<(String,String,String,Vec<u8>)>=tx.query_row("SELECT relative_path,revision,presence,relative_native FROM assets WHERE root_id=? AND relative_native=?",params![root_id,relative],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?))).optional()?;
+        if previous.as_ref().is_some_and(|(_,revision,presence,_)|revision==&item.revision && presence=="present") {
+            tx.execute("UPDATE assets SET seen_scan=? WHERE root_id=? AND relative_native=?",params![job_id,root_id,relative])?;
+            let id=tx.query_row("SELECT id FROM assets WHERE root_id=? AND relative_native=?",params![root_id,relative],|r|r.get(0))?;
+            ids.push((id,item.revision));continue;
+        }
+        changed=true;
         let proposed=uuid::Uuid::new_v4().to_string();
         if item.links==1 && item.born.is_some() && !tx.prepare("SELECT 1 FROM assets WHERE root_id=? AND relative_native=?")?.exists(params![root_id,relative])? {
             // A unique one-link object with matching birth evidence can retain
@@ -315,6 +322,7 @@ pub fn discover_batch(
             // and missing birth evidence never merge independent locations.
             let candidates=tx.prepare("SELECT id FROM assets WHERE root_id=? AND native_file=? AND born_at=? AND seen_scan<>? LIMIT 2")?.query_map(params![root_id,item.native_file,item.born,job_id],|r|r.get::<_,String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
             if candidates.len()==1 {
+                previous=Some(tx.query_row("SELECT relative_path,revision,presence,relative_native FROM assets WHERE id=?",[&candidates[0]],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?)))?);
                 tx.execute("UPDATE assets SET relative_native=?,relative_path=?,folder_native=?,folder=?,name=?,stem=?,extension=? WHERE id=?",params![relative,item.relative.to_string_lossy(),native::encode_path(folder),folder.to_string_lossy(),name,item.relative.file_stem().unwrap_or_default().to_string_lossy(),item.relative.extension().unwrap_or_default().to_string_lossy().to_ascii_lowercase(),candidates[0]])?;
             }
         }
@@ -338,9 +346,10 @@ pub fn discover_batch(
           revision=excluded.revision,presence='present',is_media=excluded.is_media,seen_scan=excluded.seen_scan"#,
           params![proposed,root_id,relative,item.relative.to_string_lossy(),native::encode_path(folder),folder.to_string_lossy(),name,item.relative.file_stem().unwrap_or_default().to_string_lossy(),item.relative.extension().unwrap_or_default().to_string_lossy().to_ascii_lowercase(),item.native_file,item.bytes,item.revision,item.modified,item.born,now(),date,source,item.detected,if item.placeholder{"placeholder"}else{"pending"},if item.placeholder{"placeholder"}else{"pending"},item.media,job_id])?;
         let id:String=tx.query_row("SELECT id FROM assets WHERE root_id=? AND relative_native=?",params![root_id,relative],|r|r.get(0))?;
+        super::changes::file_change(&tx,&root_id,&job_id,&id,previous,&item.relative,&item.revision)?;
         ids.push((id,item.revision));
     }
-    tx.execute("UPDATE library_state SET revision=revision+1 WHERE singleton=1",[])?;tx.commit()?;Ok(ids)
+    if changed {bump(&tx)?;}tx.commit()?;Ok(ids)
 })
 }
 #[cfg(unix)]
@@ -352,9 +361,16 @@ pub fn directory(
     state: String,
 ) -> Result<()> {
     catalog.call(move|db|{
-    let parent=path.parent().map(native::encode_path);
-    db.execute("INSERT INTO directories(root_id,native_path,parent_native,seen_scan,state) VALUES(?,?,?,?,?) ON CONFLICT(root_id,native_path) DO UPDATE SET seen_scan=excluded.seen_scan,state=excluded.state",params![root_id,native::encode_path(&path),parent,job_id,state])?;Ok(())
-})
+        let tx=db.transaction()?;
+        let raw=native::encode_path(&path);
+        let previous:Option<String>=tx.query_row("SELECT state FROM directories WHERE root_id=? AND native_path=?",params![root_id,raw],|r|r.get(0)).optional()?;
+        if state=="incomplete" && (previous.is_none() || previous.as_deref()==Some("missing")) {
+            super::changes::directory_change(&tx,&root_id,&job_id,&path,if previous.is_none(){LibraryChangeKind::Added}else{LibraryChangeKind::Reappeared})?;
+        }
+        let parent=path.parent().map(native::encode_path);
+        tx.execute("INSERT INTO directories(root_id,native_path,parent_native,seen_scan,state) VALUES(?,?,?,?,?) ON CONFLICT(root_id,native_path) DO UPDATE SET seen_scan=excluded.seen_scan,state=excluded.state",params![root_id,raw,parent,job_id,state])?;
+        tx.commit()?;Ok(())
+    })
 }
 pub fn exclude_scope(
     catalog: &Catalog,
@@ -382,8 +398,15 @@ pub fn finish_job(catalog: &Catalog, id: String, state: String, message: String)
     if state=="completed"||state=="partial" {
         // Only a completed enumeration of an individual directory establishes
         // absence. Failed, excluded, offline and canceled scopes retain history.
-        tx.execute("UPDATE assets SET presence='missing' WHERE root_id=?1 AND seen_scan<>?2 AND folder_native IN (SELECT native_path FROM directories WHERE root_id=?1 AND seen_scan=?2 AND state='complete')",params![root_id,id])?;
-        tx.execute("WITH RECURSIVE absent(path) AS (SELECT d.native_path FROM directories d JOIN directories p ON d.root_id=p.root_id AND d.parent_native=p.native_path WHERE d.root_id=?1 AND d.seen_scan<>?2 AND p.seen_scan=?2 AND p.state='complete' UNION SELECT d.native_path FROM directories d JOIN absent a ON d.parent_native=a.path WHERE d.root_id=?1) UPDATE assets SET presence='missing' WHERE root_id=?1 AND seen_scan<>?2 AND folder_native IN (SELECT path FROM absent)",params![root_id,id])?;
+        let direct="folder_native IN (SELECT native_path FROM directories WHERE root_id=?1 AND seen_scan=?2 AND state='complete')";
+        let absent="WITH RECURSIVE absent(path) AS (SELECT d.native_path FROM directories d JOIN directories p ON d.root_id=p.root_id AND d.parent_native=p.native_path WHERE d.root_id=?1 AND d.seen_scan<>?2 AND p.seen_scan=?2 AND p.state='complete' UNION SELECT d.native_path FROM directories d JOIN absent a ON d.parent_native=a.path WHERE d.root_id=?1)";
+        super::changes::missing_files(&tx,&root_id,&id,direct)?;
+        tx.execute(&format!("UPDATE assets SET presence='missing' WHERE root_id=?1 AND seen_scan<>?2 AND presence NOT IN ('missing','excluded') AND {direct}"),params![root_id,id])?;
+        let nested=format!("folder_native IN ({absent} SELECT path FROM absent)");
+        super::changes::missing_files(&tx,&root_id,&id,&nested)?;
+        tx.execute(&format!("UPDATE assets SET presence='missing' WHERE root_id=?1 AND seen_scan<>?2 AND presence NOT IN ('missing','excluded') AND {nested}"),params![root_id,id])?;
+        super::changes::missing_directories(&tx,&root_id,&id,absent)?;
+        tx.execute(&format!("{absent} UPDATE directories SET state='missing' WHERE root_id=?1 AND seen_scan<>?2 AND state NOT IN ('excluded','blocked','missing') AND native_path IN (SELECT path FROM absent)"),params![root_id,id])?;
         tx.execute("UPDATE roots SET last_scan=? WHERE id=?",params![now(),root_id])?;
     }
     tx.execute("UPDATE scans SET state=?,message=? WHERE id=?",params![state,message,id])?;
@@ -1051,6 +1074,7 @@ fn current_preview_state(state: String, error: Option<String>) -> (String, Optio
     ("pending".into(), None)
 }
 
+#[cfg(test)]
 pub fn preview_failure(catalog: &Catalog, key: ThumbnailKey) -> Result<Option<String>> {
     catalog.call(move |db| {
         let raw: Option<Option<String>> = db
@@ -1063,10 +1087,7 @@ pub fn preview_failure(catalog: &Catalog, key: ThumbnailKey) -> Result<Option<St
         let Some(raw) = raw else {
             return Ok(None);
         };
-        Ok(raw
-            .and_then(|text| serde_json::from_str::<PreviewFailure>(&text).ok())
-            .filter(|failure| failure.policy == super::THUMBNAIL_POLICY)
-            .and_then(|failure| failure.edges.get(&key.edge).cloned()))
+        Ok(edge_failure(raw.as_deref(), key.edge))
     })
 }
 pub fn preview_state_for_edge(
@@ -1074,7 +1095,7 @@ pub fn preview_state_for_edge(
     key: ThumbnailKey,
     error: Option<String>,
 ) -> Result<()> {
-    if !matches!(key.edge, 32 | 256 | 512) {
+    if !crate::rendition::supported_edge(key.edge) {
         return Err(invalid("Invalid preview tier."));
     }
     catalog.call(move |db| {
@@ -1093,7 +1114,7 @@ pub fn preview_state_for_edge(
             .filter(|failure| failure.policy == super::THUMBNAIL_POLICY)
             .map(|failure| failure.edges)
             .unwrap_or_default();
-        edges.retain(|edge, _| matches!(edge, 32 | 256 | 512));
+        edges.retain(|edge, _| crate::rendition::supported_edge(*edge));
         if let Some(error) = error {
             edges.insert(key.edge, error.chars().take(512).collect());
         } else {
@@ -1121,14 +1142,67 @@ pub fn preview_state_for_edge(
         Ok(())
     })
 }
-pub fn cache_touch(catalog: &Catalog, key: String) -> Result<bool> {
-    catalog.call(move |db| {
-        Ok(db.execute(
-            "UPDATE thumbnail_cache SET last_used=? WHERE key=?",
-            params![now(), key],
-        )? > 0)
+pub fn cache_lookup(
+    catalog: &Catalog,
+    keys: Vec<String>,
+) -> Result<std::collections::HashSet<String>> {
+    if keys.len() > 1280
+        || keys
+            .iter()
+            .any(|key| key.len() != 64 || !key.bytes().all(|b| b.is_ascii_hexdigit()))
+    {
+        return Err(invalid("Invalid bounded cache lookup."));
+    }
+    if keys.is_empty() {
+        return Ok(Default::default());
+    }
+    let encoded = serde_json::to_string(&keys).map_err(|_| invalid("Invalid cache candidates."))?;
+    catalog.call(move|db| {
+        let tx=db.transaction()?;
+        let found=tx.prepare("SELECT key FROM thumbnail_cache WHERE key IN (SELECT value FROM json_each(?))")?
+            .query_map([&encoded],|row|row.get::<_,String>(0))?.collect::<rusqlite::Result<std::collections::HashSet<_>>>()?;
+        if !found.is_empty() { tx.execute("UPDATE thumbnail_cache SET last_used=? WHERE key IN (SELECT value FROM json_each(?))",params![now(),encoded])?; }
+        tx.commit()?;
+        Ok(found)
     })
 }
+
+pub struct PreviewStatus {
+    pub revision: String,
+    pub presence: String,
+    pub metadata_state: String,
+    pub root_availability: String,
+    error: Option<String>,
+}
+impl PreviewStatus {
+    pub fn failure(&self, edge: u32) -> Option<String> {
+        edge_failure(self.error.as_deref(), edge)
+    }
+}
+fn edge_failure(raw: Option<&str>, edge: u32) -> Option<String> {
+    raw.and_then(|text| serde_json::from_str::<PreviewFailure>(text).ok())
+        .filter(|failure| failure.policy == super::THUMBNAIL_POLICY)
+        .and_then(|failure| failure.edges.get(&edge).cloned())
+}
+pub fn preview_statuses(
+    catalog: &Catalog,
+    ids: Vec<String>,
+) -> Result<std::collections::HashMap<String, PreviewStatus>> {
+    if ids.len() > 64 {
+        return Err(invalid("Too many preview identities."));
+    }
+    if ids.is_empty() {
+        return Ok(Default::default());
+    }
+    let encoded =
+        serde_json::to_string(&ids).map_err(|_| invalid("Invalid preview identities."))?;
+    catalog.call(move|db| {
+        Ok(db.prepare("SELECT a.id,a.revision,a.presence,a.metadata_state,a.preview_error,r.availability FROM assets a JOIN roots r ON r.id=a.root_id WHERE a.id IN (SELECT value FROM json_each(?))")?
+            .query_map([encoded],|r|Ok((r.get(0)?,PreviewStatus {revision:r.get(1)?,presence:r.get(2)?,metadata_state:r.get(3)?,error:r.get(4)?,root_availability:r.get(5)?})))?
+            .collect::<rusqlite::Result<_>>()?)
+    })
+}
+
 pub fn cache_add(
     catalog: &Catalog,
     key: String,

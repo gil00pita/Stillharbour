@@ -43,9 +43,32 @@ it('retains a tiny cached image when clear decoding fails and keeps offline stat
   );
   expect(container.querySelector('img')).toHaveAttribute(
     'title',
-    'Small preview · Decode budget reached',
+    'Smaller preview · Decode budget reached',
   );
   expect(getByText('Offline original')).toBeVisible();
   fireEvent.error(container.querySelector('img')!);
   expect(getByText('Decode budget reached')).toBeVisible();
+});
+
+it('uses an indexed smaller clear rendition while a larger tier is loading or unavailable', () => {
+  const { container, rerender } = render(
+    <TileImage
+      {...props}
+      edge={1024}
+      tinyPreview={result(32, 'ready')}
+      preview={{ ...result(1024, 'pending'), fallbackEdge: 512 }}
+    />,
+  );
+  expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/512/'));
+  fireEvent.error(container.querySelector('img')!);
+  expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/32/'));
+  rerender(
+    <TileImage
+      {...props}
+      edge={1024}
+      tinyPreview={result(32, 'ready')}
+      preview={{ ...result(1024, 'unavailable'), fallbackEdge: 512 }}
+    />,
+  );
+  expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/32/'));
 });

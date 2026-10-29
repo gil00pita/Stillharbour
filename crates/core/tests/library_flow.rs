@@ -1715,5 +1715,326 @@ fn tiny_previews_are_a_separate_durable_job_with_warm_resume_and_no_inventory_re
         )
         .unwrap();
     assert_eq!(tiny[0].state, "ready");
+    let clear = ThumbnailKey {
+        asset_id: tiny[0].asset_id.clone(),
+        revision: tiny[0].revision.clone(),
+        edge: 512,
+    };
+    let start = Instant::now();
+    while library
+        .thumbnails(vec![clear.clone()], "1000".into())
+        .unwrap()[0]
+        .state
+        != "ready"
+    {
+        assert!(start.elapsed() < Duration::from_secs(15));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    let high = ThumbnailKey {
+        edge: 1024,
+        ..clear.clone()
+    };
+    let start = Instant::now();
+    loop {
+        let result = library
+            .thumbnails(vec![high.clone()], "1001".into())
+            .unwrap();
+        assert_eq!(
+            result[0].fallback_edge,
+            Some(512),
+            "Keep the smaller cache through actual image load"
+        );
+        if result[0].state == "ready" {
+            break;
+        }
+        assert!(start.elapsed() < Duration::from_secs(15));
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert!(
+        !library
+            .cached_thumbnail(high, stillharbour_core::library::THUMBNAIL_POLICY)
+            .unwrap()
+            .is_empty()
+    );
+    // Catalog-offline state must not enqueue a new decode or hide an indexed
+    // smaller rendition. This is a state fixture, not a physical NAS test.
+    let external = rusqlite::Connection::open(data.path().join("fixture.stillharbour")).unwrap();
+    external.busy_timeout(Duration::from_secs(5)).unwrap();
+    external
+        .execute(
+            "UPDATE roots SET availability='offline' WHERE id=?",
+            [root.id.clone()],
+        )
+        .unwrap();
+    let offline = library
+        .thumbnails(
+            vec![ThumbnailKey {
+                edge: 2048,
+                ..clear
+            }],
+            "1002".into(),
+        )
+        .unwrap();
+    assert_eq!(offline[0].state, "unavailable");
+    assert_eq!(offline[0].fallback_edge, Some(1024));
+    fixture.verify_unchanged().unwrap();
+}
+
+#[test]
+fn synthetic_performance_roots_stay_offline_without_reconciling_catalog_observations() {
+    let data = tempfile::tempdir().unwrap();
+    let (catalog, library) = open(data.path());
+    let seeded =
+        stillharbour_core::library::performance_probe::seed_catalog(&catalog, data.path(), 10_000)
+            .unwrap();
+    let ids = seeded["rootIds"].as_array().unwrap();
+    let status = library.status().unwrap();
+    for id in ids {
+        let root = status
+            .roots
+            .iter()
+            .find(|root| root.id == id.as_str().unwrap())
+            .unwrap();
+        assert_eq!(
+            root.availability, "offline",
+            "Synthetic roots must not reconnect to empty directories and scan away seeded rows"
+        );
+    }
+    assert!(
+        status.jobs.is_empty(),
+        "Read-only synthetic browsing must not start a recovery scan"
+    );
+    assert_eq!(
+        library
+            .query(AssetQuery::default(), None, 240)
+            .unwrap()
+            .total,
+        10_000
+    );
+    let keys = library
+        .query(AssetQuery::default(), None, 64)
+        .unwrap()
+        .assets
+        .into_iter()
+        .map(|asset| ThumbnailKey {
+            asset_id: asset.id,
+            revision: asset.revision,
+            edge: 1024,
+        })
+        .collect();
+    let before = catalog.probe_call_count();
+    let previews = library.thumbnails(keys, "1".into()).unwrap();
+    assert!(previews.iter().all(|item| item.state == "unavailable"));
+    let calls = catalog.probe_call_count() - before;
+    println!("preview_batch_catalog_calls={calls}");
+    assert!(
+        calls <= 4,
+        "A64-key cache-status batch used{calls} catalog calls; do not query every policy/tier/asset separately"
+    );
+}
+
+fn independent_manifest(root: &Path) -> serde_json::Value {
+    let output = std::process::Command::new("python3")
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/performance/manifest.py"))
+        .arg(root)
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    serde_json::from_slice(&output.stdout).unwrap()
+}
+fn eventually(mut condition: impl FnMut() -> bool) {
+    let until = Instant::now() + Duration::from_secs(45);
+    while !condition() {
+        assert!(Instant::now() < until, "Live reconciliation did not finish");
+        std::thread::sleep(Duration::from_millis(100));
+    }
+}
+
+#[test]
+fn change_journal_survives_restart_and_missing_folders_leave_normal_explorer() {
+    let fixture = LibraryFixture::generate().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let (catalog, library) = open(data.path());
+    let first = register(&library, &fixture);
+    wait(&library, &first.id);
+    assert!(
+        library.changes(None, 100).unwrap().changes.is_empty(),
+        "Initial scan is a baseline"
+    );
+    let original = library
+        .query(AssetQuery::default(), None, 240)
+        .unwrap()
+        .assets
+        .into_iter()
+        .find(|a| a.name == "Generated-00.jpg")
+        .unwrap();
+    library
+        .annotate(
+            AssetSelection::Ids {
+                ids: vec![original.id.clone()],
+            },
+            AnnotationPatch {
+                favorite: Some(true),
+                rating: None,
+                tags: None,
+            },
+        )
+        .unwrap();
+    let old = fixture.path().join("Coast/Generated-00.jpg");
+    let moved = fixture.path().join("Woodland/Live-renamed.jpg");
+    std::fs::rename(&old, &moved).unwrap(); // External actor, owned fixture only.
+    let expected = independent_manifest(fixture.path());
+    let scan = library.scan(first.root_id.clone(), filter()).unwrap();
+    wait(&library, &scan.id);
+    assert_eq!(expected, independent_manifest(fixture.path()));
+    let changes = library.changes(None, 100).unwrap().changes;
+    let change = changes
+        .iter()
+        .find(|c| c.asset_id.as_ref() == Some(&original.id))
+        .unwrap();
+    assert_eq!(change.kind, LibraryChangeKind::Moved);
+    assert_eq!(
+        change.previous_path.as_deref(),
+        Some("Coast/Generated-00.jpg")
+    );
+    assert_eq!(change.path.as_deref(), Some("Woodland/Live-renamed.jpg"));
+    assert!(library.detail(original.id.clone()).unwrap().asset.favorite);
+    let count = changes.len();
+    let scan = library.scan(first.root_id.clone(), filter()).unwrap();
+    wait(&library, &scan.id);
+    assert_eq!(
+        count,
+        library.changes(None, 100).unwrap().changes.len(),
+        "Unchanged scans must not manufacture changes"
+    );
+    let holder = tempfile::tempdir().unwrap();
+    let coast = fixture.path().join("Coast");
+    let away = holder.path().join("Coast");
+    std::fs::rename(&coast, &away).unwrap();
+    let expected = independent_manifest(fixture.path());
+    let scan = library.scan(first.root_id.clone(), filter()).unwrap();
+    wait(&library, &scan.id);
+    assert_eq!(expected, independent_manifest(fixture.path()));
+    let page = library
+        .browse_directory(first.root_id.clone(), None, String::new(), None, 240)
+        .unwrap();
+    assert!(
+        !page
+            .entries
+            .iter()
+            .any(|e| matches!(e,DirectoryEntry::Folder{directory} if directory.name=="Coast"))
+    );
+    let removed = library.changes(None, 100).unwrap();
+    assert!(
+        removed
+            .changes
+            .iter()
+            .any(|c| c.kind == LibraryChangeKind::Removed && c.entry_kind == "folder")
+    );
+    let one = library.changes(None, 1).unwrap();
+    let older = library.changes(one.next_before, 1).unwrap();
+    assert_ne!(one.changes[0].sequence, older.changes[0].sequence);
+    assert!(library.changes(Some("-1".into()), 25).is_err());
+    assert!(library.changes(None, 101).is_err());
+    std::fs::rename(&away, &coast).unwrap();
+    std::fs::rename(&moved, &old).unwrap();
+    let expected = independent_manifest(fixture.path());
+    let scan = library.scan(first.root_id, filter()).unwrap();
+    wait(&library, &scan.id);
+    assert_eq!(expected, independent_manifest(fixture.path()));
+    fixture.verify_unchanged().unwrap();
+    let recorded = library.changes(None, 100).unwrap().changes.len();
+    library.cancel_all();
+    eventually(|| {
+        library
+            .status()
+            .unwrap()
+            .jobs
+            .iter()
+            .all(|j| !matches!(j.state.as_str(), "queued" | "running" | "cancel_requested"))
+    });
+    drop(library);
+    drop(catalog);
+    let (_, library) = open(data.path());
+    assert_eq!(recorded, library.changes(None, 100).unwrap().changes.len());
+}
+
+#[test]
+fn native_notifications_reconcile_external_add_move_remove_and_preserve_offline_inventory() {
+    let fixture = LibraryFixture::generate().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let (_, library) = open(data.path());
+    let first = register(&library, &fixture);
+    wait(&library, &first.id);
+    library.start_monitoring().unwrap();
+    library.start_monitoring().unwrap();
+    eventually(|| {
+        library
+            .status()
+            .unwrap()
+            .monitoring
+            .unwrap_or_default()
+            .iter()
+            .any(|m| m.mode == "watching")
+    });
+    let created = fixture.path().join("Live-added.jpg");
+    std::fs::copy(fixture.path().join("Coast/Generated-00.jpg"), &created).unwrap();
+    let expected = independent_manifest(fixture.path());
+    eventually(|| {
+        library
+            .query(AssetQuery::default(), None, 240)
+            .unwrap()
+            .assets
+            .iter()
+            .any(|a| a.name == "Live-added.jpg")
+    });
+    assert_eq!(expected, independent_manifest(fixture.path()));
+    let moved = fixture.path().join("Woodland/Live-moved.jpg");
+    std::fs::rename(&created, &moved).unwrap();
+    let expected = independent_manifest(fixture.path());
+    eventually(|| {
+        library.changes(None, 100).unwrap().changes.iter().any(|c| {
+            c.kind == LibraryChangeKind::Moved
+                && c.path.as_deref() == Some("Woodland/Live-moved.jpg")
+        })
+    });
+    assert_eq!(expected, independent_manifest(fixture.path()));
+    let holder = tempfile::tempdir().unwrap();
+    let gone = holder.path().join("removed.jpg");
+    std::fs::rename(&moved, &gone).unwrap();
+    let expected = independent_manifest(fixture.path());
+    eventually(|| {
+        !library
+            .query(AssetQuery::default(), None, 240)
+            .unwrap()
+            .assets
+            .iter()
+            .any(|a| a.name == "Live-moved.jpg")
+    });
+    assert_eq!(expected, independent_manifest(fixture.path()));
+    fixture.verify_unchanged().unwrap();
+    let total = library
+        .query(AssetQuery::default(), None, 240)
+        .unwrap()
+        .total;
+    let recorded = library.changes(None, 100).unwrap().changes.len();
+    let offline = holder.path().join("offline-root");
+    std::fs::rename(fixture.path(), &offline).unwrap();
+    eventually(|| library.status().unwrap().roots[0].availability == "offline");
+    assert_eq!(
+        total,
+        library
+            .query(AssetQuery::default(), None, 240)
+            .unwrap()
+            .total
+    );
+    assert_eq!(
+        recorded,
+        library.changes(None, 100).unwrap().changes.len(),
+        "Offline is not mass deletion"
+    );
+    std::fs::rename(&offline, fixture.path()).unwrap();
+    eventually(|| library.status().unwrap().roots[0].availability == "online");
+    library.cancel_all();
     fixture.verify_unchanged().unwrap();
 }

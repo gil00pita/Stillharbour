@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { JobDetail, LibraryStatus, ScanJob } from '../bindings';
 import { errorMessage, library, libraryData } from '../ipc';
 import { ScanJobProgress } from './ScanJobProgress';
+import { LibraryChanges } from './LibraryChanges';
 
 export function JobsDropdown({
   status,
@@ -153,6 +154,7 @@ export function JobsDropdown({
                 </p>
                 <ThumbnailJobAction status={status} onRefresh={onRefresh} />
                 {entries(active)}
+                <LibraryChanges status={status} />
                 {recent.length > 0 && (
                   <details className="recent-jobs">
                     <summary>Recent jobs ({recent.length})</summary>

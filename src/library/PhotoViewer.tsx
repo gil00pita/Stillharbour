@@ -6,11 +6,19 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react';
-import type { AnnotationPatch, AssetQuery, AssetSummary, LibraryStatus } from '../bindings';
+import {
+  VIEWER_EDGE,
+  type AnnotationPatch,
+  type AssetQuery,
+  type AssetSummary,
+  type LibraryStatus,
+  type ThumbnailResult,
+} from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { nearbyPhotos, useViewerNeighbors } from './useViewerNeighbors';
 import { Inspector } from './Inspector';
-import { previewKey, previewUrl, usePreviews } from './previews';
+import { ViewerImage } from './ViewerImage';
+import { previewEdges, previewKey, previewUrl, usePreviews } from './previews';
 
 export function PhotoViewer({
   initial,
@@ -44,13 +52,18 @@ export function PhotoViewer({
   const { context, retry: retryNavigation } = useViewerNeighbors(asset.id, query);
   const nearby = nearbyPhotos(pageAssets, asset, context?.data);
   const keys = [
-    { assetId: asset.id, revision: asset.revision, edge: 512 },
+    ...[VIEWER_EDGE, 512, 32].map((edge) => ({
+      assetId: asset.id,
+      revision: asset.revision,
+      edge,
+    })),
     ...(filmstrip
       ? nearby.map((item) => ({ assetId: item.id, revision: item.revision, edge: 256 }))
       : []),
   ];
   const previews = usePreviews(keys, onError);
-  const current = previews.results[previewKey(keys[0]!)];
+  const current = keys.slice(0, 3).map((key) => previews.results[previewKey(key)]);
+  const ready = previewEdges(current).length > 0;
   function closeInfo() {
     setInfo(false);
     infoButton.current?.focus();
@@ -142,10 +155,16 @@ export function PhotoViewer({
             <PhotoStage
               key={`${asset.id}:${asset.revision}`}
               asset={asset}
-              ready={current?.state === 'ready'}
+              ready={ready}
+              results={current}
+              transportError={previews.error}
               error={
-                previews.error ??
-                (current?.state === 'unavailable' ? (current.error ?? 'Preview unavailable') : null)
+                !ready
+                  ? (previews.error ??
+                    (current.every((item) => item?.state === 'unavailable')
+                      ? (current.find((item) => item?.error)?.error ?? 'Preview unavailable')
+                      : null))
+                  : null
               }
               onRetry={previews.retry}
             />
@@ -189,8 +208,12 @@ function PhotoStage({
   ready,
   error,
   onRetry,
+  results,
+  transportError,
 }: {
   asset: AssetSummary;
+  results: (ThumbnailResult | undefined)[];
+  transportError: string | null;
   ready: boolean;
   error: string | null;
   onRetry: () => void;
@@ -198,7 +221,6 @@ function PhotoStage({
   const canvas = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const [zoom, setZoom] = useState(1);
-  const [imageFailed, setImageFailed] = useState(false);
   useLayoutEffect(() => {
     const element = canvas.current;
     if (element) {
@@ -236,39 +258,17 @@ function PhotoStage({
           drag.current = null;
         }}
       >
-        {error || imageFailed ? (
-          <div className="viewer-unavailable" role="status">
-            <h3>
-              <bdi>{asset.name}</bdi>
-            </h3>
-            <p>{error ?? 'Cached preview failed to load.'}</p>
-            <p>The original has not been changed.</p>
-            <button
-              onClick={() => {
-                setImageFailed(false);
-                onRetry();
-              }}
-            >
-              Retry preview
-            </button>
-          </div>
-        ) : ready ? (
-          <div
-            className="viewer-zoom-plane"
-            style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
-          >
-            <img
-              src={previewUrl(asset, 512)}
-              alt={asset.name}
-              draggable={false}
-              onError={() => setImageFailed(true)}
-            />
-          </div>
-        ) : (
-          <p className="viewer-loading" role="status">
-            Preparing cached preview…
-          </p>
-        )}
+        <div
+          className="viewer-zoom-plane"
+          style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
+        >
+          <ViewerImage
+            asset={asset}
+            results={results}
+            transportError={transportError}
+            onRetry={onRetry}
+          />
+        </div>
       </div>
       <div className="viewer-zoom" aria-label="Preview zoom controls">
         <button
@@ -312,7 +312,7 @@ function ViewerStatus({ asset, status }: { asset: AssetSummary; status: LibraryS
       {offline
         ? `Cached preview — original ${asset.presence !== 'present' ? asset.presence : (root?.availability ?? 'availability unknown')}`
         : 'Read-only cached preview'}{' '}
-      · up to 512 px, not a full-resolution original
+      · up to {VIEWER_EDGE.toLocaleString()} px, not a full-resolution original
     </p>
   );
 }
@@ -352,8 +352,9 @@ function FilmstripImage({
   const [failed, setFailed] = useState(false);
   const result =
     previews.results[previewKey({ assetId: asset.id, revision: asset.revision, edge: 256 })];
-  if (failed || result?.state === 'unavailable' || previews.error)
+  const edge = previewEdges([result])[0];
+  if (failed || (!edge && (result?.state === 'unavailable' || previews.error)))
     return <span>Preview unavailable</span>;
-  if (result?.state !== 'ready') return <span>Preparing preview…</span>;
-  return <img src={previewUrl(asset, 256)} alt="" onError={() => setFailed(true)} />;
+  if (!edge) return <span>Preparing preview…</span>;
+  return <img src={previewUrl(asset, edge)} alt="" onError={() => setFailed(true)} />;
 }

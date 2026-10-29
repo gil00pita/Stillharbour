@@ -85,7 +85,7 @@ export function LibraryMaintenance({
           <>
             <p>
               {removing
-                ? 'This forgets the selected folder, its indexed records, catalog favorites, ratings, tags and scan history, and clears its indexed cached previews. You can add the folder again, but its catalog notes will not return.'
+                ? 'This forgets the selected folder, its indexed records, catalog favorites, ratings, tags and scan history, and clears its indexed cached previews. You can add the folder again, but its catalog notes will not return. Library change history, including previous paths, remains in this catalog.'
                 : 'Clear indexed cached previews for every library. Originals, library settings and catalog notes stay unchanged. Previews regenerate when accessible photos are viewed; offline photos need their originals reconnected.'}
             </p>
             <p className="help">

@@ -21,7 +21,7 @@ export function useAssetFeed(
   period: string | null,
   revision: string,
   onError: (error: unknown) => void,
-  onWindowChange?: () => void,
+  onWindowChange?: (followTop?: boolean) => void,
 ) {
   const key = JSON.stringify([query, period]);
   const [state, setState] = useState<FeedState>({
@@ -46,7 +46,7 @@ export function useAssetFeed(
       let native: LibraryRequest = firstRequest(query, period);
       if (direction === 'after')
         native = { kind: 'query', query, cursor: tail ?? null, limit: FEED_PAGE_SIZE };
-      if ((direction === 'before' || direction === 'refresh') && first)
+      if ((direction === 'before' || (direction === 'refresh' && current.hasBefore)) && first)
         native = {
           kind: 'seek_asset',
           query,
@@ -71,7 +71,7 @@ export function useAssetFeed(
           );
         }
         if (token !== generation.current) return;
-        onWindowChange?.();
+        onWindowChange?.(direction === 'refresh' && !current.hasBefore && !period);
         const observedRevision = pages.at(-1)!.revision;
         setState((previous) => {
           if (direction === 'before' && !pages[0]?.assets.length)
@@ -90,7 +90,7 @@ export function useAssetFeed(
               key,
               revision: observedRevision,
               pages,
-              hasBefore: direction === 'refresh' ? Boolean(first) : Boolean(period),
+              hasBefore: direction === 'refresh' ? current.hasBefore : Boolean(period),
               error: null,
             };
           const combined =

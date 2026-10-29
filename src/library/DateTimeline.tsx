@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import type { DateBucket } from '../bindings';
 import { timelineDate } from './model';
-import { periodLabel, timelineIndexAt, timelineYears } from './timeline';
+import { periodLabel, timelineYears } from './timeline';
 
 export function DateTimeline({
   buckets,
@@ -9,12 +9,16 @@ export function DateTimeline({
   scrolling,
   onYear,
   onScroll,
+  progress = 0,
+  onPosition,
 }: {
   buckets: DateBucket[];
   date: string;
   scrolling: boolean;
   onYear: (period: string) => void;
   onScroll?: (delta: number, mode: number) => void;
+  progress?: number;
+  onPosition?: (period: string, progress: number) => boolean;
 }) {
   const rail = useRef<HTMLElement>(null);
   const [height, setHeight] = useState(400);
@@ -39,10 +43,13 @@ export function DateTimeline({
     0,
     periods.findIndex((period) => period.period === currentPeriod),
   );
+  const maximum = Math.max(1, periods.length);
   const value =
-    dragging || editing ? Math.min(draft, Math.max(0, periods.length - 1)) : activeIndex;
+    dragging || editing
+      ? Math.min(draft, maximum)
+      : activeIndex + Math.max(0, Math.min(0.9999, progress));
   const labelIndex = hovered ?? value;
-  const period = periods[labelIndex]?.period;
+  const period = periods[Math.min(periods.length - 1, Math.floor(labelIndex))]?.period;
   const label = periodLabel(period);
   useEffect(() => {
     const element = rail.current;
@@ -70,24 +77,24 @@ export function DateTimeline({
     if (event.pointerId !== dragPointer.current) return;
     const bounds = slider.current?.getBoundingClientRect();
     if (!bounds || !Number.isFinite(event.clientY) || bounds.height <= 0) return;
-    const index = timelineIndexAt(event.clientY, bounds, periods.length, draftValue.current);
+    const index = positionAt(event.clientY, bounds);
     draftValue.current = index;
     setDraft(index);
+    scrollLoaded(index);
   });
   const finishDrag = useEffectEvent((event: PointerEvent) => {
     if (event.pointerId !== dragPointer.current) return;
-    const selected = periods[draftValue.current];
+    if (event.type === 'pointerup') moveDrag(event);
     dragPointer.current = null;
     setDragging(false);
     setEditing(false);
-    if (event.type === 'pointerup' && selected) onYear(selected.period);
+    if (event.type === 'pointerup') commit(draftValue.current);
   });
   useEffect(() => {
-    if (!dragging) return;
     const move = (event: PointerEvent) => moveDrag(event);
     const finish = (event: PointerEvent) => finishDrag(event);
-    // Keep one subscription for the gesture, reading current periods/callbacks.
-    // Native pointer capture also handles release outside the window.
+    // Subscribe before a gesture starts, so a quick release cannot race an
+    // effect installation. The pointer ID gates all unrelated document input.
     document.addEventListener('pointermove', move);
     document.addEventListener('pointerup', finish);
     document.addEventListener('pointercancel', finish);
@@ -98,11 +105,23 @@ export function DateTimeline({
       document.removeEventListener('pointercancel', finish);
       document.removeEventListener('lostpointercapture', finish);
     };
-  }, [dragging]);
+  }, []);
   const visibleYears = timelineYears(buckets, periods, current.year, height);
-  function commit(index: number) {
-    const selected = periods[Math.max(0, Math.min(periods.length - 1, index))];
-    if (selected) onYear(selected.period);
+  function positionAt(y: number, bounds: { top: number; height: number }) {
+    if (!Number.isFinite(y) || bounds.height <= 0) return draftValue.current;
+    return Math.max(0, Math.min(maximum, ((y - bounds.top) / bounds.height) * maximum));
+  }
+  function targetAt(position: number) {
+    const index = Math.max(0, Math.min(periods.length - 1, Math.floor(position)));
+    return { period: periods[index]?.period, progress: Math.min(1, Math.max(0, position - index)) };
+  }
+  function scrollLoaded(position: number) {
+    const target = targetAt(position);
+    return target.period === currentPeriod ? onPosition?.(target.period, target.progress) : false;
+  }
+  function commit(position: number) {
+    const target = targetAt(position);
+    if (target.period && !scrollLoaded(position)) onYear(target.period);
   }
   return (
     <nav
@@ -127,13 +146,16 @@ export function DateTimeline({
         ref={slider}
         className="date-scrubber"
         type="range"
-        title="Jump to a month. Use the gallery scrollbar for precise scrolling."
+        title="Drag to scroll photos or jump to a month."
         aria-label="Jump to year or month"
-        aria-valuetext={periodLabel(periods[value]?.period)}
+        aria-valuetext={periodLabel(
+          periods[Math.min(periods.length - 1, Math.floor(value))]?.period,
+        )}
         min="0"
-        max={Math.max(1, periods.length - 1)}
+        max={maximum}
+        step="any"
         value={value}
-        disabled={periods.length <= 1}
+        disabled={periods.length === 0}
         onFocus={() => setFocused(true)}
         onBlur={() => {
           setFocused(false);
@@ -144,13 +166,14 @@ export function DateTimeline({
           event.preventDefault();
           event.currentTarget.focus({ preventScroll: true });
           const bounds = event.currentTarget.getBoundingClientRect();
-          const index = timelineIndexAt(event.clientY, bounds, periods.length, activeIndex);
+          const index = positionAt(event.clientY, bounds);
           draftValue.current = index;
           setDraft(index);
           setHovered(null);
           dragPointer.current = event.pointerId;
           if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId);
           setDragging(true);
+          scrollLoaded(index);
         }}
         onChange={(event) => {
           const next = Number(event.target.value);
@@ -158,6 +181,28 @@ export function DateTimeline({
           setDraft(next);
           setEditing(true);
           setHovered(null);
+        }}
+        onKeyDown={(event) => {
+          const direction = {
+            ArrowDown: 0.05,
+            ArrowRight: 0.05,
+            ArrowUp: -0.05,
+            ArrowLeft: -0.05,
+            PageDown: 0.5,
+            PageUp: -0.5,
+          }[event.key];
+          if (direction === undefined && !['Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const next =
+            event.key === 'Home'
+              ? 0
+              : event.key === 'End'
+                ? maximum
+                : Math.max(0, Math.min(maximum, value + (direction ?? 0)));
+          draftValue.current = next;
+          setDraft(next);
+          setEditing(true);
+          scrollLoaded(next);
         }}
         onKeyUp={(event) => {
           if (
@@ -179,19 +224,19 @@ export function DateTimeline({
         onPointerMove={(event) => {
           if (dragging) return;
           const bounds = event.currentTarget.getBoundingClientRect();
-          setHovered(timelineIndexAt(event.clientY, bounds, periods.length));
+          setHovered(positionAt(event.clientY, bounds));
         }}
         onPointerLeave={() => setHovered(null)}
       />
       <div className="date-scrubber-track" aria-hidden="true">
-        <i style={{ top: `${(value / Math.max(1, periods.length - 1)) * 100}%` }} />
+        <i style={{ top: `${(value / maximum) * 100}%` }} />
       </div>
       <output
         className="timeline-current"
         aria-live="off"
         aria-label="Currently visible date"
         style={{
-          top: `clamp(0px, ${(labelIndex / Math.max(1, periods.length - 1)) * 100}%, calc(100% - 24px))`,
+          top: `clamp(0px, ${(labelIndex / maximum) * 100}%, calc(100% - 24px))`,
         }}
       >
         {hovered === null && !dragging && !focused ? current.label : label}

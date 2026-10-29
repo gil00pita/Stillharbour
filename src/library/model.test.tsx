@@ -131,3 +131,14 @@ it('keeps compact date captions fully named and preserves Today and unknown date
   expect(dayLabel('2026-10-28', new Date(2026, 9, 28), true)).toBe('Today');
   expect(dayLabel('Undated', new Date(), true)).toBe('Unknown date');
 });
+
+it('does not collapse a dense mixed-aspect day into rows of tiny slivers', () => {
+  const assets = Array.from({ length: 720 }, (_, index) => ({
+    ...fixtureAsset(String(index), '2020-06-15'),
+    width: index % 7 === 0 ? 12000 : index % 7 === 1 ? 40 : 600,
+    height: index % 7 === 0 ? 40 : index % 7 === 1 ? 12000 : 400,
+  }));
+  const rows = photoRows(assets, 816, 'gallery', 220);
+  expect(rows.every((row) => row.assets.length === 1 || row.imageHeight >= 110)).toBe(true);
+  expect(rows.length).toBeGreaterThan(50);
+});

@@ -31,7 +31,17 @@ pub struct WorkerPaths {
 pub fn read_input(file: File) -> Result<Vec<u8>> {
     read_input_at(file, crate::performance::Endpoint::Source)
 }
-pub fn read_input_at(mut file: File, endpoint: crate::performance::Endpoint) -> Result<Vec<u8>> {
+pub fn read_input_at(file: File, endpoint: crate::performance::Endpoint) -> Result<Vec<u8>> {
+    read_input_inner(file, endpoint, &AtomicBool::new(false))
+}
+pub(super) fn read_input_cancellable(file: File, cancel: &AtomicBool) -> Result<Vec<u8>> {
+    read_input_inner(file, crate::performance::Endpoint::Source, cancel)
+}
+fn read_input_inner(
+    mut file: File,
+    endpoint: crate::performance::Endpoint,
+    cancel: &AtomicBool,
+) -> Result<Vec<u8>> {
     let started = crate::performance::clock();
     let volume = crate::performance::file_volume(&file);
     if !file.metadata()?.is_file() || file.metadata()?.len() > MAX_INPUT_BYTES {
@@ -42,9 +52,33 @@ pub fn read_input_at(mut file: File, endpoint: crate::performance::Endpoint) -> 
     }
     let before = super::native::revision(&file)?;
     let mut bytes = Vec::new();
-    Read::by_ref(&mut file)
-        .take(MAX_INPUT_BYTES + 1)
-        .read_to_end(&mut bytes)?;
+    // Check before each bounded read, not only after a whole source is loaded.
+    let mut chunk = [0u8; 64 * 1024];
+    loop {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(AppError::new(ErrorCode::Busy, "Source read canceled."));
+        }
+        let remaining = (MAX_INPUT_BYTES + 1).saturating_sub(bytes.len() as u64);
+        if remaining == 0 {
+            break;
+        }
+        let length = chunk.len().min(remaining as usize);
+        let n = match file.read(&mut chunk[..length]) {
+            Ok(n) => n,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => return Err(error.into()),
+        };
+        if n == 0 {
+            break;
+        }
+        if bytes.len() as u64 + n as u64 > MAX_INPUT_BYTES {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The original grew beyond the input budget.",
+            ));
+        }
+        bytes.extend_from_slice(&chunk[..n]);
+    }
     if bytes.len() as u64 > MAX_INPUT_BYTES || super::native::revision(&file)? != before {
         return Err(AppError::new(
             ErrorCode::Conflict,
@@ -320,11 +354,11 @@ pub async fn thumbnail_file(
         crate::performance::file_volume(&file),
     );
     #[cfg(target_os = "macos")]
-    let (mode, input) = ("--media-worker-file", WorkerInput::File(file));
+    let (mode, input) = ("--media-worker-file-v2", WorkerInput::File(file));
     #[cfg(not(target_os = "macos"))]
     let (mode, input) = (
-        "--media-worker-stdin",
-        WorkerInput::Bytes(read_input(file)?),
+        "--media-worker-stdin-v2",
+        WorkerInput::Bytes(read_input_cancellable(file, &cancel)?),
     );
     let mut command = Command::new(&paths.executable);
     command
@@ -333,14 +367,15 @@ pub async fn thumbnail_file(
         .arg((format as u32).to_string())
         .env_clear()
         .current_dir(&paths.working_directory);
-    let output = run(command, input, 8 * 1024 * 1024, true, cancel).await?;
-    let report = serde_json::from_slice::<Result<MediaReport>>(&output).map_err(|e| {
-        AppError::new(
-            ErrorCode::WorkerFailed,
-            "Preview worker returned invalid data.",
-        )
-        .caused_by(e)
-    })??;
+    let output = run(
+        command,
+        input,
+        crate::rendition::wire_budget(edge)?,
+        true,
+        cancel,
+    )
+    .await?;
+    let report = crate::rendition::read_frame(&output, edge)?;
     #[cfg(target_os = "macos")]
     if let (Some(started), volume) = observation {
         crate::performance::record_at(
@@ -374,7 +409,7 @@ pub async fn thumbnail(
     );
     let mut command = Command::new(&paths.executable);
     command
-        .arg("--media-worker-stdin")
+        .arg("--media-worker-stdin-v2")
         .arg(edge.to_string())
         .arg((format as u32).to_string())
         .env_clear()
@@ -382,23 +417,39 @@ pub async fn thumbnail(
     let output = run(
         command,
         WorkerInput::Bytes(bytes),
-        8 * 1024 * 1024,
+        crate::rendition::wire_budget(edge)?,
         true,
         cancel,
     )
     .await?;
-    serde_json::from_slice::<Result<MediaReport>>(&output).map_err(|e| {
-        AppError::new(
-            ErrorCode::WorkerFailed,
-            "Preview worker returned invalid data.",
-        )
-        .caused_by(e)
-    })?
+    crate::rendition::read_frame(&output, edge)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn canceled_chunked_source_read_keeps_the_original_and_can_be_retried() {
+        use std::io::Write;
+        let mut fixture = tempfile::NamedTempFile::new().unwrap();
+        let source = vec![71u8; 256 * 1024 + 3];
+        fixture.write_all(&source).unwrap();
+        let error = read_input_cancellable(
+            crate::filesystem::open_readonly(fixture.path()).unwrap(),
+            &AtomicBool::new(true),
+        )
+        .unwrap_err();
+        assert_eq!(error.code, ErrorCode::Busy);
+        assert_eq!(std::fs::read(fixture.path()).unwrap(), source);
+        assert_eq!(
+            read_input_cancellable(
+                crate::filesystem::open_readonly(fixture.path()).unwrap(),
+                &AtomicBool::new(false),
+            )
+            .unwrap(),
+            source
+        );
+    }
     #[test]
     fn capture_dates_remain_local_and_preserve_old_and_fractional_values() {
         assert_eq!(

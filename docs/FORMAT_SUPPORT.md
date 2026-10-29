@@ -72,3 +72,7 @@ Run the native suites as separate CLI invocations, serially; do not rebuild `dis
 ## Large-image progressive renditions — 2026-10-28
 
 The owner's large JPEG/PNG/TIFF request adds the bounded macOS handle-backed downsampling path in [PROGRESSIVE_PREVIEWS.md](PROGRESSIVE_PREVIEWS.md) and [ADR-0011](decisions/ADR-0011-progressive-renditions.md). Its explicit file/read limits replace the earlier full-source estimate for those three types only; other adapters retain prior limits. Tiny placeholders are prepared as a separate background job and clear previews remain demand-driven. Old M5-v2/M1 positive caches remain usable; old failures retry under the new policy. Existing evidence above remains historical, not proof of the changed path; current runs are recorded in the new document.
+
+## P2 higher rendition tiers — 2026-10-29
+
+The owner's P2 continuation adds1024px gallery and2048px viewer requests through the same bounded adapter and read-only cache. [PERFORMANCE_P2.md](PERFORMANCE_P2.md) records generated JPEG/PNG/TIFF tier/output evidence and the exact native/package checks completed for this stage. Earlier512px camera/format evidence is retained at its original scope; higher-tier camera variants, clean machines, minimum OS and Windows require their own evidence. A larger derived image is still a preview, not full-media validation or original-resolution/HDR support. Decoder source/read/dimension/time/concurrency/RSS gates remain; only the tier-specific output/transport caps change under ADR-0012.

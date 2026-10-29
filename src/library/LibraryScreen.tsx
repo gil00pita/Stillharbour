@@ -36,7 +36,10 @@ export function LibraryScreen({
   onRelink: (id: string) => Promise<void>;
 }) {
   const viewportHandle = useRef<PhotoViewportHandle>(null);
-  const rememberWindow = useCallback(() => viewportHandle.current?.remember(), []);
+  const rememberWindow = useCallback(
+    (followTop = false) => viewportHandle.current?.remember(followTop),
+    [],
+  );
   const c = useLibraryController({
     status,
     section,

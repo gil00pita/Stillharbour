@@ -1,4 +1,6 @@
 //! Bounded admission independent of any UI queue. Blocking jobs use worker threads.
+pub mod resources;
+
 use crate::domain::{AppError, ErrorCode, Result};
 use std::sync::{
     Arc,

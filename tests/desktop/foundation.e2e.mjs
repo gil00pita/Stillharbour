@@ -637,8 +637,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       };
     });
     assert.equal(styles.outline, 'none');
-    assert.notEqual(styles.scrollbar, 'none');
-    assert.notEqual(styles.webkitScrollbar, 'none');
+    assert.ok(styles.scrollbar === 'none' || styles.webkitScrollbar === 'none');
     const bounds = await browser.execute(() => {
       const rect = document.querySelector('.date-scrubber').getBoundingClientRect();
       return {
@@ -1416,19 +1415,19 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           expected,
         ),
       );
-      await browser.waitUntil(async () =>
-        browser.execute(
-          (last) => {
-            const viewport = document.querySelector('.asset-viewport');
-            viewport.scrollTop = viewport.scrollHeight;
-            return [...document.querySelectorAll('.list .asset')].some((asset) =>
-              asset.textContent.includes(last),
-            );
-          },
-          `Synthetic ${String((index + 2) * 240 - 1).padStart(4, '0')}`,
-        ),
-      );
     }
+    // Reach the final tail after admitting each bounded page. Scrolling inside
+    // an intermediate-tail assertion can load the next page before that tail
+    // is observed, skipping the assertion's own checkpoint.
+    await browser.waitUntil(async () =>
+      browser.execute(() => {
+        const viewport = document.querySelector('.asset-viewport');
+        viewport.scrollTop = viewport.scrollHeight;
+        return [...document.querySelectorAll('.list .asset')].some((asset) =>
+          asset.textContent.includes('Synthetic 0959'),
+        );
+      }),
+    );
     assert.equal(
       await browser.execute(
         () => Number(document.querySelector('.collection-main').dataset.feedCount) <= 720,
@@ -1464,6 +1463,87 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       ),
     );
     assert.equal((await $$('.asset-viewport img')).length, 0);
+    // The synthetic records share one exact timestamp. The timeline must still
+    // move with the viewport and drag before release, without a second scrollbar.
+    await openFilters();
+    await changeSizeUnit('Sort', 'capture');
+    await $('button=Apply filters').click();
+    await browser.waitUntil(async () =>
+      browser.execute(() => {
+        const slider = document.querySelector('.date-scrubber');
+        return slider && !slider.disabled && slider.max === '1';
+      }),
+    );
+    await browser.execute(() => {
+      const viewport = document.querySelector('.asset-viewport');
+      viewport.scrollTop = 0;
+      document
+        .querySelector('.date-rail')
+        .dispatchEvent(new WheelEvent('wheel', { deltaY: 350, bubbles: true, cancelable: true }));
+    });
+    await browser.waitUntil(async () =>
+      browser.execute(
+        () =>
+          document.querySelector('.asset-viewport').scrollTop > 0 &&
+          Number(document.querySelector('.date-scrubber').value) > 0,
+      ),
+    );
+    const bounds = await browser.execute(() => {
+      const slider = document.querySelector('.date-scrubber');
+      const rect = slider.getBoundingClientRect();
+      return {
+        x: Math.round(rect.left + rect.width / 2),
+        start: Math.round(rect.top + rect.height * 0.25),
+        end: Math.round(rect.top + rect.height * 0.65),
+      };
+    });
+    await browser.performActions([
+      {
+        type: 'pointer',
+        id: 'dense-timeline',
+        parameters: { pointerType: 'mouse' },
+        actions: [
+          { type: 'pointerMove', x: bounds.x, y: bounds.start, duration: 0 },
+          { type: 'pointerDown', button: 0 },
+          { type: 'pointerMove', x: bounds.x, y: bounds.end, duration: 120 },
+        ],
+      },
+    ]);
+    await browser.waitUntil(async () =>
+      browser.execute(() => {
+        const viewport = document.querySelector('.asset-viewport');
+        return (
+          viewport.scrollTop > viewport.clientHeight &&
+          Number(document.querySelector('.date-scrubber').value) > 0.5
+        );
+      }),
+    );
+    await browser.performActions([
+      {
+        type: 'pointer',
+        id: 'dense-timeline',
+        parameters: { pointerType: 'mouse' },
+        actions: [{ type: 'pointerUp', button: 0 }],
+      },
+    ]);
+    await browser.releaseActions();
+    assert.equal(
+      await browser.execute(() => {
+        const viewport = document.querySelector('.asset-viewport');
+        const style = getComputedStyle(viewport);
+        return (
+          style.scrollbarWidth === 'none' ||
+          getComputedStyle(viewport, '::-webkit-scrollbar').display === 'none'
+        );
+      }),
+      true,
+    );
+    assert.ok(
+      await browser.execute(
+        () => Number(document.querySelector('.collection-main').dataset.feedCount) <= 720,
+      ),
+    );
+    await browser.saveScreenshot('.context/screenshots/timeline-only-scroll.png');
     const verified = await browser.tauri.execute(async ({ core }) =>
       core.invoke('test_library_fixture', { verify: true }),
     );

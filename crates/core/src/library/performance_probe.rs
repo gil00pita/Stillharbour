@@ -39,12 +39,26 @@ pub fn seed_catalog(catalog: &Catalog, parent: &Path, rows: u32) -> Result<Value
         let handle = native::open_root(&path, None)?;
         let id = store::add_root(
             catalog,
-            path,
+            path.clone(),
             filesystem::identity(&handle)?,
             native::volume_token(&handle)?,
             "Synthetic metadata only; no media originals".into(),
             RootMode::Referenced,
             ScanFilter::default(),
+        )?;
+        // These are freshly created, empty, test-owned roots. Retain them at a
+        // different path so the registered roots are genuinely unavailable.
+        // A flag alone lets status reconnect/scan the empty directory and mark
+        // every synthetic observation missing, invalidating scale measurements.
+        if std::fs::read_dir(&path)?.next().is_some() {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "Synthetic fixture root is not empty.",
+            ));
+        }
+        filesystem::publish_noreplace(
+            &path,
+            &parent.join(format!("retained-synthetic-root-{index}")),
         )?;
         catalog.call({
             let id = id.clone();
@@ -77,7 +91,7 @@ pub fn seed_catalog(catalog: &Catalog, parent: &Path, rows: u32) -> Result<Value
         Ok(())
     })?;
     Ok(
-        json!({"rows":rows,"rootIds":ids,"synthetic":true,"seedVersion":1,"seed":20261028,"offlineRoots":2,"unknownDates":rows/20,"denseEqualTimestampDay":rows/5,"videoRows":rows/5,"largeVideoLogicalBytes":8589934592u64}),
+        json!({"rows":rows,"rootIds":ids,"synthetic":true,"seedVersion":2,"seed":20261028,"offlineRoots":2,"unknownDates":rows/20,"denseEqualTimestampDay":rows/5,"videoRows":rows/5,"largeVideoLogicalBytes":8589934592u64}),
     )
 }
 

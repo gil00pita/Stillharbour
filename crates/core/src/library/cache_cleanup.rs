@@ -75,7 +75,8 @@ impl CacheCleanup {
             let identity = crate::filesystem::identity(&file)?;
             let mut signature = [0u8; 8];
             if !metadata.is_file()
-                || metadata.len() > 2 * 1024 * 1024
+                || metadata.len()
+                    > crate::rendition::png_budget(crate::rendition::VIEWER_EDGE)? as u64
                 || identity.links != 1
                 || file.read_exact(&mut signature).is_err()
                 || signature != *b"\x89PNG\r\n\x1a\n"

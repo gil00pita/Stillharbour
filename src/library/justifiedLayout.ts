@@ -20,8 +20,11 @@ export function justifiedLayout(
       const room = width - gutter * (end - start - 1);
       if (room <= 0) break;
       const fitted = room / sum;
+      // Do not amortise one row's distortion cost across dozens of slivers.
+      // A single full-width panorama may naturally be shorter than this floor.
+      if (end > start + 1 && fitted < target * 0.5) break;
       const final = end === ratios.length;
-      const height = Math.min(fitted, target * (final ? 1 : 1.25));
+      const height = Math.min(fitted, target * (final || end === start + 1 ? 1 : 1.25));
       const deviation = (height - target) / target;
       const unused = Math.max(0, (room - sum * height) / width);
       // A small row cost avoids leaving an orphan simply to perfect earlier

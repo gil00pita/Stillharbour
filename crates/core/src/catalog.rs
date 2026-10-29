@@ -49,6 +49,8 @@ enum Request {
 }
 
 pub struct Catalog {
+    #[cfg(feature = "fixture-probes")]
+    probe_calls: std::sync::atomic::AtomicU64,
     sender: SyncSender<Request>,
     worker: Option<thread::JoinHandle<()>>,
     #[cfg(feature = "fixture-probes")]
@@ -91,6 +93,8 @@ impl Catalog {
             })?;
         ready_rx.recv().map_err(|_| stopped())??;
         Ok(Self {
+            #[cfg(feature = "fixture-probes")]
+            probe_calls: std::sync::atomic::AtomicU64::new(0),
             sender,
             worker: Some(worker),
             #[cfg(feature = "fixture-probes")]
@@ -118,6 +122,9 @@ impl Catalog {
         work: impl FnOnce(&mut Connection, &mut ReadCache) -> Result<T> + Send + 'static,
     ) -> Result<T> {
         use crate::performance::{self, Endpoint, Metric, Span};
+        #[cfg(feature = "fixture-probes")]
+        self.probe_calls
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let _span = Span::new(Metric::CatalogCall, Endpoint::Catalog);
         let queued = performance::clock();
         #[cfg(feature = "fixture-probes")]
@@ -136,6 +143,12 @@ impl Catalog {
             })))
             .map_err(|_| busy())?;
         response.recv().map_err(|_| stopped())?
+    }
+
+    /// Diagnostic-only bounded counter; absent from production and IPC.
+    #[cfg(feature = "fixture-probes")]
+    pub fn probe_call_count(&self) -> u64 {
+        self.probe_calls.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Backend-owned destination only; M0 does not expose catalog export through IPC.

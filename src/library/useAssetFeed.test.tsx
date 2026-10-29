@@ -89,22 +89,35 @@ it('keeps loaded photos on a failed continuation and retries explicitly', async 
 });
 it('refreshes a window from its stable first identity when catalog revision changes', async () => {
   const { result, rerender } = renderHook(
-    ({ revision }) => useAssetFeed(defaultQuery, null, revision, onError),
+    ({ revision }) => useAssetFeed(defaultQuery, '2026-03', revision, onError),
     { initialProps: { revision: '1' } },
   );
   await waitFor(() => expect(result.current.page?.assets).toHaveLength(240));
   vi.mocked(libraryData).mockImplementation(async (request) => {
     if (request.kind === 'seek_asset' || request.kind === 'query')
-      return { ...page(0), revision: '2' };
+      return { ...page(480), revision: '2' };
     throw new Error('Unexpected');
   });
   rerender({ revision: '2' });
   await waitFor(() =>
     expect(libraryData).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'seek_asset', asset_id: '0', position: 'at' }),
+      expect.objectContaining({ kind: 'seek_asset', asset_id: '480', position: 'at' }),
       'page',
     ),
   );
   await waitFor(() => expect(result.current.busy).toBe(false));
-  expect(result.current.page?.assets[0]?.id).toBe('0');
+  expect(result.current.page?.assets[0]?.id).toBe('480');
+});
+
+it('refreshes the beginning to include new files above the previous first asset', async () => {
+  const remember = vi.fn();
+  const { result, rerender } = renderHook(
+    ({ revision }) => useAssetFeed(defaultQuery, null, revision, onError, remember),
+    { initialProps: { revision: '1' } },
+  );
+  await waitFor(() => expect(result.current.page?.assets).toHaveLength(240));
+  vi.mocked(libraryData).mockImplementation(async () => ({ ...page(1000), revision: '2' }));
+  rerender({ revision: '2' });
+  await waitFor(() => expect(result.current.page?.assets[0]?.id).toBe('1000'));
+  expect(remember).toHaveBeenCalledWith(true);
 });

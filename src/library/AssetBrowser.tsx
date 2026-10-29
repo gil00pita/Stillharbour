@@ -23,10 +23,42 @@ import { DEFAULT_TEXT_COLUMNS, textListLayout, type TextColumn } from './textCol
 import { restoreAssetFocus } from './focus';
 import { usePhotoViewport } from './usePhotoViewport';
 import type { GalleryDisplay } from './FilterPanel';
+import { galleryPreviewKeys, galleryRenditions } from './renditionPlan';
+import { usePixelRatio } from './usePixelRatio';
 export type PhotoViewportHandle = {
-  remember: () => void;
+  remember: (followTop?: boolean) => void;
   scrollBy: (delta: number, mode: number) => void;
+  scrollToPeriod: (period: string, progress: number) => boolean;
 };
+
+interface AssetBrowserProps {
+  display?: GalleryDisplay;
+  viewportHandle?: Ref<PhotoViewportHandle>;
+  onNearStart?: (() => void) | undefined;
+  onNearEnd?: (() => void) | undefined;
+  pagingPaused?: boolean;
+  assets: AssetSummary[];
+  mode: ViewMode;
+  selected: ReadonlySet<string>;
+  selectionFrozen: boolean;
+  activeId: string | null;
+  onSelect: (id: string, range: boolean) => void;
+  onInspect: (id: string, opener: HTMLButtonElement) => void;
+  onMode?: (mode: ViewMode) => void;
+  onError: (error: unknown) => void;
+  onVisibleDate: (date: string, scrolling: boolean, progress: number) => void;
+  pageKey: string;
+  onSelectGroup?: (ids: string[]) => void;
+  onClearSelection?: () => void;
+  previewPaused?: boolean;
+  unavailableRoots?: ReadonlySet<string>;
+  grouping?: DateGrouping;
+  timeline?: ReactNode;
+  columns?: readonly TextColumn[];
+  sort?: string;
+  onSort?: (sort: string) => void;
+  sortBusy?: boolean;
+}
 
 export function AssetBrowser({
   display,
@@ -53,70 +85,68 @@ export function AssetBrowser({
   sort,
   onSort,
   sortBusy = false,
-}: {
-  display?: GalleryDisplay;
-  viewportHandle?: Ref<PhotoViewportHandle>;
-  onNearStart?: (() => void) | undefined;
-  onNearEnd?: (() => void) | undefined;
-  pagingPaused?: boolean;
-  assets: AssetSummary[];
-  mode: ViewMode;
-  selected: ReadonlySet<string>;
-  selectionFrozen: boolean;
-  activeId: string | null;
-  onSelect: (id: string, range: boolean) => void;
-  onInspect: (id: string, opener: HTMLButtonElement) => void;
-  onMode?: (mode: ViewMode) => void;
-  onError: (error: unknown) => void;
-  onVisibleDate: (date: string, scrolling: boolean) => void;
-  pageKey: string;
-  onSelectGroup?: (ids: string[]) => void;
-  onClearSelection?: () => void;
-  previewPaused?: boolean;
-  unavailableRoots?: ReadonlySet<string>;
-  grouping?: DateGrouping;
-  timeline?: ReactNode;
-  columns?: readonly TextColumn[];
-  sort?: string;
-  onSort?: (sort: string) => void;
-  sortBusy?: boolean;
-}) {
+}: AssetBrowserProps) {
   const size = display?.size ?? 'comfortable';
   const fit = display?.fit ?? 'contain';
   const target = THUMBNAIL_SIZES[size];
-  const { viewport, rows, virtual, height, remember, scrollToAsset, isRestorationScroll } =
-    usePhotoViewport({
-      assets,
-      mode,
-      target,
-      grouping,
-      onVisibleDate,
-      pageKey,
-    });
-  const visibleAssets = virtual.flatMap((item) => rows[item.index]?.assets ?? []);
-  const edge = target >= 220 ? 512 : 256;
-  const keys =
-    mode === 'list'
-      ? []
-      : visibleAssets
-          .slice(0, 240)
-          .flatMap((asset) =>
-            [32, edge].map((size) => ({ assetId: asset.id, revision: asset.revision, edge: size })),
-          );
+  const {
+    viewport,
+    rows,
+    virtual,
+    height,
+    visibleStart,
+    visibleHeight,
+    isScrolling,
+    remember,
+    scrollToAsset,
+    scrollToPeriod,
+    isRestorationScroll,
+  } = usePhotoViewport({
+    assets,
+    mode,
+    target,
+    grouping,
+    onVisibleDate,
+    pageKey,
+  });
+  const offset = visibleStart;
+  const bottom = offset + visibleHeight;
+  const previewRows = [...virtual].sort(
+    (a, b) =>
+      Number(b.end > offset && b.start < bottom) - Number(a.end > offset && a.start < bottom),
+  );
+  const requestRows = isScrolling
+    ? previewRows.filter((item) => item.end > offset && item.start < bottom)
+    : previewRows;
+  const visibleAssets = requestRows.flatMap((item) => rows[item.index]?.assets ?? []);
+  const ratio = usePixelRatio();
+  const tiers = galleryRenditions(
+    previewRows.map((item) => rows[item.index]).filter((row) => row !== undefined),
+    ratio,
+    mode === 'grid' && fit === 'cover',
+  );
+  const keys = mode === 'list' ? [] : galleryPreviewKeys(visibleAssets, tiers, isScrolling);
   const previews = usePreviews(keys, onError, !previewPaused);
   const previousScroll = useRef(0);
   useImperativeHandle(
     viewportHandle,
     () => ({
       remember,
+      scrollToPeriod: (period, progress) => {
+        const found = scrollToPeriod(period, progress);
+        if (found && !pagingPaused && progress === 0) onNearStart?.();
+        return found;
+      },
       scrollBy: (delta, mode) => {
         const element = viewport.current;
         if (!element) return;
         const distance = delta * (mode === 1 ? 16 : mode === 2 ? element.clientHeight : 1);
+        if (!pagingPaused && distance < 0 && element.scrollTop < element.clientHeight)
+          onNearStart?.();
         element.scrollBy({ top: distance, behavior: 'instant' });
       },
     }),
-    [remember, viewport],
+    [remember, viewport, scrollToPeriod, pagingPaused, onNearStart],
   );
   function endEdge() {
     const element = viewport.current;
@@ -187,7 +217,7 @@ export function AssetBrowser({
       <div className={`browser-canvas-layout ${timeline ? '' : 'without-timeline'}`}>
         <BrowserTable mode={mode} columns={columns} sort={sort} onSort={onSort} busy={sortBusy}>
           <div
-            className={`asset-viewport ${mode === 'gallery' ? 'gallery-viewport' : ''}`}
+            className={`asset-viewport ${mode === 'gallery' ? 'gallery-viewport' : ''} ${timeline ? 'with-timeline' : ''}`}
             ref={viewport}
             onScroll={() => {
               const element = viewport.current;
@@ -270,7 +300,7 @@ export function AssetBrowser({
                         selectionActive={selected.size > 0 || selectionFrozen}
                         frozen={selectionFrozen}
                         offline={unavailableRoots.has(asset.rootId)}
-                        edge={edge}
+                        edge={tiers.get(asset.id) ?? 256}
                         fit={mode === 'gallery' ? 'contain' : fit}
                         tinyPreview={
                           previews.results[
@@ -279,7 +309,11 @@ export function AssetBrowser({
                         }
                         preview={
                           previews.results[
-                            previewKey({ assetId: asset.id, revision: asset.revision, edge })
+                            previewKey({
+                              assetId: asset.id,
+                              revision: asset.revision,
+                              edge: tiers.get(asset.id) ?? 256,
+                            })
                           ]
                         }
                         onSelect={onSelect}

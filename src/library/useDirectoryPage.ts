@@ -10,6 +10,7 @@ export type FolderLocation = {
 export function useDirectoryPage(location: FolderLocation, revision: string) {
   const [attempt, setAttempt] = useState(0);
   const scope = JSON.stringify(location);
+  const { rootId, directoryId, cursor, search } = location;
   const requestKey = JSON.stringify([scope, revision, attempt]);
   const [state, setState] = useState<{
     scope: string;
@@ -18,20 +19,34 @@ export function useDirectoryPage(location: FolderLocation, revision: string) {
     error: string | null;
   }>({ scope: '', key: '', page: null, error: null });
   useEffect(() => {
-    if (!location.rootId) return;
+    if (!rootId) return;
     let active = true;
     libraryData(
       {
         kind: 'browse_directory',
-        root_id: location.rootId,
-        directory_id: location.directoryId,
-        name: location.search,
-        cursor: location.cursor,
+        root_id: rootId,
+        directory_id: directoryId,
+        name: search,
+        cursor: cursor,
         limit: 240,
       },
       'directory',
     )
-      .then((page) => {
+      .then(async (page) => {
+        // A removed last entry can leave a valid cursor beyond the new end.
+        // Recover with one bounded first-page request, not a false empty folder.
+        if (active && cursor && page.total > 0 && !page.entries.length)
+          page = await libraryData(
+            {
+              kind: 'browse_directory',
+              root_id: rootId,
+              directory_id: directoryId,
+              name: search,
+              cursor: null,
+              limit: 240,
+            },
+            'directory',
+          );
         if (active) setState({ scope, key: requestKey, page, error: null });
       })
       .catch((error) => {
@@ -46,7 +61,7 @@ export function useDirectoryPage(location: FolderLocation, revision: string) {
     return () => {
       active = false;
     };
-  }, [location, scope, requestKey]);
+  }, [rootId, directoryId, cursor, search, scope, requestKey]);
   return {
     page: location.rootId && state.scope === scope ? state.page : null,
     loading: Boolean(location.rootId && state.key !== requestKey),

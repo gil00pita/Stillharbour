@@ -10,7 +10,10 @@ use crate::{
     catalog::Catalog,
     domain::{AppError, ErrorCode, Result},
     filesystem::{self, FileIdentity},
-    jobs::JobScheduler,
+    jobs::{
+        JobScheduler,
+        resources::{Class, ResourceScheduler, Work},
+    },
 };
 use std::{
     collections::VecDeque,
@@ -27,7 +30,14 @@ use std::{
 #[path = "rendition_jobs.rs"]
 mod rendition_jobs;
 
-pub const THUMBNAIL_POLICY: &str = "p2-v1-file-backed-progressive-srgb8-preview";
+pub const THUMBNAIL_POLICY: &str = "p2-v2-bounded-pyramid-srgb8-preview";
+const CACHE_POLICIES: &[&str] = &[
+    THUMBNAIL_POLICY,
+    "p2-v1-file-backed-progressive-srgb8-preview",
+    "m5-v2-oriented-native-srgb8-preview",
+    "m1-v1-oriented-assumed-srgb-no-icc",
+];
+
 #[derive(Clone)]
 pub struct LibraryOptions {
     pub data_directory: PathBuf,
@@ -60,6 +70,7 @@ struct MaintenancePlan {
 }
 
 pub struct Library {
+    monitor: Mutex<Option<super::monitor::Monitor>>,
     cache_cleanup: super::cache_cleanup::CacheCleanup,
     cache_gate: RwLock<()>,
     maintenance: AtomicBool,
@@ -70,7 +81,7 @@ pub struct Library {
     thumbnail_jobs: Mutex<Vec<rendition_jobs::ThumbnailJob>>,
     thumbnail_job_gate: JobScheduler,
     scan_gate: JobScheduler,
-    media_gate: JobScheduler,
+    resources: ResourceScheduler,
     thumbnails: Arc<ThumbnailQueue>,
     recovery: Mutex<VecDeque<String>>,
 }
@@ -91,6 +102,23 @@ fn lock_error() -> AppError {
 }
 
 impl Library {
+    pub(super) fn scan_idle(&self) -> bool {
+        self.active.lock().is_ok_and(|active| active.is_none())
+    }
+    pub fn start_monitoring(self: &Arc<Self>) -> Result<()> {
+        let mut state = self.monitor.lock().map_err(|_| lock_error())?;
+        if state.is_none() {
+            *state = Some(super::monitor::start(
+                Arc::downgrade(self),
+                self.options.data_directory.clone(),
+            )?);
+        }
+        Ok(())
+    }
+    pub fn changes(&self, before: Option<String>, limit: u32) -> Result<LibraryChangePage> {
+        super::changes::page(&self.catalog, before, limit)
+    }
+
     pub fn browse_directory(
         &self,
         root_id: String,
@@ -242,6 +270,7 @@ impl Library {
         fs::create_dir_all(&options.workers.working_directory)?;
         let recovery = store::recover_jobs(&catalog)?;
         let library = Arc::new(Self {
+            monitor: Mutex::new(None),
             cache_cleanup: super::cache_cleanup::CacheCleanup::open(&options.data_directory)?,
             cache_gate: RwLock::new(()),
             maintenance: AtomicBool::new(false),
@@ -252,7 +281,7 @@ impl Library {
             thumbnail_jobs: Mutex::new(Vec::new()),
             thumbnail_job_gate: JobScheduler::new(1)?,
             scan_gate: JobScheduler::new(1)?,
-            media_gate: JobScheduler::new(2)?,
+            resources: ResourceScheduler::default(),
             thumbnails: Arc::new(ThumbnailQueue {
                 state: Mutex::new(Queue {
                     pending: VecDeque::new(),
@@ -311,8 +340,12 @@ impl Library {
                                 task.queued,
                                 0,
                             );
-                            let result =
-                                library.build_thumbnail(&task.key, &runtime, task.cancel.clone());
+                            let result = library.build_thumbnail(
+                                &task.key,
+                                &runtime,
+                                task.cancel.clone(),
+                                Class::Interactive,
+                            );
                             if let Err(error) = result
                                 && !task.cancel.load(Ordering::Relaxed)
                             {
@@ -475,7 +508,7 @@ impl Library {
                     #[cfg(unix)]
                     data_identity: managed_identity,
                     canceled: cancel,
-                    gate: owner.media_gate.clone(),
+                    resources: owner.resources.clone(),
                     discovered: 0,
                     indexed: 0,
                     skipped: 0,
@@ -540,6 +573,11 @@ impl Library {
         Err(invalid("This scan is no longer running."))
     }
     pub fn cancel_all(&self) {
+        if let Ok(state) = self.monitor.lock()
+            && let Some(monitor) = state.as_ref()
+        {
+            monitor.stop.store(true, Ordering::Relaxed);
+        }
         if let Ok(jobs) = self.thumbnail_jobs.lock() {
             for job in jobs.iter() {
                 job.cancel.store(true, Ordering::Relaxed);
@@ -618,7 +656,21 @@ impl Library {
                 }
             }
         }
+        let monitoring = self
+            .monitor
+            .lock()
+            .map_err(|_| lock_error())?
+            .as_ref()
+            .map(|monitor| {
+                monitor
+                    .views
+                    .lock()
+                    .map(|views| views.clone())
+                    .map_err(|_| lock_error())
+            })
+            .transpose()?;
         Ok(LibraryStatus {
+            monitoring,
             roots: store::roots(&self.catalog)?
                 .into_iter()
                 .map(|r| r.view)
@@ -774,7 +826,7 @@ impl Library {
         if uuid::Uuid::parse_str(&key.asset_id).is_err()
             || key.revision.len() != 64
             || !key.revision.bytes().all(|b| b.is_ascii_hexdigit())
-            || !matches!(key.edge, 32 | 256 | 512)
+            || !crate::rendition::supported_edge(key.edge)
         {
             return Err(invalid("Invalid thumbnail identity, revision or size."));
         }
@@ -794,22 +846,26 @@ impl Library {
             .join("thumbnails")
             .join(format!("{key}.png")))
     }
-    fn existing_preview(&self, key: &ThumbnailKey) -> Result<Option<String>> {
-        // M1 positives could only be oriented, untagged JPEG/PNG/WebP. Their
-        // pixels satisfy the unchanged baseline contract; keep offline browsing
-        // across this capability upgrade without copying or deleting cache files.
-        for policy in [
-            THUMBNAIL_POLICY,
-            "m5-v2-oriented-native-srgb8-preview",
-            "m1-v1-oriented-assumed-srgb-no-icc",
-        ] {
+    fn indexed_preview(
+        &self,
+        key: &ThumbnailKey,
+        found: &std::collections::HashSet<String>,
+    ) -> Result<Option<String>> {
+        for policy in CACHE_POLICIES {
             let hash = Self::cache_key_for_policy(key, policy)?;
-            if store::cache_touch(&self.catalog, hash.clone())? && self.cache_path(&hash)?.is_file()
-            {
+            if found.contains(&hash) && self.cache_path(&hash)?.is_file() {
                 return Ok(Some(hash));
             }
         }
         Ok(None)
+    }
+    fn existing_preview(&self, key: &ThumbnailKey) -> Result<Option<String>> {
+        let candidates = CACHE_POLICIES
+            .iter()
+            .map(|policy| Self::cache_key_for_policy(key, policy))
+            .collect::<Result<Vec<_>>>()?;
+        let found = store::cache_lookup(&self.catalog, candidates)?;
+        self.indexed_preview(key, &found)
     }
     pub fn thumbnails(
         &self,
@@ -843,21 +899,48 @@ impl Library {
                 "Preview request superseded.",
             ));
         }
+        // One bounded cache-index snapshot and one lean asset/root projection,
+        // rather than a catalog round trip for every policy/tier/asset.
+        let mut candidates = Vec::new();
+        for key in &keys {
+            Self::cache_key(key)?;
+            for edge in crate::rendition::EDGES
+                .iter()
+                .copied()
+                .filter(|edge| *edge <= key.edge)
+            {
+                for policy in CACHE_POLICIES {
+                    candidates.push(Self::cache_key_for_policy(
+                        &ThumbnailKey {
+                            edge,
+                            ..key.clone()
+                        },
+                        policy,
+                    )?);
+                }
+            }
+        }
+        let found = store::cache_lookup(&self.catalog, candidates)?;
+        let statuses = store::preview_statuses(
+            &self.catalog,
+            keys.iter().map(|key| key.asset_id.clone()).collect(),
+        )?;
         let mut output = Vec::with_capacity(keys.len());
         let mut pending = Vec::new();
         for key in keys {
-            let cached = self.existing_preview(&key)?.is_some();
-            let asset = store::asset(&self.catalog, key.asset_id.clone())?;
-            let root = store::root(&self.catalog, asset.root_id.clone())?;
+            let cached = self.indexed_preview(&key, &found)?.is_some();
+            let asset = statuses
+                .get(&key.asset_id)
+                .ok_or_else(|| invalid("The requested preview asset is unavailable."))?;
             let error = if asset.revision != key.revision {
                 Some("The source revision changed; refresh this view.".into())
             } else if cached {
                 None
             } else if asset.presence != "present"
-                || !matches!(root.view.availability.as_str(), "online" | "scanning")
+                || !matches!(asset.root_availability.as_str(), "online" | "scanning")
             {
                 Some("Reconnect the original to generate this preview.".into())
-            } else if let Some(error) = store::preview_failure(&self.catalog, key.clone())? {
+            } else if let Some(error) = asset.failure(key.edge) {
                 Some(error)
             } else if asset.metadata_state == "placeholder" {
                 Some("Download this original explicitly before generating a preview.".into())
@@ -871,7 +954,27 @@ impl Library {
             } else {
                 "pending"
             };
+            let mut fallback_edge = None;
+            if asset.revision == key.revision {
+                for edge in [1024, 512, 256, 32] {
+                    if edge < key.edge
+                        && self
+                            .indexed_preview(
+                                &ThumbnailKey {
+                                    edge,
+                                    ..key.clone()
+                                },
+                                &found,
+                            )?
+                            .is_some()
+                    {
+                        fallback_edge = Some(edge);
+                        break;
+                    }
+                }
+            }
             output.push(ThumbnailResult {
+                fallback_edge,
                 asset_id: key.asset_id.clone(),
                 revision: key.revision.clone(),
                 edge: key.edge,
@@ -923,27 +1026,13 @@ impl Library {
         key: &ThumbnailKey,
         runtime: &tokio::runtime::Runtime,
         cancel: Arc<AtomicBool>,
+        class: Class,
     ) -> Result<()> {
         let _perf_span = Span::new(Metric::ThumbnailBuild, Endpoint::Worker);
         let _cache = self.cache_gate.read().map_err(|_| lock_error())?;
         if self.maintenance.load(Ordering::Acquire) || cancel.load(Ordering::Relaxed) {
             return Ok(());
         }
-        let _permit = loop {
-            if cancel.load(Ordering::Relaxed) {
-                return Err(AppError::new(
-                    ErrorCode::Busy,
-                    "Preview request superseded.",
-                ));
-            }
-            match self.media_gate.try_start() {
-                Ok(p) => break p,
-                Err(e) if e.code == ErrorCode::Busy => {
-                    std::thread::sleep(Duration::from_millis(30))
-                }
-                Err(e) => return Err(e),
-            }
-        };
         if self.existing_preview(key)?.is_some() {
             return Ok(());
         }
@@ -957,6 +1046,15 @@ impl Library {
         }
         let root = store::root(&self.catalog, root_id)?;
         let file = native::open_asset(&root.path, &root.identity, &root.volume, &relative)?;
+        let _lease = self.resources.acquire(
+            filesystem::identity(&file)?.volume,
+            class,
+            Work::Rendition,
+            &cancel,
+        )?;
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(());
+        }
         if native::revision(&file)? != revision {
             return Err(AppError::new(
                 ErrorCode::Conflict,
@@ -978,16 +1076,7 @@ impl Library {
         if cancel.load(Ordering::Relaxed) {
             return Ok(());
         }
-        if report.png.len() > 2 * 1024 * 1024
-            || !report.png.starts_with(b"\x89PNG\r\n\x1a\n")
-            || report.thumbnail_width > key.edge
-            || report.thumbnail_height > key.edge
-        {
-            return Err(AppError::new(
-                ErrorCode::WorkerFailed,
-                "The preview worker returned an invalid image.",
-            ));
-        }
+        crate::rendition::validate(&report, key.edge)?;
         let hash = Self::cache_key(key)?;
         let path = self.cache_path(&hash)?;
         if !path.try_exists()? {
@@ -1059,12 +1148,18 @@ impl Library {
             .existing_preview(&key)?
             .ok_or_else(|| AppError::new(ErrorCode::Io, "Preview is not cached."))?;
         let file = filesystem::open_readonly(&self.cache_path(&hash)?)?;
-        if !file.metadata()?.is_file() || file.metadata()?.len() > 2 * 1024 * 1024 {
+        if !file.metadata()?.is_file()
+            || file.metadata()?.len() > crate::rendition::png_budget(key.edge)? as u64
+        {
             return Err(invalid("Invalid cached preview."));
         }
         let volume = performance::file_volume(&file);
         let mut bytes = Vec::new();
-        file.take(2 * 1024 * 1024 + 1).read_to_end(&mut bytes)?;
+        file.take(crate::rendition::png_budget(key.edge)? as u64 + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > crate::rendition::png_budget(key.edge)? {
+            return Err(invalid("Invalid cached preview size."));
+        }
         if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
             return Err(invalid("Invalid cached preview format."));
         }
@@ -1074,6 +1169,11 @@ impl Library {
 }
 impl Drop for Library {
     fn drop(&mut self) {
+        if let Ok(state) = self.monitor.lock()
+            && let Some(monitor) = state.as_ref()
+        {
+            monitor.stop.store(true, Ordering::Relaxed);
+        }
         if let Ok(mut queue) = self.thumbnails.state.lock() {
             queue.closed = true;
             queue.cancel.store(true, Ordering::Relaxed);

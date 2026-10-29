@@ -27,10 +27,12 @@ export function PhotoCollection({
 }) {
   const { query, page, loading, feed } = c;
   const { ids: selected, frozen, busy: batchBusy } = c.selection;
-  const [visibleDate, setVisibleDate] = useState({ date: '', scrolling: false });
-  const onVisibleDate = useCallback((date: string, scrolling: boolean) => {
+  const [visibleDate, setVisibleDate] = useState({ date: '', scrolling: false, progress: 0 });
+  const onVisibleDate = useCallback((date: string, scrolling: boolean, progress: number) => {
     setVisibleDate((previous) =>
-      previous.date === date && previous.scrolling === scrolling ? previous : { date, scrolling },
+      previous.date === date && previous.scrolling === scrolling && previous.progress === progress
+        ? previous
+        : { date, scrolling, progress },
     );
   }, []);
   function scrollTimeline(delta: number, mode: number) {
@@ -65,6 +67,10 @@ export function PhotoCollection({
                 <CollectionTimeline
                   controller={c}
                   onScroll={scrollTimeline}
+                  progress={visibleDate.progress}
+                  onPosition={(period, progress) =>
+                    viewportHandle.current?.scrollToPeriod(period, progress) ?? false
+                  }
                   date={visibleDate.date}
                   scrolling={visibleDate.scrolling}
                 />
@@ -130,15 +136,21 @@ function CollectionTimeline({
   date,
   scrolling,
   onScroll,
+  progress,
+  onPosition,
 }: {
   controller: LibraryController;
   date: string;
   scrolling: boolean;
   onScroll: (delta: number, mode: number) => void;
+  progress: number;
+  onPosition: (period: string, progress: number) => boolean;
 }) {
   if (!['capture', 'added'].includes(c.query.sort) || !c.buckets.length) return null;
   return (
     <DateTimeline
+      progress={progress}
+      onPosition={onPosition}
       buckets={c.buckets}
       date={date}
       scrolling={scrolling}

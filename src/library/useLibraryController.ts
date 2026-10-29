@@ -32,7 +32,7 @@ export function useLibraryController({
   section: Section;
   onError: (error: unknown) => void;
   onRefresh: () => Promise<void>;
-  onWindowChange?: () => void;
+  onWindowChange?: (followTop?: boolean) => void;
 }) {
   const [browse, dispatch] = useReducer(reducer, {
     query: {
