@@ -286,6 +286,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           const status = await native({ kind: 'status' });
           return (
             status.data.jobs.length > 0 &&
+            status.data.jobs.some((job) => job.kind === 'thumbnails') &&
             status.data.jobs
               .filter((job) => job.kind !== 'thumbnails')
               .every((job) => job.state === 'completed') &&
@@ -354,6 +355,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           partial = true;
         return (
           status.data.jobs.length > 0 &&
+          // The scan publishes completion before its separate thumbnail job is
+          // enqueued. Do not mistake that observable handoff gap for all done.
+          status.data.jobs.some((job) => job.kind === 'thumbnails') &&
           status.data.jobs.every(
             (job) => !['queued', 'running', 'cancel_requested'].includes(job.state),
           )

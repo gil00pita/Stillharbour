@@ -206,6 +206,8 @@ Successful native write/publication tests run only where that primitive is imple
 
 Native evidence setup must work from an empty checkout: create shared evidence parents recursively, then create each UUID run directory exclusively before writing its ownership marker or touching a generated source. The live-library test creates `.context/live-library` itself; developers must not need to precreate it. Keep test-only Rust helpers under the same platform/feature conditions as their callers. In addition to the fixture-enabled matrix, `node scripts/cargo.mjs clippy --locked -p stillharbour-core --all-targets -- -D warnings` checks the default-feature test build for unused helpers. Do not suppress denied warnings to make a platform pass.
 
+Native completion tests must observe creation of the separate thumbnail job as well as terminal states. The scan can publish completion before its thumbnail job is enqueued; an all-terminal snapshot containing only the scan is a handoff gap, not proof that thumbnail generation finished. Keep the explicit partial-result/error-count assertions.
+
 Native Jobs tests must allow a real scan to complete before the dropdown opens, expanding Recent jobs and validating the displayed state instead of depending on a transient running interval. To deterministically exercise that schedule, run `STILLHARBOUR_TEST_JOBS_COMPLETED=1 npm run desktop:test` on macOS after the desktop-test build; the test waits for backend and UI completion before opening Jobs. This harness-only environment switch is not an application feature or throttle. Production controls and all geometry/source-preservation assertions remain unchanged.
 
 ### Generated large-image preview diagnostics
