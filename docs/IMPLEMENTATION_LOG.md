@@ -702,3 +702,9 @@ After native tests, restore the production frontend build and rerun release excl
 **Validation:** reuse the immediately preceding final-source npm run check (170 frontend/84 Rust tests), 15 passing native macOS cases, independent source manifests and production build/release-exclusion checks recorded above. Review the combined pending diff and run final formatting/diff checks before publication. Hosted CI for the new commit remains a separate result; no Windows or release-bundle claim is added.
 
 Final React Doctor regression scan remains 73/100 with the same 12 existing warnings; no new suppression or unrelated cleanup. The changed-scope invocation completed without a scored report, so confirm with the full scan. Pre-publication logs are retained under .context/aspect-ratio/pre-commit-react-doctor*.txt.
+
+## 2026-10-29 — Refresh PR #1 for the current desktop implementation
+
+**Request/result:** update [PR #1](https://github.com/gil00pita/Stillharbour/pull/1) title/description after ce80a68. Review the whole branch against origin/main (initial LICENSE only), then replace the outdated summary/test counts with the desktop foundation, live reconciliation/history, progressive previews, bounded performance work and current gallery fixes. Retain explicit preservation, incomplete P2/P3 and platform/release gates. Use the pr skill's Summary/Evidence/Merge Danger structure; preserve the existing head branch and main base.
+
+**Verification:** read back the remote PR and compare its exact title/body and branch/base with the prepared content. Reuse the recorded 170 frontend/84 Rust/15 native macOS test results and source/release audits; no application change or new test run. Hosted macOS/Windows checks for ce80a68 were still in progress when inspected, not claimed passed. Save the request and verified metadata under .context/pr-update-20261029/; commit this documentation-only record to the same PR branch.
