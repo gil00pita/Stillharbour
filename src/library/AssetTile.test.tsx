@@ -72,3 +72,22 @@ it('uses an indexed smaller clear rendition while a larger tier is loading or un
   );
   expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/32/'));
 });
+
+it('reveals immediately when an occluded native window suspends transitions', () => {
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+  const { container } = render(<TileImage {...props} preview={result(256, 'ready')} />);
+  fireEvent.load(container.querySelector('.t-skel-content')!);
+  expect(container.querySelector('.photo-layers')).toHaveClass('without-motion', 'is-revealed');
+  vi.restoreAllMocks();
+});
+
+it('retains an already-loaded clear image while scroll-generation status refreshes', () => {
+  const { container, rerender } = render(
+    <TileImage {...props} tinyPreview={result(32, 'ready')} preview={result(256, 'ready')} />,
+  );
+  const clear = container.querySelector('.t-skel-content')!;
+  fireEvent.load(clear);
+  rerender(<TileImage {...props} tinyPreview={result(32, 'ready')} preview={undefined} />);
+  expect(container.querySelector('.t-skel-content')).toBe(clear);
+  expect(container.querySelector('.t-skel')).toHaveClass('is-revealed');
+});

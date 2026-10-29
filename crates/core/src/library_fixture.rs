@@ -89,6 +89,26 @@ impl LibraryFixture {
                 AppError::new(ErrorCode::WorkerFailed, "JPEG fixture failed.").caused_by(e)
             })?;
         std::fs::write(root.join("Coast/Generated-00.jpg"), encoded)?;
+        // Sensor-landscape JPEG displayed as portrait by EXIF orientation 6.
+        // Replace an existing generated item so inventory counts stay stable.
+        let mut rotated_exif = b"II\x2a\0\x08\0\0\0".to_vec();
+        rotated_exif.extend(1u16.to_le_bytes());
+        entry(&mut rotated_exif, 0x0112, 3, 1, 6);
+        rotated_exif.extend(0u32.to_le_bytes());
+        let image = image::RgbImage::from_fn(600, 450, |x, y| {
+            image::Rgb([(40 + x / 8) as u8, (70 + y / 5) as u8, 130])
+        });
+        let mut encoded = Vec::new();
+        let mut encoder = image::codecs::jpeg::JpegEncoder::new(&mut encoded);
+        encoder.set_exif_metadata(rotated_exif).map_err(|e| {
+            AppError::new(ErrorCode::WorkerFailed, "Rotated EXIF fixture failed.").caused_by(e)
+        })?;
+        encoder
+            .write_image(image.as_raw(), 600, 450, image::ExtendedColorType::Rgb8)
+            .map_err(|e| {
+                AppError::new(ErrorCode::WorkerFailed, "Rotated JPEG fixture failed.").caused_by(e)
+            })?;
+        std::fs::write(root.join("Coast/Generated-06.jpg"), encoded)?;
         std::fs::rename(
             root.join("Woodland/Generated-17.webp"),
             root.join("Woodland/-Generated-17-\"%\n港📷.webp"),

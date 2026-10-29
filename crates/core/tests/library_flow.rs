@@ -146,6 +146,16 @@ fn native_scan_keysets_notes_previews_offline_and_restart_preserve_sources() {
         cursor = page.next_cursor;
     }
     assert_eq!(all.len(), 20);
+    let portrait = all
+        .iter()
+        .find(|asset| asset.name == "Generated-06.jpg")
+        .unwrap();
+    assert_eq!((portrait.width, portrait.height), (Some(450), Some(600)));
+    let detail = library.detail(portrait.id.clone()).unwrap();
+    assert_eq!(
+        (detail.asset.width, detail.asset.height),
+        (Some(450), Some(600))
+    );
     assert_eq!(all.iter().map(|a| &a.id).collect::<HashSet<_>>().len(), 20);
     assert_eq!(
         all.iter()

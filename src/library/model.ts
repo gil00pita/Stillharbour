@@ -100,32 +100,26 @@ function computePhotoRows(
     ids.push(asset.id);
     groups.set(day, ids);
   }
-  let previousDay: string | null = null;
-  for (const layout of justifiedLayout(assets.map(ratio), available, ideal, PHOTO_GUTTER)) {
-    const current = assets.slice(layout.start, layout.end);
-    const imageHeight = layout.height;
-    const widths = current.map((asset) => imageHeight * ratio(asset));
-    const headings: PhotoHeading[] = [];
-    if (grouping)
-      current.forEach((asset, index) => {
-        const day = assetDay(asset, grouping);
-        if (day !== previousDay)
-          headings.push({ date: day, index, width: 0, ids: groups.get(day) ?? [] });
-        previousDay = day;
+  for (let start = 0; start < assets.length;) {
+    const day = assetDay(assets[start]!, grouping);
+    let end = grouping ? start + 1 : assets.length;
+    while (grouping && end < assets.length && assetDay(assets[end]!, grouping) === day) end++;
+    const section = assets.slice(start, end);
+    for (const layout of justifiedLayout(section.map(ratio), available, ideal, PHOTO_GUTTER)) {
+      const current = section.slice(layout.start, layout.end);
+      const headings: PhotoHeading[] =
+        grouping && layout.start === 0
+          ? [{ date: day, index: 0, width: available, ids: groups.get(day) ?? [] }]
+          : [];
+      rows.push({
+        assets: current,
+        height: layout.height + (headings.length ? DATE_HEADING_HEIGHT : 0),
+        imageHeight: layout.height,
+        widths: current.map((asset) => layout.height * ratio(asset)),
+        headings,
       });
-    headings.forEach((heading, index) => {
-      const end = headings[index + 1]?.index ?? current.length;
-      heading.width =
-        widths.slice(heading.index, end).reduce((a, b) => a + b, 0) +
-        PHOTO_GUTTER * (end - heading.index - 1);
-    });
-    rows.push({
-      assets: current,
-      height: imageHeight + (headings.length ? DATE_HEADING_HEIGHT : 0),
-      imageHeight,
-      widths,
-      headings,
-    });
+    }
+    start = end;
   }
   return rows;
 }
@@ -190,4 +184,30 @@ export function normalizeFileExtensions(values: string[]): string[] {
   return Array.from(
     new Set(values.map((value) => value.trim().replace(/^\./, '').toLowerCase()).filter(Boolean)),
   );
+}
+
+export function galleryDateSections(rows: readonly PhotoRow[]) {
+  const sections: {
+    key: string;
+    index: number;
+    start: number;
+    end: number;
+    heading: PhotoHeading;
+  }[] = [];
+  const occurrences = new Map<string, number>();
+  let start = 0;
+  rows.forEach((row, index) => {
+    const heading = row.headings[0];
+    if (heading) {
+      const previous = sections.at(-1);
+      if (previous) previous.end = start;
+      const occurrence = occurrences.get(heading.date) ?? 0;
+      occurrences.set(heading.date, occurrence + 1);
+      sections.push({ key: `${heading.date}:${occurrence}`, index, start, end: start, heading });
+    }
+    start += row.height + PHOTO_GUTTER;
+  });
+  const last = sections.at(-1);
+  if (last) last.end = start;
+  return sections;
 }

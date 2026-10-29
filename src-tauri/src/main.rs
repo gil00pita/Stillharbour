@@ -280,9 +280,15 @@ async fn library_request(
             LibraryRequest::Annotate { selection, patch } => {
                 LibraryResponse::Updated(library.annotate(selection, patch)?)
             }
-            LibraryRequest::Thumbnails { keys, generation } => {
-                LibraryResponse::Thumbnails(library.thumbnails(keys, generation)?)
-            }
+            LibraryRequest::Thumbnails {
+                keys,
+                generation,
+                cache_only,
+            } => LibraryResponse::Thumbnails(if cache_only.unwrap_or(false) {
+                library.cached_thumbnails(keys, generation)?
+            } else {
+                library.thumbnails(keys, generation)?
+            }),
             LibraryRequest::FilterPreview { filter, paths } => {
                 LibraryResponse::FilterPreview(library.filter_preview(filter, paths)?)
             }

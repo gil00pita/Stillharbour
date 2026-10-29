@@ -47,7 +47,8 @@ export function DateTimeline({
   const value =
     dragging || editing
       ? Math.min(draft, maximum)
-      : activeIndex + Math.max(0, Math.min(0.9999, progress));
+      : activeIndex +
+        Math.max(0, Math.min(activeIndex === periods.length - 1 ? 1 : 0.9999, progress));
   const labelIndex = hovered ?? value;
   const period = periods[Math.min(periods.length - 1, Math.floor(labelIndex))]?.period;
   const label = periodLabel(period);

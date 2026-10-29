@@ -558,6 +558,9 @@ pub enum LibraryRequest {
     Thumbnails {
         keys: Vec<ThumbnailKey>,
         generation: String,
+        #[serde(default)]
+        #[ts(optional)]
+        cache_only: Option<bool>,
     },
     FilterPreview {
         filter: ScanFilter,
@@ -604,5 +607,32 @@ mod page_transport_tests {
             serde_json::to_value(PackedAssetPage::from(page)).unwrap(),
             golden["packed"]
         );
+    }
+}
+
+#[cfg(test)]
+mod cache_request_tests {
+    use super::*;
+    #[test]
+    fn legacy_thumbnail_requests_default_to_work_and_cache_mode_is_typed() {
+        let legacy = serde_json::json!({"kind":"thumbnails", "keys":[], "generation":"1"});
+        assert!(matches!(
+            serde_json::from_value::<LibraryRequest>(legacy.clone()).unwrap(),
+            LibraryRequest::Thumbnails {
+                cache_only: None,
+                ..
+            }
+        ));
+        let mut cached = legacy;
+        cached["cache_only"] = serde_json::json!(true);
+        assert!(matches!(
+            serde_json::from_value::<LibraryRequest>(cached.clone()).unwrap(),
+            LibraryRequest::Thumbnails {
+                cache_only: Some(true),
+                ..
+            }
+        ));
+        cached["cache_only"] = serde_json::json!("true");
+        assert!(serde_json::from_value::<LibraryRequest>(cached).is_err());
     }
 }

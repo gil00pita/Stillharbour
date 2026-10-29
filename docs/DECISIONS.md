@@ -125,3 +125,8 @@ The owner confirms P2 as the next stage. [ADR-0012](decisions/ADR-0012-bounded-r
 ## P3 shared source admission — 2026-10-29
 
 [ADR-0014](decisions/ADR-0014-shared-source-admission.md) replaces separate media admission with atomic source-volume/CPU/memory reservations, visible preference and background aging. Keep job/maintenance gates and current helper/source safety. Scroll-aware tiny-first requests reuse existing viewport signals. Synthetic read contention is explicitly separated from the missing production backup adapter, physical topology/pacing and native NAS/HDD evidence.
+
+
+## Aligned sticky date sections and cached scrolling — 2026-10-29
+
+The owner replaces side-by-side sparse dates with separate justified rows and full-width native sticky headings. Retain complete section extents around bounded virtual rows, without overlay copies of selection controls. Compatible cache-only thumbnail lookup can reuse clear renditions during scrolling while source work remains tiny-first and constrained by ADR-0014. Remove gallery image filters and retain loaded pixels across status refreshes. [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md) records the revised product behavior, evidence and limits; earlier layout/performance records remain historical. No new framework, decoder, dependency/catalog migration or original mutation.

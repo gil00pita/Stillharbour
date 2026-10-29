@@ -10,6 +10,22 @@ async function native(request) {
     request,
   );
 }
+async function assertPhotoCheckboxOnTop(id) {
+  // HTMLElement.click() in the embedded driver bypasses real pointer hit testing.
+  const hit = await browser.execute((id) => {
+    const checkbox = document.querySelector(`[data-asset-id="${id}"] .asset-check`);
+    const bounds = checkbox.getBoundingClientRect();
+    return {
+      onTop:
+        document.elementFromPoint(
+          bounds.left + bounds.width / 2,
+          bounds.top + bounds.height / 2,
+        ) === checkbox,
+      visible: getComputedStyle(checkbox).opacity === '1',
+    };
+  }, id);
+  assert.deepEqual(hit, { onTop: true, visible: true });
+}
 async function changeSizeUnit(label, unit) {
   // The embedded driver's option click only calls option.click(), which does
   // not perform a native select change in WKWebView. Exercise its change event.
@@ -428,8 +444,92 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     );
     assert.equal((await $$('.error')).length, 0);
     await browser.waitUntil(async () => (await $$('.gallery img')).length >= 6, { timeout: 20000 });
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() => {
+          const assets = [...document.querySelectorAll('.gallery .asset')];
+          return (
+            assets.length > 0 &&
+            assets.every((asset) => {
+              const image = asset.querySelector('.t-skel-content');
+              const fallback = asset.querySelector('.preview-fallback');
+              return (
+                (image?.complete && image.naturalWidth > 0) ||
+                (fallback && !fallback.textContent.includes('Preparing preview'))
+              );
+            })
+          );
+        }),
+      { timeout: 20000, timeoutMsg: 'Visible clear renditions did not settle' },
+    );
+    await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'start', rows: null }),
+    );
+    let warmScroll;
+    let warmTrace;
+    try {
+      warmScroll = await browser.execute(async () => {
+        const viewport = document.querySelector('.asset-viewport');
+        const image = document.querySelector('.gallery .t-skel-content');
+        const asset = image.closest('.asset');
+        const id = asset.dataset.assetId;
+        const source = image.getAttribute('src');
+        let retained = true;
+        for (let step = 0; step < 10; step++) {
+          viewport.scrollTop = step % 2 ? 20 : 24;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+          const current = [...document.querySelectorAll('.gallery .asset')]
+            .find((item) => item.dataset.assetId === id)
+            ?.querySelector('.t-skel-content');
+          retained &&=
+            !!current &&
+            current.getAttribute('src') === source &&
+            current.complete &&
+            current.naturalWidth > 32;
+        }
+        return { retained };
+      });
+      warmTrace = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'read', rows: null }),
+      );
+    } finally {
+      await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'stop', rows: null }),
+      );
+    }
+    assert.equal(warmScroll.retained, true);
+    assert.equal(
+      warmTrace.trace.events.filter(
+        (event) => event.metric === 'read' && event.endpoint === 'source',
+      ).length,
+      0,
+    );
+    await writeFile(
+      `${evidence}/warm-scroll.json`,
+      JSON.stringify({ warmScroll, trace: warmTrace.trace }),
+    );
     await browser.saveScreenshot('.context/screenshots/m1-gallery.png');
     assert.ok((await $$('.gallery .asset-check')).length > 0);
+    const selectedPhoto = await browser.execute(() => {
+      const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
+      const checkbox = [...document.querySelectorAll('.gallery .asset-check')].find((input) => {
+        const bounds = input.getBoundingClientRect();
+        return bounds.top > viewport.top + 36 && bounds.bottom < viewport.bottom;
+      });
+      checkbox.click();
+      return checkbox.closest('.asset').dataset.assetId;
+    });
+    await browser.waitUntil(async () =>
+      browser.execute(
+        (id) =>
+          document.querySelector(`[data-asset-id="${id}"]`)?.classList.contains('is-selected'),
+        selectedPhoto,
+      ),
+    );
+    await assertPhotoCheckboxOnTop(selectedPhoto);
+    await browser.saveScreenshot('.context/screenshots/gallery-checkbox-on-top.png');
+    await $('button=Clear selection').click();
+
     assert.ok((await $$('.date-heading')).length > 0);
     assert.equal((await $$('.gallery .asset-name')).length, 0);
     await $('.date-rail').waitForDisplayed();
@@ -481,9 +581,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         const destination = Math.min(200, viewport.scrollHeight - viewport.clientHeight);
         viewport.scrollTop = Math.abs(viewport.scrollTop - destination) < 1 ? 0 : destination;
       });
-      await browser.waitUntil(async () =>
-        (await $('.date-rail').getAttribute('class')).includes('is-scrolling'),
-      );
+
       const visibleDate = await browser.execute(() => {
         const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
         const first = [...document.querySelectorAll('.asset-row')].find(
@@ -498,7 +596,12 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             timeZone: 'UTC',
           }).format(new Date(visibleDate.slice(0, 7) + '-01T00:00:00Z'))
         : 'Undated';
-      assert.equal(await $('.timeline-current').getText(), expectedDate);
+      await browser.waitUntil(async () =>
+        browser.execute(
+          (expected) => document.querySelector('.timeline-current')?.textContent === expected,
+          expectedDate,
+        ),
+      );
       assert.equal(
         await browser.execute(() => {
           const year = document
@@ -514,6 +617,38 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         }),
         true,
       );
+      const sticky = await browser.execute(() => {
+        const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
+        const heading = [...document.querySelectorAll('.date-heading')].find((element) => {
+          const parent = element.parentElement.getBoundingClientRect();
+          return parent.top <= viewport.top && parent.bottom > viewport.top + 36;
+        });
+        return {
+          aligned: [...document.querySelectorAll('.date-heading')].every(
+            (element) => Math.abs(element.getBoundingClientRect().left - viewport.left) < 1,
+          ),
+          sticky:
+            !!heading &&
+            getComputedStyle(heading).position === 'sticky' &&
+            Math.abs(heading.getBoundingClientRect().top - viewport.top) < 1,
+          separateDays: [...document.querySelectorAll('.asset-row.gallery')].every(
+            (row) =>
+              new Set(
+                [...row.querySelectorAll('.asset')].map((asset) => asset.dataset.date.slice(0, 10)),
+              ).size <= 1,
+          ),
+          noFilters: [
+            ...document.querySelectorAll('.photo-layers, .photo-layers img, .t-skel-skeleton'),
+          ].every((element) => getComputedStyle(element).filter === 'none'),
+        };
+      });
+      assert.deepEqual(sticky, {
+        aligned: true,
+        sticky: true,
+        separateDays: true,
+        noFilters: true,
+      });
+      await browser.saveScreenshot(`.context/screenshots/gallery-dates-sticky-${size}.png`);
       await browser.saveScreenshot(`.context/screenshots/photo-canvas-timeline-${size}.png`);
       await browser.execute(() => {
         document.querySelector('.asset-viewport').scrollTop = 0;
@@ -521,7 +656,83 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await browser.saveScreenshot(`.context/screenshots/photo-canvas-overview-${size}.png`);
       await browser.saveScreenshot(`.context/screenshots/balanced-gallery-${size}.png`);
     }
+    // A short diagnostic scrollport lets the final sparse date reach the top;
+    // the normal desktop/minimum screenshots above retain their actual layout.
+    try {
+      await browser.execute(() => {
+        const viewport = document.querySelector('.asset-viewport');
+        const first = document.querySelector('.photo-date-section');
+        viewport.style.flex = '0 0 150px';
+        viewport.style.height = '150px';
+        viewport.scrollTop =
+          Number.parseFloat(first.style.top) + Number.parseFloat(first.style.height) - 20;
+      });
+      await browser.waitUntil(async () =>
+        browser.execute(() => document.querySelectorAll('.photo-date-section').length >= 2),
+      );
+      const handoff = await browser.execute(() => {
+        const viewport = document.querySelector('.asset-viewport');
+        const sections = [...document.querySelectorAll('.photo-date-section')];
+        const [current, next] = sections
+          .slice(0, 2)
+          .map((section) => section.querySelector('.date-heading'));
+        return {
+          pushed: current.getBoundingClientRect().top < viewport.getBoundingClientRect().top,
+          nextBelow: next.getBoundingClientRect().top > viewport.getBoundingClientRect().top,
+          differentDays: current.dataset.day !== next.dataset.day,
+          nextStart: Number.parseFloat(sections[1].style.top),
+          nextDay: next.dataset.day,
+        };
+      });
+      assert.equal(handoff.pushed && handoff.nextBelow && handoff.differentDays, true);
+      await browser.execute((offset) => {
+        document.querySelector('.asset-viewport').scrollTop = offset + 20;
+      }, handoff.nextStart);
+      await browser.waitUntil(async () =>
+        browser.execute((day) => {
+          const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
+          const heading = [...document.querySelectorAll('.date-heading')].find(
+            (element) => element.dataset.day === day,
+          );
+          return heading && Math.abs(heading.getBoundingClientRect().top - viewport.top) < 1;
+        }, handoff.nextDay),
+      );
+    } finally {
+      await browser.execute(() => {
+        const viewport = document.querySelector('.asset-viewport');
+        viewport.style.removeProperty('flex');
+        viewport.style.removeProperty('height');
+        viewport.scrollTop = 0;
+      });
+    }
     await browser.setWindowSize(1180, 780);
+    await browser.execute(() => {
+      const viewport = document.querySelector('.asset-viewport');
+      viewport.scrollTop = viewport.scrollHeight;
+    });
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() => {
+          const slider = document.querySelector('.date-scrubber');
+          const viewport = document.querySelector('.asset-viewport');
+          return (
+            viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop <= 1 &&
+            Number(slider.value) === Number(slider.max)
+          );
+        }),
+      { timeoutMsg: 'The timeline did not reach its exact end at the gallery bottom' },
+    );
+    assert.equal(
+      await browser.execute(() => document.querySelector('.date-scrubber-track i').style.top),
+      '100%',
+    );
+    await browser.saveScreenshot('.context/screenshots/timeline-end.png');
+    await browser.execute(() => {
+      document.querySelector('.asset-viewport').scrollTop = 0;
+    });
+    await browser.waitUntil(async () =>
+      browser.execute(() => Number(document.querySelector('.date-scrubber').value) === 0),
+    );
     const yearBuckets = (
       await native({
         kind: 'date_buckets',
@@ -585,6 +796,38 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         (year) => document.querySelector('.gallery .asset')?.dataset.date?.startsWith(year),
         newest.year,
       ),
+    );
+    // The JPEG sensor is 600×450 with EXIF orientation 6. Its decoded image
+    // and chronological tile must both be portrait, including existing catalogs.
+    await $('input[aria-label="Search filenames"]').setValue('Generated-06.jpg');
+    await browser.waitUntil(async () =>
+      browser.execute(() => {
+        const assets = [...document.querySelectorAll('.gallery .asset')];
+        return assets.length === 1 && assets[0].querySelector('.t-skel-content')?.naturalWidth > 32;
+      }),
+    );
+    const oriented = await browser.execute(() => {
+      const area = document.querySelector('.gallery .photo-area').getBoundingClientRect();
+      const image = document.querySelector('.gallery .t-skel-content');
+      return {
+        width: area.width,
+        height: area.height,
+        naturalWidth: image.naturalWidth,
+        naturalHeight: image.naturalHeight,
+      };
+    });
+    assert.ok(oriented.naturalWidth < oriented.naturalHeight);
+    assert.ok(Math.abs(oriented.width - oriented.height * 0.75) < 1, JSON.stringify(oriented));
+    assert.ok(
+      Math.abs(
+        oriented.width - (oriented.height * oriented.naturalWidth) / oriented.naturalHeight,
+      ) < 1,
+      JSON.stringify(oriented),
+    );
+    await browser.saveScreenshot('.context/screenshots/gallery-oriented-portrait.png');
+    await $('input[aria-label="Search filenames"]').setValue('');
+    await browser.waitUntil(async () =>
+      browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
     );
     observations.scrolling = await browser.execute(async () => {
       const gaps = [];
@@ -864,6 +1107,15 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         .map((asset) => asset.dataset.assetId),
     );
     await $(`[data-asset-id="${chosen[0]}"] .asset-check`).click();
+    await browser.waitUntil(async () =>
+      browser.execute(
+        (id) =>
+          document.querySelector(`[data-asset-id="${id}"]`)?.classList.contains('is-selected'),
+        chosen[0],
+      ),
+    );
+    await assertPhotoCheckboxOnTop(chosen[0]);
+    await browser.saveScreenshot('.context/screenshots/grid-checkbox-on-top.png');
     const name = await $(`[data-asset-id="${chosen[0]}"] .asset-check`).getAttribute('aria-label');
     await browser.execute(
       (id) =>

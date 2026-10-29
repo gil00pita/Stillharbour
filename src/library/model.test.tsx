@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { PHOTO_GUTTER, DATE_HEADING_HEIGHT, photoRows, timelineDate, dayLabel } from './model';
+import {
+  PHOTO_GUTTER,
+  DATE_HEADING_HEIGHT,
+  photoRows,
+  galleryDateSections,
+  timelineDate,
+  dayLabel,
+} from './model';
 import { fixtureAsset } from './__tests__/fixtures';
 
 describe('aspect-preserving chronological rows', () => {
@@ -65,12 +72,15 @@ describe('timeline capture-local dates', () => {
   );
 });
 
-it('places sparse consecutive dates beside one another without reordering photos', () => {
+it('starts each date on its own full-width heading and photo row without reordering', () => {
   const assets = [fixtureAsset('one', '2026-03-02'), fixtureAsset('two', '2026-03-01')];
   const rows = photoRows(assets, 1300, 'gallery');
-  expect(rows).toHaveLength(1);
-  expect(rows[0]?.headings.map((heading) => heading.date)).toEqual(['2026-03-02', '2026-03-01']);
-  expect(rows[0]?.assets.map((asset) => asset.id)).toEqual(['one', 'two']);
+  expect(rows).toHaveLength(2);
+  expect(rows.map((row) => row.headings[0]?.date)).toEqual(['2026-03-02', '2026-03-01']);
+  expect(rows.every((row) => row.headings[0]?.width === 1300 && row.headings[0]?.index === 0)).toBe(
+    true,
+  );
+  expect(rows.flatMap((row) => row.assets.map((asset) => asset.id))).toEqual(['one', 'two']);
 });
 it('distinguishes capture dates, recently added and unknown dates without changing metadata', () => {
   const asset = fixtureAsset('one', '1964-07-01');
@@ -141,4 +151,19 @@ it('does not collapse a dense mixed-aspect day into rows of tiny slivers', () =>
   const rows = photoRows(assets, 816, 'gallery', 220);
   expect(rows.every((row) => row.assets.length === 1 || row.imageHeight >= 110)).toBe(true);
   expect(rows.length).toBeGreaterThan(50);
+});
+
+it('retains section extents for native sticky headings while inner rows virtualize', () => {
+  const assets = Array.from({ length: 20 }, (_, i) =>
+    fixtureAsset(String(i), i < 18 ? '2026-03-02' : '2026-03-01'),
+  );
+  const rows = photoRows(assets, 700, 'gallery');
+  const sections = galleryDateSections(rows);
+  expect(sections).toHaveLength(2);
+  expect(sections[0]!.start).toBe(0);
+  expect(sections[0]!.end).toBe(sections[1]!.start);
+  expect(sections[0]!.heading.ids).toHaveLength(18);
+  expect(rows.filter((row) => row.headings.length)).toHaveLength(2);
+  expect(rows.every((row) => new Set(row.assets.map((asset) => asset.date)).size === 1)).toBe(true);
+  expect(galleryDateSections(photoRows(assets, 700, 'grid'))).toEqual([]);
 });

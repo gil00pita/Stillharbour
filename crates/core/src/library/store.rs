@@ -14,9 +14,17 @@ use crate::{
 use rusqlite::{Connection, OptionalExtension, Row, params, params_from_iter, types::Value};
 use std::path::{Path, PathBuf};
 
-// List only the display projection: never fetch native path blobs, raw metadata,
-// content digests or scan bookkeeping for a page/neighbor lookup.
-pub(super) const ASSET_COLUMNS: &str = "id,root_id,name,relative_path,folder,extension,detected_format,bytes,date,date_source,raw_date,offset,modified_at,born_at,added_at,revision,presence,width,height,camera,metadata_state,metadata_error,preview_state,preview_error,favorite,rating,tags";
+// Return only display fields. Derive one flag inside SQLite from retained EXIF;
+// never send raw metadata or native path blobs through the page/neighbor reader.
+// Legacy rows contain sensor dimensions, while preview-only rows may already
+// contain oriented dimensions. Require an exact match before transposing.
+pub(super) const ASSET_COLUMNS: &str = "id,root_id,name,relative_path,folder,extension,detected_format,bytes,date,date_source,raw_date,offset,modified_at,born_at,added_at,revision,presence,width,height,camera,metadata_state,metadata_error,preview_state,preview_error,favorite,rating,tags,
+CASE WHEN json_valid(raw_metadata) THEN
+    json_extract(raw_metadata,'$[0].Orientation') IN (5,6,7,8,'5','6','7','8')
+    AND width>0 AND height>0
+    AND json_extract(raw_metadata,'$[0].ImageWidth') IN (width,CAST(width AS TEXT))
+    AND json_extract(raw_metadata,'$[0].ImageHeight') IN (height,CAST(height AS TEXT))
+ELSE 0 END AS display_transposed";
 
 pub fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
@@ -464,6 +472,15 @@ pub(super) fn asset_row(row: &Row<'_>) -> rusqlite::Result<AssetSummary> {
     let tags: String = row.get("tags")?;
     let (preview_state, preview_error) =
         current_preview_state(row.get("preview_state")?, row.get("preview_error")?);
+    let (width, height) = (row.get("width")?, row.get("height")?);
+    let (width, height) = if row
+        .get::<_, Option<bool>>("display_transposed")?
+        .unwrap_or(false)
+    {
+        (height, width)
+    } else {
+        (width, height)
+    };
     Ok(AssetSummary {
         id: row.get("id")?,
         root_id: row.get("root_id")?,
@@ -482,8 +499,8 @@ pub(super) fn asset_row(row: &Row<'_>) -> rusqlite::Result<AssetSummary> {
         added_at: row.get("added_at")?,
         revision: row.get("revision")?,
         presence: row.get("presence")?,
-        width: row.get("width")?,
-        height: row.get("height")?,
+        width,
+        height,
         camera: row.get("camera")?,
         metadata_state: row.get("metadata_state")?,
         metadata_error: row.get("metadata_error")?,
@@ -497,7 +514,13 @@ pub(super) fn asset_row(row: &Row<'_>) -> rusqlite::Result<AssetSummary> {
     })
 }
 pub fn asset(catalog: &Catalog, id: String) -> Result<AssetSummary> {
-    catalog.call(move |db| Ok(db.query_row("SELECT * FROM assets WHERE id=?", [id], asset_row)?))
+    catalog.call(move |db| {
+        Ok(db.query_row(
+            &format!("SELECT {ASSET_COLUMNS} FROM assets WHERE id=?"),
+            [id],
+            asset_row,
+        )?)
+    })
 }
 pub fn asset_native(catalog: &Catalog, id: String) -> Result<(String, PathBuf, String)> {
     catalog.call(move |db| {
@@ -1341,6 +1364,101 @@ pub fn preview_dimensions(
 #[cfg(test)]
 mod preview_policy_tests {
     use super::*;
+    #[test]
+    fn display_projection_matches_oriented_previews_without_rewriting_legacy_rows() {
+        let mut db = Connection::open_in_memory().unwrap();
+        migrate(&mut db).unwrap();
+        db.execute("INSERT INTO roots(id,label,native_path,display_path,mode,is_base,platform,volume,device,inode,availability,filter) VALUES('root','Fixture',x'01','Fixture','referenced',1,'fixture','fixture','fixture','fixture','offline','{}')", []).unwrap();
+        db.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,presence,is_media,seen_scan,width,height) VALUES('fixture','root',x'01','portrait.jpg',x'','','portrait.jpg','portrait','jpg','fixture',1,'revision','2026-10-29','','unavailable','ready','ready','present',1,'fixture',4032,3024)", []).unwrap();
+        for orientation in 1..=8 {
+            let raw = serde_json::json!([{"ImageWidth":4032,"ImageHeight":3024,"Orientation":orientation}]).to_string();
+            db.execute("UPDATE assets SET raw_metadata=?", [&raw])
+                .unwrap();
+            let changes = db.total_changes();
+            let asset = db
+                .query_row(
+                    &format!("SELECT {ASSET_COLUMNS} FROM assets"),
+                    [],
+                    asset_row,
+                )
+                .unwrap();
+            let expected = if orientation >= 5 {
+                (Some(3024), Some(4032))
+            } else {
+                (Some(4032), Some(3024))
+            };
+            assert_eq!(
+                (asset.width, asset.height),
+                expected,
+                "orientation {orientation}"
+            );
+            assert_eq!(
+                db.total_changes(),
+                changes,
+                "browsing must not rewrite a catalog"
+            );
+            assert_eq!(
+                db.query_row("SELECT width,height FROM assets", [], |r| Ok((
+                    r.get::<_, u32>(0)?,
+                    r.get::<_, u32>(1)?
+                )))
+                .unwrap(),
+                (4032, 3024)
+            );
+        }
+    }
+
+    #[test]
+    fn orientation_projection_retains_unknown_and_already_oriented_geometry() {
+        let db = Connection::open_in_memory().unwrap();
+        // Exercise the real projection/mapper against bounded, untrusted retained
+        // metadata without involving a source path or writable catalog.
+        let fields = "'fixture' AS id,'root' AS root_id,'photo.jpg' AS name,'' AS relative_path,'' AS folder,'jpg' AS extension,NULL AS detected_format,1 AS bytes,'' AS date,'unavailable' AS date_source,NULL AS raw_date,NULL AS offset,NULL AS modified_at,NULL AS born_at,'' AS added_at,'revision' AS revision,'present' AS presence,?1 AS width,?2 AS height,NULL AS camera,'ready' AS metadata_state,NULL AS metadata_error,'ready' AS preview_state,NULL AS preview_error,0 AS favorite,0 AS rating,'[]' AS tags,?3 AS raw_metadata";
+        for (width, height, raw, expected) in [
+            (Some(4032), Some(3024), "not JSON", (Some(4032), Some(3024))),
+            (Some(4032), Some(3024), "[]", (Some(4032), Some(3024))),
+            (
+                Some(4032),
+                Some(3024),
+                r#"[{"ImageWidth":4032,"ImageHeight":3024,"Orientation":"6bad"}]"#,
+                (Some(4032), Some(3024)),
+            ),
+            (
+                Some(4032),
+                Some(3024),
+                r#"[{"Orientation":6}]"#,
+                (Some(4032), Some(3024)),
+            ),
+            (
+                Some(4032),
+                Some(3024),
+                r#"[{"ImageWidth":"4032","ImageHeight":"3024","Orientation":"6"}]"#,
+                (Some(3024), Some(4032)),
+            ),
+            (
+                Some(3024),
+                Some(4032),
+                r#"[{"ImageWidth":4032,"ImageHeight":3024,"Orientation":6}]"#,
+                (Some(3024), Some(4032)),
+            ),
+            (
+                None,
+                Some(4032),
+                r#"[{"ImageWidth":4032,"ImageHeight":3024,"Orientation":6}]"#,
+                (None, Some(4032)),
+            ),
+        ] {
+            let asset = db
+                .query_row(
+                    &format!("SELECT {ASSET_COLUMNS} FROM (SELECT {fields})"),
+                    params![width, height, raw],
+                    asset_row,
+                )
+                .unwrap();
+            assert_eq!((asset.width, asset.height), expected, "{raw}");
+        }
+    }
+
     #[test]
     fn legacy_failures_retry_but_current_failures_are_suppressed_and_envelope_stays_private() {
         assert_eq!(

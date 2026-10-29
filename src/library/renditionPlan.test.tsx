@@ -32,15 +32,11 @@ it('admits at most240 images and bounds decoded-pixel estimates rather than allo
   expect(new Set(plan.values())).not.toContain(2048);
 });
 
-it('defers clear work during scroll and restores bounded visible-first requests when settled', () => {
+it('includes clear cache lookup keys while retaining bounded visible-first admission', () => {
   const assets = Array.from({ length: 300 }, (_, i) => fixtureAsset(String(i)));
-  const tiers = new Map([['0', 1024]]);
-  const moving = galleryPreviewKeys(assets, tiers, true);
-  expect(moving).toHaveLength(240);
-  expect(moving.every((key) => key.edge === 32)).toBe(true);
-  const settled = galleryPreviewKeys(assets, tiers, false);
-  expect(settled).toHaveLength(480);
-  expect(settled.slice(0, 3).map((key) => [key.assetId, key.edge])).toEqual([
+  const keys = galleryPreviewKeys(assets, new Map([['0', 1024]]));
+  expect(keys).toHaveLength(480);
+  expect(keys.slice(0, 3).map((key) => [key.assetId, key.edge])).toEqual([
     ['0', 32],
     ['0', 1024],
     ['1', 32],

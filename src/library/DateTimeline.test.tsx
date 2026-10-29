@@ -185,3 +185,24 @@ it('keeps a distant month seek even when another month has some loaded rows', ()
   expect(onYear).toHaveBeenCalledExactlyOnceWith('1964-07');
   expect(onPosition).not.toHaveBeenCalled();
 });
+
+it('reaches the exact end for the final period without advancing a nonfinal period label', () => {
+  const { container, rerender } = render(
+    <DateTimeline buckets={buckets} date="" progress={1} scrolling={false} onYear={vi.fn()} />,
+  );
+  const slider = screen.getByRole('slider', { name: 'Jump to year or month' });
+  expect(slider).toHaveValue('3');
+  expect(container.querySelector('.date-scrubber-track i')).toHaveStyle({ top: '100%' });
+  expect(slider).toHaveAttribute('aria-valuetext', 'Undated');
+  rerender(
+    <DateTimeline
+      buckets={buckets}
+      date="1964-07-01"
+      progress={1}
+      scrolling={false}
+      onYear={vi.fn()}
+    />,
+  );
+  expect(Number((slider as HTMLInputElement).value)).toBeLessThan(2);
+  expect(slider).toHaveAttribute('aria-valuetext', 'Jul 1964');
+});

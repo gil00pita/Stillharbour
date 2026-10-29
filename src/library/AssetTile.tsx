@@ -132,7 +132,9 @@ export function TileImage({
     : (preview?.error ?? asset.previewError ?? 'Preview unavailable');
   return (
     <span className="photo-area" style={{ height: imageHeight }}>
-      <span className={`photo-layers t-skel ${clearLoaded && !imageFailed ? 'is-revealed' : ''}`}>
+      <span
+        className={`photo-layers t-skel ${clearLoaded && !imageFailed ? 'is-revealed' : ''} ${document.visibilityState === 'hidden' ? 'without-motion' : ''}`}
+      >
         <span className="t-skel-skeleton">
           {tinyReady ? (
             <img
@@ -158,7 +160,7 @@ export function TileImage({
             </span>
           )}
         </span>
-        {preview?.state === 'ready' && !imageFailed && (
+        {(preview?.state === 'ready' || clearLoaded) && !imageFailed && (
           <img
             className="t-skel-content"
             src={previewUrl(asset, edge)}

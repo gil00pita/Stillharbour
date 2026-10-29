@@ -872,6 +872,23 @@ impl Library {
         keys: Vec<ThumbnailKey>,
         generation: String,
     ) -> Result<Vec<ThumbnailResult>> {
+        self.thumbnail_results(keys, generation, false)
+    }
+    /// Catalog/owned-cache status only: never advances/cancels the work queue,
+    /// opens an original or schedules a worker, even for uncached online items.
+    pub fn cached_thumbnails(
+        &self,
+        keys: Vec<ThumbnailKey>,
+        generation: String,
+    ) -> Result<Vec<ThumbnailResult>> {
+        self.thumbnail_results(keys, generation, true)
+    }
+    fn thumbnail_results(
+        &self,
+        keys: Vec<ThumbnailKey>,
+        generation: String,
+        cache_only: bool,
+    ) -> Result<Vec<ThumbnailResult>> {
         let _perf_span = Span::new(Metric::ThumbnailBatch, Endpoint::Worker);
         let _cache = self.cache_gate.read().map_err(|_| lock_error())?;
         if self.maintenance.load(Ordering::Acquire) {
@@ -886,13 +903,14 @@ impl Library {
         let generation: u64 = generation
             .parse()
             .map_err(|_| invalid("Invalid preview generation."))?;
-        if generation
-            < self
-                .thumbnails
-                .state
-                .lock()
-                .map_err(|_| lock_error())?
-                .generation
+        if !cache_only
+            && generation
+                < self
+                    .thumbnails
+                    .state
+                    .lock()
+                    .map_err(|_| lock_error())?
+                    .generation
         {
             return Err(AppError::new(
                 ErrorCode::Busy,
@@ -984,6 +1002,9 @@ impl Library {
             if state == "pending" {
                 pending.push(key);
             }
+        }
+        if cache_only {
+            return Ok(output);
         }
         let mut queue = self.thumbnails.state.lock().map_err(|_| lock_error())?;
         if generation < queue.generation {
@@ -1186,6 +1207,63 @@ impl Drop for Library {
 #[cfg(test)]
 mod maintenance_tests {
     use super::*;
+    #[test]
+    #[cfg(all(feature = "fixture-probes", target_os = "macos"))]
+    fn cache_only_lookup_never_admits_or_cancels_source_work() {
+        let data = tempfile::tempdir().unwrap();
+        let catalog = Arc::new(Catalog::open(data.path().join("fixture.stillharbour")).unwrap());
+        super::super::performance_probe::seed_catalog(&catalog, data.path(), 10_000).unwrap();
+        // Explicit synthetic catalog observations, not an accessible source fixture.
+        catalog
+            .call(|db| {
+                db.execute("UPDATE roots SET availability='online'", [])?;
+                Ok(())
+            })
+            .unwrap();
+        let library = Library::new(
+            catalog,
+            LibraryOptions {
+                data_directory: data.path().to_owned(),
+                workers: workers::WorkerPaths {
+                    executable: data.path().join("must-not-start"),
+                    exiftool: None,
+                    working_directory: data.path().join("worker"),
+                },
+            },
+        )
+        .unwrap();
+        let asset = library
+            .query(AssetQuery::default(), None, 1)
+            .unwrap()
+            .assets
+            .remove(0);
+        let key = ThumbnailKey {
+            asset_id: asset.id,
+            revision: asset.revision,
+            edge: 512,
+        };
+        library.thumbnails(vec![], "5".into()).unwrap();
+        let cancel = library.thumbnails.state.lock().unwrap().cancel.clone();
+        for generation in ["0", "999"] {
+            let result = library
+                .cached_thumbnails(vec![key.clone()], generation.into())
+                .unwrap();
+            assert_eq!(result[0].state, "pending");
+        }
+        let queue = library.thumbnails.state.lock().unwrap();
+        assert_eq!(queue.generation, 5);
+        assert!(queue.pending.is_empty() && queue.inflight.is_empty());
+        assert!(!cancel.load(Ordering::Relaxed));
+        drop(queue);
+        assert!(library.thumbnails(vec![], "6".into()).is_ok());
+        assert_eq!(
+            library
+                .cached_thumbnails(vec![key; 65], "7".into())
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidInput
+        );
+    }
     #[test]
     fn scan_admission_blocks_maintenance_and_keeps_the_review_retryable() {
         let data = tempfile::tempdir().unwrap();

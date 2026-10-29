@@ -11,6 +11,8 @@ export function usePhotoViewport({
   grouping,
   onVisibleDate,
   pageKey,
+  hasBefore,
+  hasAfter,
 }: {
   assets: AssetSummary[];
   mode: ViewMode;
@@ -18,6 +20,8 @@ export function usePhotoViewport({
   grouping: DateGrouping;
   onVisibleDate: (date: string, scrolling: boolean, progress: number) => void;
   pageKey: string;
+  hasBefore: boolean;
+  hasAfter: boolean;
 }) {
   const viewport = useRef<HTMLDivElement>(null);
   const anchor = useRef<string | null>(null);
@@ -72,7 +76,7 @@ export function usePhotoViewport({
     getScrollElement: () => viewport.current,
     estimateSize: (index) => (rows[index]?.height ?? target) + PHOTO_GUTTER,
     overscan: 2,
-    isScrollingResetDelay: 1000,
+    isScrollingResetDelay: 150,
     getItemKey: (index) => rows[index]?.assets[0]?.id ?? index,
     onChange: (instance) => {
       const first = instance
@@ -90,14 +94,33 @@ export function usePhotoViewport({
         grouping,
         viewport.current?.clientHeight ?? 0,
       );
-      const progress =
-        range && range.end > range.start
+      // A sparse final month can fit below the first visible month. At the
+      // true catalog tail, report the last photo without changing the anchor.
+      // A retained window with more pages must not claim the library has ended.
+      const atEnd =
+        Boolean(grouping) &&
+        !hasAfter &&
+        (viewport.current?.clientHeight ?? 0) > 0 &&
+        range !== null &&
+        (range.maximum > 0 || hasBefore) &&
+        (instance.scrollOffset ?? 0) >= range.maximum - 1;
+      const tail = atEnd ? assets.at(-1) : undefined;
+      const progress = atEnd
+        ? 1
+        : range && range.end > range.start
           ? Math.max(
               0,
-              Math.min(1, ((instance.scrollOffset ?? 0) - range.start) / (range.end - range.start)),
+              Math.min(
+                0.9999,
+                ((instance.scrollOffset ?? 0) - range.start) / (range.end - range.start),
+              ),
             )
           : 0;
-      onVisibleDate(date, instance.isScrolling, progress);
+      onVisibleDate(
+        tail ? (grouping === 'added' ? tail.addedAt : tail.date) : date,
+        instance.isScrolling,
+        progress,
+      );
     },
   });
   const virtual = virtualizer.getVirtualItems();

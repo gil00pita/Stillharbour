@@ -59,5 +59,5 @@ export function timelineScrollRange(
   }
   if (start === undefined) return null;
   const maximum = Math.max(0, offset - viewportHeight);
-  return { start: Math.min(start, maximum), end: Math.min(end, maximum) };
+  return { start: Math.min(start, maximum), end: Math.min(end, maximum), maximum };
 }

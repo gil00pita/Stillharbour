@@ -107,26 +107,30 @@ it('retains selection controls in Grid and makes no nonempty thumbnail batch in 
   );
 });
 
-it('requests only visible tiny previews while scrolling and restores overscan upgrades on settle', async () => {
+it('looks up visible clear caches during scrolling while scheduling only tiny work', async () => {
   const callbacks = props();
   engine.isScrolling = true;
   const { rerender } = render(<AssetBrowser {...callbacks} />);
-  await waitFor(() => expect(libraryData).toHaveBeenCalled());
-  const moving = vi.mocked(libraryData).mock.calls.at(-1)?.[0];
-  expect(moving?.kind).toBe('thumbnails');
-  if (moving?.kind !== 'thumbnails') throw new Error('Expected preview request');
-  expect(moving.keys.length).toBeGreaterThan(0);
-  expect(moving.keys.every((key) => key.edge === 32)).toBe(true);
+  await waitFor(() => expect(libraryData).toHaveBeenCalledTimes(2));
+  const requests = vi.mocked(libraryData).mock.calls.map(([request]) => request);
+  const work = requests.find((request) => request.kind === 'thumbnails' && !request.cache_only);
+  const cached = requests.find((request) => request.kind === 'thumbnails' && request.cache_only);
+  if (work?.kind !== 'thumbnails' || cached?.kind !== 'thumbnails')
+    throw new Error('Expected split preview requests');
   const visibleIds = photoRows(assets, 700, 'gallery')[0]!.assets.map((asset) => asset.id);
-  expect(moving.keys.map((key) => key.assetId)).toEqual(visibleIds);
+  expect(work.keys.map((key) => key.assetId)).toEqual(visibleIds);
+  expect(work.keys.every((key) => key.edge === 32)).toBe(true);
+  expect(cached.keys.every((key) => key.edge > 32)).toBe(true);
   engine.isScrolling = false;
   rerender(<AssetBrowser {...callbacks} />);
   await waitFor(() => {
     const settled = vi.mocked(libraryData).mock.calls.at(-1)?.[0];
-    expect(settled?.kind === 'thumbnails' && settled.keys.some((key) => key.edge > 32)).toBe(true);
-    expect(settled?.kind === 'thumbnails' && settled.keys.length).toBeGreaterThan(
-      moving.keys.length,
-    );
+    expect(
+      settled?.kind === 'thumbnails' &&
+        !settled.cache_only &&
+        settled.keys.some((key) => key.edge > 32),
+    ).toBe(true);
+    expect(settled?.kind === 'thumbnails' && settled.keys.length).toBeGreaterThan(work.keys.length);
   });
 });
 
@@ -185,8 +189,10 @@ it('coalesces resize bursts into one layout and retains the visible anchor', () 
   expect(engine.measure).not.toHaveBeenCalled();
   act(() => frame(0));
   expect(engine.measure).toHaveBeenCalledTimes(1);
-  // The anchored photo moved into the first balanced row; retain its 30px offset.
-  expect(engine.scrollToOffset).toHaveBeenCalledWith(30);
+  // A date boundary keeps this anchor in the second section after resize.
+  expect(engine.scrollToOffset).toHaveBeenCalledWith(
+    photoRows(assets, 900, 'gallery')[0]!.height + 4 + 30,
+  );
   expect(container.querySelector<HTMLElement>('.asset')!.style.width).toBe(
     `${photoRows(assets, 900, 'gallery')[0]!.widths[0]}px`,
   );
@@ -348,4 +354,67 @@ it('keeps the beginning visible when live updates insert newer photos', async ()
     />,
   );
   expect(engine.scrollToOffset).toHaveBeenLastCalledWith(0);
+});
+
+it.each(['capture', 'added', 'undated'] as const)(
+  'reports the %s tail at the bottom when its sparse month cannot reach the top',
+  (kind) => {
+    const tailDate = kind === 'undated' ? '' : '1964-07-01';
+    const grouping = kind === 'added' ? 'added' : 'capture';
+    const callbacks = props();
+    const items = vi.spyOn(engine, 'getVirtualItems').mockReturnValue(
+      [7, 8, 9, 10].map((index) => ({
+        index,
+        start: index * 58,
+        end: (index + 1) * 58,
+        key: String(index),
+      })),
+    );
+    try {
+      const photos = Array.from({ length: 11 }, (_, i) => ({
+        ...fixtureAsset(
+          String(i),
+          kind === 'added' ? '2001-01-01' : i < 10 ? '2026-03-01' : tailDate,
+        ),
+        addedAt: i < 10 ? '2026-03-01' : tailDate,
+      }));
+      const { container, rerender } = render(
+        <AssetBrowser {...callbacks} assets={photos} grouping={grouping} mode="list" />,
+      );
+      const viewport = container.querySelector('.asset-viewport')!;
+      Object.defineProperty(viewport, 'clientHeight', { value: 200 });
+      engine.scrollOffset = 11 * 58 - 200;
+      act(() => events.onChange?.(engine));
+      expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(tailDate, false, 1);
+      // A retained page boundary is not the end of the matching catalog.
+      rerender(
+        <AssetBrowser
+          {...callbacks}
+          assets={photos}
+          grouping={grouping}
+          mode="list"
+          onNearEnd={vi.fn()}
+        />,
+      );
+      act(() => events.onChange?.(engine));
+      expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('2026-03-01', false, 0.9999);
+    } finally {
+      items.mockRestore();
+    }
+  },
+);
+
+it('pins a non-scrollable tail seek to the end, but leaves an entirely fitting collection at the start', () => {
+  const callbacks = props();
+  const photos = [fixtureAsset('one', '2026-03-01'), fixtureAsset('two', '1964-07-01')];
+  const { container, rerender } = render(
+    <AssetBrowser {...callbacks} assets={photos} mode="list" onNearStart={vi.fn()} />,
+  );
+  Object.defineProperty(container.querySelector('.asset-viewport'), 'clientHeight', { value: 500 });
+  engine.scrollOffset = 0;
+  act(() => events.onChange?.(engine));
+  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('1964-07-01', false, 1);
+  rerender(<AssetBrowser {...callbacks} assets={photos} mode="list" />);
+  act(() => events.onChange?.(engine));
+  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('2026-03-01', false, 0);
 });

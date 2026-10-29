@@ -34,6 +34,7 @@ export function usePreviews(
   keys: ThumbnailKey[],
   onError: (error: unknown) => void,
   enabled = true,
+  cacheOnlyAbove?: number,
 ) {
   const [results, setResults] = useState<Record<string, ThumbnailResult>>({});
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
@@ -47,14 +48,26 @@ export function usePreviews(
     const visible: ThumbnailKey[] = JSON.parse(serialized) as ThumbnailKey[];
     async function load() {
       try {
-        const chunks = visible.length
-          ? Array.from({ length: Math.ceil(visible.length / 64) }, (_, index) =>
-              visible.slice(index * 64, (index + 1) * 64),
-            )
-          : [[]];
+        const groups =
+          cacheOnlyAbove === undefined
+            ? [{ items: visible, cached: false }]
+            : [
+                { items: visible.filter((key) => key.edge <= cacheOnlyAbove), cached: false },
+                { items: visible.filter((key) => key.edge > cacheOnlyAbove), cached: true },
+              ];
+        const chunks = groups.flatMap(({ items, cached }) =>
+          Array.from({ length: Math.ceil(items.length / 64) }, (_, index) => ({
+            keys: items.slice(index * 64, (index + 1) * 64),
+            cached,
+          })),
+        );
+        if (!chunks.length) chunks.push({ keys: [], cached: false });
         const batches = await Promise.all(
-          chunks.map((chunk) =>
-            libraryData({ kind: 'thumbnails', keys: chunk, generation }, 'thumbnails'),
+          chunks.map(({ keys, cached }) =>
+            libraryData(
+              { kind: 'thumbnails', keys, generation, ...(cached ? { cache_only: true } : {}) },
+              'thumbnails',
+            ),
           ),
         );
         const response = batches.flat();
@@ -62,7 +75,7 @@ export function usePreviews(
         setResults(Object.fromEntries(response.map((item) => [previewKey(item), item])));
         setFailure(null);
         if (response.some((item) => item.state === 'pending'))
-          timer = setTimeout(() => void load(), 750);
+          timer = setTimeout(() => void load(), 200);
       } catch (error) {
         if (active) {
           setFailure({ key: serialized, message: errorMessage(error) });
@@ -75,7 +88,7 @@ export function usePreviews(
       active = false;
       clearTimeout(timer);
     };
-  }, [serialized, onError, enabled, attempt]);
+  }, [serialized, onError, enabled, attempt, cacheOnlyAbove]);
   return {
     results,
     error: failure?.key === serialized ? failure.message : null,

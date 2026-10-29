@@ -106,3 +106,7 @@ node scripts/performance/packaged-sqlite.mjs
 ```
 
 The P0 Python process sampler and independent SHA256 manifest definitions/limitations remain in [PERFORMANCE_BASELINE.md](PERFORMANCE_BASELINE.md). Preserve previous reports/evidence. Stop at the P1 gate; do not advance to P2 or any original-file operation without approval.
+
+## Read-only display-geometry correction — 2026-10-29
+
+The owner's aspect-ratio repair derives one orientation flag inside SQLite from valid retained EXIF for selected rows. The renderer still receives compact display summaries, without raw metadata/native paths. This differs from the original projection's complete avoidance of raw-metadata inspection inside SQL; existing timings remain historical. No schema/dependency/index/paging/cache change or performance claim accompanies it. The shared projection also serves details and folder entries. [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md) records the guards, read-only tests and current validation.

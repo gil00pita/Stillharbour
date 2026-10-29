@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   useEffect,
+  useMemo,
   useImperativeHandle,
   useRef,
   type Ref,
@@ -10,14 +11,14 @@ import {
 import type { AssetSummary } from '../bindings';
 import {
   DATE_HEADING_HEIGHT,
-  PHOTO_GUTTER,
   THUMBNAIL_SIZES,
-  dayLabel,
+  galleryDateSections,
   type DateGrouping,
   type ViewMode,
 } from './model';
 import { previewKey, usePreviews } from './previews';
 import { AssetTile } from './AssetTile';
+import { DateHeading } from './DateHeading';
 import { TextListHeader } from './TextList';
 import { DEFAULT_TEXT_COLUMNS, textListLayout, type TextColumn } from './textColumns';
 import { restoreAssetFocus } from './focus';
@@ -108,6 +109,8 @@ export function AssetBrowser({
     grouping,
     onVisibleDate,
     pageKey,
+    hasBefore: Boolean(onNearStart),
+    hasAfter: Boolean(onNearEnd),
   });
   const offset = visibleStart;
   const bottom = offset + visibleHeight;
@@ -125,8 +128,9 @@ export function AssetBrowser({
     ratio,
     mode === 'grid' && fit === 'cover',
   );
-  const keys = mode === 'list' ? [] : galleryPreviewKeys(visibleAssets, tiers, isScrolling);
-  const previews = usePreviews(keys, onError, !previewPaused);
+  const keys = mode === 'list' ? [] : galleryPreviewKeys(visibleAssets, tiers);
+  const previews = usePreviews(keys, onError, !previewPaused, isScrolling ? 32 : undefined);
+  const sections = useMemo(() => galleryDateSections(rows), [rows]);
   const previousScroll = useRef(0);
   useImperativeHandle(
     viewportHandle,
@@ -199,6 +203,56 @@ export function AssetBrowser({
     scrollToAsset(asset.id);
     restoreAssetFocus(asset.id, null);
   }
+  function renderRow(item: (typeof virtual)[number], base = 0) {
+    const row = rows[item.index];
+    if (!row) return null;
+    const headingHeight = row.headings.length ? DATE_HEADING_HEIGHT : 0;
+    return (
+      <div
+        key={item.key}
+        className={`asset-row ${mode}`}
+        style={{
+          transform: `translateY(${item.start - base}px)`,
+          height: row.height,
+          paddingTop: headingHeight,
+        }}
+      >
+        {row.assets.map((asset, index) => (
+          <AssetTile
+            key={`${asset.id}:${asset.revision}`}
+            asset={asset}
+            columns={columns}
+            mode={mode}
+            width={row.widths[index]}
+            imageHeight={row.imageHeight}
+            selected={selected.has(asset.id)}
+            selectionActive={selected.size > 0 || selectionFrozen}
+            frozen={selectionFrozen}
+            offline={unavailableRoots.has(asset.rootId)}
+            edge={tiers.get(asset.id) ?? 256}
+            fit={mode === 'gallery' ? 'contain' : fit}
+            tinyPreview={
+              previews.results[
+                previewKey({ assetId: asset.id, revision: asset.revision, edge: 32 })
+              ]
+            }
+            preview={
+              previews.results[
+                previewKey({
+                  assetId: asset.id,
+                  revision: asset.revision,
+                  edge: tiers.get(asset.id) ?? 256,
+                })
+              ]
+            }
+            onSelect={onSelect}
+            onOpen={onInspect}
+            onNavigate={navigate}
+          />
+        ))}
+      </div>
+    );
+  }
   const listLayout = textListLayout(columns);
   const listStyle =
     mode === 'list'
@@ -247,83 +301,30 @@ export function AssetBrowser({
             aria-label={mode === 'list' ? 'Text-only library' : 'Photo library'}
           >
             <div className="virtual-canvas" style={{ height }}>
-              {virtual.map((item) => {
-                const row = rows[item.index];
-                if (!row) return null;
-                const headingHeight = row.headings.length ? DATE_HEADING_HEIGHT : 0;
-                return (
-                  <div
-                    key={item.key}
-                    className={`asset-row ${mode}`}
-                    style={{
-                      transform: `translateY(${item.start}px)`,
-                      height: row.height,
-                      paddingTop: headingHeight,
-                    }}
-                  >
-                    {row.headings.map((heading) => (
-                      <div
-                        key={heading.date}
-                        className="date-heading"
-                        data-day={heading.date}
-                        style={{
-                          left:
-                            row.widths.slice(0, heading.index).reduce((a, b) => a + b, 0) +
-                            PHOTO_GUTTER * heading.index,
-                          width: heading.width,
-                        }}
+              {sections.length
+                ? sections.map((section, index) => {
+                    const endIndex = sections[index + 1]?.index ?? rows.length;
+                    const items = virtual.filter(
+                      (item) => item.index >= section.index && item.index < endIndex,
+                    );
+                    if (!items.length) return null;
+                    return (
+                      <section
+                        className="photo-date-section"
+                        key={section.key}
+                        style={{ top: section.start, height: section.end - section.start }}
                       >
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${heading.ids.length} shown photos from ${dayLabel(heading.date)}`}
-                          checked={
-                            heading.ids.length > 0 && heading.ids.every((id) => selected.has(id))
-                          }
-                          disabled={selectionFrozen}
-                          onChange={() => onSelectGroup?.(heading.ids)}
+                        <DateHeading
+                          heading={section.heading}
+                          selected={selected}
+                          frozen={selectionFrozen}
+                          onSelect={onSelectGroup}
                         />
-                        <h2 title={dayLabel(heading.date)} aria-label={dayLabel(heading.date)}>
-                          {dayLabel(heading.date, undefined, heading.width < 250)}
-                        </h2>
-                        {heading.width >= 180 && <small>{heading.ids.length} shown</small>}
-                      </div>
-                    ))}
-                    {row.assets.map((asset, index) => (
-                      <AssetTile
-                        key={`${asset.id}:${asset.revision}`}
-                        asset={asset}
-                        columns={columns}
-                        mode={mode}
-                        width={row.widths[index]}
-                        imageHeight={row.imageHeight}
-                        selected={selected.has(asset.id)}
-                        selectionActive={selected.size > 0 || selectionFrozen}
-                        frozen={selectionFrozen}
-                        offline={unavailableRoots.has(asset.rootId)}
-                        edge={tiers.get(asset.id) ?? 256}
-                        fit={mode === 'gallery' ? 'contain' : fit}
-                        tinyPreview={
-                          previews.results[
-                            previewKey({ assetId: asset.id, revision: asset.revision, edge: 32 })
-                          ]
-                        }
-                        preview={
-                          previews.results[
-                            previewKey({
-                              assetId: asset.id,
-                              revision: asset.revision,
-                              edge: tiers.get(asset.id) ?? 256,
-                            })
-                          ]
-                        }
-                        onSelect={onSelect}
-                        onOpen={onInspect}
-                        onNavigate={navigate}
-                      />
-                    ))}
-                  </div>
-                );
-              })}
+                        {items.map((item) => renderRow(item, section.start))}
+                      </section>
+                    );
+                  })
+                : virtual.map((item) => renderRow(item))}
             </div>
           </div>
         </BrowserTable>

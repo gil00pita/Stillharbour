@@ -52,15 +52,14 @@ export function galleryRenditions(rows: PhotoRow[], ratio: number, cover: boolea
   );
 }
 
-// While moving, request only visible tiny previews. The virtualizer's existing
-// settled signal restores clear tiers/overscan without a second scroll timer.
+// While moving, clear keys are cache-only lookups; tiny keys can still queue.
+// The virtualizer's settled signal enables clear work and bounded overscan.
 export function galleryPreviewKeys(
   assets: readonly AssetSummary[],
   tiers: ReadonlyMap<string, number>,
-  scrolling: boolean,
 ): ThumbnailKey[] {
   return assets.slice(0, 240).flatMap((asset) =>
-    (scrolling ? [32] : [32, tiers.get(asset.id) ?? 256]).map((edge) => ({
+    [32, tiers.get(asset.id) ?? 256].map((edge) => ({
       assetId: asset.id,
       revision: asset.revision,
       edge,
