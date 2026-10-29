@@ -429,7 +429,7 @@ pub async fn thumbnail(
 mod tests {
     use super::*;
     #[test]
-    fn canceled_chunked_source_read_keeps_the_original_and_can_be_retried() {
+    fn chunked_source_read_preserves_originals_and_respects_native_identity_gate() {
         use std::io::Write;
         let mut fixture = tempfile::NamedTempFile::new().unwrap();
         let source = vec![71u8; 256 * 1024 + 3];
@@ -439,16 +439,24 @@ mod tests {
             &AtomicBool::new(true),
         )
         .unwrap_err();
-        assert_eq!(error.code, ErrorCode::Busy);
         assert_eq!(std::fs::read(fixture.path()).unwrap(), source);
-        assert_eq!(
-            read_input_cancellable(
-                crate::filesystem::open_readonly(fixture.path()).unwrap(),
-                &AtomicBool::new(false),
-            )
-            .unwrap(),
-            source
+        let retry = read_input_cancellable(
+            crate::filesystem::open_readonly(fixture.path()).unwrap(),
+            &AtomicBool::new(false),
         );
+        #[cfg(unix)]
+        {
+            assert_eq!(error.code, ErrorCode::Busy);
+            assert_eq!(retry.unwrap(), source);
+        }
+        #[cfg(not(unix))]
+        {
+            // Identity validation must keep failing closed, even when a read
+            // is canceled or retried. Do not bypass it just to pass this test.
+            assert_eq!(error.code, ErrorCode::Unsupported);
+            assert_eq!(retry.unwrap_err().code, ErrorCode::Unsupported);
+        }
+        assert_eq!(std::fs::read(fixture.path()).unwrap(), source);
     }
     #[test]
     fn capture_dates_remain_local_and_preserve_old_and_fractional_values() {
