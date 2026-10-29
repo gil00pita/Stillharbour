@@ -40,6 +40,8 @@ npm run desktop:build
 npm run release:check
 ```
 
+The native test creates its shared `.context/live-library` parent on demand before exclusively creating a UUID run directory. A fresh CI checkout requires no preexisting local evidence. Ownership markers, independent manifests and restoration checks remain mandatory; recursive parent creation does not permit reusing an existing UUID run.
+
 Focused native backend tests:
 
 ```sh

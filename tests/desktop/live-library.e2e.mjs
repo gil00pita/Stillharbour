@@ -75,6 +75,7 @@ const filter = {
       assert.ok(basename(fixtureRoot).startsWith('stillharbour-generated-'));
       const run = randomUUID();
       const output = resolve('.context/live-library', `native-${run}`);
+      await mkdir(resolve('.context/live-library'), { recursive: true });
       await mkdir(output, { recursive: false });
       await writeFile(
         join(output, 'ownership.json'),

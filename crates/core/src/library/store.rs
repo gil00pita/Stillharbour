@@ -1074,7 +1074,7 @@ fn current_preview_state(state: String, error: Option<String>) -> (String, Optio
     ("pending".into(), None)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "fixture-probes", target_os = "macos"))]
 pub fn preview_failure(catalog: &Catalog, key: ThumbnailKey) -> Result<Option<String>> {
     catalog.call(move |db| {
         let raw: Option<Option<String>> = db
