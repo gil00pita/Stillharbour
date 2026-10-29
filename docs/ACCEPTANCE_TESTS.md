@@ -324,3 +324,7 @@ The bounded catalog-read update must satisfy P1-01 through P1-07 in [PERFORMANCE
 - Enforce16384px maximum JPEG side and144000000 source pixels independently in header/native/frame guards; reject over-axis/over-pixel inputs. Preserve PNG/TIFF/byte-path geometry limits, malformed/ICC/writable-handle checks, read/output caps, timeout, child RSS watchdog and shared admission.
 - Limit failures are Unsupported preview-budget results, distinct from genuine WorkerFailed decode errors; backend causes stay private. Obsolete p2-v2 negatives retry under p2-v3 on the next request while positive prior-policy caches remain usable and historical job outcomes remain truthful.
 - Keep the supplied photo out of Git and all normal test fixtures; use generated committed regressions and independent manifests for the authorized disposable copy. Local worker/native results do not establish Windows, cold-cache or full process-tree evidence.
+
+### P4 local stress evidence — 2026-10-29
+
+[P4-01–P4-06](PERFORMANCE_ACCEPTANCE_TESTS.md#p4--local-stress-evidence) require bounded segmented traces, source preservation, separate current release-core/worker and debug-native scale/failure results, full checks and honest unavailable-gate dispositions. Production release builds must continue to reject automation. Local synthetic stress cannot pass backup, physical endpoint/pacing, NAS/HDD, Windows, complete WebContent/GPU memory or native release presented-frame acceptance.

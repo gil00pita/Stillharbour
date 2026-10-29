@@ -1,0 +1,9 @@
+# P4 — local stress evidence
+
+The owner's 2026-10-29 “Lets start on the next stage” continues the performance track after the implemented read-only P3 slice. Run the available local P4 checks and stop at this gate. Full P3 physical-endpoint/backup/pacing prerequisites remain blocked; this stage cannot pass them through synthetic work.
+
+Reuse owned generated media, catalog probes, scheduler/failure tests, packaged worker and native routes. Preserve the release compile-time prohibition on desktop-test instrumentation. Distinguish release core/packaged-worker measurements from instrumented debug native UI diagnostics; neither establishes release UI presented frames or complete WebContent/GPU/XPC memory.
+
+Drain long native traces into bounded 4096-event segments without restarting observers or remapping source-volume aliases. Retain all dropped counts, failed routes, source manifests and executable/lock provenance. Validate a 60-second 120-step route at 10k/100k/1m synthetic observations, date jumps, resizing, selection/viewer return and image-free text mode. Use lossless stat transport and independent manifests on failure as well as success. Never accept user-library paths, purge caches or change production resource/safety limits to meet a benchmark.
+
+Run release catalog/media and synthetic contention fixtures, worker crash/timeout/replacement and admission cancellation/failure tests, full repository checks and native regressions. Record actual commands, run IDs, scopes, percentiles/sample counts, failures and unavailable gates in [PERFORMANCE_P4.md](../docs/PERFORMANCE_P4.md). Optimize production code only when measurements identify a reproducible bottleneck. Keep dependencies/schema, preservation gates and earlier evidence intact; no M2/M4 implementation or publication is implied.

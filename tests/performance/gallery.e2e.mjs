@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { browser, $, $$ } from '@wdio/globals';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, writeFile } from 'node:fs/promises';
 import { execFileSync, spawn } from 'node:child_process';
-import { once } from 'node:events';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
+import { samplerStop } from './samplerStop.mjs';
 
 assert.equal(
   process.platform,
@@ -12,7 +12,7 @@ assert.equal(
 );
 const rows = Number(process.env.STILLHARBOUR_PERF_ROWS ?? '10000');
 const phase = process.env.STILLHARBOUR_PERF_PHASE ?? 'P0';
-assert.ok(['P0', 'P1', 'P2'].includes(phase));
+assert.ok(['P0', 'P1', 'P2', 'P4'].includes(phase));
 const steps = Number(process.env.STILLHARBOUR_PERF_STEPS ?? '120');
 assert.ok([6, 24, 120].includes(steps));
 assert.ok([10000, 100000, 1000000].includes(rows));
@@ -38,7 +38,7 @@ async function view(label) {
 }
 function manifest(root) {
   return JSON.parse(
-    execFileSync('python3', ['scripts/performance/manifest.py', root], {
+    execFileSync('python3', ['scripts/performance/manifest.py', root, '--lossless-stat'], {
       encoding: 'utf8',
       maxBuffer: 2 * 1024 * 1024,
     }),
@@ -67,23 +67,42 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
     const before = manifest(fixtureRoot);
     await writeFile(`${output}/manifest-before.json`, JSON.stringify(before, null, 2));
     const { pid } = await diagnostic('start');
+    const samplerErrors = await open(`${output}/memory-stderr.txt`, 'wx');
     const monitor = spawn('python3', ['scripts/performance/process_stats.py', String(pid), '900'], {
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', samplerErrors.fd],
     });
+    const stopSampler = samplerStop(monitor);
+    await samplerErrors.close();
     let memory = '';
+    let memoryTruncated = false;
     monitor.stdout.setEncoding('utf8');
     monitor.stdout.on('data', (chunk) => {
       if (memory.length + chunk.length <= 4 * 1024 * 1024) memory += chunk;
+      else memoryTruncated = true;
     });
     await browser.execute(() => window.__stillharbourPerf.start());
     let failure = null;
     const measurements = { phase };
+    const segments = [];
+    async function drain(label) {
+      if (phase !== 'P4') return;
+      assert.ok(segments.length < 32, 'Diagnostic segment limit exceeded');
+      const segment = {
+        label,
+        elapsedMs: Date.now() - routeStarted,
+        backend: await diagnostic('drain'),
+        frontend: await browser.execute(() => window.__stillharbourPerf.drain()),
+      };
+      const file = `segment-${segments.length}.json`;
+      await writeFile(`${output}/${file}`, JSON.stringify(segment));
+      segments.push(file);
+    }
     try {
       const picker = await browser.tauri.mock('foundation_request');
       try {
         await picker.mockReturnValue({ kind: 'directory', data: selection });
         await $('button.primary').click();
-        await $('.root-setup input[required]').setValue('P0 generated sources');
+        await $('.root-setup input[required]').setValue('Performance generated sources');
         const started = Date.now();
         await $('.folder-actions .primary').click();
         await $('.asset-viewport').waitForDisplayed();
@@ -110,6 +129,19 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
       measurements.freshCacheTrace = {
         backend: await diagnostic('read'),
         frontend: await browser.execute(() => window.__stillharbourPerf.read()),
+      };
+      const app = process.env.STILLHARBOUR_PERF_APP ?? 'target/debug/stillharbour';
+      measurements.build = {
+        profile: 'debug desktop-test; production release automation remains forbidden',
+        executableSha256: createHash('sha256')
+          .update(await readFile(app))
+          .digest('hex'),
+        cargoLockSha256: createHash('sha256')
+          .update(await readFile('Cargo.lock'))
+          .digest('hex'),
+        npmLockSha256: createHash('sha256')
+          .update(await readFile('package-lock.json'))
+          .digest('hex'),
       };
       // The pinned embedded evaluator has its own 30s deadline, independent of
       // WebDriver setTimeout. Keep its invocation short and poll one owned promise.
@@ -189,6 +221,7 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
         if (geometry && (measurements.galleryGeometry?.length ?? 0) < 8)
           (measurements.galleryGeometry ??= []).push(geometry);
         await pause(500);
+        if ((step + 1) % 10 === 0) await drain('scroll');
       }
       measurements.scrollRouteSteps = steps;
       measurements.scrollRouteMs = Date.now() - started;
@@ -231,6 +264,7 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
         );
         measurements.randomJumpCompletionsMs.push(Date.now() - started);
         await progress(`jump_${jumpIndex}_finished`);
+        await drain('date_jump');
       }
       measurements.resizeCommandMs = [];
       for (const [width, height] of [
@@ -244,11 +278,25 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
         await pause(100);
         measurements.resizeCommandMs.push(Date.now() - started);
       }
+      await browser.execute(() => {
+        window.__p4TextRequests = 0;
+        window.__p4TextListener = (event) => {
+          if (
+            event.detail.kind === 'thumbnails' &&
+            event.detail.keys.length > 0 &&
+            document.querySelector('.asset-viewport')?.dataset.viewMode === 'list' &&
+            !document.querySelector('dialog[open]')
+          )
+            window.__p4TextRequests++;
+        };
+        window.addEventListener('stillharbour:test-library-request', window.__p4TextListener);
+      });
       await view('Text list');
       await $('.text-list-table').waitForDisplayed();
       assert.equal((await $$('.asset-viewport img')).length, 0);
+      await drain('resize_and_text_entry');
       const root = (await native({ kind: 'status' })).data.roots.find(
-        (root) => root.label === 'P0 generated sources',
+        (root) => root.label === 'Performance generated sources',
       );
       const scan = (await native({ kind: 'scan', root_id: root.id, filter: root.filter })).data;
       measurements.scanOverlapSamples = [];
@@ -301,6 +349,12 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
           .filter((event) => event.metric === 'resident_summaries')
           .every((event) => event.value <= 720),
       );
+      measurements.textNonemptyThumbnailRequests = await browser.execute(() => {
+        window.removeEventListener('stillharbour:test-library-request', window.__p4TextListener);
+        return window.__p4TextRequests;
+      });
+      assert.equal(measurements.textNonemptyThumbnailRequests, 0);
+      await drain('text_and_scan');
       await diagnostic('start');
       await browser.execute(() => window.__stillharbourPerf.start());
       await $('input[aria-label="Search filenames"]').setValue('Generated');
@@ -340,22 +394,41 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
       measurements.backup = 'blocked: production backup adapter unavailable';
       measurements.presentedFrames =
         'not run: rAF observations are not native presented-frame evidence';
+      assert.equal(
+        createHash('sha256')
+          .update(await readFile(app))
+          .digest('hex'),
+        measurements.build.executableSha256,
+        'Diagnostic executable changed during the run',
+      );
     } catch (error) {
       failure = error;
       measurements.failure =
         'Diagnostic route failed; see runner assertion/build evidence. No raw private error exported.';
     } finally {
-      await browser.execute(() => window.__stillharbourPerf.stop());
-      await diagnostic('stop');
+      // Native shutdown/disconnection must not prevent independent preservation evidence.
+      try {
+        await drain('final');
+        await browser.execute(() => window.__stillharbourPerf.stop());
+        await diagnostic('stop');
+      } catch (error) {
+        failure ??= error;
+        measurements.failure ??= 'Native diagnostic teardown failed; inspect retained runner logs.';
+      }
+      measurements.segments = segments;
       const after = manifest(fixtureRoot);
       measurements.sourceManifestEqual = JSON.stringify(before) === JSON.stringify(after);
       await writeFile(`${output}/manifest-after.json`, JSON.stringify(after, null, 2));
-      if (monitor.exitCode === null && monitor.signalCode === null) {
-        const exited = once(monitor, 'exit');
-        monitor.kill('SIGTERM');
-        await exited;
-      }
+      await stopSampler();
+      await writeFile(`${output}/memory-stdout.txt`, memory);
+      measurements.memorySampler = {
+        exitCode: monitor.exitCode,
+        signal: monitor.signalCode,
+        outputTruncated: memoryTruncated,
+      };
       try {
+        assert.equal(monitor.exitCode, 0, 'Sampler must exit cleanly');
+        assert.equal(memoryTruncated, false, 'Sampler output exceeded its bound');
         measurements.memory = JSON.parse(memory);
       } catch {
         measurements.memory = {

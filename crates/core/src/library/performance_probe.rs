@@ -121,6 +121,25 @@ fn measure<T>(n: usize, mut work: impl FnMut() -> Result<T>) -> Result<Value> {
 /// P1 focused release measurements. All cache resets affect derived reads of
 /// this disposable catalog only; no OS cache purge or production cache eviction.
 pub fn measure_p1(path: &Path, fixture: &Value) -> Result<Value> {
+    measure_catalog_pages(path, fixture, false)
+}
+
+/// P4 retains each bounded trace segment between timed groups, outside stopwatch samples.
+pub fn measure_p4(path: &Path, fixture: &Value) -> Result<Value> {
+    measure_catalog_pages(path, fixture, true)
+}
+
+fn measure_catalog_pages(path: &Path, fixture: &Value, segmented: bool) -> Result<Value> {
+    let mut segments = Vec::new();
+    macro_rules! sample {
+        ($count:expr, $work:expr) => {{
+            let result = measure($count, $work);
+            if segmented {
+                segments.push(performance::drain());
+            }
+            result
+        }};
+    }
     performance::enable();
     let catalog = Catalog::open(path.to_owned())?;
     let sqlite = sqlite_info(&catalog)?;
@@ -137,36 +156,36 @@ pub fn measure_p1(path: &Path, fixture: &Value) -> Result<Value> {
     let mut metrics = serde_json::Map::new();
     metrics.insert(
         "firstPage".into(),
-        measure(100, || store::query(&catalog, query.clone(), None, 240))?,
+        sample!(100, || store::query(&catalog, query.clone(), None, 240))?,
     );
     metrics.insert(
         "nextPage".into(),
-        measure(100, || {
+        sample!(100, || {
             store::query(&catalog, query.clone(), first.next_cursor.clone(), 240)
         })?,
     );
     metrics.insert(
         "firstBoundaryNeighbors".into(),
-        measure(100, || {
+        sample!(100, || {
             store::neighbors(&catalog, query.clone(), first.assets[0].id.clone())
         })?,
     );
     metrics.insert(
         "lastBoundaryNeighbors".into(),
-        measure(100, || {
+        sample!(100, || {
             store::neighbors(&catalog, query.clone(), last.clone())
         })?,
     );
     metrics.insert(
         "timelineBucketsUncached".into(),
-        measure(10, || {
+        sample!(10, || {
             reset()?;
             store::buckets(&catalog, query.clone())
         })?,
     );
     metrics.insert(
         "timelineBucketsCached".into(),
-        measure(100, || store::buckets(&catalog, query.clone()))?,
+        sample!(100, || store::buckets(&catalog, query.clone()))?,
     );
     let tagged = AssetQuery {
         tag: "Fixture tag".into(),
@@ -174,19 +193,19 @@ pub fn measure_p1(path: &Path, fixture: &Value) -> Result<Value> {
     };
     metrics.insert(
         "tagPageUncachedCount".into(),
-        measure(10, || {
+        sample!(10, || {
             reset()?;
             store::query(&catalog, tagged.clone(), None, 240)
         })?,
     );
     metrics.insert(
         "tagPageCachedCount".into(),
-        measure(100, || store::query(&catalog, tagged.clone(), None, 240))?,
+        sample!(100, || store::query(&catalog, tagged.clone(), None, 240))?,
     );
     let mut seed = 20261028u64;
     metrics.insert(
         "randomDateSeek".into(),
-        measure(100, || {
+        sample!(100, || {
             seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
             store::seek(
                 &catalog,
@@ -225,17 +244,19 @@ pub fn measure_p1(path: &Path, fixture: &Value) -> Result<Value> {
     let packed_bytes = serde_json::to_vec(&packed).unwrap().len();
     metrics.insert(
         "packedPageEncode".into(),
-        measure(100, || {
+        sample!(100, || {
             serde_json::to_vec(&packed).map_err(|e| {
                 AppError::new(ErrorCode::Catalog, "Could not encode fixture page.").caused_by(e)
             })
         })?,
     );
-    Ok(
-        json!({"sqlite":sqlite,"metrics":metrics,"boundaryLogicalPagerMissBytes":(after.0-before.0) as u64*before.2,
+    let mut result = json!({"sqlite":sqlite,"metrics":metrics,"boundaryLogicalPagerMissBytes":(after.0-before.0) as u64*before.2,
         "wire":{"legacyBytes":legacy_bytes,"packedBytes":packed_bytes,"rows":240,"format":1},
-        "plans":plans,"trace":performance::snapshot(),"productionBackupAvailable":false}),
-    )
+        "plans":plans,"trace":performance::snapshot(),"productionBackupAvailable":false});
+    if segmented {
+        result["traceSegments"] = json!(segments);
+    }
+    Ok(result)
 }
 
 pub fn measure_catalog(path: &Path, fixture: &Value) -> Result<Value> {

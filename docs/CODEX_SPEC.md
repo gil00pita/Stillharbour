@@ -674,3 +674,7 @@ Catalog display summaries must use the same oriented width/height as previews. F
 ### Owner correction — high-resolution JPEG previews, 2026-10-29
 
 Allow read-only macOS file-backed JPEG downsampling up to16384px per side under the retained144000000 source-pixel ceiling, existing read/input/time/memory/admission/output limits and ICC/orientation/revision checks. Other adapters and byte/full-raster paths retain their current geometry bounds. Report true limit failures explicitly as unsupported preview budgets. A versioned policy retries obsolete negative observations on demand while retaining compatible positive caches and historical job outcomes; no original conversion, rescan, blanket purge, migration or new phase. Follow [ADR-0015](decisions/ADR-0015-tall-jpeg-previews.md).
+
+### P4 local stress evidence — 2026-10-29
+
+The next performance stage runs bounded generated-source stress/failure checks with explicit build and platform scope. Retain the production release automation exclusion; current release core/packaged-worker probes and debug native UI diagnostics are separate evidence. Diagnostic segmentation retains fixed4096-event buffers and loss counts, with independent lossless source manifests and executable/lock provenance. [PERFORMANCE_P4.md](PERFORMANCE_P4.md) records actual results; P3 backup/endpoint/pacing and full native release-presentation/memory/platform gates remain open. No new original-file operation, schema/dependency change or later milestone is implied.
