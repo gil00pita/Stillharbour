@@ -33,3 +33,5 @@ jobs:
           path: |
             .context/screenshots
             .context/wdio
+            .context/gallery/**/warm-scroll.json
+            .context/gallery/**/manifest-*.json

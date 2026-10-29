@@ -3,6 +3,7 @@ import { browser, $, $$ } from '@wdio/globals';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { warmPhotoForScroll } from './warmPhoto.mjs';
 
 async function native(request) {
   return browser.tauri.execute(
@@ -462,33 +463,57 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         }),
       { timeout: 20000, timeoutMsg: 'Visible clear renditions did not settle' },
     );
+    // Start within the already-warmed viewport and select real visible pixels,
+    // not a virtual overscan node or a tile awaiting its resize/metadata update.
+    await browser.execute(() => {
+      document.querySelector('.asset-viewport').scrollTop = 20;
+    });
+    let warmPhoto;
+    await browser.waitUntil(
+      async () => {
+        warmPhoto = await browser.execute(warmPhotoForScroll);
+        return Boolean(warmPhoto);
+      },
+      {
+        timeout: 20000,
+        timeoutMsg: 'No visible decoded photo reached its final frame for warm scrolling',
+      },
+    );
     await browser.tauri.execute(async ({ core }) =>
       core.invoke('test_performance', { action: 'start', rows: null }),
     );
     let warmScroll;
     let warmTrace;
     try {
-      warmScroll = await browser.execute(async () => {
+      warmScroll = await browser.execute(async (target) => {
         const viewport = document.querySelector('.asset-viewport');
-        const image = document.querySelector('.gallery .t-skel-content');
-        const asset = image.closest('.asset');
-        const id = asset.dataset.assetId;
-        const source = image.getAttribute('src');
-        let retained = true;
+        const findImage = () =>
+          [...document.querySelectorAll('.gallery .asset')]
+            .find((item) => item.dataset.assetId === target.id)
+            ?.querySelector('.t-skel-content');
+        const image = findImage();
+        const samples = [];
         for (let step = 0; step < 10; step++) {
           viewport.scrollTop = step % 2 ? 20 : 24;
           await new Promise((resolve) => setTimeout(resolve, 25));
-          const current = [...document.querySelectorAll('.gallery .asset')]
-            .find((item) => item.dataset.assetId === id)
-            ?.querySelector('.t-skel-content');
-          retained &&=
-            !!current &&
-            current.getAttribute('src') === source &&
-            current.complete &&
-            current.naturalWidth > 32;
+          const current = findImage();
+          samples.push({
+            sameElement: Boolean(current && current === image),
+            sameSource: current?.getAttribute('src') === target.source,
+            complete: current?.complete ?? false,
+            naturalWidth: current?.naturalWidth ?? 0,
+            scrollTop: viewport.scrollTop,
+            viewportWidth: viewport.clientWidth,
+          });
         }
-        return { retained };
-      });
+        return {
+          target,
+          retained: samples.every(
+            (sample) => sample.sameSource && sample.complete && sample.naturalWidth > 32,
+          ),
+          samples,
+        };
+      }, warmPhoto);
       warmTrace = await browser.tauri.execute(async ({ core }) =>
         core.invoke('test_performance', { action: 'read', rows: null }),
       );
@@ -497,16 +522,17 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         core.invoke('test_performance', { action: 'stop', rows: null }),
       );
     }
-    assert.equal(warmScroll.retained, true);
+    await writeFile(
+      `${evidence}/warm-scroll.json`,
+      JSON.stringify({ warmScroll, trace: warmTrace.trace }),
+    );
+    assert.equal(warmScroll.retained, true, JSON.stringify(warmScroll));
+    assert.equal(warmTrace.trace.dropped, 0);
     assert.equal(
       warmTrace.trace.events.filter(
         (event) => event.metric === 'read' && event.endpoint === 'source',
       ).length,
       0,
-    );
-    await writeFile(
-      `${evidence}/warm-scroll.json`,
-      JSON.stringify({ warmScroll, trace: warmTrace.trace }),
     );
     await browser.saveScreenshot('.context/screenshots/m1-gallery.png');
     assert.ok((await $$('.gallery .asset-check')).length > 0);
