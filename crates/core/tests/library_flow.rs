@@ -30,6 +30,70 @@ fn open(data: &Path) -> (Arc<Catalog>, Arc<Library>) {
     .unwrap();
     (catalog, library)
 }
+// Fixture restart boundary; production still rejects genuinely open catalogs.
+fn close(library: Arc<Library>, catalog: Arc<Catalog>) {
+    library.cancel_all();
+    drop(library);
+    let start = Instant::now();
+    let mut owner = catalog;
+    loop {
+        match Arc::try_unwrap(owner) {
+            Ok(catalog) => {
+                // Drop the last owner here so Catalog::drop joins its actor
+                // before the caller reopens the fixture's lifetime lock.
+                drop(catalog);
+                return;
+            }
+            Err(shared) => {
+                owner = shared;
+                assert!(
+                    start.elapsed() < Duration::from_secs(45),
+                    "background catalog owners did not stop before fixture restart"
+                );
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+    }
+}
+
+#[test]
+fn fixture_restart_waits_for_the_last_background_catalog_owner() {
+    let data = tempfile::tempdir().unwrap();
+    let (catalog, library) = open(data.path());
+    let identity = catalog.summary().unwrap().id;
+    // Model a preview worker paused after publishing its result, before it
+    // releases its Arc. The test controls release, not a guessed worker delay.
+    let background_owner = library.clone();
+    let (started, start) = std::sync::mpsc::sync_channel(0);
+    let (finished, finish) = std::sync::mpsc::sync_channel(1);
+    let closer = std::thread::spawn(move || {
+        started.send(()).unwrap();
+        close(library, catalog);
+        finished.send(()).unwrap();
+    });
+    start.recv_timeout(Duration::from_secs(5)).unwrap();
+    let premature_open = finish
+        .recv_timeout(Duration::from_millis(300))
+        .ok()
+        .map(|()| {
+            Catalog::open(data.path().join("fixture.stillharbour"))
+                .map(|_| ())
+                .map_err(|error| error.code)
+        });
+    let still_locked = Catalog::open(data.path().join("fixture.stillharbour"))
+        .err()
+        .map(|error| error.code);
+    drop(background_owner);
+    closer.join().unwrap();
+    assert_eq!(still_locked, Some(ErrorCode::CatalogInUse));
+    assert_eq!(
+        premature_open, None,
+        "fixture restart raced a legitimate catalog owner"
+    );
+    let (catalog, _) = open(data.path());
+    assert_eq!(catalog.summary().unwrap().id, identity);
+}
+
 fn filter() -> ScanFilter {
     ScanFilter {
         excluded_folders: vec!["Private".into()],
@@ -305,9 +369,7 @@ fn native_scan_keysets_notes_previews_offline_and_restart_preserve_sources() {
         .expect("Reconnect should start a fresh read-only scan");
     wait(&library, &reconciliation.id);
     assert!(fixture.verify_unchanged().unwrap() >= 26);
-    library.cancel_all();
-    drop(library);
-    drop(catalog);
+    close(library, catalog);
     let (catalog, library) = open(data.path());
     assert_eq!(catalog.summary().unwrap().id, catalog_id);
     assert_eq!(library.query(query, None, 240).unwrap().total, 20);
@@ -1270,8 +1332,7 @@ fn reviewed_removal_clears_only_its_indexed_cache_and_promotes_another_root_with
         .unwrap();
     library.apply_maintenance(preview.id).unwrap();
     assert!(library.status().unwrap().roots.is_empty());
-    drop(library);
-    drop(catalog);
+    close(library, catalog);
     let (_, reopened) = open(data.path());
     assert!(reopened.status().unwrap().roots.is_empty());
     first.verify_unchanged().unwrap();
@@ -1963,8 +2024,7 @@ fn change_journal_survives_restart_and_missing_folders_leave_normal_explorer() {
             .iter()
             .all(|j| !matches!(j.state.as_str(), "queued" | "running" | "cancel_requested"))
     });
-    drop(library);
-    drop(catalog);
+    close(library, catalog);
     let (_, library) = open(data.path());
     assert_eq!(recorded, library.changes(None, 100).unwrap().changes.len());
 }
