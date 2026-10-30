@@ -11,8 +11,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     let p1 = args.len() == 5 && args[4] == "--p1";
-    if (args.len() != 4 && !p1) || args[0] != "--rows" || args[2] != "--run" {
-        return Err("Use --rows 10000|100000|1000000 --run UUID [--p1]".into());
+    let p4 = args.len() == 5 && args[4] == "--p4";
+    if (args.len() != 4 && !p1 && !p4) || args[0] != "--rows" || args[2] != "--run" {
+        return Err("Use --rows 10000|100000|1000000 --run UUID [--p1|--p4]".into());
     }
     let rows = args[1].parse::<u32>()?;
     if !matches!(rows, 10_000 | 100_000 | 1_000_000) {
@@ -49,7 +50,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if command.trim() != "measure" {
         return Err("Independent before-manifest handshake required".into());
     }
-    let results = if p1 {
+    let results = if p4 {
+        performance_probe::measure_p4(&path, &fixture)?
+    } else if p1 {
         performance_probe::measure_p1(&path, &fixture)?
     } else {
         performance_probe::measure_catalog(&path, &fixture)?
@@ -62,7 +65,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .await?;
     println!(
         "{}",
-        serde_json::json!({"run":run,"rows":rows,"phase":if p1 {"P1"} else {"P0"},"fixture":fixture,"profile":if cfg!(debug_assertions){"debug"}else{"release"},"seedMs":seed_ms,"catalog":results,"media":media})
+        serde_json::json!({"run":run,"rows":rows,"phase":if p4 {"P4"} else if p1 {"P1"} else {"P0"},"fixture":fixture,"profile":if cfg!(debug_assertions){"debug"}else{"release"},"seedMs":seed_ms,"catalog":results,"media":media})
     );
     Ok(())
 }

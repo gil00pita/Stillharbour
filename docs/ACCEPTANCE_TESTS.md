@@ -324,3 +324,13 @@ The bounded catalog-read update must satisfy P1-01 through P1-07 in [PERFORMANCE
 - Enforce16384px maximum JPEG side and144000000 source pixels independently in header/native/frame guards; reject over-axis/over-pixel inputs. Preserve PNG/TIFF/byte-path geometry limits, malformed/ICC/writable-handle checks, read/output caps, timeout, child RSS watchdog and shared admission.
 - Limit failures are Unsupported preview-budget results, distinct from genuine WorkerFailed decode errors; backend causes stay private. Obsolete p2-v2 negatives retry under p2-v3 on the next request while positive prior-policy caches remain usable and historical job outcomes remain truthful.
 - Keep the supplied photo out of Git and all normal test fixtures; use generated committed regressions and independent manifests for the authorized disposable copy. Local worker/native results do not establish Windows, cold-cache or full process-tree evidence.
+
+### P4 local stress evidence — 2026-10-29
+
+[P4-01–P4-06](PERFORMANCE_ACCEPTANCE_TESTS.md#p4--local-stress-evidence) require bounded segmented traces, source preservation, separate current release-core/worker and debug-native scale/failure results, full checks and honest unavailable-gate dispositions. Production release builds must continue to reject automation. Local synthetic stress cannot pass backup, physical endpoint/pacing, NAS/HDD, Windows, complete WebContent/GPU memory or native release presented-frame acceptance.
+
+### P4 continuation — empty filtered reads, 2026-10-29
+
+- A warm exact no-match page in all five sort orders and both page/timeline request orders stays below64KiB logical pager misses on the10k regression fixture. Retain correct empty rows, no continuation and current catalog revision, with invalid cursor/limit/filter failures unchanged.
+- Actor and external catalog writes invalidate proven emptiness even without a library revision bump; a newly matching observation appears in both page and timeline. Root counters set to zero while10k rows remain must still show240 page rows and all timeline counts.
+- Release million-row measurements retain before/after raw samples, positive-match controls, executable/SQLite/lock provenance and independent unchanged sources. Native literal no-match search returns to populated photos. [The evidence report](PERFORMANCE_FILTERED_READS.md) records actual checks and unavailable gates; this does not complete P4 or authorize original operations.

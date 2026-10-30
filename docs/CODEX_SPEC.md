@@ -674,3 +674,11 @@ Catalog display summaries must use the same oriented width/height as previews. F
 ### Owner correction — high-resolution JPEG previews, 2026-10-29
 
 Allow read-only macOS file-backed JPEG downsampling up to16384px per side under the retained144000000 source-pixel ceiling, existing read/input/time/memory/admission/output limits and ICC/orientation/revision checks. Other adapters and byte/full-raster paths retain their current geometry bounds. Report true limit failures explicitly as unsupported preview budgets. A versioned policy retries obsolete negative observations on demand while retaining compatible positive caches and historical job outcomes; no original conversion, rescan, blanket purge, migration or new phase. Follow [ADR-0015](decisions/ADR-0015-tall-jpeg-previews.md).
+
+### P4 local stress evidence — 2026-10-29
+
+The next performance stage runs bounded generated-source stress/failure checks with explicit build and platform scope. Retain the production release automation exclusion; current release core/packaged-worker probes and debug native UI diagnostics are separate evidence. Diagnostic segmentation retains fixed4096-event buffers and loss counts, with independent lossless source manifests and executable/lock provenance. [PERFORMANCE_P4.md](PERFORMANCE_P4.md) records actual results; P3 backup/endpoint/pacing and full native release-presentation/memory/platform gates remain open. No new original-file operation, schema/dependency change or later milestone is implied.
+
+### P4 continuation — exact empty filtered results, 2026-10-29
+
+A validated display query with an exact zero count can return its empty page/revision without an ordered asset scan. Share proven emptiness between the page count and month summaries through the existing fully query-scoped bounded cache and conservative write/data-version invalidation. Inventory counters that may lag a scan never prove emptiness: preserve partial rows and timeline entries. Keep cursor/filter/limit validation, typed responses, schema, durability, original access and safety gates. [PERFORMANCE_FILTERED_READS.md](PERFORMANCE_FILTERED_READS.md) records the release reproduction, bounded fix and remaining positive-filter/P4 gates.

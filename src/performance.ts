@@ -123,6 +123,12 @@ export function installDiagnostics() {
       read() {
         return { events: events.slice(), dropped, capacity };
       },
+      drain() {
+        const segment = { events, dropped, capacity };
+        events = [];
+        dropped = 0;
+        return segment;
+      },
     },
   });
 }

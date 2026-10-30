@@ -58,3 +58,7 @@ required-features = ["fixture-probes"]
 [[example]]
 name = "scheduler_probe"
 required-features = ["fixture-probes"]
+
+[[example]]
+name = "filtered_probe"
+required-features = ["fixture-probes"]

@@ -260,3 +260,7 @@ The owner explicitly selects “Finish P2: gallery and preview performance.” [
 ## P3 read-only scheduling stage — 2026-10-29
 
 The owner's “Start new stage” continues the selected performance track. [P3 scope](../tasks/P3_SHARED_RESOURCES.md) implements shared admission for existing metadata/renditions and scroll-aware requests. [PERFORMANCE_P3.md](PERFORMANCE_P3.md) records actual evidence and acceptance dispositions. Production backup remains unavailable; explicit read fixtures cannot pass native backup/NAS/HDD or hard-byte-pacing gates. Preserve P0–P2 history and all preservation rules. Stop before P4 or original mutations.
+
+## P4 local evidence stage — 2026-10-29
+
+The owner's next-stage request authorizes [local P4 stress evidence](../tasks/P4_LOCAL_STRESS.md). Preserve the production release automation prohibition. Separate current release core/packaged-worker probes from instrumented debug native UI routes, collect bounded segmented traces and independent lossless source manifests, and report actual outcomes in [PERFORMANCE_P4.md](PERFORMANCE_P4.md). P3 backup/endpoint/pacing prerequisites and full platform/presentation/memory gates remain open. No original mutations or further milestone are authorized.

@@ -410,6 +410,7 @@ async fn test_performance(
             let catalog = state._catalog.clone();
             tauri::async_runtime::spawn_blocking(move || -> Result<_> { Ok(serde_json::json!({"trace":stillharbour_core::performance::snapshot(),"sqlite":stillharbour_core::library::performance_probe::sqlite_info(&catalog)?})) }).await.map_err(|e|AppError::new(ErrorCode::WorkerFailed,"Diagnostic read stopped.").caused_by(e))?
         }
+        "drain" => Ok(serde_json::json!({"trace":stillharbour_core::performance::drain()})),
         "monitor_stop" => {
             state.library.cancel_all();
             Ok(serde_json::json!({"stopped":true}))

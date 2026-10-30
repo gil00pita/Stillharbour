@@ -8,7 +8,12 @@ import {
 type Harness = {
   start: () => void;
   stop: () => void;
-  read: () => { events: { metric: string; value: number }[]; dropped: number; capacity: number };
+  read: () => {
+    events: { metric: string; value: number; tMs: number }[];
+    dropped: number;
+    capacity: number;
+  };
+  drain: () => ReturnType<Harness['read']>;
 };
 const harness = () => (window as Window & { __stillharbourPerf?: Harness }).__stillharbourPerf;
 afterEach(() => {
@@ -45,4 +50,25 @@ it('requires explicit opt-in, drops at the cap and records numeric sizes without
   expect(encoded).not.toContain('51.1');
   harness()!.stop();
   expect(diagnosticClock()).toBeUndefined();
+});
+
+it('drains bounded segments while retaining active recording and loss counts', () => {
+  vi.stubEnv('MODE', 'desktop-test');
+  installDiagnostics();
+  const recorder = harness()!;
+  recorder.start();
+  for (let index = 0; index < 4100; index++) diagnosticValue('ipc_ms', index);
+  const first = recorder.drain();
+  expect(first.events).toHaveLength(4096);
+  expect(first.dropped).toBe(4);
+  expect(recorder.read()).toMatchObject({ events: [], dropped: 0 });
+  diagnosticValue('ipc_ms', 42);
+  const second = recorder.drain();
+  expect(second.events).toHaveLength(1);
+  expect(second.events[0]!.value).toBe(42);
+  expect(second.events[0]!.tMs).toBeGreaterThanOrEqual(first.events.at(-1)!.tMs);
+  expect(first.events).toHaveLength(4096);
+  recorder.stop();
+  diagnosticValue('ipc_ms', 43);
+  expect(recorder.drain().events).toHaveLength(0);
 });

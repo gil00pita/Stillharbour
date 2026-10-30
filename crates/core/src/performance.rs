@@ -113,6 +113,22 @@ mod recorder {
             Snapshot::default()
         }
     }
+    pub fn drain() -> Snapshot {
+        if let Some(trace) = TRACE.get()
+            && let Ok(mut trace) = trace.lock()
+        {
+            Snapshot {
+                events: std::mem::replace(&mut trace.events, Vec::with_capacity(4096)),
+                dropped: std::mem::take(&mut trace.dropped)
+                    .saturating_add(LOST.swap(0, Ordering::Relaxed)),
+                capacity: trace.capacity,
+                volume_count: trace.volume_count,
+                ..Snapshot::default()
+            }
+        } else {
+            Snapshot::default()
+        }
+    }
     pub fn volume_alias(volume: u64) -> u16 {
         if !enabled() {
             return 0;
@@ -161,6 +177,17 @@ pub fn snapshot() -> Snapshot {
     #[cfg(feature = "fixture-probes")]
     {
         recorder::snapshot()
+    }
+    #[cfg(not(feature = "fixture-probes"))]
+    {
+        Snapshot::default()
+    }
+}
+/// Consume a bounded diagnostic segment without disabling recording or remapping volumes.
+pub fn drain() -> Snapshot {
+    #[cfg(feature = "fixture-probes")]
+    {
+        recorder::drain()
     }
     #[cfg(not(feature = "fixture-probes"))]
     {
@@ -290,9 +317,20 @@ mod tests {
         assert!(trace.dropped >= 904);
         let json = serde_json::to_string(&trace).unwrap();
         assert!(!json.contains("path"));
+        let segment = drain();
+        assert_eq!(segment.events.len(), 4096);
+        assert!(segment.dropped >= 904);
+        assert_eq!(snapshot().events.len(), 0);
+        assert_eq!(snapshot().dropped, 0);
+        assert_eq!(volume_alias(Some(private_volume)), alias);
+        record(Metric::Write, Endpoint::Cache, 4, 9);
+        let next = drain();
+        assert_eq!(next.events.len(), 1);
+        assert_eq!(next.events[0].bytes, 9);
+        assert_eq!(next.volume_count, 16);
         disable();
         record(Metric::Write, Endpoint::Cache, 4, 9);
-        assert_eq!(snapshot().events.len(), 4096);
+        assert_eq!(snapshot().events.len(), 0);
     }
 }
 

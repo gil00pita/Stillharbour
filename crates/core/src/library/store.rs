@@ -675,7 +675,12 @@ pub fn query(
     catalog.cached(move|db,cache|{
         let total = cached_count(db,cache,&query,&where_sql,&base_values,&hash)?;
         let sql=format!("SELECT {ASSET_COLUMNS} FROM {source} WHERE {page_where} ORDER BY {column} {direction},id {direction} LIMIT {}",limit+1);
-        let mut assets=db.prepare(&sql)?.query_map(params_from_iter(values),asset_row)?.collect::<rusqlite::Result<Vec<_>>>()?;
+        // Inventory totals can lag an active scan. Only an exact filtered count
+        // (or the actual include-missing count) proves this page is empty.
+        let exact_empty = total == 0 && (!inventory_query(&query) || query.include_missing);
+        let mut assets = if exact_empty { Vec::new() } else {
+            db.prepare(&sql)?.query_map(params_from_iter(values),asset_row)?.collect::<rusqlite::Result<Vec<_>>>()?
+        };
         let more=assets.len()>limit as usize;assets.truncate(limit as usize);
         let next=if more {assets.last().map(|last|serde_json::to_string(&Cursor{query:hash,key:asset_sort_key(last, &query.sort),id:last.id.clone()})).transpose().map_err(|e|invalid("Could not encode cursor.").caused_by(e))?}else{None};
         let revision:String=db.query_row("SELECT CAST(revision AS TEXT) FROM library_state WHERE singleton=1",[],|r|r.get(0))?;
@@ -857,9 +862,17 @@ pub fn buckets(catalog: &Catalog, query: AssetQuery) -> Result<Vec<DateBucket>> 
     } else {
         "date"
     };
-    let key = format!("buckets:{}", query_hash(&query)?);
+    let hash = query_hash(&query)?;
+    let key = format!("buckets:{hash}");
+    let exact_count_key =
+        (!inventory_query(&query) || query.include_missing).then(|| format!("count:{hash}"));
     catalog.cached(move |db,cache| {
         if let Some(Summary::Buckets(buckets)) = cache.get(db, &key)? { return Ok(buckets); }
+        if let Some(count_key) = &exact_count_key
+            && matches!(cache.get(db, count_key)?, Some(Summary::Count(0))) {
+            cache.insert(key, Summary::Buckets(Vec::new()));
+            return Ok(Vec::new());
+        }
 
         let rows = db.prepare(&format!("SELECT CASE WHEN length({date_column})<10 THEN 'Undated' ELSE substr({date_column},1,7) END AS period,count(*) FROM assets WHERE {where_sql} GROUP BY period ORDER BY (period='Undated'),period DESC"))?
             .query_map(params_from_iter(values), |r| Ok((r.get::<_,String>(0)?,r.get::<_,u32>(1)?)))?
@@ -874,6 +887,9 @@ pub fn buckets(catalog: &Catalog, query: AssetQuery) -> Result<Vec<DateBucket>> 
             } else {
                 buckets.push(DateBucket { year, count, months: vec![month] });
             }
+        }
+        if buckets.is_empty() && let Some(count_key) = exact_count_key {
+            cache.insert(count_key, Summary::Count(0));
         }
         cache.insert(key,Summary::Buckets(buckets.clone()));
         Ok(buckets)

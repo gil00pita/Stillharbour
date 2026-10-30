@@ -1,4 +1,4 @@
-"""Run a new owned P0 release catalog experiment. Never accepts a library path."""
+"""Run a new owned phase-labelled release catalog experiment. Never accepts a library path."""
 import argparse, hashlib, json, platform, plistlib, shutil, subprocess, threading, time, uuid
 from pathlib import Path
 from manifest import manifest
@@ -6,7 +6,7 @@ from process_stats import Sampler
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--rows', type=int, choices=[10000, 100000, 1000000], nargs='+', default=[10000, 100000, 1000000])
-parser.add_argument('--phase', choices=['p0','p1'], default='p0')
+parser.add_argument('--phase', choices=['p0','p1','p4'], default='p0')
 args = parser.parse_args()
 if platform.system() != 'Darwin': raise SystemExit('Native adapter unavailable here; no macOS/Windows result inferred')
 if shutil.disk_usage('.').free < 4 * 1024**3: raise SystemExit('At least 4 GiB free required; no cleanup attempted')
@@ -22,7 +22,7 @@ environment['sha256'] = {str(path): hashlib.sha256(path.read_bytes()).hexdigest(
 for rows in args.rows:
     if shutil.disk_usage('.').free < 4 * 1024**3: raise SystemExit('Space reserve reached; fixtures retained, no cleanup')
     if base.is_symlink() or Path('.context').is_symlink(): raise SystemExit('Diagnostic namespace must not be a link')
-    child = subprocess.Popen(['target/release/examples/performance_probe', '--rows', str(rows), '--run', run] + (['--p1'] if args.phase == 'p1' else []), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    child = subprocess.Popen(['target/release/examples/performance_probe', '--rows', str(rows), '--run', run] + ([f'--{args.phase}'] if args.phase in ('p1', 'p4') else []), stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
     timed_out = threading.Event()
     def expire():
         timed_out.set()
@@ -62,6 +62,13 @@ for rows in args.rows:
     result.update({'memory': sampler.result(), 'measurementStartMs': measured_start_ms, 'sourceManifestEqual': equal,
                    'sourceEntryCount': len(before['entries']), 'environment': f'{run}-environment.json', 'cacheProtocol': 'OS cache uncontrolled/warm after seeding; P0 has seven app-connection reopens; P1 separately resets derived summaries and once the disposable connection pager; source and thumbnail cache not purged',
                    'network': 'not instrumented at OS socket level; no network workload requested'})
+    trace_failure = False
+    if args.phase == 'p4':
+        traces = [result['catalog']['trace'], *result['catalog']['traceSegments']]
+        trace_failure = any(trace['dropped'] or len(trace['events']) > 4096 for trace in traces)
+        if trace_failure:
+            result['failure'] = 'P4 catalog trace loss; preserve this failed evidence'
     (owned/'baseline.json').write_text(json.dumps(result, indent=2)+'\n')
-    print(json.dumps({'run':run,'rows':rows,'completed':True,'sourceManifestEqual':equal}), flush=True)
+    print(json.dumps({'run':run,'rows':rows,'completed':equal and not trace_failure,'sourceManifestEqual':equal}), flush=True)
     if not equal: raise SystemExit('Source manifest mismatch; stop')
+    if trace_failure: raise SystemExit(result['failure'])

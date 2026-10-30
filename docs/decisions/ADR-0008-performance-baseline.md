@@ -14,3 +14,7 @@ Use the existing decoder and native root guards against generated sources. A sep
 Run native UI diagnostics separately from release backend observations. Label debug/Strict Mode/driver overhead, partial process attribution, finite trace capacity, low sample counts and uncontrolled OS caches. Do not treat rAF or an image-load callback as proof of actual presentation. Backup contention remains blocked until the production adapter exists. Proposed P1 fixes require separate approval and preservation review; this ADR grants none.
 
 Actual evidence, missing proposal references, acceptance statuses and commands belong in [PERFORMANCE_BASELINE.md](../PERFORMANCE_BASELINE.md).
+
+## P4 evidence collection — 2026-10-29
+
+The authorized local P4 slice adds consuming reads of the same bounded diagnostic recorder. Drain events and observed losses atomically while retaining enabled state and the session-local volume map; production calls remain no-ops. Frontend drains retain observer lifetime and the original timestamp origin. The native harness writes at most32 segments of at most4096 events per recorder; overflow and recorder contention still count as loss and fail the new scoped report. This avoids restarting the observer or increasing production working-set limits. Release automation remains forbidden; [PERFORMANCE_P4.md](../PERFORMANCE_P4.md) separates release core/worker probes from debug native UI results and open platform gates.
