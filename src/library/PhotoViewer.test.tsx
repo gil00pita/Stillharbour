@@ -108,7 +108,7 @@ it('provides zoom, optional filmstrip, information panel and an explicit return 
   expect(screen.queryByRole('navigation', { name: 'Nearby photos' })).not.toBeInTheDocument();
   expect(screen.queryByRole('complementary', { name: 'Photo details' })).not.toBeInTheDocument();
   const controls = screen.getByRole('group', { name: 'Photo controls' });
-  for (const name of ['Zoom out', 'Zoom in', 'Fit image', 'Info', 'Filmstrip']) {
+  for (const name of ['Zoom out', 'Zoom in', 'Fit image', 'Favorite photo', 'Info', 'Filmstrip']) {
     const button = screen.getByRole('button', { name });
     expect(controls).toContainElement(button);
     expect(button).toHaveAttribute('title');
@@ -208,7 +208,7 @@ it('keeps the page viewer nonmodal, does not dismiss on image click, and closes 
   expect(callbacks.onClose).toHaveBeenCalledOnce();
 });
 
-it('places X on the right and a catalog-backed animated heart at the bottom', async () => {
+it('places X on the right and the catalog-backed animated heart before Info in the photo controls', async () => {
   let favorite = false;
   const callbacks = props();
   callbacks.onAnnotate.mockImplementation(async (patch) => {
@@ -225,7 +225,10 @@ it('places X on the right and a catalog-backed animated heart at the bottom', as
     'Close photo viewer',
   );
   const heart = screen.getByRole('button', { name: 'Favorite photo' });
-  expect(container.querySelector('.viewer-actions')).toContainElement(heart);
+  const controls = screen.getByRole('group', { name: 'Photo controls' });
+  expect(controls).toContainElement(heart);
+  expect(heart.nextElementSibling).toBe(screen.getByRole('button', { name: 'Info' }));
+  expect(container.querySelector('.viewer-photo')).toContainElement(controls);
   expect(heart).toHaveAttribute('aria-pressed', 'false');
   fireEvent.click(heart);
   await waitFor(() => expect(heart).toHaveAttribute('aria-pressed', 'true'));

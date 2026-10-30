@@ -375,7 +375,7 @@ The bounded catalog-read update must satisfy P1-01 through P1-07 in [PERFORMANCE
 ### Floating viewer icon controls — owner revision, 2026-10-30
 
 - Zoom out/in, Fit image, Info and Filmstrip are icon buttons in one labelled Photo controls group, with hover titles, accessible names and 40 px-wide buttons. Preserve slider/percentage, zoom limits and pressed toggle states.
-- Info/Filmstrip leave the header and remain reachable in the floating surface above the bottom heart, including at 660×560 and with the Info panel/filmstrip open. Preserve focus return, original readiness, zoom/pan, page/menu bounds and per-photo zoom reset; annotations do not reset zoom.
+- Info/Filmstrip leave the header and remain reachable in the floating surface over the photo, including at 660×560 and with the Info panel/filmstrip open. The existing favorite heart immediately precedes Info in visual and keyboard order. The bar is absolutely positioned inside the photo bounds, outside the pan/scroll canvas; all controls and navigation arrows pass native pointer hit testing, with the control icons in one row at the minimum size. Stack a bounded scrolling Info panel below the photo/filmstrip at narrow widths. Preserve focus return, original readiness, zoom/pan, page/menu bounds and per-photo zoom reset; annotations do not reset zoom.
 - Use real generated native fixtures for layout/navigation checks; original access, fallback, source preservation and all existing milestone/platform limits stay unchanged.
 
 ### P4 continuation — cold filename summaries, 2026-10-30

@@ -707,7 +707,7 @@ Load the original image rather than only a 2,048-pixel derived rendition when it
 
 ### Owner viewer control-bar refinement — 2026-10-30
 
-Group single-photo Zoom out/in, Fit, Info and Filmstrip into one centered floating icon bar above the bottom favorite heart. Preserve accessible names/tooltips, zoom slider/percentage, disabled limits, toggle states, Info focus return and minimum-window access. Keep original access/fallback, page/menu containment, arrows, X, favorites and all safety/milestone gates intact. See docs/ORIGINAL_IMAGE_VIEWING.md.
+Group single-photo Zoom out/in, Fit, Info and Filmstrip into one centered floating icon bar over the photo. Include the existing favorite heart immediately before Info; the bar overlays the image without a reserved footer. At narrow widths, stack the bounded scrolling Info panel below the photo/filmstrip to preserve control access. Preserve accessible names/tooltips, zoom slider/percentage, disabled limits, toggle states, Info focus return and minimum-window access. Keep original access/fallback, page/menu containment, arrows, X, favorites and all safety/milestone gates intact. See docs/ORIGINAL_IMAGE_VIEWING.md.
 
 ### P4 continuation — cold filename summaries, 2026-10-30
 

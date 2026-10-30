@@ -53,6 +53,7 @@ export function ViewerControls({
   onInfo,
   onFilmstrip,
   infoButtonRef,
+  favorite,
 }: {
   zoom: number;
   canZoom: boolean;
@@ -62,6 +63,7 @@ export function ViewerControls({
   onInfo: () => void;
   onFilmstrip: () => void;
   infoButtonRef: RefObject<HTMLButtonElement | null>;
+  favorite: ReactNode;
 }) {
   return (
     <div className="viewer-controls viewer-zoom" role="group" aria-label="Photo controls">
@@ -96,6 +98,7 @@ export function ViewerControls({
         <ToolIcon name="fit" />
       </button>
       <span className="viewer-control-divider" aria-hidden="true" />
+      {favorite}
       <button
         ref={infoButtonRef}
         aria-label="Info"

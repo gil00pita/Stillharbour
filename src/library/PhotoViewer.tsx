@@ -240,6 +240,28 @@ export function PhotoViewer({
                 <path d="M5 12h14m-6-6 6 6-6 6" />
               </svg>
             </button>
+            <div className="viewer-actions">
+              <ViewerControls
+                zoom={zoom}
+                canZoom={originalReady || ready}
+                onZoom={(value) => setZoom({ key: assetKey, value })}
+                info={info}
+                filmstrip={filmstrip}
+                onInfo={() => setInfo((value) => !value)}
+                onFilmstrip={() => setFilmstrip((value) => !value)}
+                infoButtonRef={infoButton}
+                favorite={
+                  <FavoriteHeart
+                    key={asset.id}
+                    favorite={asset.favorite}
+                    busy={busy}
+                    animate={celebrate === asset.id}
+                    onClick={() => void favorite()}
+                    onAnimationEnd={stopCelebration}
+                  />
+                }
+              />
+            </div>
           </div>
           {filmstrip && (
             <ViewerFilmstrip
@@ -261,26 +283,6 @@ export function PhotoViewer({
           />
         )}
       </div>
-      <footer className="viewer-actions">
-        <ViewerControls
-          zoom={zoom}
-          canZoom={originalReady || ready}
-          onZoom={(value) => setZoom({ key: assetKey, value })}
-          info={info}
-          filmstrip={filmstrip}
-          onInfo={() => setInfo((value) => !value)}
-          onFilmstrip={() => setFilmstrip((value) => !value)}
-          infoButtonRef={infoButton}
-        />
-        <FavoriteHeart
-          key={asset.id}
-          favorite={asset.favorite}
-          busy={busy}
-          animate={celebrate === asset.id}
-          onClick={() => void favorite()}
-          onAnimationEnd={stopCelebration}
-        />
-      </footer>
     </dialog>
   );
 }

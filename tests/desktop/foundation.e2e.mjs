@@ -11,6 +11,56 @@ async function native(request) {
     request,
   );
 }
+async function assertViewerControlsOverlay() {
+  const geometry = await browser.execute(() => {
+    const controls = document.querySelector('.viewer-controls');
+    const bar = controls.getBoundingClientRect();
+    const photo = document.querySelector('.viewer-photo').getBoundingClientRect();
+    const heart = controls.querySelector('.viewer-favorite');
+    const buttons = [...controls.querySelectorAll('button')];
+    const first = buttons[0].getBoundingClientRect();
+    return {
+      insidePhoto:
+        bar.left >= photo.left &&
+        bar.right <= photo.right + 1 &&
+        bar.top >= photo.top &&
+        bar.bottom <= photo.bottom,
+      overlaysCanvas:
+        getComputedStyle(controls.parentElement).position === 'absolute' &&
+        controls.parentElement.parentElement.classList.contains('viewer-photo'),
+      heartBeforeInfo: heart.nextElementSibling?.getAttribute('aria-label') === 'Info',
+      singleRow: buttons.every((button) => {
+        const bounds = button.getBoundingClientRect();
+        return Math.abs(bounds.top + bounds.height / 2 - first.top - first.height / 2) < 1;
+      }),
+      buttonsReachable: buttons.every((button) => {
+        const bounds = button.getBoundingClientRect();
+        return button.contains(
+          document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2),
+        );
+      }),
+      navigationReachable: [...document.querySelectorAll('.viewer-previous, .viewer-next')].every(
+        (button) => {
+          const bounds = button.getBoundingClientRect();
+          return button.contains(
+            document.elementFromPoint(
+              bounds.left + bounds.width / 2,
+              bounds.top + bounds.height / 2,
+            ),
+          );
+        },
+      ),
+    };
+  });
+  assert.deepEqual(geometry, {
+    insidePhoto: true,
+    overlaysCanvas: true,
+    heartBeforeInfo: true,
+    singleRow: true,
+    buttonsReachable: true,
+    navigationReachable: true,
+  });
+}
 async function assertPhotoCheckboxOnTop(id) {
   // HTMLElement.click() in the embedded driver bypasses real pointer hit testing.
   const hit = await browser.execute((id) => {
@@ -1398,7 +1448,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         menuUsable: true,
         nonmodal: true,
       });
-      await browser.saveScreenshot(`.context/screenshots/viewer-controls-${name}.png`);
+      await assertViewerControlsOverlay();
+      await browser.saveScreenshot(`.context/screenshots/viewer-overlay-${name}.png`);
     }
     await browser.execute(() => {
       const image = [...document.querySelectorAll('.viewer-image-frame img')].find(
@@ -1452,7 +1503,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         opacity: getComputedStyle(image).opacity,
         width: image.naturalWidth,
         closeRight: close.left > title.right,
-        heartBottom: Boolean(heart),
+        heartInControls: Boolean(heart?.closest('.viewer-controls')),
         oldBanner: Boolean(document.querySelector('.photo-viewer .viewer-status')),
       };
     });
@@ -1461,10 +1512,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     assert.deepEqual(
       {
         closeRight: originalDisplay.closeRight,
-        heartBottom: originalDisplay.heartBottom,
+        heartInControls: originalDisplay.heartInControls,
         oldBanner: originalDisplay.oldBanner,
       },
-      { closeRight: true, heartBottom: true, oldBanner: false },
+      { closeRight: true, heartInControls: true, oldBanner: false },
     );
     observations.originalDisplay = originalDisplay;
     const initialFavorite = await $('.viewer-favorite').getAttribute('aria-pressed');
@@ -1482,12 +1533,12 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         return getComputedStyle(heart.querySelector('path')).fill === getComputedStyle(heart).color;
       }),
     );
-    await browser.saveScreenshot('.context/screenshots/viewer-controls-favorite.png');
+    await browser.saveScreenshot('.context/screenshots/viewer-overlay-favorite.png');
     await $('.viewer-favorite').click();
     await browser.waitUntil(
       async () => (await $('.viewer-favorite').getAttribute('aria-pressed')) === initialFavorite,
     );
-    await browser.saveScreenshot('.context/screenshots/viewer-controls-loaded.png');
+    await browser.saveScreenshot('.context/screenshots/viewer-overlay-loaded.png');
     await browser.execute(() => {
       const range = document.querySelector('input[aria-label="Preview zoom"]');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(range, '200');
@@ -1511,6 +1562,15 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     const opening = observations.viewerOpening;
     await $('button[aria-label="Info"]').click();
     await $('.inspector').waitForDisplayed();
+    for (const [name, width, height] of [
+      ['desktop', 1180, 780],
+      ['minimum', 660, 560],
+    ]) {
+      await browser.setWindowSize(width, height);
+      await assertViewerControlsOverlay();
+      await browser.saveScreenshot(`.context/screenshots/viewer-overlay-info-${name}.png`);
+    }
+    await browser.setWindowSize(1180, 780);
     console.info('Native viewer information opened');
     const favorite = await $('.inspector input[type="checkbox"]');
     await favorite.click();

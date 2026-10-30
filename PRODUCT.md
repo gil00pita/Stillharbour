@@ -76,4 +76,4 @@ Open photos within the page while keeping navigation usable. Expand from the thu
 
 Single-photo viewing loads actual original bytes for supported static JPEG/PNG/WebP images within the bounded 32-MiB/32-million-pixel envelope, retaining a clearly labelled preview fallback for offline/unsupported/error cases. The routine cached-preview banner is removed for loaded originals. X is at the top right; the bottom heart fills after a confirmed catalog favorite and respects Reduced Motion. See docs/ORIGINAL_IMAGE_VIEWING.md; this is not broad format, integrity or archival-fidelity certification.
 
-Viewer controls follow-up (2026-10-30): a floating icon bar above the heart groups Zoom out/in, Fit, Info and Filmstrip, retaining accessible tooltips, the slider and percentage. Keep the photo/menu visible and all existing source/favorite safety behavior.
+Viewer controls follow-up (2026-10-30): a floating icon bar overlays the photo and groups Zoom out/in, Fit, the favorite heart immediately before Info, and Filmstrip, retaining accessible tooltips, the slider and percentage. Keep the photo/menu visible and all existing source/favorite safety behavior.

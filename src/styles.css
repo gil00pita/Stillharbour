@@ -1569,7 +1569,7 @@ input.switch-control:disabled {
   background: var(--surface);
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.28);
 }
-.viewer-controls button {
+.viewer-actions .viewer-controls button {
   display: grid;
   place-items: center;
   flex-shrink: 0;
@@ -1585,7 +1585,7 @@ input.switch-control:disabled {
   color: var(--accent);
 }
 .viewer-controls input[type='range'] {
-  width: clamp(48px, 14vw, 96px);
+  width: clamp(48px, 8vw, 96px);
   min-height: 24px;
   padding: 0;
   border: 0;
@@ -1607,7 +1607,7 @@ input.switch-control:disabled {
 .viewer-next {
   position: absolute;
   z-index: 2;
-  top: 42%;
+  top: max(12px, calc(50% - 64px));
   display: grid;
   place-items: center;
   width: 40px;
@@ -1729,11 +1729,15 @@ input.switch-control:disabled {
   .viewer-toolbar button {
     padding: 7px 9px !important;
   }
+  .viewer-body.with-info {
+    flex-direction: column;
+  }
   .photo-viewer .inspector {
-    position: absolute;
-    inset: 0 0 0 auto;
-    z-index: 5;
-    width: min(320px, 90vw);
+    width: 100%;
+    max-height: 45%;
+    min-height: 0;
+    flex: 0 1 45%;
+    overflow-y: auto;
   }
 }
 @media (max-width: 600px) {
@@ -2706,14 +2710,17 @@ button.explorer-entry.asset-open:hover:enabled {
   font-size: 12px;
 }
 .viewer-actions {
+  position: absolute;
+  inset: auto 16px 16px;
+  z-index: 3;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-  padding: 12px 16px;
+  justify-content: center;
+  pointer-events: none;
 }
-.viewer-favorite {
+.viewer-actions .viewer-controls {
+  pointer-events: auto;
+}
+.viewer-controls button.viewer-favorite {
   --like-color: var(--accent);
   --like-fill: 150ms;
   --like-pop: 350ms;

@@ -44,4 +44,4 @@ Command logs, failed attempts, executable identities, copied native observations
 
 ## Original-image follow-up — 2026-10-30
 
-The next owner request supersedes the 2,048-only single-photo presentation above: [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) and [ADR-0018](decisions/ADR-0018-original-image-viewing.md) define actual bounded original-byte loading, explicit preview fallback, right-side X and the bottom animated favorite heart. Earlier screenshots/checks remain historical; no original mutation or wider format/platform gate is implied.
+The next owner request supersedes the 2,048-only single-photo presentation above: [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) and [ADR-0018](decisions/ADR-0018-original-image-viewing.md) define actual bounded original-byte loading, explicit preview fallback, right-side X and the animated favorite heart (now inside the overlaid controls immediately before Info). Earlier screenshots/checks remain historical; no original mutation or wider format/platform gate is implied.
