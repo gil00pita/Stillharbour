@@ -2,6 +2,8 @@
 
 Owner request: 2026-10-29, “Start the new step,” after publishing the local P4 work. [Task scope](../tasks/P4_EMPTY_RESULTS.md) continues the measured filtered-query issue. [P4's earlier evidence and failed/unavailable gates](PERFORMANCE_P4.md) remain historical. This step changes only proven-empty display reads; other filtered-query costs remain open.
 
+The 2026-10-30 next-stage request separately continues [positive timeline total reuse](PERFORMANCE_POSITIVE_TOTALS.md). Its measurements and validation do not replace the empty-result evidence below.
+
 ## Reproduction and fix
 
 A current release core probe of the previously generated million-row fixture reproduces the no-match query at 1545–1600ms (n=3). Month summaries take 227–236ms after that page. Narrow and broad matches are retained as controls. The catalog contains synthetic observations, not a million real media files, and no source folder is scanned.

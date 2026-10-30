@@ -6,6 +6,7 @@ import { AssetBrowser, type PhotoViewportHandle } from './AssetBrowser';
 import type { GalleryDisplay } from './FilterPanel';
 import type { TextColumn } from './textColumns';
 import { DateTimeline } from './DateTimeline';
+import { PreparationBanner } from './PreparationBanner';
 export function PhotoCollection({
   display,
   viewportHandle,
@@ -15,9 +16,11 @@ export function PhotoCollection({
   viewerOpen,
   onOpen,
   columns,
+  onRefresh,
 }: {
   display: GalleryDisplay;
   columns: readonly TextColumn[];
+  onRefresh: () => Promise<void>;
   viewportHandle: RefObject<PhotoViewportHandle | null>;
   controller: LibraryController;
   status: LibraryStatus;
@@ -41,6 +44,7 @@ export function PhotoCollection({
   return (
     <div className="collection-layout">
       <div className="collection-main" data-feed-count={page?.assets.length ?? 0}>
+        <PreparationBanner status={status} rootId={query.rootId} onRefresh={onRefresh} />
         {page?.assets.length ? (
           <AssetBrowser
             display={display}
@@ -87,6 +91,9 @@ export function PhotoCollection({
         ) : (
           <CollectionEmpty
             loading={loading}
+            preparing={status.roots.some(
+              (root) => root.preparingPreviews && (!query.rootId || root.id === query.rootId),
+            )}
             scanning={status.jobs.some(
               (job) => job.kind !== 'thumbnails' && job.state === 'running',
             )}
@@ -119,14 +126,30 @@ function unavailableRoots(status: LibraryStatus) {
       .map((root) => root.id),
   );
 }
-function CollectionEmpty({ loading, scanning }: { loading: boolean; scanning: boolean }) {
+function CollectionEmpty({
+  loading,
+  scanning,
+  preparing,
+}: {
+  loading: boolean;
+  scanning: boolean;
+  preparing: boolean;
+}) {
   return (
     <div className="empty-results">
-      <h2>{loading ? 'Reading your catalog…' : 'No matching photos yet'}</h2>
+      <h2>
+        {preparing
+          ? 'Preparing your photos'
+          : loading
+            ? 'Reading your catalog…'
+            : 'No matching photos yet'}
+      </h2>
       <p>
-        {scanning
-          ? 'Your scan is running. Photos appear as they are indexed.'
-          : 'Check your filters or select a library to rescan its folder.'}
+        {preparing
+          ? 'Photos appear as their previews become ready.'
+          : scanning
+            ? 'Your scan is running. Photos appear as they are indexed.'
+            : 'Check your filters or select a library to rescan its folder.'}
       </p>
     </div>
   );

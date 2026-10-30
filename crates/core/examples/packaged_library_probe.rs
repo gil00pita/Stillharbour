@@ -108,10 +108,38 @@ fn main() {
             bytes.len()
         })
         .sum::<usize>();
+    let mut original_formats = Vec::new();
+    for extension in ["jpg", "png", "webp"] {
+        let asset = page
+            .assets
+            .iter()
+            .find(|a| a.extension == extension && a.width.is_some())
+            .unwrap();
+        let original = library
+            .original_image(
+                asset.id.clone(),
+                asset.revision.clone(),
+                stillharbour_core::library::ORIGINAL_IMAGE_POLICY,
+            )
+            .unwrap();
+        assert!(!original.bytes.is_empty());
+        original_formats.push(original.mime);
+    }
+    let exact = library
+        .original_image(
+            dated.id.clone(),
+            dated.revision.clone(),
+            stillharbour_core::library::ORIGINAL_IMAGE_POLICY,
+        )
+        .unwrap();
+    assert_eq!(
+        exact.bytes,
+        std::fs::read(fixture.path().join("Coast/Generated-00.jpg")).unwrap()
+    );
     let verified = fixture.verify_unchanged().unwrap();
     println!(
         "{}",
-        serde_json::json!({"kind":"packaged-generated-library","indexedMedia":page.total,"previewFormats":["jpeg","png","webp"],"scanMs":scan_ms,"previewMs":preview_ms,"cachedPngBytes":bytes,"sourceEntriesUnchanged":verified,"bundledMetadataDate":dated.date,"offset":dated.offset})
+        serde_json::json!({"kind":"packaged-generated-library","indexedMedia":page.total,"previewFormats":["jpeg","png","webp"],"scanMs":scan_ms,"previewMs":preview_ms,"cachedPngBytes":bytes,"sourceEntriesUnchanged":verified,"originalFormats":original_formats,"originalJpegExact":true,"bundledMetadataDate":dated.date,"offset":dated.offset})
     );
 }
 #[cfg(not(target_os = "macos"))]

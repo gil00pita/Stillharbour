@@ -27,6 +27,8 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "original.rs"]
+pub mod original;
 #[path = "rendition_jobs.rs"]
 mod rendition_jobs;
 
@@ -83,6 +85,10 @@ pub struct Library {
     thumbnail_job_gate: JobScheduler,
     scan_gate: JobScheduler,
     resources: ResourceScheduler,
+    original_gate: JobScheduler,
+    original_cancel: Mutex<Option<Arc<AtomicBool>>>,
+    #[cfg(feature = "fixture-probes")]
+    pub(super) initial_previews_hold: AtomicBool,
     thumbnails: Arc<ThumbnailQueue>,
     recovery: Mutex<VecDeque<String>>,
 }
@@ -283,6 +289,10 @@ impl Library {
             thumbnail_job_gate: JobScheduler::new(1)?,
             scan_gate: JobScheduler::new(1)?,
             resources: ResourceScheduler::default(),
+            original_gate: JobScheduler::new(1)?,
+            original_cancel: Mutex::new(None),
+            #[cfg(feature = "fixture-probes")]
+            initial_previews_hold: AtomicBool::new(false),
             thumbnails: Arc::new(ThumbnailQueue {
                 state: Mutex::new(Queue {
                     pending: VecDeque::new(),
@@ -532,7 +542,21 @@ impl Library {
                 if store::job(&owner.catalog, job_id.clone())
                     .is_ok_and(|job| matches!(job.state.as_str(), "completed" | "partial"))
                 {
-                    let _ = owner.enqueue_thumbnails(thumbnail_root);
+                    if let Err(error) = owner.enqueue_thumbnails(thumbnail_root.clone(), false) {
+                        let _ = store::stop_initial_preparation(
+                            &owner.catalog,
+                            thumbnail_root,
+                            "failed".into(),
+                            error.message,
+                        );
+                    }
+                } else {
+                    let _ = store::stop_initial_preparation(
+                        &owner.catalog,
+                        thumbnail_root,
+                        "interrupted".into(),
+                        "Discovery stopped. Resume previews for the indexed photos.".into(),
+                    );
                 }
             });
         if let Err(error) = spawned {
@@ -552,16 +576,25 @@ impl Library {
         Ok(response)
     }
     pub fn cancel(&self, id: String) -> Result<()> {
-        if let Some(job) = self
-            .thumbnail_jobs
-            .lock()
-            .map_err(|_| lock_error())?
-            .iter()
-            .find(|job| job.id == id)
         {
-            job.cancel.store(true, Ordering::Relaxed);
-            store::cancel_requested(&self.catalog, id)?;
-            return Ok(());
+            // The same gate protects queued initial preparation and admission,
+            // so cancellation cannot be undone by the post-discovery handoff.
+            let jobs = self.thumbnail_jobs.lock().map_err(|_| lock_error())?;
+            if let Some(job) = jobs.iter().find(|job| job.id == id) {
+                job.cancel.store(true, Ordering::Relaxed);
+                store::cancel_requested(&self.catalog, id)?;
+                return Ok(());
+            }
+            if let Some(root) = id.strip_prefix("thumbnail:initial:")
+                && store::stop_initial_preparation(
+                    &self.catalog,
+                    root.into(),
+                    "canceled".into(),
+                    "Preview preparation paused. Resume when ready.".into(),
+                )?
+            {
+                return Ok(());
+            }
         }
 
         if let Some(active) = self.active.lock().map_err(|_| lock_error())?.as_ref()
@@ -574,6 +607,11 @@ impl Library {
         Err(invalid("This scan is no longer running."))
     }
     pub fn cancel_all(&self) {
+        if let Ok(active) = self.original_cancel.lock()
+            && let Some(cancel) = active.as_ref()
+        {
+            cancel.store(true, Ordering::Relaxed);
+        }
         if let Ok(state) = self.monitor.lock()
             && let Some(monitor) = state.as_ref()
         {

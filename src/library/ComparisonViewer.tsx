@@ -1,3 +1,4 @@
+import { CachedPreviewImage } from './CachedPreviewImage';
 import { useEffect, useRef, useState } from 'react';
 import type { AssetSummary, LibraryStatus } from '../bindings';
 import { previewEdges, previewKey, previewUrl, usePreviews } from './previews';
@@ -82,5 +83,11 @@ function ComparisonImage({ asset, edge }: { asset: AssetSummary; edge: number })
   const [failed, setFailed] = useState(false);
   if (failed)
     return <p role="status">Cached preview failed to load. The original has not been changed.</p>;
-  return <img src={previewUrl(asset, edge)} alt={asset.name} onError={() => setFailed(true)} />;
+  return (
+    <CachedPreviewImage
+      src={previewUrl(asset, edge)}
+      alt={asset.name}
+      onError={() => setFailed(true)}
+    />
+  );
 }

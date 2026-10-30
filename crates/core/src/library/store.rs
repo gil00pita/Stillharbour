@@ -108,6 +108,7 @@ fn root_row(row: &Row<'_>) -> rusqlite::Result<RootRecord> {
     })?;
     Ok(RootRecord {
         view: LibraryRoot {
+            preparing_previews: row.get("preparing_previews")?,
             id: row.get("id")?,
             label: row.get("label")?,
             display_path: row.get("display_path")?,
@@ -143,7 +144,7 @@ fn root_row(row: &Row<'_>) -> rusqlite::Result<RootRecord> {
         volume: row.get("volume")?,
     })
 }
-const ROOT_SQL: &str = "SELECT r.* FROM roots r";
+const ROOT_SQL: &str = "SELECT r.*,EXISTS(SELECT 1 FROM scans p WHERE p.id='thumbnail:initial:'||r.id AND p.state NOT IN ('completed','partial')) AS preparing_previews FROM roots r";
 pub fn roots(catalog: &Catalog) -> Result<Vec<RootRecord>> {
     catalog.call(|db| {
         Ok(db
@@ -244,6 +245,7 @@ pub fn begin_job(catalog: &Catalog, root_id: String, filter: ScanFilter) -> Resu
     catalog.call(move|db|{
     let id=uuid::Uuid::new_v4().to_string();let started=now();
     let tx=db.transaction()?;
+    tx.execute("INSERT OR IGNORE INTO scans(id,root_id,state,message,started_at) SELECT 'thumbnail:initial:'||id,id,'queued','Waiting for discovery to finish',? FROM roots WHERE id=? AND last_scan IS NULL",params![started,root_id])?;
     tx.execute("UPDATE roots SET filter=?,availability='scanning' WHERE id=?",params![serde_json::to_string(&filter).map_err(|e|invalid("Invalid filter.").caused_by(e))?,root_id])?;
     tx.execute("UPDATE assets SET preview_state='pending',preview_error=NULL WHERE root_id=? AND preview_state='unavailable'",[&root_id])?;
     tx.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?,?,'running','Discovering files',?)",params![id,root_id,started])?;
@@ -547,6 +549,49 @@ pub(super) fn escape_like(text: &str) -> String {
         .replace('%', "\\%")
         .replace('_', "\\_")
 }
+
+pub(super) const NAME_CANDIDATE_LIMIT: u32 = 1024;
+
+pub(super) fn narrow_name_scope(
+    db: &Connection,
+    query: &AssetQuery,
+    mut where_sql: String,
+    mut values: Vec<Value>,
+    known_total: Option<u32>,
+) -> Result<(String, Vec<Value>)> {
+    if query.name.is_empty()
+        || !matches!(known_total, Some(1..=NAME_CANDIDATE_LIMIT))
+        || query.root_id.is_some()
+        || !inventory_query(&AssetQuery {
+            name: String::new(),
+            ..query.clone()
+        })
+    {
+        return Ok((where_sql, values));
+    }
+    // Probe only an already-proven small, unscoped filename result. Other
+    // predicates can hide a globally broad name; retain their planner choices.
+    let rowids = db
+        .prepare("SELECT rowid FROM assets WHERE name LIKE ? ESCAPE '\\' LIMIT ?")?
+        .query_map(
+            params![
+                format!("%{}%", escape_like(&query.name)),
+                NAME_CANDIDATE_LIMIT + 1
+            ],
+            |r| r.get::<_, i64>(0),
+        )?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if rowids.len() <= NAME_CANDIDATE_LIMIT as usize {
+        where_sql.push_str(" AND rowid IN (SELECT value FROM json_each(?))");
+        values.push(
+            serde_json::to_string(&rowids)
+                .map_err(|e| invalid("Could not encode catalog lookup.").caused_by(e))?
+                .into(),
+        );
+    }
+    Ok((where_sql, values))
+}
+
 pub(crate) fn query_where(query: &AssetQuery) -> Result<(String, Vec<Value>)> {
     if query.name.len() > 256
         || query.folder.len() > 2048
@@ -565,6 +610,9 @@ pub(crate) fn query_where(query: &AssetQuery) -> Result<(String, Vec<Value>)> {
     }
     let mut sql = String::from("is_media=1");
     let mut values = Vec::new();
+    if query.defer_pending_previews.unwrap_or(false) {
+        sql.push_str(" AND (preview_state NOT IN ('pending','placeholder') OR NOT EXISTS(SELECT 1 FROM scans p WHERE p.id='thumbnail:initial:'||assets.root_id AND p.state NOT IN ('completed','partial')))");
+    }
     if !query.include_missing {
         sql.push_str(" AND presence NOT IN ('excluded','missing')");
     } else {
@@ -674,11 +722,12 @@ pub fn query(
     let source = ordered_source(&query);
     catalog.cached(move|db,cache|{
         let total = cached_count(db,cache,&query,&where_sql,&base_values,&hash)?;
-        let sql=format!("SELECT {ASSET_COLUMNS} FROM {source} WHERE {page_where} ORDER BY {column} {direction},id {direction} LIMIT {}",limit+1);
         // Inventory totals can lag an active scan. Only an exact filtered count
         // (or the actual include-missing count) proves this page is empty.
-        let exact_empty = total == 0 && (!inventory_query(&query) || query.include_missing);
+        let exact_empty = total == 0 && (!inventory_query(&query) || query.include_missing || initial_preparation_active(db, &query)?);
         let mut assets = if exact_empty { Vec::new() } else {
+            let (page_where, values) = narrow_name_scope(db, &query, page_where, values, Some(total))?;
+            let sql=format!("SELECT {ASSET_COLUMNS} FROM {source} WHERE {page_where} ORDER BY {column} {direction},id {direction} LIMIT {}",limit+1);
             db.prepare(&sql)?.query_map(params_from_iter(values),asset_row)?.collect::<rusqlite::Result<Vec<_>>>()?
         };
         let more=assets.len()>limit as usize;assets.truncate(limit as usize);
@@ -710,6 +759,17 @@ fn inventory_query(query: &AssetQuery) -> bool {
         ]
         .iter()
         .all(|field| field.is_empty())
+}
+
+fn initial_preparation_active(db: &Connection, query: &AssetQuery) -> Result<bool> {
+    if !query.defer_pending_previews.unwrap_or(false) {
+        return Ok(false);
+    }
+    Ok(if let Some(root) = &query.root_id {
+        db.query_row("SELECT EXISTS(SELECT 1 FROM scans WHERE id='thumbnail:initial:'||? AND state NOT IN ('completed','partial'))",[root],|r|r.get(0))?
+    } else {
+        db.query_row("SELECT EXISTS(SELECT 1 FROM roots r WHERE EXISTS(SELECT 1 FROM scans p WHERE p.id='thumbnail:initial:'||r.id AND p.state NOT IN ('completed','partial')))",[],|r|r.get(0))?
+    })
 }
 
 // ANALYZE can make SQLite prefer a root-index skip scan plus a temporary sort
@@ -747,7 +807,21 @@ fn cached_count(
     if let Some(Summary::Count(count)) = cache.get(db, &key)? {
         return Ok(count);
     }
-    let count = if inventory_query(query) && !query.include_missing {
+    let preparing = initial_preparation_active(db, query)?;
+    // Every matching row belongs to one timeline bucket. Reuse that exact
+    // summary if it arrived first, but retain lagging inventory-count semantics.
+    let buckets = if !inventory_query(query) || query.include_missing || preparing {
+        cache.get(db, &format!("buckets:{hash}"))?
+    } else {
+        None
+    };
+    let count = if let Some(Summary::Buckets(buckets)) = buckets {
+        buckets.iter().try_fold(0u32, |total, bucket| {
+            total
+                .checked_add(bucket.count)
+                .ok_or_else(|| invalid("Date count exceeds the supported catalog size."))
+        })?
+    } else if inventory_query(query) && !query.include_missing && !preparing {
         if let Some(root) = &query.root_id {
             db.query_row(
                 "SELECT coalesce(sum(file_count),0) FROM roots WHERE id=?",
@@ -810,6 +884,8 @@ pub fn seek_asset(
     };
     catalog.cached(move |db,cache| {
         let total = cached_count(db,cache,&query,&where_sql,&values,&hash)?;
+        let (where_sql, scoped_values) = narrow_name_scope(db, &query, where_sql, values, Some(total))?;
+        values = scoped_values;
         let key: Value = db.query_row(&format!("SELECT {column} FROM assets WHERE id=?"), [&id], |r| r.get(0)).optional()?.ok_or_else(|| invalid("This photo is no longer in the catalog."))?;
         values.extend([key,id.into()]);
         let mut assets = db.prepare(&format!("SELECT {ASSET_COLUMNS} FROM {source} WHERE {where_sql} AND ({column},id){cmp}(?,?) ORDER BY {column} {order},id {order} LIMIT {}",limit+1))?.query_map(params_from_iter(values),asset_row)?.collect::<rusqlite::Result<Vec<_>>>()?;
@@ -864,16 +940,18 @@ pub fn buckets(catalog: &Catalog, query: AssetQuery) -> Result<Vec<DateBucket>> 
     };
     let hash = query_hash(&query)?;
     let key = format!("buckets:{hash}");
-    let exact_count_key =
-        (!inventory_query(&query) || query.include_missing).then(|| format!("count:{hash}"));
     catalog.cached(move |db,cache| {
+        let exact_count_key = (!inventory_query(&query) || query.include_missing || initial_preparation_active(db,&query)?).then(||format!("count:{hash}"));
         if let Some(Summary::Buckets(buckets)) = cache.get(db, &key)? { return Ok(buckets); }
-        if let Some(count_key) = &exact_count_key
-            && matches!(cache.get(db, count_key)?, Some(Summary::Count(0))) {
+        let known_count = if let Some(count_key) = &exact_count_key {
+            match cache.get(db, count_key)? { Some(Summary::Count(count)) => Some(count), _ => None }
+        } else { None };
+        if known_count == Some(0) {
             cache.insert(key, Summary::Buckets(Vec::new()));
             return Ok(Vec::new());
         }
 
+        let (where_sql, values) = narrow_name_scope(db, &query, where_sql, values, known_count)?;
         let rows = db.prepare(&format!("SELECT CASE WHEN length({date_column})<10 THEN 'Undated' ELSE substr({date_column},1,7) END AS period,count(*) FROM assets WHERE {where_sql} GROUP BY period ORDER BY (period='Undated'),period DESC"))?
             .query_map(params_from_iter(values), |r| Ok((r.get::<_,String>(0)?,r.get::<_,u32>(1)?)))?
             .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -1174,10 +1252,11 @@ pub fn preview_state_for_edge(
         } else {
             ("ready", None)
         };
-        db.execute(
-            "UPDATE assets SET preview_state=?,preview_error=? WHERE id=? AND revision=?",
+        let changed = db.execute(
+            "UPDATE assets SET preview_state=?1,preview_error=?2 WHERE id=?3 AND revision=?4 AND (preview_state<>?1 OR preview_error IS NOT ?2)",
             params![state, encoded, key.asset_id, key.revision],
         )?;
+        if changed != 0 { bump(db)?; }
         Ok(())
     })
 }
@@ -1329,9 +1408,37 @@ pub fn finish_maintenance(
 // migration and, critically, no scan reconciliation/last_scan changes.
 pub fn begin_thumbnail_job(catalog: &Catalog, root_id: String) -> Result<ScanJob> {
     catalog.call(move |db| {
-        let id = format!("thumbnail:{}", uuid::Uuid::new_v4());
-        db.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?,?,'queued','Waiting to generate tiny previews',?)", params![id,root_id,now()])?;
+        let initial = format!("thumbnail:initial:{root_id}");
+        let unfinished:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM scans WHERE id=? AND state NOT IN ('completed','partial'))",[&initial],|r|r.get(0))?;
+        let id = if unfinished {initial} else {format!("thumbnail:{}", uuid::Uuid::new_v4())};
+        db.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?,?,'queued','Waiting to generate tiny previews',?) ON CONFLICT(id) DO UPDATE SET state='queued',discovered=0,indexed=0,skipped=0,errors=0,message=excluded.message", params![id,root_id,now()])?;
+        bump(db)?;
         Ok(db.query_row("SELECT * FROM scans WHERE id=?",[id],job_row)?)
+    })
+}
+
+pub fn stop_initial_preparation(
+    catalog: &Catalog,
+    root: String,
+    state: String,
+    message: String,
+) -> Result<bool> {
+    catalog.call(move|db| {
+        let changed=db.execute("UPDATE scans SET state=?,message=? WHERE id='thumbnail:initial:'||? AND state='queued'",params![state,message,root])?;
+        if changed!=0 {bump(db)?;}
+        Ok(changed!=0)
+    })
+}
+
+pub fn initial_preparation_job(catalog: &Catalog, root: String) -> Result<Option<ScanJob>> {
+    catalog.call(move |db| {
+        Ok(db
+            .query_row(
+                "SELECT * FROM scans WHERE id='thumbnail:initial:'||?",
+                [root],
+                job_row,
+            )
+            .optional()?)
     })
 }
 pub fn thumbnail_inventory(catalog: &Catalog, root_id: String) -> Result<(i64, u32)> {
@@ -1354,13 +1461,21 @@ pub fn thumbnail_page(
 pub fn thumbnail_job_state(
     catalog: &Catalog,
     id: String,
-    state: String,
-    message: String,
+    mut state: String,
+    mut message: String,
 ) -> Result<()> {
     if !id.starts_with("thumbnail:") {
         return Err(invalid("Invalid thumbnail job."));
     }
     catalog.call(move |db| {
+        if let Some(root)=id.strip_prefix("thumbnail:initial:")
+            && matches!(state.as_str(),"completed"|"partial") {
+            let pending:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM assets WHERE root_id=? AND is_media=1 AND presence NOT IN ('excluded','missing') AND preview_state IN ('pending','placeholder'))",[root],|r|r.get(0))?;
+            if pending {
+                state="failed".into();
+                message="Photos changed while previews were being prepared. Resume previews to include the remaining photos.".into();
+            }
+        }
         db.execute(
             "UPDATE scans SET state=?,message=? WHERE id=?",
             params![state, message, id],

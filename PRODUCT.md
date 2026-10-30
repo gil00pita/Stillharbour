@@ -63,3 +63,17 @@ Text list defaults to actual Modified Date without repeated provenance subtitles
 ## Balanced gallery refinement — 2026-10-28
 
 Keep the established photo-first canvas and dark native shell. The owner-requested engineering refinement balances alternative justified row breaks in the bounded retained window, makes panorama presentation less cramped, keeps sparse final rows restrained, and uses compact fully named date captions when space is narrow. Resize updates coalesce per frame while retaining the visible photo anchor. This refines existing browsing, not preservation workflows or the deferred similarity/cache/scheduling scope.
+
+## First scan preview preparation — 2026-10-30
+
+Owner first-scan revision (2026-10-30): the initial Photos/Tags collection waits for generated tiny previews or explicit unavailable outcomes, while raw catalog discovery remains early. A temporary top banner shows indeterminate discovery, then counted preview preparation and remaining media. Pausing/restarting retains the indexed collection and requires explicit resume; existing completed libraries and image-free Text list behavior remain intact. This supersedes the earlier removal of scan banners only for active/paused preparation; header Jobs and its history remain unchanged. Details: docs/INITIAL_LIBRARY_PREPARATION.md and ADR-0016.
+
+## Single-photo viewing — 2026-10-30
+
+Open photos within the page while keeping navigation usable. Expand from the thumbnail, close with a reverse transition from X/Escape, and show a loading-only glare. Keep explicit cached-preview failures and bounded recovery; this does not certify original integrity or authorize original changes. See docs/VIEWER_PRESENTATION.md.
+
+## Original viewing and favorites — 2026-10-30
+
+Single-photo viewing loads actual original bytes for supported static JPEG/PNG/WebP images within the bounded 32-MiB/32-million-pixel envelope, retaining a clearly labelled preview fallback for offline/unsupported/error cases. The routine cached-preview banner is removed for loaded originals. X is at the top right; the bottom heart fills after a confirmed catalog favorite and respects Reduced Motion. See docs/ORIGINAL_IMAGE_VIEWING.md; this is not broad format, integrity or archival-fidelity certification.
+
+Viewer controls follow-up (2026-10-30): a floating icon bar above the heart groups Zoom out/in, Fit, Info and Filmstrip, retaining accessible tooltips, the slider and percentage. Keep the photo/menu visible and all existing source/favorite safety behavior.

@@ -57,12 +57,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         LibraryResponse::decl(&config),
     ];
     let mut output = String::from(
-        "// Generated from crates/core/src/{contract,domain,preferences,library/model,rendition}.rs. Run npm run bindings.\n",
+        "// Generated from crates/core/src/{contract,domain,preferences,library/{model,original},rendition}.rs. Run npm run bindings.\n",
     );
     output.push_str(&format!(
         "export const FOUNDATION_COMMAND = {FOUNDATION_COMMAND:?};\n"
     ));
     output.push_str(&format!("export const LIBRARY_COMMAND = {LIBRARY_COMMAND:?};\nexport const THUMBNAIL_POLICY = {:?};\n",stillharbour_core::library::THUMBNAIL_POLICY));
+    output.push_str(&format!(
+        "export const ORIGINAL_IMAGE_POLICY = {:?};\n",
+        stillharbour_core::library::ORIGINAL_IMAGE_POLICY
+    ));
     output.push_str(&format!(
         "export const DEFAULT_PHOTO_EXTENSIONS: string[] = {};\n",
         serde_json::to_string(DEFAULT_PHOTO_EXTENSIONS)?

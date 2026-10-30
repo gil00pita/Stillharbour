@@ -52,6 +52,9 @@ impl Default for ScanFilter {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct LibraryRoot {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub preparing_previews: Option<bool>,
     pub id: String,
     pub label: String,
     pub display_path: String,
@@ -162,6 +165,9 @@ pub struct FolderEntry {
 pub struct AssetQuery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub defer_pending_previews: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub directory_id: Option<String>,
     pub root_id: Option<String>,
     pub folder: String,
@@ -180,6 +186,7 @@ pub struct AssetQuery {
 impl Default for AssetQuery {
     fn default() -> Self {
         Self {
+            defer_pending_previews: None,
             directory_id: None,
             root_id: None,
             folder: String::new(),

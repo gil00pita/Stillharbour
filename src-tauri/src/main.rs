@@ -398,6 +398,22 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "initial_previews_hold" | "initial_previews_release" => {
+            let fixture = state
+                .fixture
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Fixture unavailable."))?;
+            if fixture.is_none() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate an owned fixture first.",
+                ));
+            }
+            state
+                .library
+                .hold_initial_previews_for_probe(action == "initial_previews_hold");
+            Ok(serde_json::json!({"held":action=="initial_previews_hold"}))
+        }
         "start" => {
             stillharbour_core::performance::enable();
             Ok(serde_json::json!({"pid":std::process::id()}))
@@ -560,6 +576,51 @@ fn main() {
         library_request
     ]);
     builder
+        .register_asynchronous_uri_scheme_protocol("original", |context, request, responder| {
+            let library = context.app_handle().state::<Foundation>().library.clone();
+            let allowed =
+                context.webview_label() == "main" && request.method() == tauri::http::Method::GET;
+            tauri::async_runtime::spawn_blocking(move || {
+                let result = (|| {
+                    if !allowed {
+                        return Err(AppError::new(
+                            ErrorCode::InvalidInput,
+                            "Unauthorized original-image request.",
+                        ));
+                    }
+                    let parts: Vec<_> = request
+                        .uri()
+                        .path()
+                        .split('/')
+                        .filter(|s| !s.is_empty())
+                        .collect();
+                    if parts.len() != 3 {
+                        return Err(AppError::new(
+                            ErrorCode::InvalidInput,
+                            "Invalid original-image URL.",
+                        ));
+                    }
+                    library.original_image(parts[0].into(), parts[1].into(), parts[2])
+                })();
+                let response = match result {
+                    Ok(image) => tauri::http::Response::builder()
+                        .status(200)
+                        .header("Content-Type", image.mime)
+                        .header("X-Content-Type-Options", "nosniff")
+                        .header("Cache-Control", "no-store")
+                        .header("Content-Security-Policy", "default-src 'none'; sandbox")
+                        .body(image.bytes),
+                    Err(_) => tauri::http::Response::builder()
+                        .status(404)
+                        .header("Content-Type", "text/plain")
+                        .header("Cache-Control", "no-store")
+                        .body(Vec::new()),
+                };
+                if let Ok(response) = response {
+                    responder.respond(response);
+                }
+            });
+        })
         .register_asynchronous_uri_scheme_protocol("thumbnail", |context, request, responder| {
             let library = context.app_handle().state::<Foundation>().library.clone();
             let allowed = context.webview_label() == "main";
@@ -604,6 +665,7 @@ fn main() {
                         .body(bytes),
                     Err(_) => tauri::http::Response::builder()
                         .status(404)
+                        .header("Cache-Control", "no-store")
                         .header("Content-Type", "text/plain")
                         .body(Vec::new()),
                 };

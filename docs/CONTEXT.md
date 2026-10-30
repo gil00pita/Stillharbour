@@ -1,5 +1,9 @@
 # Library vocabulary
 
+**Initial preparation:** the first discovery and preview preparation for a registered photo folder. Catalog observations can exist before the photo is ready to browse; stopping preparation retains those observations for an explicit resume.
+
+**Preview readiness:** availability of a generated rendition for browsing, or an explicit unavailable-preview outcome. It is separate from original-file integrity, accessibility and backup verification.
+
 | Term                 | Meaning                                                                                                                                                                                 |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Registered root      | A selected photo folder indexed under its saved scope. Its availability can change independently of its retained contents.                                                              |

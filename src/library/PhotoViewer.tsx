@@ -1,4 +1,7 @@
+import { usePhotoMotion, type PhotoOrigin } from './viewerMotion';
+import { CachedPreviewImage } from './CachedPreviewImage';
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -17,7 +20,9 @@ import {
 import { errorMessage, libraryData } from '../ipc';
 import { nearbyPhotos, useViewerNeighbors } from './useViewerNeighbors';
 import { Inspector } from './Inspector';
-import { ViewerImage } from './ViewerImage';
+import { OriginalPhoto } from './OriginalPhoto';
+import { FavoriteHeart } from './FavoriteHeart';
+import { ViewerControls } from './ViewerControls';
 import { previewEdges, previewKey, previewUrl, usePreviews } from './previews';
 
 export function PhotoViewer({
@@ -28,8 +33,10 @@ export function PhotoViewer({
   onClose,
   onAnnotate,
   onError,
+  origin,
 }: {
   initial: AssetSummary;
+  origin?: PhotoOrigin | undefined;
   pageAssets: AssetSummary[];
   query: AssetQuery;
   status: LibraryStatus;
@@ -38,16 +45,41 @@ export function PhotoViewer({
   onError: (error: unknown) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const close = useRef<(() => void) | null>(null);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  function requestClose() {
+    close.current?.();
+  }
   const infoButton = useRef<HTMLButtonElement>(null);
   const [asset, setAsset] = useState(initial);
+  const assetKey = `${asset.id}:${asset.revision}`;
+  const [zoomState, setZoom] = useState({ key: assetKey, value: 1 });
+  const zoom = zoomState.key === assetKey ? zoomState.value : 1;
+  const [originalReadyKey, setOriginalReadyKey] = useState<string | null>(null);
+  const originalReady = originalReadyKey === assetKey;
+  const originalReadiness = useCallback(
+    (ready: boolean) => setOriginalReadyKey(ready ? assetKey : null),
+    [assetKey],
+  );
+  const currentAssetIdRef = useRef(initial.id);
+  useLayoutEffect(() => {
+    currentAssetIdRef.current = asset.id;
+  }, [asset.id]);
   const [info, setInfo] = useState(false);
   const [filmstrip, setFilmstrip] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState<string | null>(null);
+  const stopCelebration = useCallback(() => setCelebrate(null), []);
+  function navigate(next: AssetSummary) {
+    setCelebrate(null);
+    setActionError(null);
+    setZoom({ key: `${next.id}:${next.revision}`, value: 1 });
+    setOriginalReadyKey(null);
+    setAsset(next);
+  }
+  const [actionError, setActionError] = useState<{ id: string; message: string } | null>(null);
   useEffect(() => {
-    const element = dialog.current;
-    if (element && !element.open) element.showModal();
-    return () => element?.close();
+    closeButton.current?.focus({ preventScroll: true });
   }, []);
   const { context, retry: retryNavigation } = useViewerNeighbors(asset.id, query);
   const nearby = nearbyPhotos(pageAssets, asset, context?.data);
@@ -69,6 +101,12 @@ export function PhotoViewer({
     infoButton.current?.focus();
   }
   function keyDown(event: KeyboardEvent<HTMLDialogElement>) {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      if (info) closeInfo();
+      else requestClose();
+      return;
+    }
     if (
       event.target instanceof HTMLInputElement ||
       event.target instanceof HTMLTextAreaElement ||
@@ -77,11 +115,11 @@ export function PhotoViewer({
       return;
     if (event.key === 'ArrowRight' && context?.data?.next) {
       event.preventDefault();
-      setAsset(context.data.next);
+      navigate(context.data.next);
     }
     if (event.key === 'ArrowLeft' && context?.data?.previous) {
       event.preventDefault();
-      setAsset(context.data.previous);
+      navigate(context.data.previous);
     }
   }
   async function favorite() {
@@ -91,92 +129,116 @@ export function PhotoViewer({
       await onAnnotate({ favorite: !asset.favorite, rating: null, tags: null }, asset.id);
       const detail = await libraryData({ kind: 'detail', asset_id: asset.id }, 'detail');
       setAsset((current) => (current.id === detail.asset.id ? detail.asset : current));
+      if (detail.asset.favorite && currentAssetIdRef.current === detail.asset.id)
+        setCelebrate(detail.asset.id);
     } catch (error) {
-      setActionError(errorMessage(error));
+      setActionError({ id: asset.id, message: errorMessage(error) });
     } finally {
       setBusy(false);
     }
   }
+  const notice = context?.error ?? (actionError?.id === asset.id ? actionError.message : null);
   return (
     <dialog
+      open
       className="photo-viewer"
+      aria-modal="false"
       ref={dialog}
       aria-label="Photo viewer"
       onKeyDown={keyDown}
-      onCancel={(event) => {
-        event.preventDefault();
-        if (info) closeInfo();
-        else onClose();
-      }}
     >
       <header className="viewer-toolbar">
-        <button className="viewer-back" onClick={onClose}>
-          Back to gallery
-        </button>
         <h2>
           <bdi>{asset.name}</bdi>
         </h2>
-        <button aria-pressed={asset.favorite} disabled={busy} onClick={() => void favorite()}>
-          {asset.favorite ? 'Favorited' : 'Favorite'}
-        </button>
-        <button ref={infoButton} aria-pressed={info} onClick={() => setInfo((value) => !value)}>
-          Info
-        </button>
-        <button aria-pressed={filmstrip} onClick={() => setFilmstrip((value) => !value)}>
-          Filmstrip
-        </button>
         <button
           disabled
           title="Editing original files is unavailable here. Catalog edit recipes require the separate editing workflow."
         >
           Edit
         </button>
+        <button
+          className="viewer-back"
+          ref={closeButton}
+          onClick={requestClose}
+          aria-label="Close photo viewer"
+          title="Back to gallery"
+        >
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            aria-hidden="true"
+          >
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
       </header>
-      {(context?.error || actionError) && (
+      {notice && (
         <div className="viewer-notice" role="alert">
-          {context?.error ?? actionError}
+          {notice}
           {context?.error && <button onClick={retryNavigation}>Retry navigation</button>}
         </div>
       )}
-      <ViewerStatus asset={asset} status={status} />
       <div className={`viewer-body ${info ? 'with-info' : ''}`}>
         <div className="viewer-main">
           <div className="viewer-photo">
             <button
               className="viewer-previous"
               aria-label="Previous photo"
+              title="Previous photo"
               disabled={!context?.data?.previous}
               onClick={() => {
-                if (context?.data?.previous) setAsset(context.data.previous);
+                if (context?.data?.previous) navigate(context.data.previous);
               }}
             >
-              Previous
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <path d="M19 12H5m6-6-6 6 6 6" />
+              </svg>
             </button>
             <PhotoStage
               key={`${asset.id}:${asset.revision}`}
               asset={asset}
-              ready={ready}
+              origin={asset.id === initial.id ? origin : undefined}
+              closeHandleRef={close}
+              onClose={onClose}
+              zoom={zoom}
+              onOriginalReady={originalReadiness}
               results={current}
               transportError={previews.error}
-              error={
-                !ready
-                  ? (previews.error ??
-                    (current.every((item) => item?.state === 'unavailable')
-                      ? (current.find((item) => item?.error)?.error ?? 'Preview unavailable')
-                      : null))
-                  : null
-              }
               onRetry={previews.retry}
             />
             <button
               className="viewer-next"
               aria-label="Next photo"
+              title="Next photo"
               disabled={!context?.data?.next}
               onClick={() => {
-                if (context?.data?.next) setAsset(context.data.next);
+                if (context?.data?.next) navigate(context.data.next);
               }}
             >
-              Next
+              <svg
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14m-6-6 6 6-6 6" />
+              </svg>
             </button>
           </div>
           {filmstrip && (
@@ -184,7 +246,7 @@ export function PhotoViewer({
               assets={nearby}
               current={asset.id}
               previews={previews}
-              onSelect={setAsset}
+              onSelect={navigate}
             />
           )}
         </div>
@@ -199,28 +261,54 @@ export function PhotoViewer({
           />
         )}
       </div>
+      <footer className="viewer-actions">
+        <ViewerControls
+          zoom={zoom}
+          canZoom={originalReady || ready}
+          onZoom={(value) => setZoom({ key: assetKey, value })}
+          info={info}
+          filmstrip={filmstrip}
+          onInfo={() => setInfo((value) => !value)}
+          onFilmstrip={() => setFilmstrip((value) => !value)}
+          infoButtonRef={infoButton}
+        />
+        <FavoriteHeart
+          key={asset.id}
+          favorite={asset.favorite}
+          busy={busy}
+          animate={celebrate === asset.id}
+          onClick={() => void favorite()}
+          onAnimationEnd={stopCelebration}
+        />
+      </footer>
     </dialog>
   );
 }
 
 function PhotoStage({
   asset,
-  ready,
-  error,
+  zoom,
+  onOriginalReady,
   onRetry,
   results,
   transportError,
+  origin,
+  onClose,
+  closeHandleRef,
 }: {
   asset: AssetSummary;
+  origin: PhotoOrigin | undefined;
+  onClose: () => void;
+  closeHandleRef: import('react').RefObject<(() => void) | null>;
   results: (ThumbnailResult | undefined)[];
   transportError: string | null;
-  ready: boolean;
-  error: string | null;
+  zoom: number;
+  onOriginalReady: (ready: boolean) => void;
   onRetry: () => void;
 }) {
   const canvas = useRef<HTMLDivElement>(null);
+  const frame = usePhotoMotion(asset, origin, onClose, closeHandleRef);
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const [zoom, setZoom] = useState(1);
   useLayoutEffect(() => {
     const element = canvas.current;
     if (element) {
@@ -262,60 +350,22 @@ function PhotoStage({
           className="viewer-zoom-plane"
           style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
         >
-          <ViewerImage
-            asset={asset}
-            results={results}
-            transportError={transportError}
-            onRetry={onRetry}
-          />
+          <div className="viewer-image-frame" ref={frame}>
+            <OriginalPhoto
+              onReady={onOriginalReady}
+              initialSrc={origin?.src}
+              asset={asset}
+              results={results}
+              transportError={transportError}
+              onRetry={onRetry}
+            />
+          </div>
         </div>
-      </div>
-      <div className="viewer-zoom" aria-label="Preview zoom controls">
-        <button
-          disabled={zoom <= 1 || !ready || Boolean(error)}
-          onClick={() => setZoom((value) => Math.max(1, value - 0.25))}
-        >
-          Zoom out
-        </button>
-        <label>
-          Zoom
-          <input
-            type="range"
-            aria-label="Preview zoom"
-            min="100"
-            max="400"
-            step="25"
-            value={zoom * 100}
-            disabled={!ready || Boolean(error)}
-            onChange={(event) => setZoom(Number(event.target.value) / 100)}
-          />
-        </label>
-        <output>{Math.round(zoom * 100)}% of fit</output>
-        <button
-          disabled={zoom >= 4 || !ready || Boolean(error)}
-          onClick={() => setZoom((value) => Math.min(4, value + 0.25))}
-        >
-          Zoom in
-        </button>
-        <button onClick={() => setZoom(1)}>Fit</button>
       </div>
     </div>
   );
 }
 
-function ViewerStatus({ asset, status }: { asset: AssetSummary; status: LibraryStatus }) {
-  const root = status.roots.find((item) => item.id === asset.rootId);
-  const offline =
-    !root || !['online', 'scanning'].includes(root.availability) || asset.presence !== 'present';
-  return (
-    <p className="viewer-status">
-      {offline
-        ? `Cached preview — original ${asset.presence !== 'present' ? asset.presence : (root?.availability ?? 'availability unknown')}`
-        : 'Read-only cached preview'}{' '}
-      · up to {VIEWER_EDGE.toLocaleString()} px, not a full-resolution original
-    </p>
-  );
-}
 function ViewerFilmstrip({
   assets,
   current,
@@ -356,5 +406,7 @@ function FilmstripImage({
   if (failed || (!edge && (result?.state === 'unavailable' || previews.error)))
     return <span>Preview unavailable</span>;
   if (!edge) return <span>Preparing preview…</span>;
-  return <img src={previewUrl(asset, edge)} alt="" onError={() => setFailed(true)} />;
+  return (
+    <CachedPreviewImage src={previewUrl(asset, edge)} alt="" onError={() => setFailed(true)} />
+  );
 }

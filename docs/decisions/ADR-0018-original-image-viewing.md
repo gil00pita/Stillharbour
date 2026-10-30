@@ -1,0 +1,11 @@
+# ADR-0018 — Bounded original-byte photo viewing
+
+Date: 2026-10-30. Status: accepted for the owner's real-image viewer request within the read-only M1 slice.
+
+Serve original image bytes through a dedicated main-webview-only original protocol addressed by catalog asset ID, revision and generated policy constant. Never expose an arbitrary path or broaden the asset/filesystem capability. Validate native root/volume/identity and source/catalog revision before and after reading. Reuse the cancellable 32-MiB read adapter, shared interactive source reservation and supervised decoder child to establish source geometry; the child thumbnail is validation only and is not the delivered image. Return unchanged original bytes with a detected raster MIME, nosniff, sandbox and no-store headers.
+
+Admit one original read at a time, coordinate with maintenance and cancel_all, and retain existing worker input/time/memory limits. Allow static JPEG/PNG/WebP up to 32 MiB and 32,000,000 pixels; reject active/animated containers, malformed chunk bounds and over 4,096 PNG/WebP chunks. Estimated RGBA8 size is bounded below 128 MiB, not an instantaneous WebView/GPU/process-tree quota. Original requests already admitted may finish after viewer navigation; busy/unsupported/offline/over-budget reads fall back explicitly and offer retry. Broad format/platform/full-resolution color certification remains gated.
+
+The viewer retains its loaded preview until the original image's actual load event. Remove the old unconditional 2,048-pixel banner; display a compact fallback message only if original viewing fails. Keep page containment, loading glare, navigation, zoom/pan and gallery return. Move X to the right and use a bottom heart whose fill reflects a confirmed catalog favorite; animate only a successful click and honor Reduced Motion. Late favorite replies cannot animate a different photo.
+
+This supersedes the deferred renderer-original-view boundary in ADR-0010 only through this guarded route. No original mutation, native path in renderer, source conversion, cache purge, database/identity/dependency migration or broader milestone completion. See [ORIGINAL_IMAGE_VIEWING.md](../ORIGINAL_IMAGE_VIEWING.md) for scope, primary sources and actual evidence.

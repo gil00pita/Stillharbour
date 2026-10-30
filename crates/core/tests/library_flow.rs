@@ -138,6 +138,78 @@ fn register(library: &Arc<Library>, fixture: &LibraryFixture) -> ScanJob {
         .unwrap()
 }
 #[test]
+fn first_import_reveals_only_published_previews_and_preserves_sources() {
+    let fixture = LibraryFixture::generate().unwrap();
+    let before = independent_manifest(fixture.path());
+    let data = tempfile::tempdir().unwrap();
+    let (catalog, library) = open(data.path());
+    let scan = register(&library, &fixture);
+    let query = AssetQuery {
+        root_id: Some(scan.root_id.clone()),
+        defer_pending_previews: Some(true),
+        ..Default::default()
+    };
+    let initial = format!("thumbnail:initial:{}", scan.root_id);
+    let start = Instant::now();
+    let mut saw_ready = false;
+    loop {
+        let page = library.query(query.clone(), None, 240).unwrap();
+        for asset in page.assets {
+            assert_ne!(
+                asset.preview_state, "pending",
+                "An unprepared photo entered the initial collection"
+            );
+            if asset.preview_state == "ready" {
+                let bytes = library
+                    .cached_thumbnail(
+                        ThumbnailKey {
+                            asset_id: asset.id,
+                            revision: asset.revision,
+                            edge: 32,
+                        },
+                        THUMBNAIL_POLICY,
+                    )
+                    .unwrap();
+                assert!(bytes.starts_with(b"\x89PNG\r\n\x1a\n"));
+                saw_ready = true;
+            }
+        }
+        let status = library.status().unwrap();
+        let job = library.job_details(initial.clone()).unwrap().job;
+        let scanning = status.jobs.iter().any(|j| {
+            j.root_id == scan.root_id
+                && !matches!(j.kind, Some(JobKind::Thumbnails))
+                && matches!(j.state.as_str(), "running" | "queued" | "cancel_requested")
+        });
+        if !scanning && matches!(job.state.as_str(), "completed" | "partial") {
+            break;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(45),
+            "Initial preparation did not finish: {job:?}"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    // The last publication can fall between the final query and job completion.
+    let ready = library
+        .query(query, None, 240)
+        .unwrap()
+        .assets
+        .into_iter()
+        .filter(|a| a.preview_state == "ready")
+        .count();
+    assert!(saw_ready || ready > 0);
+    assert!(
+        !library.status().unwrap().roots[0]
+            .preparing_previews
+            .unwrap_or(false)
+    );
+    assert_eq!(before, independent_manifest(fixture.path()));
+    fixture.verify_unchanged().unwrap();
+    close(library, catalog);
+}
+
+#[test]
 fn native_scan_keysets_notes_previews_offline_and_restart_preserve_sources() {
     let fixture = LibraryFixture::generate().unwrap();
     let data = tempfile::tempdir().unwrap();
@@ -2107,4 +2179,113 @@ fn native_notifications_reconcile_external_add_move_remove_and_preserve_offline_
     eventually(|| library.status().unwrap().roots[0].availability == "online");
     library.cancel_all();
     fixture.verify_unchanged().unwrap();
+}
+
+#[test]
+fn original_image_returns_exact_full_size_bytes_and_rejects_stale_or_unavailable_sources() {
+    let source = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    assert_ne!(source.path(), data.path());
+    let path = source.path().join("Full-size-generated.jpg");
+    image::RgbImage::from_fn(3072, 2048, |x, y| {
+        image::Rgb([(x % 251) as u8, (y % 251) as u8, 70])
+    })
+    .save(&path)
+    .unwrap();
+    for extension in ["png", "webp"] {
+        image::RgbImage::from_pixel(128, 96, image::Rgb([20, 100, 180]))
+            .save(source.path().join(format!("Static-generated.{extension}")))
+            .unwrap();
+    }
+    let before = independent_manifest(source.path());
+    let (catalog, library) = open(data.path());
+    let scan = library
+        .register(
+            source.path().to_owned(),
+            None,
+            "Generated original".into(),
+            RootMode::Referenced,
+            ScanFilter::default(),
+        )
+        .unwrap();
+    wait(&library, &scan.id);
+    let asset = library
+        .query(
+            AssetQuery {
+                name: "Full-size-generated".into(),
+                ..Default::default()
+            },
+            None,
+            10,
+        )
+        .unwrap()
+        .assets
+        .remove(0);
+    let policy = stillharbour_core::library::ORIGINAL_IMAGE_POLICY;
+    let original = library
+        .original_image(asset.id.clone(), asset.revision.clone(), policy)
+        .unwrap();
+    assert_eq!(original.mime, "image/jpeg");
+    assert_eq!(original.bytes, std::fs::read(&path).unwrap());
+    assert_eq!(
+        image::load_from_memory(&original.bytes).unwrap().width(),
+        3072
+    );
+    for (extension, mime) in [("png", "image/png"), ("webp", "image/webp")] {
+        let name = format!("Static-generated.{extension}");
+        let image = library
+            .query(
+                AssetQuery {
+                    name: name.clone(),
+                    ..Default::default()
+                },
+                None,
+                10,
+            )
+            .unwrap()
+            .assets
+            .remove(0);
+        let response = library
+            .original_image(image.id, image.revision, policy)
+            .unwrap();
+        assert_eq!(response.mime, mime);
+        assert_eq!(
+            response.bytes,
+            std::fs::read(source.path().join(name)).unwrap()
+        );
+    }
+    assert_eq!(independent_manifest(source.path()), before);
+    assert_eq!(
+        library
+            .original_image(asset.id.clone(), "stale".into(), policy)
+            .unwrap_err()
+            .code,
+        ErrorCode::Conflict
+    );
+    assert_eq!(
+        library
+            .original_image(
+                "../Full-size-generated.jpg".into(),
+                asset.revision.clone(),
+                policy
+            )
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    assert_eq!(
+        library
+            .original_image(asset.id.clone(), asset.revision.clone(), "unapproved")
+            .unwrap_err()
+            .code,
+        ErrorCode::InvalidInput
+    );
+    // An external fixture deletion is distinct from all read-only phases.
+    std::fs::remove_file(&path).unwrap();
+    assert!(
+        library
+            .original_image(asset.id, asset.revision, policy)
+            .is_err()
+    );
+    close(library, catalog);
 }

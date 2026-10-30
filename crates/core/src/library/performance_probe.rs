@@ -134,6 +134,8 @@ pub fn measure_filtered(path: &Path, rows: u32) -> Result<Value> {
         ("none", "Generated"),
         ("narrow", "Synthetic 0000"),
         ("broad", "Synthetic"),
+        ("lateBroad", "Synthetic 099"),
+        ("lateNarrow", "Synthetic 09999"),
     ] {
         let query = AssetQuery {
             name: name.into(),
@@ -160,12 +162,60 @@ pub fn measure_filtered(path: &Path, rows: u32) -> Result<Value> {
                 json!({"pageMs":page_ms,"bucketsMs":bucket_ms,"warmBucketsMs":elapsed(start)}),
             );
         }
+        let mut timeline_first = Vec::new();
+        for _ in 0..3 {
+            catalog.cached(|_, cache| {
+                cache.reset_for_probe();
+                Ok(())
+            })?;
+            let start = Instant::now();
+            let buckets = store::buckets(&catalog, query.clone())?;
+            let buckets_ms = elapsed(start);
+            let start = Instant::now();
+            let page = store::query(&catalog, query.clone(), None, 240)?;
+            let page_ms = elapsed(start);
+            assert_eq!(page.total, matched);
+            assert_eq!(buckets.iter().map(|b| b.count).sum::<u32>(), matched);
+            timeline_first.push(json!({"pageMs":page_ms,"bucketsMs":buckets_ms}));
+        }
         let (where_sql, values) = store::query_where(&query)?;
+        let plan_query = query.clone();
         let plans = catalog.call(move |db| {
             let sql = format!("EXPLAIN QUERY PLAN SELECT CASE WHEN length(date)<10 THEN 'Undated' ELSE substr(date,1,7) END AS period,count(*) FROM assets WHERE {where_sql} GROUP BY period ORDER BY (period='Undated'),period DESC");
-            Ok(db.prepare(&sql)?.query_map(rusqlite::params_from_iter(values), |r| r.get::<_,String>(3))?.collect::<rusqlite::Result<Vec<_>>>()?)
+            let fallback = db.prepare(&sql)?.query_map(rusqlite::params_from_iter(values.clone()), |r| r.get::<_,String>(3))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            let (where_sql, values) = store::narrow_name_scope(db, &plan_query, where_sql, values, Some(matched))?;
+            let sql = format!("EXPLAIN QUERY PLAN SELECT CASE WHEN length(date)<10 THEN 'Undated' ELSE substr(date,1,7) END AS period,count(*) FROM assets WHERE {where_sql} GROUP BY period ORDER BY (period='Undated'),period DESC");
+            let buckets = db.prepare(&sql)?.query_map(rusqlite::params_from_iter(values.clone()), |r| r.get::<_,String>(3))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            let sql = format!("EXPLAIN QUERY PLAN SELECT {} FROM assets WHERE {where_sql} ORDER BY date DESC,id DESC LIMIT 241", store::ASSET_COLUMNS);
+            let page = db.prepare(&sql)?.query_map(rusqlite::params_from_iter(values), |r| r.get::<_,String>(3))?.collect::<rusqlite::Result<Vec<_>>>()?;
+            Ok((fallback, buckets, page))
         })?;
-        results.push(json!({"scope":label,"matched":matched,"samples":samples,"bucketPlan":plans}));
+        let name = name.to_owned();
+        let candidate_probe = catalog.call(move |db| {
+            let sql = "SELECT rowid FROM assets WHERE name LIKE ? ESCAPE '\\' LIMIT ?";
+            let pattern = format!("%{}%", store::escape_like(&name));
+            let plan = db
+                .prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?
+                .query_map(params![&pattern, store::NAME_CANDIDATE_LIMIT + 1], |r| {
+                    r.get::<_, String>(3)
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?;
+            let mut samples = Vec::new();
+            let mut candidates = 0;
+            for _ in 0..3 {
+                let start = Instant::now();
+                candidates = db
+                    .prepare(sql)?
+                    .query_map(params![&pattern, store::NAME_CANDIDATE_LIMIT + 1], |r| {
+                        r.get::<_, i64>(0)
+                    })?
+                    .collect::<rusqlite::Result<Vec<_>>>()?
+                    .len();
+                samples.push(elapsed(start));
+            }
+            Ok(json!({"plan":plan,"retained":candidates,"samplesMs":samples}))
+        })?;
+        results.push(json!({"scope":label,"matched":matched,"samples":samples,"timelineFirst":timeline_first,"bucketPlan":plans.0,"pageFirstBucketPlan":plans.1,"pagePlan":plans.2,"candidateProbe":candidate_probe}));
     }
     Ok(json!({"sqlite":sqlite_info(&catalog)?,"scenarios":results}))
 }
@@ -491,6 +541,498 @@ pub async fn measure_media(root: &Path, worker: &Path, working_directory: &Path)
 mod tests {
     use super::*;
     #[test]
+    fn initial_previews_are_deferred_until_published_and_survive_restart() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("Fixture.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let fixture = seed_catalog(&catalog, owned.path(), 10_000).unwrap();
+        let root = fixture["rootIds"][0].as_str().unwrap().to_owned();
+        store::begin_job(&catalog, root.clone(), ScanFilter::default()).unwrap();
+        let all = AssetQuery {
+            root_id: Some(root.clone()),
+            name: "Synthetic 0000001".into(),
+            ..Default::default()
+        };
+        let mut wire = serde_json::to_value(&all).unwrap();
+        wire["deferPendingPreviews"] = json!(true);
+        let visual: AssetQuery = serde_json::from_value(wire).unwrap();
+        let whole_root = AssetQuery {
+            root_id: Some(root.clone()),
+            defer_pending_previews: Some(true),
+            ..Default::default()
+        };
+        assert_eq!(
+            store::query(&catalog, whole_root.clone(), None, 240)
+                .unwrap()
+                .total,
+            0,
+            "Initial pending rows must not use the raw inventory counter"
+        );
+        let empty_selection = store::freeze(&catalog, whole_root.clone()).unwrap();
+        assert_eq!(empty_selection.count, 0);
+        assert!(
+            store::query(&catalog, visual.clone(), None, 240)
+                .unwrap()
+                .assets
+                .is_empty()
+        );
+        assert!(store::buckets(&catalog, visual.clone()).unwrap().is_empty());
+        let original = store::query(&catalog, all, None, 240)
+            .unwrap()
+            .assets
+            .remove(0);
+        store::preview_state_for_edge(
+            &catalog,
+            ThumbnailKey {
+                asset_id: original.id.clone(),
+                revision: original.revision.clone(),
+                edge: 32,
+            },
+            None,
+        )
+        .unwrap();
+        let visible = store::query(&catalog, visual.clone(), None, 240).unwrap();
+        assert_eq!(visible.total, 1);
+        assert_eq!(visible.assets[0].id, original.id);
+        assert_eq!(
+            store::query(&catalog, whole_root.clone(), None, 240)
+                .unwrap()
+                .total,
+            1
+        );
+        assert_eq!(
+            store::freeze(&catalog, whole_root.clone()).unwrap().count,
+            1
+        );
+        let seek = store::seek_asset(
+            &catalog,
+            whole_root.clone(),
+            original.id.clone(),
+            AssetSeekPosition::At,
+            240,
+        )
+        .unwrap();
+        assert_eq!(seek.total, 1);
+        assert_eq!(seek.assets[0].id, original.id);
+        let neighbors = store::neighbors(&catalog, whole_root, original.id.clone()).unwrap();
+        assert!(neighbors.next.is_none() && neighbors.previous.is_none());
+        assert_eq!(
+            store::buckets(&catalog, visual.clone())
+                .unwrap()
+                .iter()
+                .map(|b| b.count)
+                .sum::<u32>(),
+            1
+        );
+        let initial = format!("thumbnail:initial:{root}");
+        store::thumbnail_job_state(
+            &catalog,
+            initial.clone(),
+            "canceled".into(),
+            "Fixture cancellation".into(),
+        )
+        .unwrap();
+        store::begin_job(&catalog, root.clone(), ScanFilter::default()).unwrap();
+        assert_eq!(
+            store::initial_preparation_job(&catalog, root.clone())
+                .unwrap()
+                .unwrap()
+                .state,
+            "canceled",
+            "A reconciliation scan must not undo a paused preparation"
+        );
+        drop(catalog);
+        let catalog = Catalog::open(path).unwrap();
+        assert_eq!(
+            serde_json::to_value(store::root(&catalog, root.clone()).unwrap().view).unwrap()["preparingPreviews"],
+            true
+        );
+        assert_eq!(store::query(&catalog, visual, None, 240).unwrap().total, 1);
+        assert_eq!(
+            store::begin_thumbnail_job(&catalog, root.clone())
+                .unwrap()
+                .id,
+            initial
+        );
+        store::thumbnail_job_state(
+            &catalog,
+            initial.clone(),
+            "completed".into(),
+            "Fixture completion attempt".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            store::job(&catalog, initial.clone()).unwrap().state,
+            "failed",
+            "Incomplete preparation must not expose pending photos"
+        );
+        let failure=json!({"policy":crate::library::THUMBNAIL_POLICY,"message":"Fixture unavailable","edges":{"32":"Fixture unavailable"}}).to_string();
+        catalog.call(move|db| {
+            db.execute("UPDATE assets SET preview_state='unavailable',preview_error=? WHERE root_id=? AND preview_state='pending'",params![failure,root])?;
+            Ok(())
+        }).unwrap();
+        store::thumbnail_job_state(
+            &catalog,
+            initial.clone(),
+            "partial".into(),
+            "Fixture previews resolved with failures".into(),
+        )
+        .unwrap();
+        assert_eq!(store::job(&catalog, initial).unwrap().state, "partial");
+    }
+
+    fn assert_filename_query_parity(catalog: &Catalog, query: AssetQuery) {
+        let (where_sql, values) = store::query_where(&query).unwrap();
+        let order = match query.sort.as_str() {
+            "name" => "name ASC,id ASC",
+            "size" => "bytes DESC,id DESC",
+            "modified" => "coalesce(modified_at,'') DESC,id DESC",
+            "added" => "added_at DESC,id DESC",
+            _ => "date DESC,id DESC",
+        };
+        let expected = catalog
+            .call(move |db| {
+                Ok(db
+                    .prepare(&format!(
+                        "SELECT {} FROM assets WHERE {where_sql} ORDER BY {order}",
+                        store::ASSET_COLUMNS
+                    ))?
+                    .query_map(rusqlite::params_from_iter(values), store::asset_row)?
+                    .collect::<rusqlite::Result<Vec<_>>>()?)
+            })
+            .unwrap();
+        let mut actual = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = store::query(catalog, query.clone(), cursor, 240).unwrap();
+            assert_eq!(page.total as usize, expected.len());
+            actual.extend(page.assets);
+            assert!(actual.len() <= expected.len());
+            cursor = page.next_cursor;
+            if cursor.is_none() {
+                break;
+            }
+        }
+        assert_eq!(
+            serde_json::to_value(&actual).unwrap(),
+            serde_json::to_value(&expected).unwrap()
+        );
+        assert_eq!(
+            store::buckets(catalog, query.clone())
+                .unwrap()
+                .iter()
+                .map(|b| b.count)
+                .sum::<u32>() as usize,
+            expected.len()
+        );
+        if !expected.is_empty() {
+            let middle = expected.len() / 2;
+            let id = expected[middle].id.clone();
+            let at =
+                store::seek_asset(catalog, query.clone(), id.clone(), AssetSeekPosition::At, 3)
+                    .unwrap();
+            assert_eq!(at.total as usize, expected.len());
+            assert_eq!(
+                serde_json::to_value(at.assets).unwrap(),
+                serde_json::to_value(&expected[middle..expected.len().min(middle + 3)]).unwrap()
+            );
+            let before = store::seek_asset(
+                catalog,
+                query.clone(),
+                id.clone(),
+                AssetSeekPosition::Before,
+                3,
+            )
+            .unwrap();
+            assert_eq!(
+                serde_json::to_value(before.assets).unwrap(),
+                serde_json::to_value(&expected[middle.saturating_sub(3)..middle]).unwrap()
+            );
+            let neighbors = store::neighbors(catalog, query, id).unwrap();
+            assert_eq!(
+                neighbors.previous.map(|a| a.id),
+                middle.checked_sub(1).map(|i| expected[i].id.clone())
+            );
+            assert_eq!(
+                neighbors.next.map(|a| a.id),
+                expected.get(middle + 1).map(|a| a.id.clone())
+            );
+        }
+    }
+
+    #[test]
+    fn filename_scopes_preserve_thresholds_filters_cursors_and_native_keys() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("Fixture.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let fixture = seed_catalog(&catalog, owned.path(), 10_000).unwrap();
+        catalog
+            .call(|db| {
+                db.execute(
+                    "UPDATE assets SET name='Threshold' WHERE CAST(native_file AS INTEGER)<=1024",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        for count in [1024, 1025] {
+            if count == 1025 {
+                // No revision bump: the cache and candidate scope must both refresh.
+                let external = rusqlite::Connection::open(&path).unwrap();
+                external
+                    .execute(
+                        "UPDATE assets SET name='Threshold' WHERE native_file='1025'",
+                        [],
+                    )
+                    .unwrap();
+            }
+            for sort in ["capture", "name", "size", "modified", "added"] {
+                assert_filename_query_parity(
+                    &catalog,
+                    AssetQuery {
+                        name: "THRESHOLD".into(),
+                        sort: sort.into(),
+                        ..Default::default()
+                    },
+                );
+            }
+            assert_eq!(
+                store::query(
+                    &catalog,
+                    AssetQuery {
+                        name: "Threshold".into(),
+                        ..Default::default()
+                    },
+                    None,
+                    1
+                )
+                .unwrap()
+                .total,
+                count
+            );
+            if count == 1025 {
+                // A small visible total does not bound excluded name matches.
+                // The complete lookahead must fall back rather than drop id1025.
+                catalog
+                    .call(|db| {
+                        db.execute(
+                            "UPDATE assets SET presence='excluded' WHERE native_file='1'",
+                            [],
+                        )?;
+                        Ok(())
+                    })
+                    .unwrap();
+                assert_filename_query_parity(
+                    &catalog,
+                    AssetQuery {
+                        name: "Threshold".into(),
+                        ..Default::default()
+                    },
+                );
+                catalog
+                    .call(|db| {
+                        db.execute(
+                            "UPDATE assets SET presence='present' WHERE native_file='1'",
+                            [],
+                        )?;
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+        }
+        catalog
+            .call(|db| {
+                db.execute(
+                    "UPDATE assets SET name=?,favorite=1,rowid=? WHERE native_file='1'",
+                    params!["A%_\\É'Photo", i64::MAX - 7],
+                )?;
+                db.execute(
+                    "UPDATE assets SET presence='missing' WHERE native_file='2'",
+                    [],
+                )?;
+                db.execute(
+                    "UPDATE assets SET presence='excluded' WHERE native_file='3'",
+                    [],
+                )?;
+                db.execute("UPDATE assets SET is_media=0 WHERE native_file='4'", [])?;
+                db.execute(
+                    "UPDATE assets SET folder='Trip',folder_native=? WHERE native_file='5'",
+                    [b"Trip".as_slice()],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        let root = fixture["rootIds"][1].as_str().unwrap().to_owned();
+        for query in [
+            AssetQuery {
+                name: "Threshold".into(),
+                ..Default::default()
+            },
+            AssetQuery {
+                name: "Threshold".into(),
+                include_missing: true,
+                ..Default::default()
+            },
+            AssetQuery {
+                name: "Threshold".into(),
+                root_id: Some(root.clone()),
+                tag: "Fixture tag".into(),
+                ..Default::default()
+            },
+            AssetQuery {
+                name: "Threshold".into(),
+                root_id: Some(root.clone()),
+                directory_id: Some(super::super::directory::encode_id(b"")),
+                ..Default::default()
+            },
+            AssetQuery {
+                name: "Threshold".into(),
+                root_id: Some(root),
+                folder: "Trip".into(),
+                ..Default::default()
+            },
+            AssetQuery {
+                name: "Synthetic 0002".into(),
+                extension: "jpg".into(),
+                from_date: "1960-01-01".into(),
+                through_date: "2024-12-31".into(),
+                min_bytes: "2000".into(),
+                max_bytes: "10000".into(),
+                sort: "size".into(),
+                ..Default::default()
+            },
+            AssetQuery {
+                name: "%_\\É'".into(),
+                favorites_only: true,
+                ..Default::default()
+            },
+            AssetQuery {
+                name: "'%' OR 1=1--".into(),
+                ..Default::default()
+            },
+        ] {
+            assert_filename_query_parity(&catalog, query);
+        }
+    }
+
+    #[test]
+    fn selective_filename_projection_avoids_full_asset_scans() {
+        let owned = tempfile::tempdir().unwrap();
+        let catalog = Catalog::open(owned.path().join("Fixture.stillharbour")).unwrap();
+        seed_catalog(&catalog, owned.path(), 10_000).unwrap();
+        let query = AssetQuery {
+            name: "Synthetic 0000".into(),
+            ..Default::default()
+        };
+        // Isolate the ordered projection after the exact count is available;
+        // cold counts deliberately retain the ordinary SQL scan.
+        assert_eq!(
+            store::query(&catalog, query.clone(), None, 240)
+                .unwrap()
+                .total,
+            999
+        );
+        catalog
+            .call(|db| {
+                db.execute_batch("PRAGMA shrink_memory")?;
+                Ok(())
+            })
+            .unwrap();
+        let before = catalog
+            .call(|db| Ok(performance::pager_counters(db).unwrap()))
+            .unwrap();
+        let page = store::query(&catalog, query, None, 240).unwrap();
+        let after = catalog
+            .call(|db| Ok(performance::pager_counters(db).unwrap()))
+            .unwrap();
+        assert_eq!(page.total, 999);
+        assert_eq!(page.assets.len(), 240);
+        assert!(page.next_cursor.is_some());
+        let bytes = (after.0 - before.0) as u64 * before.2;
+        eprintln!("Selective filename projection logical pager bytes: {bytes}");
+        assert!(
+            bytes < 2 * 1024 * 1024,
+            "Selective filename page read {bytes} logical pager bytes"
+        );
+    }
+
+    #[test]
+    fn positive_timeline_supplies_exact_page_and_seek_counts() {
+        let owned = tempfile::tempdir().unwrap();
+        let catalog = Catalog::open(owned.path().join("Fixture.stillharbour")).unwrap();
+        seed_catalog(&catalog, owned.path(), 10_000).unwrap();
+        for sort in ["capture", "name", "size", "modified", "added"] {
+            let query = AssetQuery {
+                name: "Synthetic".into(),
+                sort: sort.into(),
+                ..Default::default()
+            };
+            let buckets = store::buckets(&catalog, query.clone()).unwrap();
+            assert_eq!(buckets.iter().map(|b| b.count).sum::<u32>(), 10_000);
+            catalog
+                .call(|db| {
+                    db.execute_batch("PRAGMA shrink_memory")?;
+                    Ok(())
+                })
+                .unwrap();
+            let before = catalog
+                .call(|db| Ok(performance::pager_counters(db).unwrap()))
+                .unwrap();
+            let page = store::query(&catalog, query.clone(), None, 1).unwrap();
+            let seek = store::seek_asset(
+                &catalog,
+                query.clone(),
+                page.assets[0].id.clone(),
+                AssetSeekPosition::At,
+                1,
+            )
+            .unwrap();
+            assert_eq!(page.total, 10_000);
+            assert_eq!(seek.total, 10_000);
+            assert_eq!(seek.assets[0].id, page.assets[0].id);
+            let after = catalog
+                .call(|db| Ok(performance::pager_counters(db).unwrap()))
+                .unwrap();
+            let bytes = (after.0 - before.0) as u64 * before.2;
+            // Measure the identical ordered projection with its count already
+            // cached. Selective sorts can still scan; isolate the redundant count.
+            catalog
+                .call(|db| {
+                    db.execute_batch("PRAGMA shrink_memory")?;
+                    Ok(())
+                })
+                .unwrap();
+            let before = catalog
+                .call(|db| Ok(performance::pager_counters(db).unwrap()))
+                .unwrap();
+            let reference = store::query(&catalog, query.clone(), None, 1).unwrap();
+            store::seek_asset(
+                &catalog,
+                query,
+                reference.assets[0].id.clone(),
+                AssetSeekPosition::At,
+                1,
+            )
+            .unwrap();
+            let after = catalog
+                .call(|db| Ok(performance::pager_counters(db).unwrap()))
+                .unwrap();
+            let reference_bytes = (after.0 - before.0) as u64 * before.2;
+            assert_eq!(
+                serde_json::to_value(&page).unwrap(),
+                serde_json::to_value(&reference).unwrap()
+            );
+            eprintln!(
+                "Positive timeline/{sort} page+seek logical pager bytes: {bytes}; cached-count reference: {reference_bytes}"
+            );
+            assert!(
+                bytes <= reference_bytes + 64 * 1024,
+                "Positive timeline/{sort} repeated {bytes} logical pager bytes"
+            );
+        }
+    }
+
+    #[test]
     fn exact_empty_pages_do_not_repeat_the_asset_scan() {
         let owned = tempfile::tempdir().unwrap();
         let catalog = Catalog::open(owned.path().join("Fixture.stillharbour")).unwrap();
@@ -535,15 +1077,31 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        let partial = store::query(&catalog, AssetQuery::default(), None, 240).unwrap();
-        assert_eq!(partial.total, 0);
-        assert_eq!(partial.assets.len(), 240);
         assert_eq!(
             store::buckets(&catalog, AssetQuery::default())
                 .unwrap()
                 .iter()
                 .map(|b| b.count)
                 .sum::<u32>(),
+            10_000
+        );
+        let partial = store::query(&catalog, AssetQuery::default(), None, 240).unwrap();
+        assert_eq!(partial.total, 0);
+        assert_eq!(partial.assets.len(), 240);
+        let exact = AssetQuery {
+            include_missing: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            store::buckets(&catalog, exact.clone())
+                .unwrap()
+                .iter()
+                .map(|b| b.count)
+                .sum::<u32>(),
+            10_000
+        );
+        assert_eq!(
+            store::query(&catalog, exact, None, 240).unwrap().total,
             10_000
         );
     }
@@ -671,15 +1229,21 @@ mod tests {
                 .map(|b| b.count)
                 .sum::<u32>()
         };
-        assert_eq!(count(tagged.clone()), 3333);
         assert_eq!(bucket_count(tagged.clone()), 3333);
+        assert_eq!(count(tagged.clone()), 3333);
         assert_eq!(bucket_count(AssetQuery::default()), 10_000);
         let root_query = AssetQuery {
             root_id: Some(fixture["rootIds"][1].as_str().unwrap().into()),
             ..Default::default()
         };
+        assert_eq!(bucket_count(root_query.clone()), 2000);
         assert_eq!(count(root_query.clone()), 2000);
-        assert_eq!(bucket_count(root_query), 2000);
+        let root_tagged = AssetQuery {
+            tag: tagged.tag.clone(),
+            ..root_query
+        };
+        assert_eq!(bucket_count(root_tagged.clone()), 666);
+        assert_eq!(count(root_tagged), 666);
         // No library_state bump: cache freshness cannot rely on callers doing it.
         catalog
             .call(|db| {
@@ -690,8 +1254,8 @@ mod tests {
                 Ok(())
             })
             .unwrap();
-        assert_eq!(count(tagged.clone()), 3332);
         assert_eq!(bucket_count(tagged.clone()), 3332);
+        assert_eq!(count(tagged.clone()), 3332);
         let external = rusqlite::Connection::open(path).unwrap();
         external.execute("UPDATE assets SET presence='missing' WHERE id='70000000-0000-4000-8000-000000000006'",[]).unwrap();
         assert_eq!(count(tagged.clone()), 3331);

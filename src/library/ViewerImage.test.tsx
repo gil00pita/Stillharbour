@@ -25,6 +25,7 @@ it('retains the small layer until actual high-detail load and on high-detail ima
   );
   const layers = container.querySelector('.viewer-renditions')!;
   const high = container.querySelector('.viewer-rendition-high')!;
+  fireEvent.load(container.querySelector('.viewer-rendition-small')!);
   expect(layers).not.toHaveClass('is-revealed');
   expect(screen.getByRole('img', { name: asset.name })).toHaveAttribute(
     'src',
@@ -32,6 +33,7 @@ it('retains the small layer until actual high-detail load and on high-detail ima
   );
   fireEvent.load(high);
   expect(layers).toHaveClass('is-revealed');
+  fireEvent.error(high);
   fireEvent.error(high);
   expect(layers).not.toHaveClass('is-revealed');
   expect(screen.getByRole('img', { name: asset.name })).toHaveAttribute(
@@ -53,6 +55,7 @@ it('shows an existing tiny cache image when clearer tiers are unavailable offlin
     'src',
     expect.stringContaining('/32/'),
   );
+  fireEvent.load(screen.getByRole('img', { name: asset.name }));
   expect(screen.getByRole('status')).toHaveTextContent('High detail unavailable');
 });
 
@@ -73,4 +76,19 @@ it('reuses a cached1024px gallery image when the requested viewer tiers are unav
     'src',
     expect.stringContaining('/1024/'),
   );
+});
+
+it('shows glare only while awaiting actual image load, then stops on ready or terminal failure', () => {
+  const { container } = render(
+    <ViewerImage asset={asset} results={[result(2048)]} transportError={null} onRetry={vi.fn()} />,
+  );
+  expect(container.querySelector('.preview-loading-sheen')).not.toBeNull();
+  const image = container.querySelector('img')!;
+  fireEvent.load(image);
+  expect(container.querySelector('.preview-loading-sheen')).toBeNull();
+  expect(container.querySelector('.viewer-renditions')).toHaveAttribute('aria-busy', 'false');
+  fireEvent.error(image);
+  fireEvent.error(image);
+  expect(container.querySelector('.preview-loading-sheen')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Retry preview' })).toBeEnabled();
 });

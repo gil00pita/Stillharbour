@@ -219,7 +219,7 @@ export function AssetBrowser({
       >
         {row.assets.map((asset, index) => (
           <AssetTile
-            key={`${asset.id}:${asset.revision}`}
+            key={`${asset.id}:${asset.revision}:${previews.attempt}`}
             asset={asset}
             columns={columns}
             mode={mode}
@@ -245,6 +245,7 @@ export function AssetBrowser({
                 })
               ]
             }
+            onRetry={previews.retry}
             onSelect={onSelect}
             onOpen={onInspect}
             onNavigate={navigate}

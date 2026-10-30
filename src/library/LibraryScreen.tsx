@@ -10,6 +10,7 @@ import { ComparisonViewer } from './ComparisonViewer';
 import { BatchToolbar } from './BatchToolbar';
 import { TextListControls } from './TextList';
 import { DEFAULT_TEXT_COLUMNS } from './textColumns';
+import { photoOrigin, type PhotoOrigin } from './viewerMotion';
 import { restoreAssetFocus } from './focus';
 import { type ViewMode, type Section } from './model';
 
@@ -58,6 +59,7 @@ export function LibraryScreen({
     fit: displayOverride.fit ?? defaults.gridFit,
   };
   const returnPosition = useRef(0);
+  const [origin, setOrigin] = useState<PhotoOrigin | undefined>(undefined);
   const returnFocus = useRef<HTMLElement | null>(null);
   const [modeOverride, setMode] = useState<ViewMode | null>(null);
   const mode = modeOverride ?? defaults.galleryView;
@@ -82,64 +84,74 @@ export function LibraryScreen({
       onFilter={() => setFilterOpen(true)}
       filterOpen={filterOpen}
       activeCount={
-        Object.entries(query).filter(([key, value]) => key !== 'sort' && Boolean(value)).length
+        Object.entries(query).filter(
+          ([key, value]) => !['sort', 'deferPendingPreviews'].includes(key) && Boolean(value),
+        ).length
       }
     />
   );
   return (
-    <>
-      {header}
-      <div className="library-content">
-        {selectionCount > 0 && (
-          <BatchToolbar
-            loading={loading}
-            total={page?.total ?? 0}
-            count={selectionCount}
-            busy={batchBusy}
-            frozen={frozen}
-            canCompare={!frozen && selected.size >= 2 && selected.size <= 4}
-            onCompare={() => void openComparison()}
-            onTags={c.addTags}
-            onFreeze={() => void c.freeze()}
-            onFavorite={() =>
-              void c.annotate({ favorite: true, rating: null, tags: null }).catch(onError)
-            }
-            onClear={c.clear}
-          />
-        )}
-        {mode === 'list' && (
-          <TextListControls
-            columns={columns}
-            onColumns={setColumns}
-            sort={query.sort}
-            onSort={(sort) => filter({ sort })}
-            busy={loading || batchBusy}
-          />
-        )}
-        {queryError ? (
-          <QueryFailure message={queryError} loading={loading} onRetry={c.retry} />
-        ) : (
-          <PhotoCollection
-            columns={columns}
-            display={display}
-            viewportHandle={viewportHandle}
-            controller={c}
-            status={status}
-            mode={mode}
-            viewerOpen={Boolean(viewerInitial || comparison || filterOpen)}
-            onOpen={(id, opener) => {
-              const asset = page?.assets.find((asset) => asset.id === id);
-              if (asset && !loading) {
-                returnPosition.current = opener.closest('.asset-viewport')?.scrollTop ?? 0;
-                returnFocus.current = opener;
-                setViewerInitial(asset);
+    <div className="library-page">
+      <div
+        className="library-underlay"
+        inert={Boolean(viewerInitial)}
+        aria-hidden={Boolean(viewerInitial)}
+      >
+        {header}
+        <div className="library-content">
+          {selectionCount > 0 && (
+            <BatchToolbar
+              loading={loading}
+              total={page?.total ?? 0}
+              count={selectionCount}
+              busy={batchBusy}
+              frozen={frozen}
+              canCompare={!frozen && selected.size >= 2 && selected.size <= 4}
+              onCompare={() => void openComparison()}
+              onTags={c.addTags}
+              onFreeze={() => void c.freeze()}
+              onFavorite={() =>
+                void c.annotate({ favorite: true, rating: null, tags: null }).catch(onError)
               }
-            }}
-          />
-        )}
-        <p className="screen-reader-status" role="status">
-          {notice}
-        </p>
+              onClear={c.clear}
+            />
+          )}
+          {mode === 'list' && (
+            <TextListControls
+              columns={columns}
+              onColumns={setColumns}
+              sort={query.sort}
+              onSort={(sort) => filter({ sort })}
+              busy={loading || batchBusy}
+            />
+          )}
+          {queryError ? (
+            <QueryFailure message={queryError} loading={loading} onRetry={c.retry} />
+          ) : (
+            <PhotoCollection
+              onRefresh={onRefresh}
+              columns={columns}
+              display={display}
+              viewportHandle={viewportHandle}
+              controller={c}
+              status={status}
+              mode={mode}
+              viewerOpen={Boolean(viewerInitial || comparison || filterOpen)}
+              onOpen={(id, opener) => {
+                const asset = page?.assets.find((asset) => asset.id === id);
+                if (asset && !loading) {
+                  returnPosition.current = opener.closest('.asset-viewport')?.scrollTop ?? 0;
+                  returnFocus.current = opener;
+                  setOrigin(photoOrigin(opener));
+                  setViewerInitial(asset);
+                }
+              }}
+            />
+          )}
+          <p className="screen-reader-status" role="status">
+            {notice}
+          </p>
+        </div>
       </div>
       {filterOpen && (
         <FilterPanel
@@ -163,6 +175,7 @@ export function LibraryScreen({
         <PhotoViewer
           key={viewerInitial.id}
           initial={viewerInitial}
+          origin={origin}
           pageAssets={page?.assets ?? []}
           query={query}
           status={status}
@@ -182,7 +195,7 @@ export function LibraryScreen({
           onClose={() => setComparison(null)}
         />
       )}
-    </>
+    </div>
   );
 }
 
