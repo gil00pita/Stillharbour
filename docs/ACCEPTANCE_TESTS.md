@@ -83,6 +83,8 @@ These are required test specifications, not claims that tests currently exist or
 
 M2 first-slice evidence, 2026-10-30: [organization previews](M2_ORGANIZATION_PREVIEWS.md) cover catalog-only relative names and lexical/missing-value checks for up to240 explicit IDs. Pure/catalog/component/native regressions are mapped there and in the implementation log. AC-023/024/025/026/029/031/032 have only partial preview coverage: no destination authorization, execution approval, native Unicode collision proof, execution idempotency, complete bundle inventory or space estimate is claimed. AC-027/028/030/033–039 and production enablement remain pending under the unchanged full scenarios above.
 
+M2 companion-review continuation, 2026-10-30 (partial AC-023/032/034 evidence only): requesting details for a selected photo uses its catalog UUID, returns at most 64 same-directory candidates with explicit truncation, and includes missing/excluded entries and root availability separately. Same-stem and full-filename XMP/AAE matches are candidates only. Test no-match uncertainty, large byte counts, retry/error, stale preview/current revisions and late-response disposal. Source/candidate native identity changes alter the review fingerprint. A 65th candidate must not silently disappear behind a complete-inventory claim. Neither candidate review nor an empty result confirms a bundle, allocates companion destinations or enables copying. The generated native scenario retains source manifests; the generated-library native scenario remains macOS-gated, with actual Rust/frontend outcomes recorded in the implementation log.
+
 ## 5. Duplicate matching and removal policy
 
 | ID | Scenario and expected result |

@@ -256,6 +256,8 @@ Current M2 implementation (owner continuation, 2026-10-30): [organization templa
 
 ### 9.1 Template model
 
+Next-phase continuation (2026-10-30): preview rows expose bounded, on-demand indexed companion review through catalog UUIDs. Same-stem and filename-based XMP/AAE matches show recorded presence and root availability, including missing/excluded entries; they never establish confirmed bundles or complete filesystem inventory. Truncation, stale revisions and unindexed-file uncertainty remain visible. Review creates no destinations, approvals or execution authority. See [the M2 contract](M2_ORGANIZATION_PREVIEWS.md) for scope and validation limits; persistent destination-aware planning remains pending.
+
 A saved template has UUID, name, description, schema version, template version, path pattern, enabled token set, missing-value policy, date policy, filename case policy, collision policy, sequence policy, and sample inputs/outputs. Ship editable copies of presets; editing a preset does not silently alter an existing plan.
 
 Use a deliberately limited token DSL, not JavaScript, a shell, or a general code evaluator. Proposed syntax:

@@ -181,6 +181,9 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationCompanions { asset_id } => {
+                LibraryResponse::OrganizationCompanions(library.organization_companions(asset_id)?)
+            }
             LibraryRequest::OrganizationPreview {
                 asset_ids,
                 template,

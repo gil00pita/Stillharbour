@@ -17,6 +17,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         OrganizationIssue::decl(&config),
         OrganizationRow::decl(&config),
         OrganizationPreview::decl(&config),
+        OrganizationCompanion::decl(&config),
+        OrganizationCompanionReview::decl(&config),
         AppPreferences::decl(&config),
         GalleryView::decl(&config),
         ThumbnailSize::decl(&config),

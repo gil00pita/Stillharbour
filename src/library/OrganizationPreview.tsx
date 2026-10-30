@@ -6,6 +6,7 @@ import type {
   LibraryRoot,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
+import { OrganizationCompanions } from './OrganizationCompanions';
 
 const defaultPreset = {
   name: 'Year / date / original name',
@@ -254,6 +255,12 @@ export function OrganizationPreview({
                             required
                           </p>
                         )}
+                        <OrganizationCompanions
+                          key={`${preview.fingerprint}:${row.assetId}`}
+                          assetId={row.assetId}
+                          previewRevision={preview.catalogRevision}
+                          revision={revision}
+                        />
                       </td>
                     </tr>
                   ))}

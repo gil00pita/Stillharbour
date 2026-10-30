@@ -6,7 +6,9 @@ Enable safe operations only after immutable planning, no-clobber execution and c
 
 ## Current authorized work — 2026-10-30
 
-The owner requested the next stage and prioritized Organization templates and previews. M2 is in progress; [the first preview slice](../docs/M2_ORGANIZATION_PREVIEWS.md) adds bounded catalog-only template previews through actual library IPC. It is not a persisted executable plan, destination preflight or M2 acceptance. Production copying and original mutation remain unavailable. Continue next with destination-aware persistent planning and companion review before implementing/authorizing the executor. Preserve all P4-06 and preservation gates below.
+The owner requested the next stage and prioritized Organization templates and previews. M2 is in progress; [the first preview slice](../docs/M2_ORGANIZATION_PREVIEWS.md) adds bounded catalog-only template previews through actual library IPC. It is not a persisted executable plan, destination preflight or M2 acceptance. Production copying and original mutation remain unavailable. Continue next with destination-aware persistent planning and confirmed companion inventory before implementing/authorizing the executor. Preserve all P4-06 and preservation gates below.
+
+Next-phase continuation, 2026-10-30: on-demand indexed companion detail review is implemented in source, with bounded UUID-only IPC, explicit missing/excluded/offline observations, truncation and revision warnings. This is a prerequisite slice, not destination-aware persistent planning or bundle confirmation. Frontend checks and actual Rust/native limitations are recorded in [the preview contract](../docs/M2_ORGANIZATION_PREVIEWS.md) and implementation log. The next gate remains persistent destination-aware planning and confirmed companion inventory before executor work.
 
 ## Prerequisites and references
 

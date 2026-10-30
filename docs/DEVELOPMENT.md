@@ -71,6 +71,8 @@ The packaged probe accepts only an application-bundle location. It creates its o
 
 ## Documenting requested changes
 
+The root [README](../README.md) is the project entry point: keep its implemented features, platform limits, quick start, command summary and milestone status aligned with this guide and the owning validation documents. Detailed historical evidence belongs in the implementation log rather than the README.
+
 Every requested repository change includes the relevant documentation updates and a dated entry in [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md), including documentation-only requests. Update the existing documents that own the affected requirements, behavior, commands or paths. Approved product changes must also update the applicable specification and acceptance criteria; milestone and preservation gates remain in force.
 
 The log records the request, resulting change, affected files, actual validation and remaining limitations or next gate. Keep small entries brief and preserve earlier evidence. A documentation-only change needs relevant formatting/link checks; a code change needs checks appropriate to its behavior. Describe unrun checks accurately. Material architecture decisions belong in `docs/decisions/ADR-*.md`.
@@ -181,6 +183,8 @@ The owned C11 adapter uses installed ImageIO/CoreGraphics/CoreFoundation/ColorSy
 [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md) documents the bounded row-break algorithm, compact headings and anchored frame-coalesced resize behavior. Reuse photoRows for geometry; keep raw catalog/decoder work outside the renderer. Native foundation tests now record independent Python source manifests under `.context/gallery/native-<UUID>/` and capture balanced-gallery desktop/minimum states. Run desktop-test build, native suite and full check serially; do not rebuild shared dist during an active driver.
 
 ## Git publication hygiene
+
+The repository's `paseo.json` configures worktree setup with `npm install` and a Dev action using `npm run desktop:dev`. These are development convenience commands; the reproducible clean dependency install remains `npm ci`. The configuration contains no credentials or machine-specific paths.
 
 Commit application sources, specifications, tests, pinned lockfiles and reviewed vendor resources. Keep .context evidence/attachments, build output, installed dependencies and local settings excluded through .gitignore. .gitattributes enforces LF for owned text on both Windows and macOS regardless of core.autocrlf, while preserving vendor bytes without line-ending conversion or upstream whitespace rewriting, so helper manifests remain authoritative; Markdown hard breaks are intentional. Owned-file validation still rejects accidental whitespace. Check the staged diff before publication and use a normal push on the existing branch.
 
@@ -313,3 +317,11 @@ Use node scripts/cargo.mjs test -p stillharbour-core --lib organization for focu
 ## Restrained interface polish — 2026-10-30
 
 [INTERFACE_POLISH.md](INTERFACE_POLISH.md) and DESIGN.md own the approved presentation changes. Reuse shared CSS values for 36px fields/selects, 8px control corners and the existing ease-out curve; keep 44px primary/viewer controls and compact chip/checkbox/range exceptions. The closed select uses appearance:none with a local authored chevron, retaining the native menu/keyboard behavior. The native generated-library suite checks actual field/select alignment/readability and viewer hit targets at desktop/minimum sizes. OrganizationPreview receives display-only root names from existing status, uses the existing BigInt grouping pattern and keeps its ID-based IPC unchanged. Run npm run check, changed/untracked React Doctor, desktop:test:build and desktop:test sequentially, then the normal unsigned build/release exclusions. Use only generated fixtures; do not start a development scan of a real library for visual QA.
+
+## M2 indexed companion review — 2026-10-30
+
+OrganizationCompanions loads bounded catalog observations per preview row using organization_companions with one validated asset_id. library/organization.rs owns the read transaction and identity fingerprint; no source/destination filesystem access or confirmed-bundle/approval command is introduced. The new Rust output types extend the existing generated schema without a catalog migration. After changing these types run npm run bindings and npm run bindings:check with the pinned Rust toolchain; the continuation regenerates and checks these declarations with the pinned toolchain once dependencies are available.
+
+Run npm test -- src/library/OrganizationCompanions.test.tsx src/library/OrganizationPreview.test.tsx and node scripts/cargo.mjs test --locked -p stillharbour-core --lib companion, followed by the ordinary full checks/native build/tests. The generated-library organization scenario now records organization-companions.json and compares rendered candidates to actual IPC inside its existing before/after source-inventory boundary. Do not substitute frontend mocks or Python SQLite checks for those native/Rust gates. See [the M2 contract](M2_ORGANIZATION_PREVIEWS.md) for the 64-candidate cap, heuristic scope, stale-state handling and unfinished persistent destination planning.
+
+Windows validation boundary for this continuation: npm run check passes the platform-applicable frontend/Rust suite, and desktop:test:build plus desktop:test pass the startup/IPC smoke with macOS library scenarios skipped. The existing desktop:build script targets a macOS app bundle and fails on Windows; this slice adds no Windows installer target or scanning capability. Restore ordinary frontend output with npm run build before release:check. Successful production exclusion checks are not packaged-app or macOS companion-integration evidence.

@@ -1501,6 +1501,30 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         expected.data.rows.map((row) => row.targetRelativePath ?? 'No valid target'),
       );
       assert.equal(await $('button=Create organized copy').isEnabled(), false);
+      const companions = await native({
+        kind: 'organization_companions',
+        asset_id: expected.data.rows[0].assetId,
+      });
+      assert.equal(companions.kind, 'organization_companions');
+      assert.equal(companions.data.inventoryComplete, false);
+      assert.equal(companions.data.executionAvailable, false);
+      await writeFile(`${evidence}/organization-companions.json`, JSON.stringify(companions.data));
+      await $('.organization-table tbody tr:first-child .organization-companions button').click();
+      await $(
+        '.organization-table tbody tr:first-child .organization-companions section',
+      ).waitForDisplayed();
+      const candidatePaths = await browser.execute(() =>
+        [
+          ...document.querySelectorAll(
+            '.organization-table tbody tr:first-child .organization-companions li bdi',
+          ),
+        ].map((node) => node.textContent),
+      );
+      assert.deepEqual(
+        candidatePaths,
+        companions.data.candidates.map((candidate) => candidate.sourcePath),
+      );
+      assert.equal(await $('button=Create organized copy').isEnabled(), false);
       for (const [name, width, height] of [
         ['desktop', 1180, 780],
         ['minimum', 660, 560],

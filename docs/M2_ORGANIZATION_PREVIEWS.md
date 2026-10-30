@@ -17,11 +17,21 @@ Select 1–240 individual photos in Photos, then **Preview organization**. Choos
 
 Portable-name policy follows [Microsoft's naming documentation](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file). Date formatting uses the pinned chrono implementation with an explicit directive allowlist. No dependency, schema, persisted identity, Tauri capability or production write authority changes.
 
+## Indexed companion review continuation — 2026-10-30
+
+The next-phase request starts the companion-review prerequisite. Each preview row now offers **Review indexed companions**, including rows whose earlier same-stem count is zero. The backend accepts one validated photo UUID and reads one catalog transaction; no original or destination filesystem is opened. It returns at most 64 candidates plus an explicit truncation flag. Matching is exact, within the same root/native directory: same catalog stem, or XMP/AAE whose catalog stem equals the selected photo's complete filename. This is a conservative name heuristic, not case/Unicode equivalence, provider pairing or bundle confirmation.
+
+Unlike the earlier count, detail review includes indexed missing and excluded entries and shows each candidate's recorded presence, root availability, media classification and lossless byte total. Missing and offline remain separate observations. An empty result never proves that companions are absent; unindexed/unknown entries, other naming conventions and incomplete inventory remain unverified. Candidates have no resolved destinations and are excluded from selected-file byte totals. The earlier count retains its original narrower meaning.
+
+The separate versioned review fingerprint binds source/candidate native locators, revisions, identities, root state, catalog revision and returned scope/truncation; it is neither approval nor a persisted plan. The UI loads only on explicit request, exposes loading/error/retry, flags responses from a different preview/current catalog revision, and discards late results after preview replacement or close. Refresh does not silently rebase the organization preview. Both inventoryComplete and executionAvailable remain false.
+
+Rust in-memory regressions cover candidate scope, filename-sidecars, excluded/missing/offline states, source/candidate identity binding, unknown/non-media IDs and the exact 64/65 truncation boundary. Component tests cover safe literal rendering, large byte counts, errors/retry, empty/truncated responses, stale revisions and unmount. The generated-library native scenario now compares rendered candidate paths to actual IPC and retains its independent source inventories. The focused Rust companion regressions and generated-binding comparison pass on Windows after the pinned toolchain/dependencies become available. The generated-library native scenario remains macOS-gated; see the implementation log for actual full-check/native results. No migration, dependency or production mutation permission is added.
+
 ## Remaining M2 gate
 
 Create organized copy stays disabled with a visible explanation. No approval/start/import/undo/quarantine command is introduced. Before enablement M2 still needs destination selection/identity/overlap and native name checks, confirmed bundle inventory, saved template versions, persistent immutable plans and approvals, before/after trees, safe JSON/CSV export, capacity/fidelity evidence, centrally locked executor, journaled staging, full byte verification, no-replace publication, cancellation/restart/fault injection, reverse-plan undo and folder import. Existing M0 copy fixtures are feasibility evidence, not that executor.
 
-Real-library in-place mutation also needs exact-version independent recovery evidence and native Windows/macOS preservation gates. M4 may provide recovery later. Do not waive these gates or claim AC-023–AC-039 complete after this slice. The immediate next gate is persistent destination-aware planning and companion review, still without production execution.
+Real-library in-place mutation also needs exact-version independent recovery evidence and native Windows/macOS preservation gates. M4 may provide recovery later. Do not waive these gates or claim AC-023–AC-039 complete after this slice. The immediate next gate is persistent destination-aware planning and confirmed companion inventory, still without production execution.
 
 ## Validation
 
