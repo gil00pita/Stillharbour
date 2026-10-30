@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { warmPhotoForScroll } from './warmPhoto.mjs';
+import { createEvidenceDirectory } from './evidence.mjs';
 
 async function native(request) {
   return browser.tauri.execute(
@@ -272,6 +273,7 @@ describe('native read-only library', () => {
   (process.platform === 'win32' ? it : it.skip)(
     'saves and scans a generated NTFS library and displays real cached previews',
     async () => {
+      const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
       const selection = await browser.tauri.execute(async ({ core }) =>
         core.invoke('test_library_fixture', { verify: false }),
       );
@@ -288,10 +290,7 @@ describe('native read-only library', () => {
         await browser.waitUntil(
           async () => {
             const status = (await native({ kind: 'status' })).data;
-            await writeFile(
-              '.context/windows-directory-selection/windows-status.json',
-              JSON.stringify(status),
-            );
+            await writeFile(`${evidence}/windows-status.json`, JSON.stringify(status));
             return (
               status.roots.length === 1 &&
               status.roots[0].fileCount >= 18 &&
@@ -299,7 +298,7 @@ describe('native read-only library', () => {
               status.jobs.every((j) => !['queued', 'running', 'cancel_requested'].includes(j.state))
             );
           },
-          { timeout: 45000, timeoutMsg: 'Generated Windows scan/previews did not settle' },
+          { timeout: 25000, timeoutMsg: 'Generated Windows scan/previews did not settle' },
         );
         await browser.waitUntil(
           async () =>
@@ -328,7 +327,7 @@ describe('native read-only library', () => {
         );
         assert.ok(observations.some((image) => image.source.includes('thumbnail.localhost')));
         await writeFile(
-          '.context/windows-directory-selection/windows-preview-observations.json',
+          `${evidence}/windows-preview-observations.json`,
           JSON.stringify(observations),
         );
         for (const [name, width, height] of [
@@ -344,7 +343,7 @@ describe('native read-only library', () => {
           core.invoke('test_library_fixture', { verify: true }),
         );
         await writeFile(
-          '.context/windows-directory-selection/windows-source-verification.json',
+          `${evidence}/windows-source-verification.json`,
           JSON.stringify(verification),
         );
         assert.ok(verification.verifiedFiles > 20);
