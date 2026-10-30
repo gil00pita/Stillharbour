@@ -377,3 +377,19 @@ The bounded catalog-read update must satisfy P1-01 through P1-07 in [PERFORMANCE
 - Zoom out/in, Fit image, Info and Filmstrip are icon buttons in one labelled Photo controls group, with hover titles, accessible names and 40 px-wide buttons. Preserve slider/percentage, zoom limits and pressed toggle states.
 - Info/Filmstrip leave the header and remain reachable in the floating surface above the bottom heart, including at 660×560 and with the Info panel/filmstrip open. Preserve focus return, original readiness, zoom/pan, page/menu bounds and per-photo zoom reset; annotations do not reset zoom.
 - Use real generated native fixtures for layout/navigation checks; original access, fallback, source preservation and all existing milestone/platform limits stay unchanged.
+
+### P4 continuation — cold filename summaries, 2026-10-30
+
+- On the generated 10k catalog, cold empty/early/late selective filename counts use no more than 64 extra SQLite VM steps over a media-then-filename reference predicate. Preserve the original excess-work failure; this is a statement-work check, not a wall-clock or physical-I/O target.
+- Retain filename threshold/escaping/native-key and all-sort page/seek/neighbor parity, missing/excluded/non-media and mixed scopes, exact bucket totals, initial-preview filtering, actor/external invalidation and lagging inventory counters. All query validation and SQL value binding remain intact.
+- Compare current and legacy cold count/timeline statements on the same release million-row fixture, with empty/narrow/broad/late controls, real plans, VM steps, logical pager bytes, raw samples, binary/SQLite/lock provenance and unchanged independent lossless source manifests. Record full repository/native/package outcomes and open gates in [PERFORMANCE_COLD_SUMMARIES.md](PERFORMANCE_COLD_SUMMARIES.md). Do not turn a debug/native regression pass into full P4, platform, memory, release-presentation or preservation acceptance.
+
+### P4 local closeout before M2 — 2026-10-30
+
+- Reproduce under-capacity producer loss and retain the failed prototype. A held preferred lane can route an event through another bounded lane; a real eight-producer 1,024-event batch retains every event in the regression. Full capacity/all-lane contention still reports exact losses. Keep 4,096 events total, sixteen private aliases, consuming reads, production no-ops and isolated test instances.
+- An owned child paused between fork/exec cannot extend a closed catalog’s lifetime lock. SQLite closes before explicit unlock; genuine live catalogs still reject another owner. No source operation, open retry or lock bypass. Retain the before/after OS35 regression and earlier historical uncertainty.
+- Fresh 10k/100k/1m debug native routes retain full 120-step/60-second trace, source and collector evidence. Reports keep collection statuses distinct from incomplete WebContent/GPU/XPC ownership; missing/failed/truncated samples cannot pass complete collection. [PERFORMANCE_LOCAL_CLOSEOUT.md](PERFORMANCE_LOCAL_CLOSEOUT.md) records exact results and all unrun external/platform/preservation gates. M2 remains held for this task.
+
+### P4 final acceptance record — 2026-10-30
+
+The [current P4 status](PERFORMANCE_P4_STATUS.md) maps all six scenarios to exact current-source release/native/worker/contention/regression evidence and missing prerequisites. Current release catalog and packaged-worker source stat fields round-trip losslessly through JavaScript while older artifacts remain unchanged. Local passes never promote blocked P4-06 results; M4-dependent backup and endpoint tests, complete memory, release presentation and target-platform results require their actual environments/adapters. Keep original-file mutation disabled.

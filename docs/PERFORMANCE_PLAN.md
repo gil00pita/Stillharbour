@@ -264,3 +264,11 @@ The owner's “Start new stage” continues the selected performance track. [P3 
 ## P4 local evidence stage — 2026-10-29
 
 The owner's next-stage request authorizes [local P4 stress evidence](../tasks/P4_LOCAL_STRESS.md). Preserve the production release automation prohibition. Separate current release core/packaged-worker probes from instrumented debug native UI routes, collect bounded segmented traces and independent lossless source manifests, and report actual outcomes in [PERFORMANCE_P4.md](PERFORMANCE_P4.md). P3 backup/endpoint/pacing prerequisites and full platform/presentation/memory gates remain open. No original mutations or further milestone are authorized.
+
+## P4 cold-summary continuation — 2026-10-30
+
+The owner’s “continue with P4” authorizes [cold filename summaries](../tasks/P4_COLD_SUMMARIES.md): measure release predicate/index alternatives and retain one bounded shared-predicate improvement with full correctness/native/source checks. [PERFORMANCE_COLD_SUMMARIES.md](PERFORMANCE_COLD_SUMMARIES.md) owns actual results. Earlier P4 trace loss, unavailable memory, backup/endpoint/pacing, release presentation and platform gates remain open; no later milestone or original mutation is authorized.
+
+## P4 final acceptance audit — 2026-10-30
+
+The owner requests “Finish up P4.” [The final task](../tasks/P4_FINISH.md) completes current release-catalog/media/worker/contention evidence and consolidates all six acceptance scenarios in [PERFORMANCE_P4_STATUS.md](PERFORMANCE_P4_STATUS.md). Keep implementation/local validation distinct from P4-06’s missing M4 backup/endpoint/pacing, target-platform, full-memory and release-presentation evidence. No scope waiver, production automation, original mutation or M2/M4 implementation follows.

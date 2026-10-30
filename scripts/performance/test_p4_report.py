@@ -41,6 +41,37 @@ class ReportTests(unittest.TestCase):
             self.assertIsNone(report['observedMemory']['peakRssBytes'])
             self.assertIn('not run', report['releasePresentation'])
 
+    def test_observed_memory_collection_status_is_separate_from_full_memory_gate(self):
+        with tempfile.TemporaryDirectory(prefix='stillharbour-p4-report-') as owned:
+            root = Path(owned)
+            data, _ = self.fixture(root)
+            self.assertEqual(summarize(root)['observedMemory']['status'], 'unavailable')
+            data['memorySampler'] = {'exitCode': 0, 'signal': None, 'outputTruncated': False}
+            data['memory'] = {'samples': [{'observedTreeRssBytes': 100, 'coreFootprintBytes': 90}],
+                              'errors': 0, 'dropped': 0, 'peakObservedTreeRssBytes': 100,
+                              'coverage': 'core and observed descendants only'}
+            (root / 'baseline.json').write_text(json.dumps(data))
+            report = summarize(root)
+            self.assertEqual(report['observedMemory']['status'], 'collected_observed_processes')
+            self.assertEqual(report['observedMemory']['peakRssBytes'], 100)
+            self.assertIn('not established', report['wholeApplicationMemory'])
+            for field, value, expected in [('errors', 1, 'partial_collection'),
+                                           ('dropped', 1, 'partial_collection')]:
+                data['memory'][field] = value
+                (root / 'baseline.json').write_text(json.dumps(data))
+                self.assertEqual(summarize(root)['observedMemory']['status'], expected)
+                data['memory'][field] = 0
+            for field, value in [('exitCode', 1), ('signal', 'SIGKILL'), ('outputTruncated', True)]:
+                before = dict(data['memorySampler'])
+                data['memorySampler'][field] = value
+                (root / 'baseline.json').write_text(json.dumps(data))
+                self.assertEqual(summarize(root)['observedMemory']['status'], 'failed_collection')
+                data['memorySampler'] = before
+            data['memory']['samples'] = []
+            data['memorySampler']['exitCode'] = 1
+            (root / 'baseline.json').write_text(json.dumps(data))
+            self.assertEqual(summarize(root)['observedMemory']['status'], 'failed_collection')
+
     def test_loss_manifest_failure_short_route_and_image_requests_fail(self):
         with tempfile.TemporaryDirectory(prefix='stillharbour-p4-report-') as owned:
             root = Path(owned)

@@ -48,6 +48,23 @@ enum Request {
     Stop,
 }
 
+// Fields drop in declaration order: close SQLite before releasing the lifetime
+// lock, including early returns and unwinding on the actor thread.
+struct CatalogDatabase {
+    connection: Connection,
+    _lock: CatalogLock,
+}
+struct CatalogLock(std::fs::File);
+impl Drop for CatalogLock {
+    fn drop(&mut self) {
+        // Closing our fd alone can leave flock alive in a concurrently forked
+        // non-catalog child until exec closes its inherited CLOEXEC descriptor.
+        // An explicit unlock ends only this owner's lock; active catalogs retain
+        // their guard and still reject a second writer.
+        let _ = FileExt::unlock(&self.0);
+    }
+}
+
 pub struct Catalog {
     #[cfg(feature = "fixture-probes")]
     probe_calls: std::sync::atomic::AtomicU64,
@@ -71,7 +88,8 @@ impl Catalog {
                     Err(error) => {
                         let _ = ready_tx.send(Err(error));
                     }
-                    Ok((mut connection, _lock)) => {
+                    Ok(mut database) => {
+                        let connection = &mut database.connection;
                         let mut cache = ReadCache::default();
                         if ready_tx.send(Ok(())).is_err() {
                             return;
@@ -79,12 +97,12 @@ impl Catalog {
                         while let Ok(request) = receiver.recv() {
                             match request {
                                 Request::Summary(reply) => {
-                                    let _ = reply.send(summary(&connection));
+                                    let _ = reply.send(summary(connection));
                                 }
                                 Request::Snapshot(path, reply) => {
-                                    let _ = reply.send(snapshot(&connection, &path));
+                                    let _ = reply.send(snapshot(connection, &path));
                                 }
-                                Request::Run(work) => work(&mut connection, &mut cache),
+                                Request::Run(work) => work(connection, &mut cache),
                                 Request::Stop => break,
                             }
                         }
@@ -177,7 +195,7 @@ fn stopped() -> AppError {
     AppError::new(ErrorCode::Catalog, "The catalog worker stopped.")
 }
 
-fn open_database(path: &Path) -> Result<(Connection, std::fs::File)> {
+fn open_database(path: &Path) -> Result<CatalogDatabase> {
     let _span = crate::performance::Span::new(
         crate::performance::Metric::CatalogOpen,
         crate::performance::Endpoint::Catalog,
@@ -197,6 +215,7 @@ fn open_database(path: &Path) -> Result<(Connection, std::fs::File)> {
     lock.try_lock_exclusive().map_err(|error| {
         AppError::new(ErrorCode::CatalogInUse, "This catalog is already open.").caused_by(error)
     })?;
+    let lock = CatalogLock(lock);
     let mut connection = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_WRITE
@@ -260,7 +279,10 @@ fn open_database(path: &Path) -> Result<(Connection, std::fs::File)> {
     }
     connection.pragma_update(None, "journal_mode", "WAL")?;
     validate(&connection)?;
-    Ok((connection, lock))
+    Ok(CatalogDatabase {
+        connection,
+        _lock: lock,
+    })
 }
 
 fn summary(connection: &Connection) -> Result<CatalogSummary> {
@@ -336,6 +358,60 @@ fn snapshot(source: &Connection, destination: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    #[cfg(unix)]
+    fn closing_catalog_releases_lock_while_an_unrelated_child_is_pre_exec() {
+        use std::io::{Read, Write};
+        use std::os::{
+            fd::AsRawFd,
+            unix::{net::UnixStream, process::CommandExt},
+        };
+        use std::process::{Command, Stdio};
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("fixture.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let identity = catalog.summary().unwrap().id;
+        let (mut ready_reader, ready_writer) = UnixStream::pair().unwrap();
+        let (mut release_writer, release_reader) = UnixStream::pair().unwrap();
+        ready_reader
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        release_reader
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let (ready_fd, release_fd) = (ready_writer.as_raw_fd(), release_reader.as_raw_fd());
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .arg("--list")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        // SAFETY: the child closure only performs async-signal-safe read/write
+        // syscalls before exec. The parent retains both socket owners until join,
+        // and the receive timeout bounds the child if the parent test fails.
+        unsafe {
+            command.pre_exec(move || {
+                let mut byte = 1u8;
+                if libc::write(ready_fd, std::ptr::from_ref(&byte).cast(), 1) != 1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                if libc::read(release_fd, std::ptr::from_mut(&mut byte).cast(), 1) != 1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+        let child = std::thread::spawn(move || command.spawn().unwrap().wait().unwrap());
+        ready_reader.read_exact(&mut [0]).unwrap();
+        drop(catalog);
+        // A non-catalog child can transiently inherit CLOEXEC descriptors until
+        // exec; it must not extend the application-owned catalog lock lifetime.
+        let reopened = Catalog::open(path);
+        release_writer.write_all(&[1]).unwrap();
+        assert!(child.join().unwrap().success());
+        let reopened = reopened.expect("A closed catalog retained its lock in the pre-exec child");
+        assert_eq!(reopened.summary().unwrap().id, identity);
+    }
+
     #[test]
     fn build_diagnostics_use_no_user_catalog() {
         let info = sqlite_diagnostics().unwrap();

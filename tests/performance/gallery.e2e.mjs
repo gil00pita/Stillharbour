@@ -371,7 +371,8 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
       await $('.photo-viewer[open]').waitForDisplayed();
       await $('button[aria-label="Next photo"]').waitForEnabled();
       await $('button[aria-label="Next photo"]').click();
-      await $('button=Back to gallery').click();
+      await $('button[aria-label="Close photo viewer"]').click();
+      await $('.photo-viewer[open]').waitForExist({ reverse: true });
       await view('Uniform grid');
       await view('Text list');
       measurements.viewerSelectionTrace = {

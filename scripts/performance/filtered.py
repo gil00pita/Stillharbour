@@ -72,6 +72,13 @@ def main():
                    for field in ('pageMs', 'bucketsMs', 'warmBucketsMs')},
                 'timelineFirst': {field: stats([sample[field] for sample in scenario['timelineFirst']])
                                   for field in ('pageMs', 'bucketsMs')},
+                'summaryProbe': [
+                    {'variant': probe['variant'], 'plans': probe['plans'],
+                     **{field: stats([sample[field] for sample in probe['samples']])
+                        for field in ('countMs', 'bucketsMs', 'countVmSteps', 'bucketVmSteps',
+                                      'countLogicalBytes', 'bucketLogicalBytes')}}
+                    for probe in scenario.get('summaryProbe', [])
+                ],
                 'candidateProbe': {
                     'plan': scenario['candidateProbe']['plan'],
                     'retained': scenario['candidateProbe']['retained'],

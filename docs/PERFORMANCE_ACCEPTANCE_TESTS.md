@@ -77,3 +77,11 @@ The owner's2026-10-29 confirmation authorises P2. P0/P1 evidence remains histori
 | P4-04 | Separate debug native10k/100k/1m routes run120 steps for at least60s, retain sequential bounded segments/loss counts, ten date jumps, four resizes, selection/viewer return, ≤720 summaries and zero nonempty text-mode preview requests. Independent lossless source manifests match, including failed-run teardown. |
 | P4-05 | Full repository/release-exclusion/native regression checks pass with exact actual counts/build scope. Production release instrumentation remains forbidden. Record failures and unrun tests; production tuning requires reproducible measured evidence.                                                               |
 | P4-06 | Full acceptance requires outstanding real backup/physical endpoint/accounted pacing, native release presented frames, complete memory attribution, NAS/HDD, Windows/minimum OS/clean-machine evidence. Local synthetic/debug passes do not satisfy those gates.                                                       |
+
+## Local P4 closeout before M2 — 2026-10-30
+
+The [bounded closeout task](../tasks/P4_LOCAL_CLOSEOUT.md) supplements P4-01/P4-04/P4-05 with a red-capable under-capacity producer test, exact reported overflow/contention, owned fork/exec catalog lifetime regression, explicit observed-memory collection status and fresh strict native scale reports. [The evidence report](PERFORMANCE_LOCAL_CLOSEOUT.md) records dispositions. Earlier failed/unavailable scopes remain historical; this cannot pass P4-06’s missing ownership/presentation/endpoint/platform gates or enable original-file mutation.
+
+## Current P4 disposition — 2026-10-30
+
+[PERFORMANCE_P4_STATUS.md](PERFORMANCE_P4_STATUS.md) is the consolidated current ledger; earlier per-run failures remain historical. P4-06 depends partly on M4’s production backup/recovery/endpoint work and native profiling/platform environments. Record these as explicit blocked prerequisites, without weakening the requirement or mistaking them for implementation in this read-only phase. The preservation contract separately permits fixture-only M2/M3 development before M4; it does not enable production mutations.

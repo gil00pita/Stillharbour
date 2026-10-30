@@ -158,3 +158,11 @@ Use a bounded existing-index lookup only after an exact small unscoped filename 
 ## Bounded original-byte viewing — 2026-10-30
 
 [ADR-0018](decisions/ADR-0018-original-image-viewing.md) permits original display only through a guarded ID/revision/policy protocol, preserving source identity, read/helper budgets and explicit fallback. Remove the routine 2,048-pixel banner for actually loaded originals, put X at the right and a catalog-confirmed animated heart at the bottom. [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) records the static JPEG/PNG/WebP 32-MiB/32-million-pixel scope, tested/unrun evidence and residual platform/format/preservation gates. No source mutation or broad filesystem exposure.
+
+## P4 continuation — cold filename summaries, 2026-10-30
+
+Place filename rejection after media classification and before presence/preparation checks in the existing shared predicate builder. Retain SQLite’s planner choice: measured forced-name-index and covering-name-join alternatives regress the all-matching control. No new cache, SQL hint, index, dependency, schema/IPC or source operation. [PERFORMANCE_COLD_SUMMARIES.md](PERFORMANCE_COLD_SUMMARIES.md) records the bounded read-adapter refinement and actual evidence; ADR-0009 and all earlier P4 limits remain in force.
+
+## Local P4 evidence closeout before M2 — 2026-10-30
+
+The owner explicitly chooses local P4 work before M2. [ADR-0019](decisions/ADR-0019-p4-local-evidence.md) keeps a fixed total trace budget through stable preferred producer lanes, separates aliases and shortens consuming reads without hiding losses. It also records explicit catalog lifetime-lock release after SQLite closes, with a generated fork/exec regression and unchanged strict acquisition. [PERFORMANCE_LOCAL_CLOSEOUT.md](PERFORMANCE_LOCAL_CLOSEOUT.md) separates observed memory collection from unavailable whole-app ownership and preserves all historical/external gates.

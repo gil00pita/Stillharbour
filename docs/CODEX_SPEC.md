@@ -708,3 +708,15 @@ Load the original image rather than only a 2,048-pixel derived rendition when it
 ### Owner viewer control-bar refinement — 2026-10-30
 
 Group single-photo Zoom out/in, Fit, Info and Filmstrip into one centered floating icon bar above the bottom favorite heart. Preserve accessible names/tooltips, zoom slider/percentage, disabled limits, toggle states, Info focus return and minimum-window access. Keep original access/fallback, page/menu containment, arrows, X, favorites and all safety/milestone gates intact. See docs/ORIGINAL_IMAGE_VIEWING.md.
+
+### P4 continuation — cold filename summaries, 2026-10-30
+
+Keep the existing SQL planner and indexes, but evaluate filename matching immediately after media classification and before presence/initial-preparation checks in the shared validated query predicate. Nonmatching names can avoid later row checks while non-media rows retain their early rejection. Preserve parameter binding, escaped literal matching, all query scopes/sorts, capture/added/Undated summaries, exact filtered counts, inventory-counter lag and summary invalidation/bounds. No eager candidate probe, new index, schema/dependency/IPC change or original access. [PERFORMANCE_COLD_SUMMARIES.md](PERFORMANCE_COLD_SUMMARIES.md) records statement-work regression, reference/current release measurements, rejected index alternatives and remaining P4 gates; predicate order does not promise reduced physical I/O or universally faster filters.
+
+### P4 local closeout before M2 — owner choice, 2026-10-30
+
+Finish available local trace/memory/catalog-restart work before M2. Keep the recorder’s 4,096-event total, sixteen private volume aliases, nonblocking producers, explicit loss reporting and production no-ops. A fixed partitioning/stable producer preference may reduce contention without increasing event capacity; strict reports still reject any loss. Close SQLite before explicitly releasing its lifetime lock so an unrelated pre-exec child cannot prolong it; retain genuine-owner rejection with no lock bypass or open retry. Separate observed-process collection status from full WebContent/GPU/XPC coverage and keep privileged/native-platform gaps explicit. [PERFORMANCE_LOCAL_CLOSEOUT.md](PERFORMANCE_LOCAL_CLOSEOUT.md) records actual evidence; this does not authorize original mutation or declare full P4/M2 acceptance.
+
+### P4 final evidence and cross-milestone gates — 2026-10-30
+
+Consolidate current P4-01–P4-06 dispositions in [PERFORMANCE_P4_STATUS.md](PERFORMANCE_P4_STATUS.md), preserving earlier failures and exact run/build identities. Current release catalog/media, packaged-worker and synthetic-contention evidence must retain independent source inventories with lossless 64-bit stat transport. Separate completed read-only implementation/local verification from P4-06’s unfulfilled whole-memory, native release presentation, target-platform and M4 backup/endpoint/pacing evidence. No requirement is waived; later fixture-based M2/M3 development remains governed by the preservation contract, and real original-file mutation remains disabled.

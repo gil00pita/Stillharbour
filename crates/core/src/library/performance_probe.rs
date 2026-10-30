@@ -215,9 +215,57 @@ pub fn measure_filtered(path: &Path, rows: u32) -> Result<Value> {
             }
             Ok(json!({"plan":plan,"retained":candidates,"samplesMs":samples}))
         })?;
-        results.push(json!({"scope":label,"matched":matched,"samples":samples,"timelineFirst":timeline_first,"bucketPlan":plans.0,"pageFirstBucketPlan":plans.1,"pagePlan":plans.2,"candidateProbe":candidate_probe}));
+        let summary_probe = measure_name_summaries(&catalog, query.name)?;
+        results.push(json!({"scope":label,"matched":matched,"samples":samples,"timelineFirst":timeline_first,"bucketPlan":plans.0,"pageFirstBucketPlan":plans.1,"pagePlan":plans.2,"candidateProbe":candidate_probe,"summaryProbe":summary_probe}));
     }
     Ok(json!({"sqlite":sqlite_info(&catalog)?,"scenarios":results}))
+}
+
+/// Compare predicate order on name-only owned-fixture summaries. These reference
+/// statements never affect production SQL or populate the derived summary cache.
+fn measure_name_summaries(catalog: &Catalog, name: String) -> Result<Value> {
+    let query = AssetQuery {
+        name,
+        ..Default::default()
+    };
+    let (current, values) = store::query_where(&query)?;
+    let (residual, _) = store::query_where(&AssetQuery::default())?;
+    let legacy = format!("{residual} AND name LIKE ? ESCAPE '\\'");
+    catalog.call(move |db| {
+        let mut result = Vec::new();
+        let mut reference = None;
+        for (label, predicate) in [("legacyNameLast", legacy), ("currentNameEarly", current)] {
+            let count_sql = format!("SELECT count(*) FROM assets WHERE {predicate}");
+            let bucket_sql = format!("SELECT CASE WHEN length(date)<10 THEN 'Undated' ELSE substr(date,1,7) END AS period,count(*) FROM assets WHERE {predicate} GROUP BY period ORDER BY (period='Undated'),period DESC");
+            let mut plans = Vec::new();
+            let mut samples = Vec::new();
+            for sql in [&count_sql, &bucket_sql] {
+                plans.push(db.prepare(&format!("EXPLAIN QUERY PLAN {sql}"))?.query_map(rusqlite::params_from_iter(&values), |r| r.get::<_,String>(3))?.collect::<rusqlite::Result<Vec<_>>>()?);
+            }
+            for _ in 0..3 {
+                db.execute_batch("PRAGMA shrink_memory")?;
+                let before = performance::pager_counters(db).unwrap();
+                let start = Instant::now();
+                let mut count_statement = db.prepare(&count_sql)?;
+                let count: u32 = count_statement.query_row(rusqlite::params_from_iter(&values), |r|r.get(0))?;
+                let count_ms = elapsed(start);
+                let count_steps = count_statement.get_status(rusqlite::StatementStatus::VmStep);
+                let after_count = performance::pager_counters(db).unwrap();
+                db.execute_batch("PRAGMA shrink_memory")?;
+                let start = Instant::now();
+                let mut bucket_statement = db.prepare(&bucket_sql)?;
+                let buckets = bucket_statement.query_map(rusqlite::params_from_iter(&values), |r|Ok((r.get::<_,String>(0)?,r.get::<_,u32>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?;
+                let bucket_ms = elapsed(start);
+                let bucket_steps = bucket_statement.get_status(rusqlite::StatementStatus::VmStep);
+                let after = performance::pager_counters(db).unwrap();
+                let observed = (count, buckets);
+                if let Some(reference) = &reference { assert_eq!(&observed, reference); } else { reference = Some(observed); }
+                samples.push(json!({"countMs":count_ms,"bucketsMs":bucket_ms,"countVmSteps":count_steps,"bucketVmSteps":bucket_steps,"countLogicalBytes":(after_count.0-before.0) as u64*before.2,"bucketLogicalBytes":(after.0-after_count.0) as u64*before.2}));
+            }
+            result.push(json!({"variant":label,"plans":plans,"samples":samples}));
+        }
+        Ok(json!(result))
+    })
 }
 
 /// P1 focused release measurements. All cache resets affect derived reads of
@@ -912,6 +960,34 @@ mod tests {
             },
         ] {
             assert_filename_query_parity(&catalog, query);
+        }
+    }
+
+    #[test]
+    fn cold_filename_counts_skip_unmatched_row_fields() {
+        let owned = tempfile::tempdir().unwrap();
+        let catalog = Catalog::open(owned.path().join("Fixture.stillharbour")).unwrap();
+        seed_catalog(&catalog, owned.path(), 10_000).unwrap();
+        for name in ["Generated", "Synthetic 0000", "Synthetic 000999"] {
+            let query = AssetQuery {
+                name: name.into(),
+                ..Default::default()
+            };
+            let (predicate, values) = store::query_where(&query).unwrap();
+            catalog.call(move |db| {
+                let mut actual = db.prepare(&format!("SELECT count(*) FROM assets WHERE {predicate}"))?;
+                let count: u32 = actual.query_row(rusqlite::params_from_iter(&values), |r|r.get(0))?;
+                let actual_steps = actual.get_status(rusqlite::StatementStatus::VmStep);
+                // The reference retains media rejection, then skips presence
+                // checks on filename nonmatches in each wide asset record.
+                let mut reference = db.prepare("SELECT count(*) FROM assets WHERE is_media=1 AND name LIKE ? ESCAPE '\\' AND presence NOT IN ('excluded','missing')")?;
+                let expected: u32 = reference.query_row([format!("%{}%",store::escape_like(&query.name))], |r|r.get(0))?;
+                let reference_steps = reference.get_status(rusqlite::StatementStatus::VmStep);
+                assert_eq!(count, expected);
+                eprintln!("Cold filename {}: {actual_steps} VM steps; reference {reference_steps}", query.name);
+                assert!(actual_steps <= reference_steps + 64, "Cold filename count evaluates unmatched row fields: {actual_steps} vs {reference_steps}");
+                Ok(())
+            }).unwrap();
         }
     }
 

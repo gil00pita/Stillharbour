@@ -45,14 +45,14 @@ for rows in args.rows:
     assert ready['ready'] and ready['rows'] == rows
     marker = json.loads((owned/'ownership.json').read_text())
     assert marker['run'] == run and marker['rows'] == rows
-    before = manifest(owned/'sources')
+    before = manifest(owned/'sources', lossless_stat=True)
     (owned/'manifest-before.json').write_text(json.dumps(before, indent=2)+'\n')
     measured_start_ms = (time.monotonic()-sampler.started)*1000
     child.stdin.write('measure\n'); child.stdin.flush(); child.stdin.close()
     raw = child.stdout.readline(8 * 1024 * 1024)
     code = child.wait(timeout=1800)
     stopped.set(); monitor.join(); watchdog.cancel()
-    after = manifest(owned/'sources')
+    after = manifest(owned/'sources', lossless_stat=True)
     (owned/'manifest-after.json').write_text(json.dumps(after, indent=2)+'\n')
     equal = before == after
     if code or not raw or timed_out.is_set():
@@ -60,7 +60,7 @@ for rows in args.rows:
         raise SystemExit('Probe failed; fixtures/manifests retained without raw error/path logging')
     result = json.loads(raw)
     result.update({'memory': sampler.result(), 'measurementStartMs': measured_start_ms, 'sourceManifestEqual': equal,
-                   'sourceEntryCount': len(before['entries']), 'environment': f'{run}-environment.json', 'cacheProtocol': 'OS cache uncontrolled/warm after seeding; P0 has seven app-connection reopens; P1 separately resets derived summaries and once the disposable connection pager; source and thumbnail cache not purged',
+                   'sourceEntryCount': len(before['entries']), 'sourceManifestEncoding': 'lossless decimal 64-bit stat fields', 'environment': f'{run}-environment.json', 'cacheProtocol': 'OS cache uncontrolled/warm after seeding; P0 has seven app-connection reopens; P1 separately resets derived summaries and once the disposable connection pager; source and thumbnail cache not purged',
                    'network': 'not instrumented at OS socket level; no network workload requested'})
     trace_failure = False
     if args.phase == 'p4':

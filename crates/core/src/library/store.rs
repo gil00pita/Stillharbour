@@ -608,8 +608,15 @@ pub(crate) fn query_where(query: &AssetQuery) -> Result<(String, Vec<Value>)> {
     {
         return Err(invalid("Start date exceeds end date."));
     }
+    // Keep the cheap media rejection first, then reject unmatched names before
+    // presence/preparation checks. Leave index selection to SQLite: forcing the
+    // name index slows broad searches on the measured catalog.
     let mut sql = String::from("is_media=1");
     let mut values = Vec::new();
+    if !query.name.is_empty() {
+        sql.push_str(" AND name LIKE ? ESCAPE '\\'");
+        values.push(format!("%{}%", escape_like(&query.name)).into());
+    }
     if query.defer_pending_previews.unwrap_or(false) {
         sql.push_str(" AND (preview_state NOT IN ('pending','placeholder') OR NOT EXISTS(SELECT 1 FROM scans p WHERE p.id='thumbnail:initial:'||assets.root_id AND p.state NOT IN ('completed','partial')))");
     }
@@ -621,10 +628,6 @@ pub(crate) fn query_where(query: &AssetQuery) -> Result<(String, Vec<Value>)> {
     if let Some(root) = &query.root_id {
         sql.push_str(" AND root_id=?");
         values.push(root.clone().into());
-    }
-    if !query.name.is_empty() {
-        sql.push_str(" AND name LIKE ? ESCAPE '\\'");
-        values.push(format!("%{}%", escape_like(&query.name)).into());
     }
     if let Some(id) = &query.directory_id {
         if query.root_id.is_none() {
