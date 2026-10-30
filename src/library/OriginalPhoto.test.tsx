@@ -36,6 +36,10 @@ it('loads original bytes by ID, keeps the preview until actual load, and provide
   fireEvent.error(original);
   fireEvent.error(original);
   expect(screen.getByText(/Original unavailable/)).toBeVisible();
+  expect(screen.getByText(/Original unavailable/)).toHaveAttribute(
+    'title',
+    expect.stringContaining('HEIC/HEIF on compatible macOS webviews'),
+  );
   expect(onReady).toHaveBeenLastCalledWith(false);
   fireEvent.click(screen.getByRole('button', { name: 'Retry original' }));
   expect(container.querySelector('.original-image')).toHaveAttribute(

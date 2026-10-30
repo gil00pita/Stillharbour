@@ -2182,6 +2182,59 @@ fn native_notifications_reconcile_external_add_move_remove_and_preserve_offline_
 }
 
 #[test]
+fn heic_original_opens_without_preview_fallback_and_preserves_source_bytes() {
+    let source = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let png = source.path().join("Generated.png");
+    image::RgbImage::from_pixel(3072, 2048, image::Rgb([20, 100, 180]))
+        .save(&png)
+        .unwrap();
+    let heic = source.path().join("Generated.heic");
+    assert!(
+        std::process::Command::new("/usr/bin/sips")
+            .args(["-s", "format", "heic"])
+            .arg(&png)
+            .arg("--out")
+            .arg(&heic)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    );
+    let expected = std::fs::read(&heic).unwrap();
+    for name in ["Generated.heif", "Generated-upper.HEIC"] {
+        std::fs::write(source.path().join(name), &expected).unwrap();
+    }
+    let before = independent_manifest(source.path());
+    let (catalog, library) = open(data.path());
+    let scan = library
+        .register(
+            source.path().to_owned(),
+            None,
+            "Generated HEIC originals".into(),
+            RootMode::Referenced,
+            ScanFilter::default(),
+        )
+        .unwrap();
+    wait(&library, &scan.id);
+    let page = library.query(AssetQuery::default(), None, 10).unwrap();
+    for name in ["Generated.heic", "Generated.heif", "Generated-upper.HEIC"] {
+        let asset = page.assets.iter().find(|asset| asset.name == name).unwrap();
+        let original = library
+            .original_image(
+                asset.id.clone(),
+                asset.revision.clone(),
+                stillharbour_core::library::ORIGINAL_IMAGE_POLICY,
+            )
+            .expect("HEIC must open without 'Original unavailable · showing a preview'");
+        assert_eq!(original.mime, "image/heic");
+        assert_eq!(original.bytes, expected);
+    }
+    assert_eq!(independent_manifest(source.path()), before);
+    close(library, catalog);
+}
+
+#[test]
 fn original_image_returns_exact_full_size_bytes_and_rejects_stale_or_unavailable_sources() {
     let source = tempfile::tempdir().unwrap();
     let data = tempfile::tempdir().unwrap();

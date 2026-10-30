@@ -393,3 +393,9 @@ The bounded catalog-read update must satisfy P1-01 through P1-07 in [PERFORMANCE
 ### P4 final acceptance record — 2026-10-30
 
 The [current P4 status](PERFORMANCE_P4_STATUS.md) maps all six scenarios to exact current-source release/native/worker/contention/regression evidence and missing prerequisites. Current release catalog and packaged-worker source stat fields round-trip losslessly through JavaScript while older artifacts remain unchanged. Local passes never promote blocked P4-06 results; M4-dependent backup and endpoint tests, complete memory, release presentation and target-platform results require their actual environments/adapters. Keep original-file mutation disabled.
+
+### HEIC original-viewer regression — owner fix, 2026-10-30
+
+- Generated 3,072×2,048 HEIC, HEIF alias and uppercase HEIC originals return identical source bytes and image/heic through ID/revision/policy authorization. Native WKWebView displays the original at its real dimensions with no original-unavailable warning, hides the preview fallback and restores the gallery/query on close.
+- Reject sequence brands/timed tracks, malformed/overflowed/oversized FileTypeBoxes, minor-version brand confusion, truncated/oversized/count-exceeding top-level boxes and unsupported codecs. Preserve source/helper/32 MiB/32-million-pixel limits and stale/offline/invalid-identity/policy failures. Unsupported installed webviews/variants retain honest preview/retry.
+- Packaged original loading confirms exact HEIC bytes/dimensions and unchanged generated sources; no personal library, source conversion, dependency/schema change, cache purge or Windows/minimum-OS claim. See ORIGINAL_IMAGE_VIEWING.md for scope and evidence.

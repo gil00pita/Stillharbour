@@ -80,3 +80,7 @@ The owner's P2 continuation adds1024px gallery and2048px viewer requests through
 ## Tall JPEG follow-up — 2026-10-29
 
 The macOS file-backed JPEG adapter can downsample up to16384px per side, capped at144000000 source pixels; the reported8192×12288 progressive JPEG passes every32–2048px tier on this host. Other adapters/byte paths keep their earlier geometry bounds. Preserve source files and all existing ICC/read/time/memory/output limits; this is derived preview evidence, not full-media integrity or Windows support. See [ADR-0015](decisions/ADR-0015-tall-jpeg-previews.md) and [progressive preview evidence](PROGRESSIVE_PREVIEWS.md). Previous format/package timings remain historical.
+
+## HEIC original viewing — 2026-10-30
+
+The owner's reported HEIC viewer fallback exposes a separate original-byte allowlist, despite successful HEIC preview generation. [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) now defines detected HEIC/HEIF still-image original delivery on compatible macOS WebKit, with unchanged 32 MiB/32-million-pixel source limits and explicit fallback elsewhere. Existing preview, RAW and camera/HDR/platform limitations remain. The current native fixture uses a generated 3,072×2,048 HEIC and requires loaded original-protocol pixels rather than only a derived viewer tier. Earlier preview evidence above is retained at its original scope.

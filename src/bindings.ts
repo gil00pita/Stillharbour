@@ -2,7 +2,7 @@
 export const FOUNDATION_COMMAND = "foundation_request";
 export const LIBRARY_COMMAND = "library_request";
 export const THUMBNAIL_POLICY = "p2-v3-tall-jpeg-srgb8-preview";
-export const ORIGINAL_IMAGE_POLICY = "original-v1-static-32mib-32mp";
+export const ORIGINAL_IMAGE_POLICY = "original-v2-static-heic-32mib-32mp";
 export const DEFAULT_PHOTO_EXTENSIONS: string[] = ["jpg","jpeg","jfif","heic","heif","hif","png","tif","tiff","webp","avif","gif","bmp","dng","cr3","cr2","crw","nef","nrw","arw","sr2","srf","raf","orf","rw2","raw","pef","srw","x3f","3fr","fff","iiq","rwl"];
 export const RENDITION_EDGES = [32, 256, 512, 1024, 2048] as const;
 export const GALLERY_MAX_EDGE = 1024;

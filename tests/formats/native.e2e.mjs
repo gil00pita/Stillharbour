@@ -13,7 +13,7 @@ function manifest(root) {
   );
 }
 describe('native common-format previews — generated sources only', () => {
-  it('shows a generated HEIC through the real gallery/viewer without changing sources', async () => {
+  it('opens a full-size HEIC original through the native gallery/viewer without changing sources', async () => {
     assert.equal(process.platform, 'darwin');
     await $('button.primary').waitForEnabled();
     const selection = await browser.tauri.execute(async ({ core }) =>
@@ -23,6 +23,8 @@ describe('native common-format previews — generated sources only', () => {
       core.invoke('test_performance', { action: 'fixture_location', rows: null }),
     );
     const output = `.context/formats/native-${randomUUID()}`;
+    await mkdir('.context/formats', { recursive: true });
+    await mkdir('.context/screenshots', { recursive: true });
     await mkdir(output, { recursive: false });
     const before = manifest(fixtureRoot);
     await writeFile(`${output}/manifest-before.json`, JSON.stringify(before));
@@ -120,54 +122,61 @@ describe('native common-format previews — generated sources only', () => {
       );
       await browser.keys('Escape');
 
-      await browser.saveScreenshot('.context/screenshots/native-heic-gallery.png');
+      await browser.saveScreenshot('.context/screenshots/native-heic-original-gallery.png');
       await $('.asset-open').click();
       await $('.photo-viewer[open]').waitForDisplayed();
       await browser.waitUntil(
         async () =>
           browser.execute(() => {
-            const image = document.querySelector('.photo-stage .viewer-rendition-high');
+            const image = document.querySelector('.original-image');
             return (
+              document.querySelector('.original-photo.has-original') &&
+              document.querySelector('.photo-viewer')?.getAttribute('data-motion') === 'open' &&
               image?.complete &&
-              image.naturalWidth > 0 &&
-              image.naturalWidth <= 2048 &&
-              image.naturalHeight <= 2048
-            );
-          }),
-        { timeout: 45000 },
-      );
-      const geometry = await browser.execute(() => {
-        const image = document.querySelector('.viewer-rendition-high');
-        const small = document.querySelector('.viewer-rendition-small');
-        const plane = document.querySelector('.viewer-zoom-plane');
-        const canvas = document.querySelector('.viewer-canvas');
-        return {
-          imageHeight: image.getBoundingClientRect().height,
-          imageWidth: image.getBoundingClientRect().width,
-          opacity: getComputedStyle(image).opacity,
-          smallOpacity: small ? getComputedStyle(small).opacity : null,
-          planeHeight: plane.getBoundingClientRect().height,
-          canvasHeight: canvas.getBoundingClientRect().height,
-          visibility: document.visibilityState,
-        };
-      });
-      await writeFile(`${output}/viewer-geometry.json`, JSON.stringify(geometry));
-      await browser.waitUntil(
-        async () =>
-          browser.execute(() => {
-            const image = document.querySelector('.viewer-rendition-high');
-            return (
-              image?.getBoundingClientRect().height > 100 &&
-              image.getBoundingClientRect().width > 100 &&
-              Number(getComputedStyle(image).opacity) >= 0.99
+              image.naturalWidth === 3072 &&
+              image.naturalHeight === 2048 &&
+              image.src.startsWith('original://') &&
+              getComputedStyle(image).opacity === '1' &&
+              !document.querySelector('.original-notice')
             );
           }),
         {
-          timeout: 15000,
-          timeoutMsg: 'Decoded viewer image must have visible geometry and opacity',
+          timeout: 45000,
+          timeoutMsg: 'HEIC original must load without the preview-fallback warning',
         },
       );
-      await browser.saveScreenshot('.context/screenshots/native-heic-viewer.png');
+      await browser.execute(async () => {
+        await document.querySelector('.original-image').decode();
+        await new Promise((resolve) => {
+          const timeout = setTimeout(resolve, 1000);
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              clearTimeout(timeout);
+              resolve();
+            }),
+          );
+        });
+      });
+      const geometry = await browser.execute(() => {
+        const image = document.querySelector('.original-image');
+        const fallback = document.querySelector('.original-fallback');
+        return {
+          source: image.src,
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight,
+          imageHeight: image.getBoundingClientRect().height,
+          imageWidth: image.getBoundingClientRect().width,
+          opacity: getComputedStyle(image).opacity,
+          fallbackHidden: getComputedStyle(fallback).visibility === 'hidden',
+          frameOpacity: getComputedStyle(image.closest('.viewer-image-frame')).opacity,
+          frameTransform: getComputedStyle(image.closest('.viewer-image-frame')).transform,
+          visibility: document.visibilityState,
+        };
+      });
+      assert.ok(geometry.imageHeight > 100 && geometry.imageWidth > 100);
+      assert.equal(geometry.fallbackHidden, true);
+      await writeFile(`${output}/viewer-geometry.json`, JSON.stringify(geometry));
+      await browser.saveScreenshot('.context/screenshots/native-heic-original.png');
       await browser.keys('Escape');
       await $('.asset-viewport').waitForDisplayed();
       assert.equal(await $('input[aria-label="Search filenames"]').getValue(), 'Native HEIC');
@@ -186,6 +195,8 @@ describe('native common-format previews — generated sources only', () => {
           format: 'generated HEIC',
           gallery: true,
           viewer: true,
+          original: true,
+          originalDimensions: [3072, 2048],
           sourceEntries: verified.verifiedFiles,
           originalMutationsEnabled: foundation.data.originalMutationsEnabled,
         }),

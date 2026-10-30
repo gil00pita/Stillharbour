@@ -71,7 +71,7 @@ export function OriginalPhoto({
         <p
           className="original-notice"
           role="status"
-          title="Original viewing supports static JPEG, PNG and WebP up to 32 MiB and 32 megapixels. Offline originals must be reconnected."
+          title="Original viewing supports static JPEG, PNG and WebP, plus HEIC/HEIF on compatible macOS webviews, up to 32 MiB and 32 megapixels. Offline originals must be reconnected."
         >
           Original unavailable · showing a preview.{' '}
           <button onClick={retryOriginal}>Retry original</button>
