@@ -11,6 +11,56 @@ async function native(request) {
     request,
   );
 }
+async function assertViewerControlsOverlay() {
+  const geometry = await browser.execute(() => {
+    const controls = document.querySelector('.viewer-controls');
+    const bar = controls.getBoundingClientRect();
+    const photo = document.querySelector('.viewer-photo').getBoundingClientRect();
+    const heart = controls.querySelector('.viewer-favorite');
+    const buttons = [...controls.querySelectorAll('button')];
+    const first = buttons[0].getBoundingClientRect();
+    return {
+      insidePhoto:
+        bar.left >= photo.left &&
+        bar.right <= photo.right + 1 &&
+        bar.top >= photo.top &&
+        bar.bottom <= photo.bottom,
+      overlaysCanvas:
+        getComputedStyle(controls.parentElement).position === 'absolute' &&
+        controls.parentElement.parentElement.classList.contains('viewer-photo'),
+      heartBeforeInfo: heart.nextElementSibling?.getAttribute('aria-label') === 'Info',
+      singleRow: buttons.every((button) => {
+        const bounds = button.getBoundingClientRect();
+        return Math.abs(bounds.top + bounds.height / 2 - first.top - first.height / 2) < 1;
+      }),
+      buttonsReachable: buttons.every((button) => {
+        const bounds = button.getBoundingClientRect();
+        return button.contains(
+          document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2),
+        );
+      }),
+      navigationReachable: [...document.querySelectorAll('.viewer-previous, .viewer-next')].every(
+        (button) => {
+          const bounds = button.getBoundingClientRect();
+          return button.contains(
+            document.elementFromPoint(
+              bounds.left + bounds.width / 2,
+              bounds.top + bounds.height / 2,
+            ),
+          );
+        },
+      ),
+    };
+  });
+  assert.deepEqual(geometry, {
+    insidePhoto: true,
+    overlaysCanvas: true,
+    heartBeforeInfo: true,
+    singleRow: true,
+    buttonsReachable: true,
+    navigationReachable: true,
+  });
+}
 async function assertPhotoCheckboxOnTop(id) {
   // HTMLElement.click() in the embedded driver bypasses real pointer hit testing.
   const hit = await browser.execute((id) => {
@@ -290,10 +340,107 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await $('input[name="minBytes"]').setValue('0');
       await changeSizeUnit('Minimum size unit', 'KB');
 
+      await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'initial_previews_hold', rows: null }),
+      );
       await $('.folder-actions .primary').click();
     } finally {
       await picker.mockRestore();
     }
+    try {
+      await browser.waitUntil(
+        async () =>
+          browser.execute(() => {
+            const bar = document.querySelector('.preparation-banner [role="progressbar"]');
+            return (
+              bar?.getAttribute('aria-valuenow') === '0' &&
+              document.querySelector('.preparation-banner')?.textContent.includes('remaining')
+            );
+          }),
+        {
+          timeout: 15000,
+          timeoutMsg: 'The held native preparation never showed its known inventory',
+        },
+      );
+      const status = await native({ kind: 'status' });
+      const root = status.data.roots[0];
+      const thumbnail = status.data.jobs.find(
+        (job) => job.kind === 'thumbnails' && job.rootId === root.id,
+      );
+      assert.equal(root.preparingPreviews, true);
+      assert.ok(thumbnail.discovered > 0);
+      assert.equal(thumbnail.indexed + thumbnail.skipped + thumbnail.errors, 0);
+      const base = {
+        rootId: root.id,
+        folder: '',
+        name: '',
+        fromDate: '',
+        throughDate: '',
+        minBytes: '',
+        maxBytes: '',
+        extension: '',
+        favoritesOnly: false,
+        tag: '',
+        sort: 'capture',
+        includeMissing: false,
+      };
+      const prepared = await native({
+        kind: 'query',
+        query: { ...base, deferPendingPreviews: true },
+        cursor: null,
+        limit: 240,
+      });
+      const indexed = await native({ kind: 'query', query: base, cursor: null, limit: 240 });
+      assert.equal(prepared.data.total, 0);
+      assert.ok(
+        indexed.data.total > 0,
+        'Discovery must retain catalog observations while previews wait',
+      );
+      assert.equal(
+        await browser.execute(
+          () => document.querySelectorAll('.collection-main [data-asset-id]').length,
+        ),
+        0,
+      );
+      for (const [name, width, height] of [
+        ['desktop', 1180, 780],
+        ['minimum', 660, 560],
+      ]) {
+        await browser.setWindowSize(width, height);
+        const layout = await browser.execute(() => {
+          const banner = document.querySelector('.preparation-banner');
+          const box = banner.getBoundingClientRect();
+          const button = banner.querySelector('button').getBoundingClientRect();
+          return {
+            fits: box.right <= innerWidth + 1 && box.left >= 0 && button.right <= box.right + 1,
+            hasPhotos: Boolean(document.querySelector('.collection-main [data-asset-id]')),
+          };
+        });
+        assert.deepEqual(layout, { fits: true, hasPhotos: false });
+        await browser.saveScreenshot(`.context/screenshots/initial-previews-${name}.png`);
+      }
+      await $('.preparation-banner button').click();
+      await browser.waitUntil(async () =>
+        (await $('.preparation-banner'))
+          .getText()
+          .then((text) => text.includes('Preview preparation paused')),
+      );
+      assert.equal(await $('.preparation-banner button').getText(), 'Resume previews');
+      await browser.saveScreenshot('.context/screenshots/initial-previews-paused.png');
+      observations.initialPreparation = {
+        total: thumbnail.discovered,
+        processed: 0,
+        preparedTotal: 0,
+        indexedTotal: indexed.data.total,
+        heldBeforeSourceAdmission: true,
+      };
+    } finally {
+      await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'initial_previews_release', rows: null }),
+      );
+      await browser.setWindowSize(1180, 780);
+    }
+    await $('.preparation-banner button').click();
     await $('.asset-viewport').waitForDisplayed();
     // Diagnostic schedule: deterministically exercise completion before opening
     // Jobs, instead of relying on how fast the host scans the fixture.
@@ -1226,13 +1373,32 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(async () => (await native({ kind: 'tags' })).data.includes('Reviewed'));
     await browser.saveScreenshot('.context/screenshots/photo-canvas-selection.png');
     await $('button=Clear selection').click();
+    // Inject one transport-error event; the follow-up PNG read is real native
+    // owned-cache traffic and must recover without a catalog rescan.
+    await browser.execute(() => {
+      const image = [...document.querySelectorAll('.t-skel-content')].find(
+        (item) => item.complete && item.naturalWidth > 0,
+      );
+      if (!image) throw new Error('No loaded fixture preview for retry check');
+      image.dispatchEvent(new Event('error'));
+    });
+    await browser.waitUntil(async () =>
+      browser.execute(() =>
+        [...document.querySelectorAll('.t-skel-content')].some(
+          (image) => image.src.includes('retry=1') && image.complete && image.naturalWidth > 0,
+        ),
+      ),
+    );
+    observations.transientCacheRequestRecovered = true;
     const opening = await browser.execute(() => {
       const viewport = document.querySelector('.asset-viewport');
       viewport.scrollTop = Math.min(150, viewport.scrollHeight - viewport.clientHeight);
       const bounds = viewport.getBoundingClientRect();
       const article = [...document.querySelectorAll('.gallery .asset')].find(
         (asset) =>
-          asset.querySelector('img') &&
+          [...asset.querySelectorAll('img')].some(
+            (image) => image.complete && image.naturalWidth > 0,
+          ) &&
           asset.getBoundingClientRect().bottom > bounds.top &&
           asset.getBoundingClientRect().top < bounds.bottom,
       );
@@ -1243,6 +1409,61 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       return { id: article.dataset.assetId, position };
     });
     await $('.photo-viewer[open]').waitForDisplayed();
+    await browser.waitUntil(async () =>
+      browser.execute(
+        () => document.querySelector('.photo-viewer')?.getAttribute('data-motion') === 'open',
+      ),
+    );
+    for (const [name, width, height] of [
+      ['desktop', 1180, 780],
+      ['minimum', 660, 560],
+    ]) {
+      await browser.setWindowSize(width, height);
+      const geometry = await browser.execute(() => {
+        const viewer = document.querySelector('.photo-viewer');
+        const page = document.querySelector('.library-page').getBoundingClientRect();
+        const box = viewer.getBoundingClientRect();
+        const menu = document.querySelector('.sidebar nav button').getBoundingClientRect();
+        const controls = document.querySelector('.viewer-controls').getBoundingClientRect();
+        return {
+          controlsFit:
+            controls.left >= page.left &&
+            controls.right <= page.right + 1 &&
+            controls.bottom <= innerHeight,
+          pageScoped:
+            Math.abs(box.left - page.left) < 1 &&
+            Math.abs(box.width - page.width) < 1 &&
+            box.right <= innerWidth + 1,
+          menuUsable: Boolean(
+            document
+              .elementFromPoint(menu.left + menu.width / 2, menu.top + menu.height / 2)
+              ?.closest('.sidebar'),
+          ),
+          nonmodal: viewer.getAttribute('aria-modal') === 'false',
+        };
+      });
+      assert.deepEqual(geometry, {
+        controlsFit: true,
+        pageScoped: true,
+        menuUsable: true,
+        nonmodal: true,
+      });
+      await assertViewerControlsOverlay();
+      await browser.saveScreenshot(`.context/screenshots/viewer-overlay-${name}.png`);
+    }
+    await browser.execute(() => {
+      const image = [...document.querySelectorAll('.viewer-image-frame img')].find(
+        (item) => item.naturalWidth > 0 && getComputedStyle(item).opacity !== '0',
+      );
+      if (!image) throw new Error('No displayed viewer image');
+      image.click();
+    });
+    await browser.setWindowSize(1180, 780);
+    assert.equal(
+      await $('.photo-viewer').isExisting(),
+      true,
+      'Image click must not close the viewer',
+    );
     assert.equal(
       await browser.execute(() => {
         const canvas = document.querySelector('.viewer-canvas');
@@ -1257,7 +1478,67 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         () => document.querySelector('.photo-viewer .viewer-zoom-plane img')?.naturalWidth > 0,
       ),
     );
-    await browser.saveScreenshot('.context/screenshots/photo-canvas-viewer-desktop.png');
+    await browser.waitUntil(async () =>
+      browser.execute(() => !document.querySelector('.photo-viewer .preview-loading-sheen')),
+    );
+    await browser.waitUntil(async () =>
+      browser.execute(
+        () =>
+          document.querySelector('.original-photo')?.classList.contains('has-original') &&
+          document.querySelector('.original-image')?.naturalWidth > 0,
+      ),
+    );
+    await browser.waitUntil(async () =>
+      browser.execute(
+        () => getComputedStyle(document.querySelector('.original-image')).opacity === '1',
+      ),
+    );
+    const originalDisplay = await browser.execute(() => {
+      const image = document.querySelector('.original-image');
+      const close = document.querySelector('.viewer-back').getBoundingClientRect();
+      const title = document.querySelector('.viewer-toolbar h2').getBoundingClientRect();
+      const heart = document.querySelector('.viewer-actions .viewer-favorite');
+      return {
+        source: image.src,
+        opacity: getComputedStyle(image).opacity,
+        width: image.naturalWidth,
+        closeRight: close.left > title.right,
+        heartInControls: Boolean(heart?.closest('.viewer-controls')),
+        oldBanner: Boolean(document.querySelector('.photo-viewer .viewer-status')),
+      };
+    });
+    assert.ok(originalDisplay.source.startsWith('original://'));
+    assert.ok(originalDisplay.width > 0);
+    assert.deepEqual(
+      {
+        closeRight: originalDisplay.closeRight,
+        heartInControls: originalDisplay.heartInControls,
+        oldBanner: originalDisplay.oldBanner,
+      },
+      { closeRight: true, heartInControls: true, oldBanner: false },
+    );
+    observations.originalDisplay = originalDisplay;
+    const initialFavorite = await $('.viewer-favorite').getAttribute('aria-pressed');
+    await $('.viewer-favorite').click();
+    await browser.waitUntil(
+      async () => (await $('.viewer-favorite').getAttribute('aria-pressed')) !== initialFavorite,
+    );
+    assert.equal(
+      (await native({ kind: 'detail', asset_id: opening.id })).data.asset.favorite,
+      initialFavorite !== 'true',
+    );
+    await browser.waitUntil(async () =>
+      browser.execute(() => {
+        const heart = document.querySelector('.t-like-heart');
+        return getComputedStyle(heart.querySelector('path')).fill === getComputedStyle(heart).color;
+      }),
+    );
+    await browser.saveScreenshot('.context/screenshots/viewer-overlay-favorite.png');
+    await $('.viewer-favorite').click();
+    await browser.waitUntil(
+      async () => (await $('.viewer-favorite').getAttribute('aria-pressed')) === initialFavorite,
+    );
+    await browser.saveScreenshot('.context/screenshots/viewer-overlay-loaded.png');
     await browser.execute(() => {
       const range = document.querySelector('input[aria-label="Preview zoom"]');
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(range, '200');
@@ -1265,7 +1546,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       range.dispatchEvent(new Event('change', { bubbles: true }));
     });
     assert.equal(await $('.viewer-zoom output').getText(), '200% of fit');
-    await $('button=Fit').click();
+    await $('button[aria-label="Fit image"]').click();
     const initialName = await $('.viewer-toolbar h2').getText();
     await $('.viewer-next').waitForEnabled();
     await $('.viewer-next').click();
@@ -1273,14 +1554,23 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await $('.viewer-previous').waitForEnabled();
     await $('.viewer-previous').click();
     await browser.waitUntil(async () => (await $('.viewer-toolbar h2').getText()) === initialName);
-    await $('button=Filmstrip').click();
+    await $('button[aria-label="Filmstrip"]').click();
     await $('.viewer-filmstrip').waitForDisplayed();
     observations.viewerOpening = opening;
   });
   it('saves viewer catalog notes, restores position and supports the minimum window', async () => {
     const opening = observations.viewerOpening;
-    await $('button=Info').click();
+    await $('button[aria-label="Info"]').click();
     await $('.inspector').waitForDisplayed();
+    for (const [name, width, height] of [
+      ['desktop', 1180, 780],
+      ['minimum', 660, 560],
+    ]) {
+      await browser.setWindowSize(width, height);
+      await assertViewerControlsOverlay();
+      await browser.saveScreenshot(`.context/screenshots/viewer-overlay-info-${name}.png`);
+    }
+    await browser.setWindowSize(1180, 780);
     console.info('Native viewer information opened');
     const favorite = await $('.inspector input[type="checkbox"]');
     await favorite.click();
@@ -1394,8 +1684,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     const opener = await $('.asset-open', { strict: false });
     await opener.click();
     await $('.photo-viewer[open]').waitForDisplayed();
-    await browser.saveScreenshot('.context/screenshots/photo-canvas-viewer-minimum.png');
-    await $('button=Info').click();
+    await browser.saveScreenshot('.context/screenshots/viewer-controls-minimum-error.png');
+    await $('button[aria-label="Info"]').click();
     await browser.waitUntil(async () =>
       browser.execute(() => document.activeElement?.textContent === 'Photo details'),
     );

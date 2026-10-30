@@ -11,6 +11,7 @@ import type {
 import { libraryData } from '../ipc';
 import { defaultQuery } from './model';
 import { PhotoViewer } from './PhotoViewer';
+import { photoOrigin, type PhotoOrigin } from './viewerMotion';
 import { restoreAssetFocus } from './focus';
 import { ExplorerCanvas, type ExplorerItem } from './ExplorerCanvas';
 import { FileDetails } from './FileDetails';
@@ -41,6 +42,7 @@ export function FolderExplorer({
   const restore = useRef<Position | null>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
   const viewerOffset = useRef(0);
+  const [origin, setOrigin] = useState<PhotoOrigin | undefined>(undefined);
   const root = status.roots.find((root) => root.id === location.rootId);
   const effectiveLocation = useMemo(() => (root ? location : HOME), [root, location]);
   const browse = useDirectoryPage(effectiveLocation, status.revision);
@@ -112,6 +114,7 @@ export function FolderExplorer({
       );
     else {
       opener.current = button;
+      setOrigin(photoOrigin(button));
       viewerOffset.current = viewport.current?.scrollTop ?? 0;
       if (entry.media) setViewer(entry.asset);
       else setFile(entry.asset);
@@ -128,153 +131,156 @@ export function FolderExplorer({
   }
   const parent = page?.ancestors.at(-1);
   return (
-    <>
-      <header className="toolbar explorer-toolbar">
-        {navigationControl}
-        <h1>Folders</h1>
-        <label className="fixed-search">
-          <span className="screen-reader-status">
-            {root ? 'Filter files in this folder' : 'Search libraries'}
-          </span>
-          <input
-            type="search"
-            maxLength={256}
-            placeholder={root ? 'Filter files in this folder…' : 'Search libraries…'}
-            value={location.search}
-            onChange={(event) => {
-              restore.current = { location, offset: 0, focus: null };
-              setLocation({ ...location, cursor: null, search: event.target.value });
-            }}
-          />
-        </label>
-        <div className="explorer-views" aria-label="Folder view">
-          <button aria-pressed={mode === 'icons'} onClick={() => setMode('icons')}>
-            Icons
-          </button>
-          <button aria-pressed={mode === 'details'} onClick={() => setMode('details')}>
-            Details
-          </button>
-        </div>
-        {jobsControl}
-      </header>
-      <div className="folder-explorer">
-        <div className="explorer-navigation">
-          <button onClick={back} disabled={!history.length}>
-            Back
-          </button>
-          <button
-            onClick={() =>
-              navigate(
-                parent ? { ...location, directoryId: parent.id, cursor: null, search: '' } : HOME,
-              )
-            }
-            disabled={!root}
-          >
-            Up
-          </button>
-          <nav aria-label="Folder path">
-            <button onClick={() => navigate(HOME)} disabled={!root}>
-              Libraries
-            </button>
-            {root && (
-              <>
-                {(page?.ancestors ?? []).map((directory) => (
-                  <span key={directory.id}>
-                    <span aria-hidden="true">/</span>
-                    <button
-                      title={directory.name}
-                      onClick={() =>
-                        navigate({
-                          ...location,
-                          directoryId: directory.id,
-                          cursor: null,
-                          search: '',
-                        })
-                      }
-                    >
-                      <bdi>{directory.name}</bdi>
-                    </button>
-                  </span>
-                ))}
-                <span aria-current="location">
-                  <span aria-hidden="true">/</span>
-                  <bdi>{page?.directory.name ?? root.label}</bdi>
-                </span>
-              </>
-            )}
-          </nav>
-        </div>
-        <FolderStatus root={root} page={page} libraryCount={status.roots.length} />
-        {browse.error && (
-          <p role="alert" className="error">
-            {browse.error} <button onClick={browse.retry}>Retry folder</button>
-          </p>
-        )}
-        {browse.loading && !page ? (
-          <p role="status">Loading indexed contents…</p>
-        ) : browse.error && !page ? (
-          <div className="empty-results">
-            <h2>Folder could not be loaded</h2>
-            <p>Retry, or choose another folder.</p>
-          </div>
-        ) : items.length ? (
-          <ExplorerCanvas
-            items={items}
-            mode={mode}
-            viewport={viewport}
-            root={root}
-            paused={Boolean(viewer || file)}
-            onOpen={open}
-            onError={onError}
-          />
-        ) : (
-          <div className="empty-results">
-            <h2>
-              {root
-                ? location.search
-                  ? 'No matching indexed files'
-                  : 'No indexed items here'
-                : location.search
-                  ? 'No matching libraries'
-                  : 'No libraries added'}
-            </h2>
-            <p>
-              {root
-                ? 'Choose another folder, or check its scan settings.'
-                : 'Add a photo folder in Settings to browse its indexed contents.'}
-            </p>
-          </div>
-        )}
-        {root && page && (
-          <div className="explorer-pagination">
-            <span>
-              {page.entries.length.toLocaleString()} shown · {page.total.toLocaleString()} indexed
-              items
+    <div className="library-page">
+      <div className="library-underlay" inert={Boolean(viewer)} aria-hidden={Boolean(viewer)}>
+        <header className="toolbar explorer-toolbar">
+          {navigationControl}
+          <h1>Folders</h1>
+          <label className="fixed-search">
+            <span className="screen-reader-status">
+              {root ? 'Filter files in this folder' : 'Search libraries'}
             </span>
-            <button
-              disabled={browse.loading || !page.previousCursor}
-              onClick={() => {
+            <input
+              type="search"
+              maxLength={256}
+              placeholder={root ? 'Filter files in this folder…' : 'Search libraries…'}
+              value={location.search}
+              onChange={(event) => {
                 restore.current = { location, offset: 0, focus: null };
-                setLocation({ ...location, cursor: page.previousCursor });
+                setLocation({ ...location, cursor: null, search: event.target.value });
               }}
-            >
-              Previous items
+            />
+          </label>
+          <div className="explorer-views" aria-label="Folder view">
+            <button aria-pressed={mode === 'icons'} onClick={() => setMode('icons')}>
+              Icons
             </button>
-            <button
-              disabled={browse.loading || !page.nextCursor}
-              onClick={() => {
-                restore.current = { location, offset: 0, focus: null };
-                setLocation({ ...location, cursor: page.nextCursor });
-              }}
-            >
-              Next items
+            <button aria-pressed={mode === 'details'} onClick={() => setMode('details')}>
+              Details
             </button>
           </div>
-        )}
+          {jobsControl}
+        </header>
+        <div className="folder-explorer">
+          <div className="explorer-navigation">
+            <button onClick={back} disabled={!history.length}>
+              Back
+            </button>
+            <button
+              onClick={() =>
+                navigate(
+                  parent ? { ...location, directoryId: parent.id, cursor: null, search: '' } : HOME,
+                )
+              }
+              disabled={!root}
+            >
+              Up
+            </button>
+            <nav aria-label="Folder path">
+              <button onClick={() => navigate(HOME)} disabled={!root}>
+                Libraries
+              </button>
+              {root && (
+                <>
+                  {(page?.ancestors ?? []).map((directory) => (
+                    <span key={directory.id}>
+                      <span aria-hidden="true">/</span>
+                      <button
+                        title={directory.name}
+                        onClick={() =>
+                          navigate({
+                            ...location,
+                            directoryId: directory.id,
+                            cursor: null,
+                            search: '',
+                          })
+                        }
+                      >
+                        <bdi>{directory.name}</bdi>
+                      </button>
+                    </span>
+                  ))}
+                  <span aria-current="location">
+                    <span aria-hidden="true">/</span>
+                    <bdi>{page?.directory.name ?? root.label}</bdi>
+                  </span>
+                </>
+              )}
+            </nav>
+          </div>
+          <FolderStatus root={root} page={page} libraryCount={status.roots.length} />
+          {browse.error && (
+            <p role="alert" className="error">
+              {browse.error} <button onClick={browse.retry}>Retry folder</button>
+            </p>
+          )}
+          {browse.loading && !page ? (
+            <p role="status">Loading indexed contents…</p>
+          ) : browse.error && !page ? (
+            <div className="empty-results">
+              <h2>Folder could not be loaded</h2>
+              <p>Retry, or choose another folder.</p>
+            </div>
+          ) : items.length ? (
+            <ExplorerCanvas
+              items={items}
+              mode={mode}
+              viewport={viewport}
+              root={root}
+              paused={Boolean(viewer || file)}
+              onOpen={open}
+              onError={onError}
+            />
+          ) : (
+            <div className="empty-results">
+              <h2>
+                {root
+                  ? location.search
+                    ? 'No matching indexed files'
+                    : 'No indexed items here'
+                  : location.search
+                    ? 'No matching libraries'
+                    : 'No libraries added'}
+              </h2>
+              <p>
+                {root
+                  ? 'Choose another folder, or check its scan settings.'
+                  : 'Add a photo folder in Settings to browse its indexed contents.'}
+              </p>
+            </div>
+          )}
+          {root && page && (
+            <div className="explorer-pagination">
+              <span>
+                {page.entries.length.toLocaleString()} shown · {page.total.toLocaleString()} indexed
+                items
+              </span>
+              <button
+                disabled={browse.loading || !page.previousCursor}
+                onClick={() => {
+                  restore.current = { location, offset: 0, focus: null };
+                  setLocation({ ...location, cursor: page.previousCursor });
+                }}
+              >
+                Previous items
+              </button>
+              <button
+                disabled={browse.loading || !page.nextCursor}
+                onClick={() => {
+                  restore.current = { location, offset: 0, focus: null };
+                  setLocation({ ...location, cursor: page.nextCursor });
+                }}
+              >
+                Next items
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       {viewer && (
         <PhotoViewer
           initial={viewer}
+          origin={origin}
           pageAssets={photos}
           query={query}
           status={status}
@@ -296,7 +302,7 @@ export function FolderExplorer({
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 

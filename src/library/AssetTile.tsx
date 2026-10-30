@@ -1,3 +1,4 @@
+import { CachedPreviewImage } from './CachedPreviewImage';
 import { useState, type KeyboardEvent } from 'react';
 import type { AssetSummary, ThumbnailResult } from '../bindings';
 import type { ViewMode } from './model';
@@ -21,6 +22,7 @@ type AssetTileProps = {
   tinyPreview?: ThumbnailResult | undefined;
   onSelect: (id: string, range: boolean) => void;
   onOpen: (id: string, opener: HTMLButtonElement) => void;
+  onRetry?: () => void;
   onNavigate: (event: KeyboardEvent<HTMLElement>) => void;
 };
 
@@ -48,7 +50,9 @@ function ImageTile({
   onSelect,
   onOpen,
   onNavigate,
+  onRetry,
 }: Omit<AssetTileProps, 'mode'> & { mode: Exclude<ViewMode, 'list'> }) {
+  const [imageFailure, setImageFailure] = useState(false);
   return (
     <article
       data-asset-id={asset.id}
@@ -91,6 +95,7 @@ function ImageTile({
           edge={edge}
           fit={fit}
           offline={offline}
+          onFailure={() => setImageFailure(true)}
         />
         {mode !== 'gallery' && (
           <span className="asset-name">
@@ -98,6 +103,15 @@ function ImageTile({
           </span>
         )}
       </button>
+      {imageFailure && onRetry && (
+        <button
+          className="asset-preview-retry"
+          onClick={onRetry}
+          aria-label={`Retry preview for ${asset.name}`}
+        >
+          Retry preview
+        </button>
+      )}
     </article>
   );
 }
@@ -110,6 +124,7 @@ export function TileImage({
   edge,
   fit,
   offline,
+  onFailure,
 }: {
   asset: AssetSummary;
   imageHeight: number;
@@ -118,6 +133,7 @@ export function TileImage({
   edge: number;
   fit: 'contain' | 'cover';
   offline: boolean;
+  onFailure?: () => void;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [failedFallbacks, setFailedFallbacks] = useState<ReadonlySet<number>>(new Set());
@@ -137,7 +153,7 @@ export function TileImage({
       >
         <span className="t-skel-skeleton">
           {tinyReady ? (
-            <img
+            <CachedPreviewImage
               src={previewUrl(asset, fallbackEdge!)}
               alt=""
               decoding="async"
@@ -161,7 +177,7 @@ export function TileImage({
           )}
         </span>
         {(preview?.state === 'ready' || clearLoaded) && !imageFailed && (
-          <img
+          <CachedPreviewImage
             className="t-skel-content"
             src={previewUrl(asset, edge)}
             alt=""
@@ -171,6 +187,7 @@ export function TileImage({
             onError={() => {
               setImageFailed(true);
               setClearLoaded(false);
+              onFailure?.();
             }}
           />
         )}

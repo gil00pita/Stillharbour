@@ -1,5 +1,6 @@
 import { useId } from 'react';
 import type { ScanJob } from '../bindings';
+import { thumbnailProgress, thumbnailDescription } from './jobProgress';
 
 const descriptions: Record<string, string> = {
   running: 'Scanning · total files not yet known',
@@ -54,42 +55,30 @@ function ThumbnailProgress({
 }) {
   const active =
     job.state === 'running' || job.state === 'cancel_requested' || job.state === 'queued';
-  const processed = Math.min(job.discovered, job.indexed + job.skipped + job.errors);
-  const percentage = job.discovered > 0 ? Math.floor((processed / job.discovered) * 100) : 0;
-  const descriptions: Record<string, string> = {
-    queued: 'Thumbnail generation queued',
-    running: `Preparing thumbnails · ${processed.toLocaleString()} of ${job.discovered.toLocaleString()}`,
-    cancel_requested: 'Stopping thumbnail generation…',
-    completed: 'Thumbnails complete',
-    partial: 'Thumbnails finished with unavailable items',
-    canceled: 'Thumbnail generation canceled',
-    interrupted: 'Thumbnail generation interrupted',
-    failed: 'Thumbnail generation failed',
-  };
-  const description = descriptions[job.state] ?? 'Thumbnail generation not running';
+  const { processed, percentage } = thumbnailProgress(job);
+  const completed = job.state === 'completed';
+  const value = completed ? 100 : percentage;
+  const indeterminate = value === undefined;
+  const description = thumbnailDescription(job, processed, percentage);
+  const showProgress = active || completed;
   return (
     <div className="job-progress">
-      {active || job.state === 'completed' ? (
-        <div
-          className="job-progress-track is-complete"
-          role="progressbar"
-          aria-label={`Thumbnail progress for ${label}`}
-          aria-describedby={descriptionId}
-          aria-valuetext={description}
-          aria-valuenow={
-            job.state === 'completed' ? 100 : job.state === 'queued' ? undefined : percentage
-          }
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <span
-            className="job-progress-fill"
-            style={{ width: `${job.state === 'completed' ? 100 : percentage}%` }}
-          />
-        </div>
-      ) : (
-        <div className="job-progress-track" aria-hidden="true" />
-      )}
+      <div
+        className={`job-progress-track ${showProgress ? (indeterminate ? 'is-active' : 'is-complete') : ''}`}
+        role={showProgress ? 'progressbar' : undefined}
+        aria-hidden={showProgress ? undefined : true}
+        aria-label={`Thumbnail progress for ${label}`}
+        aria-describedby={descriptionId}
+        aria-valuetext={description}
+        aria-valuenow={value}
+        aria-valuemin={0}
+        aria-valuemax={100}
+      >
+        <span
+          className="job-progress-fill"
+          style={indeterminate ? undefined : { width: `${value}%` }}
+        />
+      </div>
       <p id={descriptionId} className="help">
         {description}
       </p>

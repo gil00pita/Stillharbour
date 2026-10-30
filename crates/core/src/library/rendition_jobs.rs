@@ -7,12 +7,20 @@ pub(super) struct ThumbnailJob {
     pub cancel: Arc<AtomicBool>,
 }
 impl Library {
+    #[cfg(feature = "fixture-probes")]
+    pub fn hold_initial_previews_for_probe(&self, hold: bool) {
+        self.initial_previews_hold.store(hold, Ordering::Release);
+    }
     pub fn generate_thumbnails(self: &Arc<Self>, root_id: String) -> Result<ScanJob> {
         // Serialize admission with destructive catalog/cache maintenance and scans.
         let _admission = self.scan_gate.try_start()?;
-        self.enqueue_thumbnails(root_id)
+        self.enqueue_thumbnails(root_id, true)
     }
-    pub(super) fn enqueue_thumbnails(self: &Arc<Self>, root_id: String) -> Result<ScanJob> {
+    pub(super) fn enqueue_thumbnails(
+        self: &Arc<Self>,
+        root_id: String,
+        explicit: bool,
+    ) -> Result<ScanJob> {
         let _cache = self.cache_gate.read().map_err(|_| lock_error())?;
         if self.maintenance.load(Ordering::Acquire) {
             return Err(AppError::new(
@@ -24,6 +32,15 @@ impl Library {
         let mut jobs = self.thumbnail_jobs.lock().map_err(|_| lock_error())?;
         if let Some(job) = jobs.iter().find(|job| job.root_id == root_id) {
             return store::job(&self.catalog, job.id.clone());
+        }
+        if !explicit
+            && let Some(initial) = store::initial_preparation_job(&self.catalog, root_id.clone())?
+            && matches!(
+                initial.state.as_str(),
+                "canceled" | "interrupted" | "failed"
+            )
+        {
+            return Ok(initial);
         }
         if jobs.len() >= 8 {
             return Err(AppError::new(
@@ -114,6 +131,24 @@ impl Library {
             0,
             "Preparing tiny previews".into(),
         )?;
+        // A bounded, test-only latch holds real work before source admission.
+        // It lets native checks inspect a known inventory without racing a fast decoder.
+        #[cfg(feature = "fixture-probes")]
+        if id.starts_with("thumbnail:initial:") {
+            let held = std::time::Instant::now();
+            while self.initial_previews_hold.load(Ordering::Acquire) {
+                if cancel.load(Ordering::Relaxed) {
+                    return Ok(0);
+                }
+                if held.elapsed() > Duration::from_secs(45) {
+                    return Err(AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "Fixture preview hold timed out.",
+                    ));
+                }
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
         loop {
             if cancel.load(Ordering::Relaxed) {
                 break;
@@ -128,6 +163,7 @@ impl Library {
                 }
                 after = row;
                 if self.existing_preview(&key)?.is_some() {
+                    store::preview_state_for_edge(&self.catalog, key, None)?;
                     cached += 1;
                 } else {
                     let result =
@@ -188,7 +224,10 @@ impl Library {
                 errors,
                 "Inventory changed during generation".into(),
             )?;
-            return Ok(errors.max(1));
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "Inventory changed during preview preparation. Resume previews to cover remaining photos.",
+            ));
         }
         Ok(errors)
     }

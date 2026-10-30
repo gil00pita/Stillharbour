@@ -138,3 +138,31 @@ Reuse the existing fixture/probe/native infrastructure for [bounded local stress
 ## P4 continuation — exact empty display reads, 2026-10-29
 
 The next-step request continues P4's measured filtered reads. Reuse the existing page and summary-cache boundaries: an exact zero count avoids the ordered projection and empty page/timeline results share evidence within the same query/epoch. Preserve inventory-counter lag, conservative invalidation and every validation/field. [PERFORMANCE_FILTERED_READS.md](PERFORMANCE_FILTERED_READS.md) retains the release reproduction and positive controls; no schema/index/dependency/IPC or safety change.
+
+## P4 continuation — positive timeline totals, 2026-10-30
+
+Reuse retained matching timeline buckets as exact count evidence for pages/seeks, with checked summation and existing cache epochs/bounds/fallback. Keep unfiltered inventory semantics and avoid eager timeline work. [PERFORMANCE_POSITIVE_TOTALS.md](PERFORMANCE_POSITIVE_TOTALS.md) records the reproduced redundant scan, both request orders and the remaining filtered-projection/aggregation and wider P4 gates. This refines ADR-0009's existing read seam without a new architecture, schema, dependency or IPC surface.
+
+## P4 continuation — selective filename projections, 2026-10-30
+
+Use a bounded existing-index lookup only after an exact small unscoped filename count is available. Apply a transient parameterized rowid predicate only when the complete name match fits; larger or mixed scopes retain normal planning. Reject the eager-count prototype after its late-broad regression. [PERFORMANCE_FILENAME_READS.md](PERFORMANCE_FILENAME_READS.md) records policy boundaries, before/after evidence and remaining gates. This stays within the existing SQL read adapter and schema; no INDEXED BY requirement, persistent rowid identity/cache, migration or public surface is added.
+
+## First library preview preparation — 2026-10-30
+
+[ADR-0016](decisions/ADR-0016-initial-preview-preparation.md) records the owner's initial-ready collection and temporary progress banner. Reserve one durable initial thumbnail job before discovery; the existing bounded executor takes over afterward. Withhold pending initial previews consistently in collection queries, retain paused state across restart/reconciliation, and require an explicit resume. Unknown discovery/queued totals stay indeterminate; actual thumbnail inventories report remaining work. Legacy completed libraries, catalog/root identity, original-file safety and all wider gates remain unchanged.
+
+## Page-scoped single-photo viewer — 2026-10-30
+
+[ADR-0017](decisions/ADR-0017-page-photo-viewer.md) replaces the single-photo full-window modal with a page-contained nonmodal dialog, measured thumbnail expansion/reverse close and a loading-only glare. The sidebar remains usable, the covered page is inert, and existing preview/navigation/focus safety remains. One bounded cache transport retry plus explicit native revalidation addresses the reproduced permanent image-error latch without claiming repair of private originals or all cache failures. [VIEWER_PRESENTATION.md](VIEWER_PRESENTATION.md) records the bounded M1 scope and checks.
+
+## Bounded original-byte viewing — 2026-10-30
+
+[ADR-0018](decisions/ADR-0018-original-image-viewing.md) permits original display only through a guarded ID/revision/policy protocol, preserving source identity, read/helper budgets and explicit fallback. Remove the routine 2,048-pixel banner for actually loaded originals, put X at the right and a catalog-confirmed animated heart at the bottom. [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) records the static JPEG/PNG/WebP 32-MiB/32-million-pixel scope, tested/unrun evidence and residual platform/format/preservation gates. No source mutation or broad filesystem exposure.
+
+## P4 continuation — cold filename summaries, 2026-10-30
+
+Place filename rejection after media classification and before presence/preparation checks in the existing shared predicate builder. Retain SQLite’s planner choice: measured forced-name-index and covering-name-join alternatives regress the all-matching control. No new cache, SQL hint, index, dependency, schema/IPC or source operation. [PERFORMANCE_COLD_SUMMARIES.md](PERFORMANCE_COLD_SUMMARIES.md) records the bounded read-adapter refinement and actual evidence; ADR-0009 and all earlier P4 limits remain in force.
+
+## Local P4 evidence closeout before M2 — 2026-10-30
+
+The owner explicitly chooses local P4 work before M2. [ADR-0019](decisions/ADR-0019-p4-local-evidence.md) keeps a fixed total trace budget through stable preferred producer lanes, separates aliases and shortens consuming reads without hiding losses. It also records explicit catalog lifetime-lock release after SQLite closes, with a generated fork/exec regression and unchanged strict acquisition. [PERFORMANCE_LOCAL_CLOSEOUT.md](PERFORMANCE_LOCAL_CLOSEOUT.md) separates observed memory collection from unavailable whole-app ownership and preserves all historical/external gates.

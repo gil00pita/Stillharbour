@@ -1,0 +1,11 @@
+# P4 continuation — selective filename projections
+
+The owner's 2026-10-30 “Run the next stage” continues the performance track after positive timeline totals. Profile cold filtered reads on the retained generated catalog and implement one bounded improvement without a schema/index/dependency/IPC change.
+
+Use an existing exact count to identify an unscoped filename-only result of 1–1,024 rows. A name-only lookup can scan the existing covering index and retain at most 1,025 transient i64 rowids. Apply a rowid predicate only when the entire name match fits; retain every original validated filter, order and cursor. A broad lookup must fall back completely. Never probe before the count merely to accelerate a cold count: the measured late-broad control regresses. Mixed filters and registered-root/directory scopes retain their existing planner choices. No new index requirement or persistent rowid cache.
+
+Reuse this preparation for ordinary pages, stable-ID seeks and timeline summaries with an already-known exact count. Keep unknown/large summaries, cold exact counts, viewer neighbors, selection membership, cache epochs/bounds and inventory-counter semantics unchanged. SQLite chooses the covering index normally; no renderer SQL, source access or migration is introduced.
+
+Prove the ordered-projection regression on a 10k disposable catalog after priming only its exact count and clearing the connection pager. Preserve all five sorts, threshold/fallback cases, excluded/non-media/missing rows, escaped names, large native rowids, full paging, both seek directions, neighbors and mixed-filter parity. Extend release controls to early/late narrow and broad names and retain the rejected eager-probe measurements. Keep independent lossless source manifests and exact executable/lock/SQLite identities.
+
+Run full repository checks, release regressions, default-feature Clippy, Python evidence tests, native generated-library regressions and production exclusion/package smoke checks. Record actual outcomes in [PERFORMANCE_FILENAME_READS.md](../docs/PERFORMANCE_FILENAME_READS.md), update owning documentation and append the implementation log. Stop after this display-read optimization; cold counts/uncached summaries and all earlier P4 platform/trace/memory/backup/preservation gates remain open. Save locally; no publication or branch rename.

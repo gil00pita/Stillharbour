@@ -21,7 +21,7 @@ fn main() {
     let executable = app.join("Contents/MacOS/stillharbour");
     let exiftool = app.join("Contents/Resources/helpers/exiftool/exiftool");
     assert!(executable.is_file() && exiftool.is_file());
-    let fixture = LibraryFixture::generate().unwrap();
+    let fixture = LibraryFixture::generate_native_formats().unwrap();
     let data = tempfile::tempdir().unwrap();
     let catalog = Arc::new(Catalog::open(data.path().join("generated.stillharbour")).unwrap());
     let library = Library::new(
@@ -60,7 +60,7 @@ fn main() {
     }
     let scan_ms = started.elapsed().as_secs_f64() * 1000.;
     let page = library.query(AssetQuery::default(), None, 240).unwrap();
-    assert_eq!(page.total, 20);
+    assert_eq!(page.total, 24);
     let dated = page
         .assets
         .iter()
@@ -108,10 +108,47 @@ fn main() {
             bytes.len()
         })
         .sum::<usize>();
+    let mut original_formats = Vec::new();
+    for extension in ["jpg", "png", "webp", "heic"] {
+        let asset = page
+            .assets
+            .iter()
+            .find(|a| a.extension == extension && a.width.is_some())
+            .unwrap();
+        let original = library
+            .original_image(
+                asset.id.clone(),
+                asset.revision.clone(),
+                stillharbour_core::library::ORIGINAL_IMAGE_POLICY,
+            )
+            .unwrap();
+        assert!(!original.bytes.is_empty());
+        if extension == "heic" {
+            assert_eq!(asset.width, Some(3072));
+            assert_eq!(asset.height, Some(2048));
+            assert_eq!(original.mime, "image/heic");
+            assert_eq!(
+                original.bytes,
+                std::fs::read(fixture.path().join("Native HEIC.heic")).unwrap()
+            );
+        }
+        original_formats.push(original.mime);
+    }
+    let exact = library
+        .original_image(
+            dated.id.clone(),
+            dated.revision.clone(),
+            stillharbour_core::library::ORIGINAL_IMAGE_POLICY,
+        )
+        .unwrap();
+    assert_eq!(
+        exact.bytes,
+        std::fs::read(fixture.path().join("Coast/Generated-00.jpg")).unwrap()
+    );
     let verified = fixture.verify_unchanged().unwrap();
     println!(
         "{}",
-        serde_json::json!({"kind":"packaged-generated-library","indexedMedia":page.total,"previewFormats":["jpeg","png","webp"],"scanMs":scan_ms,"previewMs":preview_ms,"cachedPngBytes":bytes,"sourceEntriesUnchanged":verified,"bundledMetadataDate":dated.date,"offset":dated.offset})
+        serde_json::json!({"kind":"packaged-generated-library","indexedMedia":page.total,"previewFormats":["jpeg","png","webp"],"scanMs":scan_ms,"previewMs":preview_ms,"cachedPngBytes":bytes,"sourceEntriesUnchanged":verified,"originalFormats":original_formats,"originalJpegExact":true,"originalHeicExact":true,"originalHeicDimensions":[3072,2048],"bundledMetadataDate":dated.date,"offset":dated.offset})
     );
 }
 #[cfg(not(target_os = "macos"))]

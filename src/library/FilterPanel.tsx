@@ -150,7 +150,10 @@ export function FilterPanel({
             type="button"
             disabled={selecting}
             onClick={() => {
-              setDraft({ ...defaultQuery });
+              setDraft({
+                ...defaultQuery,
+                deferPendingPreviews: c.query.deferPendingPreviews ?? false,
+              });
               resetFields((value) => value + 1);
             }}
           >

@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type {
   AnnotationPatch,
   AssetQuery,
@@ -51,7 +51,10 @@ export function useLibraryController({
   const [tags, setTags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  const { query } = browse;
+  const query = useMemo<AssetQuery>(
+    () => ({ ...browse.query, deferPendingPreviews: true }),
+    [browse.query],
+  );
   const feed = useAssetFeed(query, browse.period, status.revision, onError, onWindowChange);
   const { page, loading } = feed;
   useEffect(() => {
@@ -94,8 +97,10 @@ export function useLibraryController({
   }
   function filter(patch: Partial<AssetQuery>) {
     if (busy) return;
+    const filters = { ...patch };
+    delete filters.deferPendingPreviews;
     epoch.current++;
-    dispatch({ type: 'filter', patch });
+    dispatch({ type: 'filter', patch: filters });
     clear();
   }
   function select(id: string, range: boolean) {

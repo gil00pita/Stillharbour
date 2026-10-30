@@ -1,5 +1,7 @@
 # P4 — local stress evidence
 
+Current acceptance status is consolidated in [PERFORMANCE_P4_STATUS.md](PERFORMANCE_P4_STATUS.md). The original measurements and failed dispositions below remain historical and are not relabelled by later fixes.
+
 Owner request: 2026-10-29, “Lets start on the next stage,” continuing the performance track. [Task scope](../tasks/P4_LOCAL_STRESS.md) authorizes the available local read-only checks. P3 production backup, physical-device/network mapping and accounted byte pacing remain blocked. P0–P3 evidence is historical; this stage never upgrades it to new measurements.
 
 ## Measurement boundary
@@ -118,3 +120,7 @@ The owner's next-step request authorizes [the bounded empty-result follow-up](PE
 ## CI follow-up — portable sampler regressions, 2026-10-30
 
 Windows job123990368119 in run41034035034 fails only the inherited-stdout test (175 others pass): expected JSON, received an empty string. The same original fixture passes locally on macOS; its grandchild shares a pipe-backed stdout descriptor, a platform-dependent setup. Replace that fixture with a deterministic EventEmitter lifecycle test of the actual samplerStop helper and a separate real Node-child report test; retain the existing owned-child termination/repeated-teardown case. No skips, production helper changes, dependency changes or workflow relaxations. The controlled lifecycle regression fails the old exit-only implementation at the pending-completion assertion and passes the unchanged close-based helper; the real child emits all10000 generated samples before teardown. This separates event-order correctness from OS pipe inheritance and retains the earlier Unix reproduction as historical evidence. Local/hosted outcomes follow in IMPLEMENTATION_LOG.md; no earlier unavailable memory, trace, platform or preservation gate is promoted.
+
+## Local closeout continuation — owner choice, 2026-10-30
+
+Before M2, the owner explicitly chooses to finish available local P4 work. [PERFORMANCE_LOCAL_CLOSEOUT.md](PERFORMANCE_LOCAL_CLOSEOUT.md) and [task](../tasks/P4_LOCAL_CLOSEOUT.md) retain the original trace/memory failures above, reproduce recorder contention and a catalog lifetime-lock error class, and collect fresh scale evidence. New results do not retroactively repair old runs or pass unavailable release/physical/platform/preservation gates.

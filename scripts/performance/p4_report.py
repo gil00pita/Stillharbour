@@ -78,6 +78,23 @@ def summarize(folder):
         failures.append('build_identity_missing')
     memory = data.get('memory', {})
     samples = memory.get('samples', [])
+    sampler = data.get('memorySampler')
+    if memory.get('status') == 'blocked':
+        memory_status = 'blocked'
+    elif memory.get('status') == 'failed':
+        memory_status = 'failed_collection'
+    elif sampler and (sampler.get('exitCode') != 0 or sampler.get('signal') is not None
+                      or sampler.get('outputTruncated') is not False):
+        memory_status = 'failed_collection'
+    elif not samples:
+        memory_status = 'unavailable'
+    elif not sampler:
+        memory_status = 'unverified_collection'
+    elif (memory.get('errors', 0) or memory.get('dropped', 0)
+          or any(sample.get('coreFootprintBytes') is None for sample in samples)):
+        memory_status = 'partial_collection'
+    else:
+        memory_status = 'collected_observed_processes'
     return {
         'run': folder.name, 'rows': data.get('fixture', {}).get('rows'),
         'status': 'failed' if failures else 'passed_scoped_native_diagnostics',
@@ -94,6 +111,7 @@ def summarize(folder):
         'maxMountedItems': max(mounts, default=None),
         'textNonemptyThumbnailRequests': data.get('textNonemptyThumbnailRequests'),
         'observedMemory': {
+            'status': memory_status,
             'samples': len(samples), 'errors': memory.get('errors'), 'dropped': memory.get('dropped'),
             'peakRssBytes': memory.get('peakObservedTreeRssBytes'),
             'firstRssBytes': samples[0]['observedTreeRssBytes'] if samples else None,

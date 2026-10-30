@@ -155,6 +155,16 @@ impl LibraryFixture {
         {
             let mut fixture = Self::generate()?;
             let source = fixture.path().join("Coast/Generated-00.jpg");
+            let encoding = tempfile::tempdir()?;
+            let full_size = encoding.path().join("Generated.png");
+            image::RgbImage::from_fn(3072, 2048, |x, y| {
+                image::Rgb([(x / 16 % 240) as u8, (y / 12 % 240) as u8, 120])
+            })
+            .save(&full_size)
+            .map_err(|error| {
+                AppError::new(ErrorCode::WorkerFailed, "Could not generate HEIC source.")
+                    .caused_by(error)
+            })?;
             for (name, format) in [
                 ("Native HEIC.heic", "heic"),
                 ("Native TIFF.tif", "tiff"),
@@ -163,7 +173,11 @@ impl LibraryFixture {
             ] {
                 let status = std::process::Command::new("/usr/bin/sips")
                     .args(["-s", "format", format])
-                    .arg(&source)
+                    .arg(if format == "heic" {
+                        &full_size
+                    } else {
+                        &source
+                    })
                     .arg("--out")
                     .arg(fixture.path().join(name))
                     .env_clear()

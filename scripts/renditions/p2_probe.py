@@ -58,7 +58,7 @@ def main():
     (sources / 'over-dimension.png').write_bytes(png(12001, 1, bytes([20, 40, 220]) * 12001))
 
     def manifest():
-        return json.loads(subprocess.check_output(['python3', str(workspace / 'scripts/performance/manifest.py'), str(sources)]))
+        return json.loads(subprocess.check_output(['python3', str(workspace / 'scripts/performance/manifest.py'), str(sources), '--lossless-stat']))
 
     before = manifest()
     (owned / 'manifest-before.json').write_text(json.dumps(before))
@@ -167,7 +167,7 @@ def main():
         for edge in [32, 256, 512, 1024, 2048]:
             samples = [row for row in observations if row['protocol'] == 2 and row['format'] == suffix and row['edge'] == edge]
             summaries.append({'format': suffix, 'edge': edge, 'n': len(samples), 'durationMs': percentiles([row['durationMs'] for row in samples]), 'wireBytes': samples[0]['wireBytes'], 'childPeakRssBytes': max((row['sampledChildPeakRssBytes'] or 0 for row in samples), default=0)})
-    summary = {'run': run, 'build': args.build, 'platform': platform.platform(), 'workerSha256': hashlib.sha256(worker.read_bytes()).hexdigest(), 'legacySha256': hashlib.sha256(legacy.read_bytes()).hexdigest() if legacy else None, 'cases': cases, 'summaries': summaries, 'manifestUnchanged': True, 'scope': 'Generated worker protocol/decode; each invocation starts a fresh process. No OS cache purge, disk-cache hit test, UI paint, queue or complete process-tree memory claim.'}
+    summary = {'run': run, 'build': args.build, 'platform': platform.platform(), 'workerSha256': hashlib.sha256(worker.read_bytes()).hexdigest(), 'legacySha256': hashlib.sha256(legacy.read_bytes()).hexdigest() if legacy else None, 'cases': cases, 'summaries': summaries, 'manifestUnchanged': True, 'sourceManifestEncoding': 'lossless decimal 64-bit stat fields', 'scope': 'Generated worker protocol/decode; each invocation starts a fresh process. No OS cache purge, disk-cache hit test, UI paint, queue or complete process-tree memory claim.'}
     (owned / 'summary.json').write_text(json.dumps(summary, indent=2))
     print(json.dumps({'run': run, 'cases': len(cases), 'samples': len(observations), 'manifestUnchanged': True, 'summary': str((owned / 'summary.json').relative_to(workspace))}))
 

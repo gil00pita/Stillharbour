@@ -61,6 +61,7 @@ it('distinguishes an offline original library from catalog presence while showin
 it('reports a failed cached comparison image without implying original damage', async () => {
   render(<ComparisonViewer assets={assets} status={status} onClose={vi.fn()} onError={vi.fn()} />);
   fireEvent.error(await screen.findByRole('img', { name: assets[0]!.name }));
+  fireEvent.error(await screen.findByRole('img', { name: assets[0]!.name }));
   expect(screen.getByRole('status')).toHaveTextContent(
     'Cached preview failed to load. The original has not been changed.',
   );

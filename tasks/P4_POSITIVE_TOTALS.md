@@ -1,0 +1,9 @@
+# P4 continuation — positive timeline totals
+
+The owner's 2026-10-30 “Continue to next stage” continues the performance track after exact-empty filtered reads. Reproduce the remaining positive-filter costs on generated catalogs and isolate one bounded improvement: pages and stable-ID seeks can reuse the exact total of an already retained, matching timeline summary.
+
+Keep the existing query hash, connection-owned 16-entry/512 KiB cache and conservative actor-write/external-commit invalidation. Sum bucket counts with checked arithmetic only where the page already requires an exact count. Preserve lagging inventory-counter behavior, missing/Undated/Recently added semantics, query validation, projections, cursors and selection authority. Do not eagerly aggregate a timeline to serve a page. Retention failure or eviction uses the existing SQL count fallback.
+
+Use a fast 10k logical-pager regression against an identical count-cached projection in all five sorts. Cover positive tag/root scope, actor/external changes without revision bumps and inventory lag. Extend the existing release filtered probe/report with separate timeline-first samples; retain page-first and empty controls, binary/SQLite/lock identity and independent lossless source manifests. Measure before/after serially, with no cache purge or user-library input.
+
+Run full repository checks, focused release regressions, default-feature Clippy, Python checks, native generated regressions and production exclusion/package smoke checks. Record actual results and limitations in [PERFORMANCE_POSITIVE_TOTALS.md](../docs/PERFORMANCE_POSITIVE_TOTALS.md) and the implementation log. Stop at this read-only optimization. Cold positive filtering/aggregation and prior P4 trace/memory/platform/backup/presentation gates remain open; no schema/index/dependency/IPC change, original mutation or publication is included.

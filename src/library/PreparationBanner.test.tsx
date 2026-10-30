@@ -1,0 +1,140 @@
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, expect, it, vi } from 'vitest';
+import type { LibraryRoot, LibraryStatus, ScanJob } from '../bindings';
+import { library } from '../ipc';
+import { defaultFilter } from './model';
+import { PreparationBanner } from './PreparationBanner';
+
+vi.mock('../ipc', async (original) => ({
+  ...(await original<typeof import('../ipc')>()),
+  library: vi.fn(),
+}));
+const root: LibraryRoot = {
+  id: 'generated-root',
+  label: 'Generated photos',
+  displayPath: '/fixture',
+  mode: 'referenced',
+  isBase: true,
+  availability: 'scanning',
+  filter: defaultFilter,
+  lastScan: null,
+  fileCount: 20,
+  preparingPreviews: true,
+};
+const scan: ScanJob = {
+  id: 'scan',
+  rootId: root.id,
+  state: 'running',
+  discovered: 20,
+  indexed: 20,
+  skipped: 0,
+  errors: 0,
+  message: 'Indexing',
+  startedAt: '2026-10-30',
+};
+const status: LibraryStatus = {
+  roots: [root],
+  jobs: [scan],
+  revision: '1',
+  previewGeneration: '0',
+  metadataAvailable: true,
+  previewAvailable: true,
+};
+const refresh = vi.fn(async () => {});
+beforeEach(() => {
+  vi.mocked(library).mockReset().mockResolvedValue({ kind: 'done' });
+  refresh.mockReset().mockResolvedValue();
+});
+
+it('keeps discovery indeterminate even when every found file is indexed', () => {
+  render(<PreparationBanner status={status} rootId={null} onRefresh={refresh} />);
+  expect(screen.getByText('Finding your photos')).toBeVisible();
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+  expect(screen.getByText(/20 files found · 20 indexed/)).toHaveTextContent(
+    'remaining count is not known yet',
+  );
+  expect(screen.queryByText(/0 remaining/)).not.toBeInTheDocument();
+});
+
+it('shows a real remaining count after inventory, including errors as processed', () => {
+  const job = {
+    ...scan,
+    kind: 'thumbnails' as const,
+    discovered: 100,
+    indexed: 20,
+    skipped: 15,
+    errors: 5,
+  };
+  const { rerender } = render(
+    <PreparationBanner status={{ ...status, jobs: [job] }} rootId={null} onRefresh={refresh} />,
+  );
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
+  expect(screen.getByText('60 remaining · 5 previews unavailable')).toBeVisible();
+  rerender(
+    <PreparationBanner
+      status={{ ...status, jobs: [{ ...job, discovered: 0, indexed: 0, skipped: 0, errors: 0 }] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+  expect(screen.queryByText(/0 remaining/)).not.toBeInTheDocument();
+});
+
+it('cancels with the native ID and resumes a paused library explicitly', async () => {
+  const { rerender } = render(
+    <PreparationBanner status={status} rootId={null} onRefresh={refresh} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Stop scan' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'cancel', job_id: 'scan' }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  rerender(
+    <PreparationBanner
+      status={{ ...status, jobs: [{ ...scan, state: 'canceled' }] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Resume previews' }));
+  await waitFor(() =>
+    expect(library).toHaveBeenCalledWith({ kind: 'generate_thumbnails', root_id: root.id }),
+  );
+});
+
+it('retains failures, suppresses stale errors after changing folders and hides after completion', async () => {
+  let reject: ((reason: Error) => void) | undefined;
+  vi.mocked(library).mockImplementation(
+    () =>
+      new Promise((_, fail) => {
+        reject = fail;
+      }),
+  );
+  const { rerender } = render(
+    <PreparationBanner status={{ ...status, jobs: [] }} rootId={root.id} onRefresh={refresh} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Resume previews' }));
+  const other = { ...root, id: 'other', label: 'Another folder' };
+  rerender(
+    <PreparationBanner
+      status={{ ...status, roots: [other], jobs: [] }}
+      rootId={other.id}
+      onRefresh={refresh}
+    />,
+  );
+  await act(async () => {
+    reject?.(new Error('Old folder failed'));
+  });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  vi.mocked(library).mockRejectedValue(new Error('Folder offline'));
+  fireEvent.click(screen.getByRole('button', { name: 'Resume previews' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Folder offline');
+  rerender(
+    <PreparationBanner
+      status={{ ...status, roots: [{ ...other, preparingPreviews: false }], jobs: [] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  expect(screen.queryByRole('region', { name: 'Library preparation' })).not.toBeInTheDocument();
+});

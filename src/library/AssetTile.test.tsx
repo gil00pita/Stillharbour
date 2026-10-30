@@ -29,6 +29,7 @@ it('keeps the tiny preview until the clear image actually loads, then reveals wi
   expect(container.querySelector('.t-skel')).toHaveClass('is-revealed');
   expect(container.querySelector('.photo-area')).toHaveStyle({ height: '180px' });
   fireEvent.error(container.querySelector('img.t-skel-content')!);
+  fireEvent.error(container.querySelector('img.t-skel-content')!);
   expect(container.querySelector('.t-skel')).not.toHaveClass('is-revealed');
   expect(container.querySelectorAll('img')).toHaveLength(1);
 });
@@ -47,6 +48,7 @@ it('retains a tiny cached image when clear decoding fails and keeps offline stat
   );
   expect(getByText('Offline original')).toBeVisible();
   fireEvent.error(container.querySelector('img')!);
+  fireEvent.error(container.querySelector('img')!);
   expect(getByText('Decode budget reached')).toBeVisible();
 });
 
@@ -60,6 +62,7 @@ it('uses an indexed smaller clear rendition while a larger tier is loading or un
     />,
   );
   expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/512/'));
+  fireEvent.error(container.querySelector('img')!);
   fireEvent.error(container.querySelector('img')!);
   expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/32/'));
   rerender(
@@ -90,4 +93,18 @@ it('retains an already-loaded clear image while scroll-generation status refresh
   rerender(<TileImage {...props} tinyPreview={result(32, 'ready')} preview={undefined} />);
   expect(container.querySelector('.t-skel-content')).toBe(clear);
   expect(container.querySelector('.t-skel')).toHaveClass('is-revealed');
+});
+
+it('recovers a transient cached-image transport failure without a library rescan', async () => {
+  const { container, queryByText } = render(
+    <TileImage {...props} preview={result(256, 'ready')} />,
+  );
+  fireEvent.error(container.querySelector('.t-skel-content')!);
+  // A ready cache response must get a bounded fresh image request instead of
+  // latching the failure until this virtual tile happens to unmount.
+  const retried = container.querySelector<HTMLImageElement>('.t-skel-content');
+  expect(retried).not.toBeNull();
+  expect(retried?.src).toContain('retry=1');
+  fireEvent.load(retried!);
+  expect(queryByText('Cached preview failed to load')).not.toBeInTheDocument();
 });

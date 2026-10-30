@@ -1,7 +1,8 @@
-// Generated from crates/core/src/{contract,domain,preferences,library/model,rendition}.rs. Run npm run bindings.
+// Generated from crates/core/src/{contract,domain,preferences,library/{model,original},rendition}.rs. Run npm run bindings.
 export const FOUNDATION_COMMAND = "foundation_request";
 export const LIBRARY_COMMAND = "library_request";
 export const THUMBNAIL_POLICY = "p2-v3-tall-jpeg-srgb8-preview";
+export const ORIGINAL_IMAGE_POLICY = "original-v2-static-heic-32mib-32mp";
 export const DEFAULT_PHOTO_EXTENSIONS: string[] = ["jpg","jpeg","jfif","heic","heif","hif","png","tif","tiff","webp","avif","gif","bmp","dng","cr3","cr2","crw","nef","nrw","arw","sr2","srf","raf","orf","rw2","raw","pef","srw","x3f","3fr","fff","iiq","rwl"];
 export const RENDITION_EDGES = [32, 256, 512, 1024, 2048] as const;
 export const GALLERY_MAX_EDGE = 1024;
@@ -24,7 +25,7 @@ displayPath: string, identityAvailable: boolean, };
 export type FoundationResponse = { "kind": "status", "data": FoundationStatus } | { "kind": "directory", "data": DirectorySelection | null } | { "kind": "preferences", "data": AppPreferences };
 export type RootMode = "referenced" | "managed";
 export type ScanFilter = { version: number, includeGlobs: Array<string>, excludeGlobs: Array<string>, excludedFolders: Array<string>, extensions: Array<string>, includeHiddenFiles: boolean, includeHiddenFolders: boolean, minBytes: string | null, maxBytes: string | null, fromDate: string | null, throughDate: string | null, };
-export type LibraryRoot = { id: string, label: string, displayPath: string, mode: RootMode, isBase: boolean, availability: string, filter: ScanFilter, lastScan: string | null, fileCount: number, };
+export type LibraryRoot = { preparingPreviews?: boolean, id: string, label: string, displayPath: string, mode: RootMode, isBase: boolean, availability: string, filter: ScanFilter, lastScan: string | null, fileCount: number, };
 export type JobKind = "scan" | "thumbnails";
 export type ScanJob = { kind?: JobKind, id: string, rootId: string, state: string, discovered: number, indexed: number, skipped: number, errors: number, message: string, startedAt: string, };
 export type LibraryStatus = { monitoring?: Array<RootMonitor>, roots: Array<LibraryRoot>, jobs: Array<ScanJob>, revision: string, previewGeneration: string, metadataAvailable: boolean, previewAvailable: boolean, };
@@ -32,7 +33,7 @@ export type RootMonitor = { rootId: string, mode: string, message: string, };
 export type LibraryChangeKind = "added" | "moved" | "updated" | "removed" | "reappeared";
 export type LibraryChange = { version: number, sequence: string, rootId: string, rootLabel: string, assetId: string | null, entryKind: string, kind: LibraryChangeKind, previousNative: string | null, nativePath: string | null, previousPath: string | null, path: string | null, previousRevision: string | null, revision: string | null, observedAt: string, scanId: string, };
 export type LibraryChangePage = { changes: Array<LibraryChange>, nextBefore: string | null, };
-export type AssetQuery = { directoryId?: string, rootId: string | null, folder: string, name: string, fromDate: string, throughDate: string, minBytes: string, maxBytes: string, extension: string, favoritesOnly: boolean, tag: string, sort: string, includeMissing: boolean, };
+export type AssetQuery = { deferPendingPreviews?: boolean, directoryId?: string, rootId: string | null, folder: string, name: string, fromDate: string, throughDate: string, minBytes: string, maxBytes: string, extension: string, favoritesOnly: boolean, tag: string, sort: string, includeMissing: boolean, };
 export type AssetSummary = { id: string, rootId: string, name: string, relativePath: string, folder: string, extension: string, detectedFormat: string | null, bytes: string, date: string, dateSource: string, rawDate: string | null, offset: string | null, modifiedAt: string | null, bornAt: string | null, addedAt: string, revision: string, presence: string, width: number | null, height: number | null, camera: string | null, metadataState: string, metadataError: string | null, previewState: string, previewError: string | null, favorite: boolean, rating: number, tags: Array<string>, };
 export type AssetDetail = { asset: AssetSummary, root: LibraryRoot, rawMetadata: string | null, companions: Array<string>, };
 export type AssetNeighbors = { previous: AssetSummary | null, next: AssetSummary | null, };

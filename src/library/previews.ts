@@ -91,8 +91,10 @@ export function usePreviews(
   }, [serialized, onError, enabled, attempt, cacheOnlyAbove]);
   return {
     results,
+    attempt,
     error: failure?.key === serialized ? failure.message : null,
     retry: () => {
+      setResults({});
       setFailure(null);
       setAttempt((value) => value + 1);
     },

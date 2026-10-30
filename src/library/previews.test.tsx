@@ -74,3 +74,13 @@ it('keeps both cache lookup and work batches within64 keys and480 total', async 
   expect(libraryData).toHaveBeenCalledTimes(8);
   expect(onError).not.toHaveBeenCalled();
 });
+
+it('clears stale ready results before an explicit retry revalidates the native cache', async () => {
+  vi.mocked(libraryData).mockResolvedValue([result(keys[0]!)]);
+  const { result: hook } = renderHook(() => usePreviews([keys[0]!], onError));
+  await waitFor(() => expect(hook.current.results[previewKey(keys[0]!)]?.state).toBe('ready'));
+  vi.mocked(libraryData).mockImplementation(() => new Promise(() => {}));
+  act(() => hook.current.retry());
+  expect(hook.current.results).toEqual({});
+  expect(hook.current.attempt).toBe(1);
+});

@@ -51,107 +51,200 @@ pub struct Snapshot {
     pub dropped: u64,
     pub capacity: usize,
     pub volume_count: usize,
-    #[cfg(feature = "fixture-probes")]
-    #[serde(skip)]
-    volumes: std::collections::BTreeMap<u64, u16>,
 }
 
 #[cfg(feature = "fixture-probes")]
 mod recorder {
     use super::*;
-    use std::sync::{
-        Mutex, OnceLock,
-        atomic::{AtomicBool, AtomicU64, Ordering},
+    use std::{
+        collections::BTreeMap,
+        sync::{
+            Mutex, OnceLock,
+            atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
+        },
     };
-    static ENABLED: AtomicBool = AtomicBool::new(false);
-    static LOST: AtomicU64 = AtomicU64::new(0);
-    static TRACE: OnceLock<Mutex<Snapshot>> = OnceLock::new();
+    const CAPACITY: usize = 4096;
+    const LANES: usize = 16;
+    const LANE_CAPACITY: usize = CAPACITY / LANES;
+    static NEXT_PRODUCER: AtomicUsize = AtomicUsize::new(0);
+    thread_local! { static PRODUCER_LANE: usize = NEXT_PRODUCER.fetch_add(1, Ordering::Relaxed) % LANES; }
+    pub(super) struct Recorder {
+        enabled: AtomicBool,
+        lost: AtomicU64,
+        lanes: [Mutex<Vec<Event>>; LANES],
+        volumes: Mutex<BTreeMap<u64, u16>>,
+    }
+    impl Default for Recorder {
+        fn default() -> Self {
+            Self {
+                enabled: AtomicBool::new(false),
+                lost: AtomicU64::new(0),
+                lanes: std::array::from_fn(|_| Mutex::new(Vec::with_capacity(LANE_CAPACITY))),
+                volumes: Mutex::new(BTreeMap::new()),
+            }
+        }
+    }
+    impl Recorder {
+        pub(super) fn enabled(&self) -> bool {
+            self.enabled.load(Ordering::Relaxed)
+        }
+        pub(super) fn enable(&self) {
+            self.enabled.store(false, Ordering::Relaxed);
+            let Ok(mut lanes) = self
+                .lanes
+                .iter()
+                .map(Mutex::lock)
+                .collect::<std::result::Result<Vec<_>, _>>()
+            else {
+                return;
+            };
+            let Ok(mut volumes) = self.volumes.lock() else {
+                return;
+            };
+            for lane in &mut lanes {
+                lane.clear();
+            }
+            volumes.clear();
+            self.lost.store(0, Ordering::Relaxed);
+            self.enabled.store(true, Ordering::Relaxed);
+        }
+        pub(super) fn record(&self, event: Event) {
+            if !self.enabled() {
+                return;
+            }
+            let start = PRODUCER_LANE.with(|lane| *lane);
+            // Stable preferred lanes avoid producers chasing one global rotating
+            // slot. Probe at most sixteen lanes, without waiting or allocating.
+            // Sixteen x 256 events retains the original 4096-event total bound.
+            for offset in 0..LANES {
+                if let Ok(mut lane) = self.lanes[(start + offset) % LANES].try_lock()
+                    && lane.len() < LANE_CAPACITY
+                {
+                    lane.push(event);
+                    return;
+                }
+            }
+            self.lost.fetch_add(1, Ordering::Relaxed);
+        }
+        #[cfg(test)]
+        pub(super) fn with_producer_held(&self, work: impl FnOnce()) {
+            let lane = PRODUCER_LANE.with(|lane| *lane);
+            let _held = self.lanes[lane].lock().unwrap();
+            work();
+        }
+        #[cfg(test)]
+        pub(super) fn with_all_producers_held(&self, work: impl FnOnce()) {
+            let _held = self
+                .lanes
+                .iter()
+                .map(Mutex::lock)
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .unwrap();
+            work();
+        }
+        pub(super) fn snapshot(&self) -> Snapshot {
+            self.read(false)
+        }
+        pub(super) fn drain(&self) -> Snapshot {
+            self.read(true)
+        }
+        fn read(&self, consume: bool) -> Snapshot {
+            // Allocate before acquiring producer lanes. A consuming read swaps
+            // Vec headers under the locks, then flattens outside the critical section.
+            let mut taken: [Vec<Event>; LANES] = std::array::from_fn(|_| {
+                if consume {
+                    Vec::with_capacity(LANE_CAPACITY)
+                } else {
+                    Vec::new()
+                }
+            });
+            let mut events = Vec::with_capacity(CAPACITY);
+            let Ok(volumes) = self.volumes.lock() else {
+                return Snapshot::default();
+            };
+            let Ok(mut lanes) = self
+                .lanes
+                .iter()
+                .map(Mutex::lock)
+                .collect::<std::result::Result<Vec<_>, _>>()
+            else {
+                return Snapshot::default();
+            };
+            for (index, lane) in lanes.iter_mut().enumerate() {
+                if consume {
+                    std::mem::swap(&mut **lane, &mut taken[index]);
+                } else {
+                    events.extend(lane.iter().cloned());
+                }
+            }
+            let dropped = if consume {
+                self.lost.swap(0, Ordering::Relaxed)
+            } else {
+                self.lost.load(Ordering::Relaxed)
+            };
+            let volume_count = volumes.len();
+            drop(lanes);
+            drop(volumes);
+            if consume {
+                events.extend(taken.into_iter().flatten());
+            }
+            Snapshot {
+                events,
+                dropped,
+                capacity: CAPACITY,
+                volume_count,
+            }
+        }
+        pub(super) fn volume_alias(&self, volume: u64) -> u16 {
+            if !self.enabled() {
+                return 0;
+            }
+            if let Ok(mut volumes) = self.volumes.try_lock() {
+                if let Some(alias) = volumes.get(&volume) {
+                    return *alias;
+                }
+                if volumes.len() >= 16 {
+                    return 0;
+                }
+                let alias = volumes.len() as u16 + 1;
+                volumes.insert(volume, alias);
+                alias
+            } else {
+                0
+            }
+        }
+        pub(super) fn disable(&self) {
+            self.enabled.store(false, Ordering::Relaxed);
+        }
+    }
+    static TRACE: OnceLock<Recorder> = OnceLock::new();
     pub fn enabled() -> bool {
-        ENABLED.load(Ordering::Relaxed)
+        TRACE.get().is_some_and(Recorder::enabled)
     }
     pub fn enable() {
-        let trace = TRACE.get_or_init(|| Mutex::new(Snapshot::default()));
-        if let Ok(mut trace) = trace.lock() {
-            *trace = Snapshot {
-                events: Vec::with_capacity(4096),
-                dropped: 0,
-                capacity: 4096,
-                ..Snapshot::default()
-            };
-            LOST.store(0, Ordering::Relaxed);
-            ENABLED.store(true, Ordering::Relaxed);
+        TRACE.get_or_init(Recorder::default).enable();
+    }
+    pub fn disable() {
+        if let Some(trace) = TRACE.get() {
+            trace.disable();
         }
     }
     pub fn record(event: Event) {
-        if !enabled() {
-            return;
-        }
-        if let Some(trace) = TRACE.get()
-            && let Ok(mut trace) = trace.try_lock()
-        {
-            if trace.events.len() < trace.capacity {
-                trace.events.push(event);
-            } else {
-                trace.dropped = trace.dropped.saturating_add(1);
-            }
-        } else {
-            LOST.fetch_add(1, Ordering::Relaxed);
+        if let Some(trace) = TRACE.get() {
+            trace.record(event);
         }
     }
     pub fn snapshot() -> Snapshot {
-        if let Some(trace) = TRACE.get()
-            && let Ok(trace) = trace.lock()
-        {
-            Snapshot {
-                events: trace.events.clone(),
-                dropped: trace.dropped.saturating_add(LOST.load(Ordering::Relaxed)),
-                capacity: trace.capacity,
-                volume_count: trace.volume_count,
-                ..Snapshot::default()
-            }
-        } else {
-            Snapshot::default()
-        }
+        TRACE.get().map(Recorder::snapshot).unwrap_or_default()
     }
     pub fn drain() -> Snapshot {
-        if let Some(trace) = TRACE.get()
-            && let Ok(mut trace) = trace.lock()
-        {
-            Snapshot {
-                events: std::mem::replace(&mut trace.events, Vec::with_capacity(4096)),
-                dropped: std::mem::take(&mut trace.dropped)
-                    .saturating_add(LOST.swap(0, Ordering::Relaxed)),
-                capacity: trace.capacity,
-                volume_count: trace.volume_count,
-                ..Snapshot::default()
-            }
-        } else {
-            Snapshot::default()
-        }
+        TRACE.get().map(Recorder::drain).unwrap_or_default()
     }
     pub fn volume_alias(volume: u64) -> u16 {
-        if !enabled() {
-            return 0;
-        }
-        if let Some(trace) = TRACE.get()
-            && let Ok(mut trace) = trace.try_lock()
-        {
-            if let Some(alias) = trace.volumes.get(&volume) {
-                return *alias;
-            }
-            if trace.volumes.len() >= 16 {
-                return 0;
-            }
-            let alias = trace.volumes.len() as u16 + 1;
-            trace.volumes.insert(volume, alias);
-            trace.volume_count = trace.volumes.len();
-            alias
-        } else {
-            0
-        }
-    }
-    pub fn disable() {
-        ENABLED.store(false, Ordering::Relaxed);
+        TRACE
+            .get()
+            .map(|trace| trace.volume_alias(volume))
+            .unwrap_or(0)
     }
 }
 #[inline]
@@ -295,42 +388,84 @@ mod tests {
     use super::*;
     #[test]
     fn opt_in_trace_is_bounded_numeric_and_stops() {
-        enable();
+        // The same recorder implementation as the singleton, isolated from
+        // unrelated catalog tests recording on other threads in this process.
+        let trace = recorder::Recorder::default();
+        let event = |metric, endpoint, elapsed_us, bytes| Event {
+            metric,
+            endpoint,
+            elapsed_us,
+            bytes,
+            volume_alias: 0,
+        };
+        trace.enable();
         let private_volume = 9182736450918273645u64;
-        let alias = volume_alias(Some(private_volume));
+        let alias = trace.volume_alias(private_volume);
         assert!((1..=16).contains(&alias));
         for device in 0..100 {
-            volume_alias(Some(device));
+            trace.volume_alias(device);
         }
-        assert_eq!(snapshot().volume_count, 16);
+        assert_eq!(trace.snapshot().volume_count, 16);
         assert!(
-            !serde_json::to_string(&snapshot())
+            !serde_json::to_string(&trace.snapshot())
                 .unwrap()
                 .contains(&private_volume.to_string())
         );
         for _ in 0..5000 {
-            record(Metric::Read, Endpoint::Source, 5, 7);
+            trace.record(event(Metric::Read, Endpoint::Source, 5, 7));
         }
-        let trace = snapshot();
-        assert_eq!(trace.capacity, 4096);
-        assert_eq!(trace.events.len(), 4096);
-        assert!(trace.dropped >= 904);
-        let json = serde_json::to_string(&trace).unwrap();
-        assert!(!json.contains("path"));
-        let segment = drain();
+        let snapshot = trace.snapshot();
+        assert_eq!(snapshot.capacity, 4096);
+        assert_eq!(snapshot.events.len(), 4096);
+        assert_eq!(snapshot.dropped, 904);
+        assert!(!serde_json::to_string(&snapshot).unwrap().contains("path"));
+        let segment = trace.drain();
         assert_eq!(segment.events.len(), 4096);
-        assert!(segment.dropped >= 904);
-        assert_eq!(snapshot().events.len(), 0);
-        assert_eq!(snapshot().dropped, 0);
-        assert_eq!(volume_alias(Some(private_volume)), alias);
-        record(Metric::Write, Endpoint::Cache, 4, 9);
-        let next = drain();
+        assert_eq!(segment.dropped, 904);
+        assert!(trace.snapshot().events.is_empty());
+        assert_eq!(trace.snapshot().dropped, 0);
+        assert_eq!(trace.volume_alias(private_volume), alias);
+        trace.record(event(Metric::Write, Endpoint::Cache, 4, 9));
+        let next = trace.drain();
         assert_eq!(next.events.len(), 1);
         assert_eq!(next.events[0].bytes, 9);
         assert_eq!(next.volume_count, 16);
-        disable();
-        record(Metric::Write, Endpoint::Cache, 4, 9);
-        assert_eq!(snapshot().events.len(), 0);
+        trace.with_producer_held(|| trace.record(event(Metric::Read, Endpoint::Source, 1, 2)));
+        let held = trace.drain();
+        assert_eq!(held.events.len(), 1);
+        assert_eq!(
+            held.dropped, 0,
+            "One busy producer lost an under-capacity event"
+        );
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            for producer in 0..8 {
+                let (barrier, trace, event) = (&barrier, &trace, &event);
+                scope.spawn(move || {
+                    barrier.wait();
+                    for index in 0..128 {
+                        trace.record(event(Metric::Read, Endpoint::Source, producer, index));
+                    }
+                });
+            }
+        });
+        let concurrent = trace.drain();
+        assert_eq!(concurrent.events.len() + concurrent.dropped as usize, 1024);
+        assert_eq!(
+            concurrent.dropped, 0,
+            "Under-capacity concurrent trace lost events"
+        );
+        assert_eq!(concurrent.events.len(), 1024);
+        trace.with_all_producers_held(|| trace.record(event(Metric::Read, Endpoint::Source, 1, 2)));
+        let contended = trace.drain();
+        assert!(contended.events.is_empty());
+        assert_eq!(
+            contended.dropped, 1,
+            "Unavoidable contention must remain visible"
+        );
+        trace.disable();
+        trace.record(event(Metric::Write, Endpoint::Cache, 4, 9));
+        assert!(trace.snapshot().events.is_empty());
     }
 }
 
