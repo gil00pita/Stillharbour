@@ -13,6 +13,7 @@ export function BatchToolbar({
   onClear,
   onTags,
   onCompare,
+  onOrganization,
 }: {
   loading: boolean;
   total: number;
@@ -25,6 +26,7 @@ export function BatchToolbar({
   onClear: () => void;
   onTags: (tags: string[]) => Promise<boolean>;
   onCompare: () => void;
+  onOrganization?: () => void;
 }) {
   const [editingTags, setEditingTags] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
@@ -96,6 +98,12 @@ export function BatchToolbar({
               <button disabled title="Albums are not available yet; tags are saved in the catalog.">
                 Add to album
               </button>
+              <OrganizationAction
+                busy={busy}
+                frozen={frozen}
+                count={count}
+                onPreview={onOrganization}
+              />
               <button disabled title="Export requires a separate reviewed preservation workflow.">
                 Export
               </button>
@@ -131,5 +139,32 @@ export function BatchToolbar({
         </form>
       )}
     </div>
+  );
+}
+
+function OrganizationAction({
+  busy,
+  frozen,
+  count,
+  onPreview,
+}: {
+  busy: boolean;
+  frozen: boolean;
+  count: number;
+  onPreview: (() => void) | undefined;
+}) {
+  const unsupportedScope = frozen || count > 240;
+  return (
+    <button
+      disabled={busy || unsupportedScope || !onPreview}
+      title={
+        unsupportedScope
+          ? 'Choose up to 240 individual photos for a template preview'
+          : 'Preview proposed names without changing originals'
+      }
+      onClick={onPreview}
+    >
+      Preview organization
+    </button>
   );
 }

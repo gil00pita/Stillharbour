@@ -166,3 +166,7 @@ Place filename rejection after media classification and before presence/preparat
 ## Local P4 evidence closeout before M2 — 2026-10-30
 
 The owner explicitly chooses local P4 work before M2. [ADR-0019](decisions/ADR-0019-p4-local-evidence.md) keeps a fixed total trace budget through stable preferred producer lanes, separates aliases and shortens consuming reads without hiding losses. It also records explicit catalog lifetime-lock release after SQLite closes, with a generated fork/exec regression and unchanged strict acquisition. [PERFORMANCE_LOCAL_CLOSEOUT.md](PERFORMANCE_LOCAL_CLOSEOUT.md) separates observed memory collection from unavailable whole-app ownership and preserves all historical/external gates.
+
+## Authorized M2 organization previews — 2026-10-30
+
+The owner continued to M2 and selected organization templates/previews as the priority. [ADR-0020](decisions/ADR-0020-organization-template-previews.md) separates bounded pure template rendering from catalog snapshots and future executable plans. [M2 preview status](M2_ORGANIZATION_PREVIEWS.md) records current relative proposals, deterministic fingerprints and explicit missing/collision issues. No destination/approval/executor is enabled; P4-06 and exact-version recovery/native preservation gates remain open. Persistent destination-aware planning and companion review are next.

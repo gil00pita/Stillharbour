@@ -7,6 +7,7 @@ import { useLibraryController } from './useLibraryController';
 import { LibraryHeader } from './LibraryHeader';
 import { PhotoViewer } from './PhotoViewer';
 import { ComparisonViewer } from './ComparisonViewer';
+import { OrganizationPreview } from './OrganizationPreview';
 import { BatchToolbar } from './BatchToolbar';
 import { TextListControls } from './TextList';
 import { DEFAULT_TEXT_COLUMNS } from './textColumns';
@@ -65,6 +66,7 @@ export function LibraryScreen({
   const mode = modeOverride ?? defaults.galleryView;
   const [viewerInitial, setViewerInitial] = useState<AssetSummary | null>(null);
   const [comparison, setComparison] = useState<AssetSummary[] | null>(null);
+  const [organizationIds, setOrganizationIds] = useState<string[] | null>(null);
   function filter(patch: Partial<AssetQuery>) {
     c.filter(patch);
     if (!batchBusy) setViewerInitial(null);
@@ -108,6 +110,7 @@ export function LibraryScreen({
               frozen={frozen}
               canCompare={!frozen && selected.size >= 2 && selected.size <= 4}
               onCompare={() => void openComparison()}
+              onOrganization={() => setOrganizationIds([...selected])}
               onTags={c.addTags}
               onFreeze={() => void c.freeze()}
               onFavorite={() =>
@@ -136,7 +139,7 @@ export function LibraryScreen({
               controller={c}
               status={status}
               mode={mode}
-              viewerOpen={Boolean(viewerInitial || comparison || filterOpen)}
+              viewerOpen={Boolean(viewerInitial || comparison || filterOpen || organizationIds)}
               onOpen={(id, opener) => {
                 const asset = page?.assets.find((asset) => asset.id === id);
                 if (asset && !loading) {
@@ -193,6 +196,13 @@ export function LibraryScreen({
           status={status}
           onError={onError}
           onClose={() => setComparison(null)}
+        />
+      )}
+      {organizationIds && (
+        <OrganizationPreview
+          assetIds={organizationIds}
+          revision={status.revision}
+          onClose={() => setOrganizationIds(null)}
         />
       )}
     </div>

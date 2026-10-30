@@ -2,6 +2,7 @@ use stillharbour_core::{
     contract::*,
     domain::{AppError, ErrorCode},
     library::model::*,
+    organization::*,
     preferences::*,
 };
 use ts_rs::TS;
@@ -11,6 +12,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let declarations = [
         ErrorCode::decl(&config),
         AppError::decl(&config),
+        MissingDatePolicy::decl(&config),
+        OrganizationTemplate::decl(&config),
+        OrganizationIssue::decl(&config),
+        OrganizationRow::decl(&config),
+        OrganizationPreview::decl(&config),
         AppPreferences::decl(&config),
         GalleryView::decl(&config),
         ThumbnailSize::decl(&config),
@@ -57,7 +63,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         LibraryResponse::decl(&config),
     ];
     let mut output = String::from(
-        "// Generated from crates/core/src/{contract,domain,preferences,library/{model,original},rendition}.rs. Run npm run bindings.\n",
+        "// Generated from crates/core/src/{contract,domain,preferences,organization,library/{model,original},rendition}.rs. Run npm run bindings.\n",
     );
     output.push_str(&format!(
         "export const FOUNDATION_COMMAND = {FOUNDATION_COMMAND:?};\n"

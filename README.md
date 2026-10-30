@@ -7,7 +7,7 @@ npm ci
 npm run desktop:dev
 ```
 
-See [development commands](docs/DEVELOPMENT.md), [M0 architecture](docs/decisions/ADR-0001-stack.md), [dependency and helper inventory](docs/DEPENDENCIES.md), [skill recommendations](docs/SKILLS.md), and [actual implementation evidence and remaining gates](docs/IMPLEMENTATION_LOG.md). A Rust toolchain and native Tauri prerequisites are required. See [M1 validation and platform gates](docs/M1_VALIDATION.md). M2 remains separately gated.
+See [development commands](docs/DEVELOPMENT.md), [M0 architecture](docs/decisions/ADR-0001-stack.md), [dependency and helper inventory](docs/DEPENDENCIES.md), [skill recommendations](docs/SKILLS.md), and [actual implementation evidence and remaining gates](docs/IMPLEMENTATION_LOG.md). A Rust toolchain and native Tauri prerequisites are required. See [M1 validation and platform gates](docs/M1_VALIDATION.md). M2 is in progress with [read-only organization template previews](docs/M2_ORGANIZATION_PREVIEWS.md); copying and original-file mutations remain gated.
 
 ## Original specification package
 

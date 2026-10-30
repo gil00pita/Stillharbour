@@ -252,6 +252,8 @@ Unknown XMP namespaces and existing editing instructions must be preserved on an
 
 ## 9. Organization templates and dry-run preview
 
+Current M2 implementation (owner continuation, 2026-10-30): [organization template previews](M2_ORGANIZATION_PREVIEWS.md) implement the first catalog-only slice for 1–240 explicit photo IDs. Editable session presets/custom DSL produce relative names and typed issues with deterministic snapshot fingerprints. Destination-aware persistent plans, saved templates, trees/export, confirmed companions, approvals and execution remain pending. This slice does not relax sections 9–10 or preservation/native acceptance gates.
+
 ### 9.1 Template model
 
 A saved template has UUID, name, description, schema version, template version, path pattern, enabled token set, missing-value policy, date policy, filename case policy, collision policy, sequence policy, and sample inputs/outputs. Ship editable copies of presets; editing a preset does not silently alter an existing plan.

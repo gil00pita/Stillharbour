@@ -81,6 +81,8 @@ These are required test specifications, not claims that tests currently exist or
 | AC-038 | Undo a completed rename after another file occupies the old path. Reverse-plan preview reports the conflict; the newer file is not overwritten. |
 | AC-039 | Modify a selected source or replace a path with a link after approval. Revalidation detects identity/containment changes and stops dependent operations. Document any OS limitations honestly. |
 
+M2 first-slice evidence, 2026-10-30: [organization previews](M2_ORGANIZATION_PREVIEWS.md) cover catalog-only relative names and lexical/missing-value checks for up to240 explicit IDs. Pure/catalog/component/native regressions are mapped there and in the implementation log. AC-023/024/025/026/029/031/032 have only partial preview coverage: no destination authorization, execution approval, native Unicode collision proof, execution idempotency, complete bundle inventory or space estimate is claimed. AC-027/028/030/033–039 and production enablement remain pending under the unchanged full scenarios above.
+
 ## 5. Duplicate matching and removal policy
 
 | ID | Scenario and expected result |

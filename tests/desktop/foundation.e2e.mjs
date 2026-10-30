@@ -1355,6 +1355,118 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     );
     await galleryView('Timeline');
   });
+  it('previews organization through real catalog IPC without changing generated originals', async () => {
+    const before = JSON.parse(
+      execFileSync('python3', ['scripts/performance/manifest.py', sourceRoot, '--lossless-stat'], {
+        encoding: 'utf8',
+      }),
+    );
+    await writeFile(`${evidence}/organization-manifest-before.json`, JSON.stringify(before));
+    try {
+      const ids = await browser.execute(() =>
+        [...document.querySelectorAll('.asset-check:checked')].map(
+          (input) => input.closest('[data-asset-id]').dataset.assetId,
+        ),
+      );
+      assert.equal(ids.length, 2);
+      const template = {
+        pattern: '{capture:%Y}/{capture:%Y-%m-%d}/{original_stem}.{ext}',
+        event: '',
+        missingDate: 'undated',
+      };
+      const expected = await native({ kind: 'organization_preview', asset_ids: ids, template });
+      await writeFile(`${evidence}/organization-preview.json`, JSON.stringify(expected.data));
+      assert.equal(expected.kind, 'organization_preview');
+      assert.equal(expected.data.rows.length, 2);
+      assert.equal(expected.data.executionAvailable, false);
+      await $('button=Preview organization').click();
+      await $('.organization-preview[open]').waitForDisplayed();
+      await $('button=Build preview').click();
+      await $('.organization-table tbody tr:first-child').waitForDisplayed();
+      assert.equal(
+        await browser.execute(() => {
+          const body = document.querySelector('.organization-body').getBoundingClientRect();
+          const row = document
+            .querySelector('.organization-table tbody tr')
+            .getBoundingClientRect();
+          return (
+            document.activeElement.tagName === 'CAPTION' &&
+            row.top < body.bottom &&
+            row.bottom > body.top
+          );
+        }),
+        true,
+      );
+      const shown = await browser.execute(() =>
+        [...document.querySelectorAll('.organization-table tbody tr')].map(
+          (row) => row.querySelectorAll('td')[1].textContent,
+        ),
+      );
+      assert.deepEqual(
+        shown,
+        expected.data.rows.map((row) => row.targetRelativePath ?? 'No valid target'),
+      );
+      assert.equal(await $('button=Create organized copy').isEnabled(), false);
+      for (const [name, width, height] of [
+        ['desktop', 1180, 780],
+        ['minimum', 660, 560],
+      ]) {
+        await browser.setWindowSize(width, height);
+        await browser.execute(() =>
+          document.querySelector('.organization-table caption').scrollIntoView({ block: 'start' }),
+        );
+        const layout = await browser.execute(() => {
+          const dialog = document.querySelector('.organization-preview');
+          const box = dialog.getBoundingClientRect();
+          const close = dialog.querySelector('header button');
+          const button = close.getBoundingClientRect();
+          return {
+            fits:
+              box.left >= 0 &&
+              box.right <= innerWidth + 1 &&
+              box.top >= 0 &&
+              box.bottom <= innerHeight + 1,
+            closeReachable: close.contains(
+              document.elementFromPoint(
+                button.left + button.width / 2,
+                button.top + button.height / 2,
+              ),
+            ),
+            noImages: dialog.querySelectorAll('img').length === 0,
+          };
+        });
+        assert.deepEqual(layout, { fits: true, closeReachable: true, noImages: true });
+        await browser.saveScreenshot(`.context/screenshots/organization-${name}.png`);
+      }
+      await browser.setWindowSize(1180, 780);
+      await $('.organization-preview input[aria-describedby="organization-token-help"]').setValue(
+        '{capture:%n}/{original_stem}.{ext}',
+      );
+      await $('button=Build preview').click();
+      await $('.organization-preview [role="alert"]').waitForDisplayed();
+      assert.equal((await $$('.organization-table')).length, 0);
+      await $('button[aria-label="Close organization preview"]').click();
+      assert.equal(
+        await browser.execute(() => document.activeElement.textContent.trim()),
+        'Preview organization',
+      );
+    } finally {
+      const close = await $$('button[aria-label="Close organization preview"]');
+      if (close.length) await close[0].click();
+      await browser.setWindowSize(1180, 780);
+      const after = JSON.parse(
+        execFileSync(
+          'python3',
+          ['scripts/performance/manifest.py', sourceRoot, '--lossless-stat'],
+          {
+            encoding: 'utf8',
+          },
+        ),
+      );
+      await writeFile(`${evidence}/organization-manifest-after.json`, JSON.stringify(after));
+      assert.deepEqual(after, before);
+    }
+  });
   it('saves catalog annotations and shows honest unsupported states', async () => {
     await $('button=Compare').waitForEnabled();
     await $('button=Compare').click();

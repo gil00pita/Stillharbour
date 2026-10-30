@@ -79,3 +79,7 @@ Single-photo viewing loads actual original bytes for supported static JPEG/PNG/W
 Viewer controls follow-up (2026-10-30): a floating icon bar overlays the photo and groups Zoom out/in, Fit, the favorite heart immediately before Info, and Filmstrip, retaining accessible tooltips, the slider and percentage. Keep the photo/menu visible and all existing source/favorite safety behavior.
 
 HEIC viewer fix (2026-10-30): detected HEIC/HEIF still-image originals also open through the guarded route on compatible macOS webviews, within the existing 32 MiB/32-million-pixel limits. Preserve unchanged source bytes, loading/error fallback and source safety. No conversion, rescan or cache purge is required. See docs/ORIGINAL_IMAGE_VIEWING.md; this does not imply support for every HEIC variant or older webview.
+
+## Organization template previews — 2026-10-30
+
+M2 begins with a catalog-only preview from the Photos selection toolbar for 1–240 individually selected photos. Preserve the existing Operate shell, system type, neutral surfaces and protected dialog focus. Editable session presets/custom templates show exact relative proposals, missing-date policy, conflicts and unconfirmed companion candidates. Destination checks, saved/versioned templates, export, approvals and all copying/original operations remain unavailable. See docs/M2_ORGANIZATION_PREVIEWS.md for behavior and gates.
