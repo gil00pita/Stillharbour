@@ -111,7 +111,11 @@ impl LibraryFixture {
         std::fs::write(root.join("Coast/Generated-06.jpg"), encoded)?;
         std::fs::rename(
             root.join("Woodland/Generated-17.webp"),
-            root.join("Woodland/-Generated-17-\"%\n港📷.webp"),
+            root.join(if cfg!(windows) {
+                "Woodland/-Generated-17-%港📷.webp"
+            } else {
+                "Woodland/-Generated-17-\"%\n港📷.webp"
+            }),
         )?;
         for name in [
             ".hidden.png",
@@ -139,7 +143,11 @@ impl LibraryFixture {
         )?;
         std::fs::write(root.join("broken.jpg"), b"generated malformed fixture")?;
         std::fs::write(
-            root.join("-quoted\"%\n港.txt"),
+            root.join(if cfg!(windows) {
+                "-quoted%港.txt"
+            } else {
+                "-quoted\"%\n港.txt"
+            }),
             b"untrusted filename fixture",
         )?;
         #[cfg(unix)]
@@ -243,10 +251,20 @@ fn manifest(root: &Path) -> Result<BTreeMap<PathBuf, String>> {
             } else if kind.is_symlink() {
                 out.insert(relative, format!("link:{:?}", std::fs::read_link(&path)?));
             } else {
-                out.insert(
-                    relative,
-                    blake3::hash(&std::fs::read(path)?).to_hex().to_string(),
-                );
+                let hash = blake3::hash(&std::fs::read(&path)?).to_hex().to_string();
+                #[cfg(windows)]
+                let hash = {
+                    use std::os::windows::fs::MetadataExt;
+                    let m = std::fs::metadata(&path)?;
+                    format!(
+                        "{hash}:{}:{}:{}:{}",
+                        m.len(),
+                        m.creation_time(),
+                        m.last_write_time(),
+                        m.file_attributes()
+                    )
+                };
+                out.insert(relative, hash);
             }
         }
         Ok(())

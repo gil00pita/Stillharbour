@@ -108,6 +108,28 @@ fn lock_error() -> AppError {
     AppError::new(ErrorCode::WorkerFailed, "Library job state is unavailable.")
 }
 
+// Regenerable, application-owned preview output only. This must never become
+// an original-file publication fallback or bypass the operation executor.
+fn publish_cache_noreplace(staged: &Path, destination: &Path) -> Result<()> {
+    #[cfg(windows)]
+    {
+        fs::hard_link(staged, destination).map_err(|error| {
+            let code = if error.kind() == std::io::ErrorKind::AlreadyExists {
+                ErrorCode::Conflict
+            } else {
+                ErrorCode::Io
+            };
+            AppError::new(
+                code,
+                "The preview cache could not publish without replacement.",
+            )
+            .caused_by(error)
+        })
+    }
+    #[cfg(not(windows))]
+    filesystem::publish_noreplace(staged, destination)
+}
+
 impl Library {
     pub(super) fn scan_idle(&self) -> bool {
         self.active.lock().is_ok_and(|active| active.is_none())
@@ -384,15 +406,51 @@ impl Library {
         mode: RootMode,
         filter: ScanFilter,
     ) -> Result<ScanJob> {
+        self.register_inner(path, expected.map(|id| (id, None)), label, mode, filter)
+    }
+    pub fn register_verified(
+        self: &Arc<Self>,
+        path: PathBuf,
+        expected: (FileIdentity, String),
+        label: String,
+        mode: RootMode,
+        filter: ScanFilter,
+    ) -> Result<ScanJob> {
+        self.register_inner(
+            path,
+            Some((expected.0, Some(expected.1))),
+            label,
+            mode,
+            filter,
+        )
+    }
+    fn register_inner(
+        self: &Arc<Self>,
+        path: PathBuf,
+        expected: Option<(FileIdentity, Option<String>)>,
+        label: String,
+        mode: RootMode,
+        filter: ScanFilter,
+    ) -> Result<ScanJob> {
         CompiledFilter::new(filter.clone())?;
         if label.len() > 128 || label.chars().any(char::is_control) {
             return Err(invalid(
                 "Folder labels must be at most 128 bytes without control characters.",
             ));
         }
-        let root = native::open_root(&path, expected.as_ref())?;
+        let root = native::open_root(&path, expected.as_ref().map(|e| &e.0))?;
         let identity = filesystem::identity(&root)?;
         let volume = native::volume_token(&root)?;
+        if expected
+            .as_ref()
+            .and_then(|e| e.1.as_ref())
+            .is_some_and(|v| v != &volume)
+        {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The selected volume changed. Choose the folder again before scanning.",
+            ));
+        }
         let path = path.canonicalize()?;
         let managed_identity =
             filesystem::identity(&native::open_root(&self.options.data_directory, None)?)?;
@@ -490,7 +548,7 @@ impl Library {
             ));
         }
         let compiled = CompiledFilter::new(filter.clone())?;
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         let managed_identity =
             filesystem::identity(&native::open_root(&self.options.data_directory, None)?)?;
         let job = store::begin_job(&self.catalog, id, filter.clone())?;
@@ -514,9 +572,9 @@ impl Library {
                     job,
                     filter: compiled,
                     paths: owner.options.workers.clone(),
-                    #[cfg(unix)]
+                    #[cfg(any(unix, windows))]
                     data_directory: owner.options.data_directory.clone(),
-                    #[cfg(unix)]
+                    #[cfg(any(unix, windows))]
                     data_identity: managed_identity,
                     canceled: cancel,
                     resources: owner.resources.clone(),
@@ -734,10 +792,36 @@ impl Library {
         path: PathBuf,
         expected: Option<FileIdentity>,
     ) -> Result<ScanJob> {
+        self.relink_inner(id, path, expected.map(|id| (id, None)))
+    }
+    pub fn relink_verified(
+        self: &Arc<Self>,
+        id: String,
+        path: PathBuf,
+        expected: (FileIdentity, String),
+    ) -> Result<ScanJob> {
+        self.relink_inner(id, path, Some((expected.0, Some(expected.1))))
+    }
+    fn relink_inner(
+        self: &Arc<Self>,
+        id: String,
+        path: PathBuf,
+        expected: Option<(FileIdentity, Option<String>)>,
+    ) -> Result<ScanJob> {
         let root = store::root(&self.catalog, id.clone())?;
-        let handle = native::open_root(&path, expected.as_ref())?;
+        let handle = native::open_root(&path, expected.as_ref().map(|e| &e.0))?;
         let identity = filesystem::identity(&handle)?;
         let volume = native::volume_token(&handle)?;
+        if expected
+            .as_ref()
+            .and_then(|e| e.1.as_ref())
+            .is_some_and(|v| v != &volume)
+        {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The selected volume changed. Choose the folder again before relinking.",
+            ));
+        }
         let canonical = path.canonicalize()?;
         let managed_identity =
             filesystem::identity(&native::open_root(&self.options.data_directory, None)?)?;
@@ -1153,7 +1237,8 @@ impl Library {
                 report.png.len() as u64,
             );
             staged.as_file().sync_all()?;
-            match filesystem::publish_noreplace(staged.path(), &path) {
+            let staged = staged.into_temp_path();
+            match publish_cache_noreplace(&staged, &path) {
                 Ok(()) => {}
                 Err(error) if error.code == ErrorCode::Conflict => {}
                 Err(error) => return Err(error),
@@ -1246,6 +1331,31 @@ impl Drop for Library {
 #[cfg(test)]
 mod maintenance_tests {
     use super::*;
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_preview_publication_preserves_late_existing_cache_content() {
+        let fixture = tempfile::tempdir().unwrap();
+        let staged = fixture.path().join("owned-stage");
+        let destination = fixture.path().join("owned-preview");
+        fs::write(&staged, b"new preview").unwrap();
+        fs::write(&destination, b"existing preview").unwrap();
+        assert_eq!(
+            publish_cache_noreplace(&staged, &destination)
+                .unwrap_err()
+                .code,
+            ErrorCode::Conflict
+        );
+        assert_eq!(fs::read(&destination).unwrap(), b"existing preview");
+        assert_eq!(fs::read(&staged).unwrap(), b"new preview");
+        let fresh = fixture.path().join("fresh-preview");
+        publish_cache_noreplace(&staged, &fresh).unwrap();
+        assert_eq!(fs::read(fresh).unwrap(), b"new preview");
+        assert_eq!(
+            crate::domain::require_original_mutation().unwrap_err().code,
+            ErrorCode::MutationUnavailable
+        );
+    }
     #[test]
     #[cfg(all(feature = "fixture-probes", target_os = "macos"))]
     fn cache_only_lookup_never_admits_or_cancels_source_work() {

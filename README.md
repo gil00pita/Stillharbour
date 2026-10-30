@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/branding/stillharbour-logo.svg" alt="Stillharbour logo" width="96" />
+<img src="assets/branding/stillharbour-logo-no-padding.svg" alt="Stillharbour logo" width="96" />
 
 # Stillharbour
 
@@ -12,10 +12,10 @@ A local-first photo library that keeps your originals in ordinary folders.
 
 </div>
 
-Stillharbour is a native desktop application built with Tauri, React and Rust. Browse photos across folders, inspect metadata, and organise favourites, ratings and tags in a local SQLite catalog. Your originals stay where they are, and annotations stay in the catalog. No account, telemetry or cloud service is enabled.
+**Stillharbour** is a native desktop application built with Tauri, React and Rust. Browse photos across folders, inspect metadata, and organise favourites, ratings and tags in a local SQLite catalog. Your originals stay where they are, and annotations stay in the catalog. No account, telemetry or cloud service is enabled.
 
 > [!IMPORTANT]
-> Stillharbour is in development. Native library evidence currently covers **macOS Apple Silicon**; Windows 11 x64 is a release target, and Windows scanning remains disabled pending native validation. M2 has begun with organization previews. File copying, renaming, moving, deletion and production backup remain unavailable. See the [implementation log](docs/IMPLEMENTATION_LOG.md) for actual checks and open gates.
+> Stillharbour is in development. Native library evidence covers **macOS Apple Silicon**, with a bounded **Windows local NTFS** scan/preview implementation. Windows network drives and other filesystems remain unavailable; capture/camera metadata and broader format support are not implemented there. Signed installers and clean-machine release validation remain pending. M2 has begun with organization previews. File copying, renaming, moving, deletion and production backup remain unavailable. See the [implementation log](docs/IMPLEMENTATION_LOG.md) for actual checks and open gates.
 
 ## Features
 

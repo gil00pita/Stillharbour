@@ -193,6 +193,33 @@ pub async fn metadata(
     bytes: Vec<u8>,
     cancel: Arc<AtomicBool>,
 ) -> Result<Metadata> {
+    if cfg!(windows) {
+        // Windows uses the existing supervised baseline decoder for dimensions.
+        // Capture/camera/EXIF metadata is unavailable, never fabricated from mtime.
+        let digest = blake3::hash(&bytes).to_hex().to_string();
+        let mut command = Command::new(&paths.executable);
+        command
+            .args(["--media-worker-stdin-v2", "32", "0"])
+            .env_clear()
+            .current_dir(&paths.working_directory);
+        let output = run(
+            command,
+            WorkerInput::Bytes(bytes),
+            crate::rendition::wire_budget(32)?,
+            true,
+            cancel,
+        )
+        .await?;
+        let report = crate::rendition::read_frame(&output, 32)?;
+        let (width, height) = report
+            .display_dimensions
+            .unwrap_or((report.source_width, report.source_height));
+        return Ok(Metadata {
+            width: Some(width), height: Some(height), source: "unavailable".into(),
+            raw: r#"[{"StillharbourMetadataPolicy":"windows-basic-v1","CaptureMetadata":"unavailable"}]"#.into(),
+            digest: Some(digest), ..Default::default()
+        });
+    }
     let script = paths.exiftool.as_ref().ok_or_else(|| {
         AppError::new(
             ErrorCode::Unsupported,
@@ -390,9 +417,10 @@ pub async fn thumbnail_file(
 }
 
 pub fn helper_available(paths: &WorkerPaths) -> bool {
-    cfg!(target_os = "macos")
-        && Path::new("/usr/bin/perl").is_file()
-        && paths.exiftool.as_ref().is_some_and(|p| p.is_file())
+    (cfg!(windows) && paths.executable.is_file())
+        || (cfg!(target_os = "macos")
+            && Path::new("/usr/bin/perl").is_file()
+            && paths.exiftool.as_ref().is_some_and(|p| p.is_file()))
 }
 
 #[cfg(feature = "fixture-probes")]
@@ -434,29 +462,30 @@ mod tests {
         let mut fixture = tempfile::NamedTempFile::new().unwrap();
         let source = vec![71u8; 256 * 1024 + 3];
         fixture.write_all(&source).unwrap();
+        let fixture = fixture.into_temp_path();
         let error = read_input_cancellable(
-            crate::filesystem::open_readonly(fixture.path()).unwrap(),
+            crate::filesystem::open_readonly(fixture.as_ref()).unwrap(),
             &AtomicBool::new(true),
         )
         .unwrap_err();
-        assert_eq!(std::fs::read(fixture.path()).unwrap(), source);
+        assert_eq!(std::fs::read(&fixture).unwrap(), source);
         let retry = read_input_cancellable(
-            crate::filesystem::open_readonly(fixture.path()).unwrap(),
+            crate::filesystem::open_readonly(fixture.as_ref()).unwrap(),
             &AtomicBool::new(false),
         );
-        #[cfg(unix)]
+        #[cfg(any(unix, windows))]
         {
             assert_eq!(error.code, ErrorCode::Busy);
             assert_eq!(retry.unwrap(), source);
         }
-        #[cfg(not(unix))]
+        #[cfg(not(any(unix, windows)))]
         {
             // Identity validation must keep failing closed, even when a read
             // is canceled or retried. Do not bypass it just to pass this test.
             assert_eq!(error.code, ErrorCode::Unsupported);
             assert_eq!(retry.unwrap_err().code, ErrorCode::Unsupported);
         }
-        assert_eq!(std::fs::read(fixture.path()).unwrap(), source);
+        assert_eq!(std::fs::read(&fixture).unwrap(), source);
     }
     #[test]
     fn capture_dates_remain_local_and_preserve_old_and_fractional_values() {

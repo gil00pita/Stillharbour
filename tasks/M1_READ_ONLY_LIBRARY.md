@@ -67,3 +67,8 @@ Owner original-viewing revision (2026-10-30): use a guarded backend original-byt
 Owner floating-controls revision (2026-10-30): group zoom out/in, Fit, Info and Filmstrip as labelled icon actions in a floating bar over the photo, with the favorite heart immediately before Info. Keep the overlay outside the pan/scroll canvas; stack the bounded scrolling Info panel below the photo/filmstrip at narrow widths. Preserve minimum-window/panel access, zoom state, keyboard/focus behavior and existing original-viewing limits. See docs/ORIGINAL_IMAGE_VIEWING.md; no milestone expansion or native/source changes.
 
 Owner HEIC viewer fix (2026-10-30): remove the original-format restriction causing valid HEIC images to fall back. Admit detected HEIC/HEIF still-image bytes through the existing guarded macOS route on compatible WebKit; preserve all source/helper/32 MiB/32-million-pixel and fallback limits. Require full-size native pixels, exact packaged bytes and unchanged generated sources; no source conversion, schema/dependency change or cache purge. Follow ORIGINAL_IMAGE_VIEWING.md and ADR-0018's follow-up; other milestones/platform/preservation gates remain separate.
+
+
+## Windows continuation — 2026-10-30
+
+Owner explicitly authorizes the native Windows scan backend alongside the identity alert and requested PR. ADR-0021 records the local NTFS adapter, captured volume binding, exact native names, held-handle enumeration/file-ID opens, worker-based baseline metadata/previews and cache-only publication. Follow the current M1 validation/development/log evidence. This does not waive broader filesystem/format/distribution/performance or original-mutation/recovery gates and does not advance M2 execution.

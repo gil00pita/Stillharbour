@@ -170,3 +170,8 @@ The owner explicitly chooses local P4 work before M2. [ADR-0019](decisions/ADR-0
 ## Authorized M2 organization previews — 2026-10-30
 
 The owner continued to M2 and selected organization templates/previews as the priority. [ADR-0020](decisions/ADR-0020-organization-template-previews.md) separates bounded pure template rendering from catalog snapshots and future executable plans. [M2 preview status](M2_ORGANIZATION_PREVIEWS.md) records current relative proposals, deterministic fingerprints and explicit missing/collision issues. No destination/approval/executor is enabled; P4-06 and exact-version recovery/native preservation gates remain open. Persistent destination-aware planning and companion review are next.
+
+
+## Owner-approved Windows NTFS read adapter — 2026-10-30
+
+[ADR-0021](decisions/ADR-0021-windows-ntfs-scanning.md) records the explicit Windows-backend continuation. Use local NTFS volume GUID/file identities, bounded held-handle enumeration and file-ID opens with native name/membership checks. Baseline worker dimensions/previews preserve filesystem date provenance; unsupported roots show the blocking alert. Generic original publication/durability, non-NTFS/network support, full Windows metadata/format packaging and release/preservation gates remain separate. No persisted identity/schema migration.

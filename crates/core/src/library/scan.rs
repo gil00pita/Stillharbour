@@ -5,14 +5,14 @@ use super::{
     store::{self, Discovery, RootRecord},
     workers,
 };
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use crate::filesystem;
 use crate::{
     catalog::Catalog,
     domain::{AppError, ErrorCode, Result},
     jobs::resources::{Class, ResourceScheduler, Work},
 };
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 use std::io::{Read, Seek, SeekFrom};
 use std::{
     fs::File,
@@ -29,9 +29,9 @@ pub struct ScanContext {
     pub job: ScanJob,
     pub filter: CompiledFilter,
     pub paths: workers::WorkerPaths,
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     pub data_directory: PathBuf,
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     pub data_identity: filesystem::FileIdentity,
     pub canceled: Arc<AtomicBool>,
     pub resources: ResourceScheduler,
@@ -63,7 +63,7 @@ impl ScanContext {
             error.message,
         )
     }
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     fn excluded(&mut self, path: &Path) -> Result<()> {
         self.skipped = self.skipped.saturating_add(1);
         store::exclude_scope(
@@ -519,7 +519,7 @@ impl ScanContext {
         }
         Ok(())
     }
-    #[cfg(not(unix))]
+    #[cfg(not(any(unix, windows)))]
     fn walk(
         &mut self,
         _parent: File,
@@ -534,7 +534,7 @@ impl ScanContext {
     }
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn is_media_extension(extension: &str) -> bool {
     super::model::DEFAULT_PHOTO_EXTENSIONS.contains(&extension)
         || matches!(
@@ -542,6 +542,10 @@ fn is_media_extension(extension: &str) -> bool {
             "mp4" | "mov" | "m4v" | "avi" | "mts" | "m2ts" | "mkv"
         )
 }
+
+#[cfg(windows)]
+#[path = "scan_windows.rs"]
+mod windows;
 
 #[cfg(all(test, unix))]
 mod tests {

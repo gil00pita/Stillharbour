@@ -6,6 +6,9 @@ use std::{
     path::Path,
 };
 
+#[cfg(windows)]
+pub(crate) mod windows;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileIdentity {
     pub volume: u64,
@@ -24,7 +27,12 @@ pub fn identity(file: &File) -> Result<FileIdentity> {
     })
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+pub fn identity(file: &File) -> Result<FileIdentity> {
+    windows::identity(file)
+}
+
+#[cfg(not(any(unix, windows)))]
 pub fn identity(_file: &File) -> Result<FileIdentity> {
     Err(AppError::new(
         ErrorCode::Unsupported,
@@ -40,7 +48,58 @@ pub fn open_readonly(path: &Path) -> Result<File> {
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
     }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::*;
+        options.share_mode(FILE_SHARE_READ).custom_flags(
+            FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL,
+        );
+        windows::checked(options.open(path)?)
+    }
+    #[cfg(not(windows))]
     Ok(options.open(path)?)
+}
+
+/// Validate a selected directory without enumerating its children.
+pub fn open_directory_readonly(path: &Path) -> Result<File> {
+    #[cfg(windows)]
+    let file = {
+        use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
+        const FILE_READ_ATTRIBUTES: u32 = 0x80;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        // Directory handles require BACKUP_SEMANTICS. Selection needs only
+        // attributes, not directory listing, content reads or write access.
+        let file = OpenOptions::new()
+            .access_mode(FILE_READ_ATTRIBUTES)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)
+            .map_err(|error| {
+                AppError::new(
+                    ErrorCode::Io,
+                    "The selected folder could not be opened. Check access permissions and drive availability.",
+                )
+                .caused_by(error)
+            })?;
+        if file.metadata()?.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err(AppError::new(
+                ErrorCode::Unsupported,
+                "Select a folder directly. Reparse points are not supported for folder selection.",
+            ));
+        }
+        file
+    };
+    #[cfg(not(windows))]
+    let file = open_readonly(path)?;
+    if !file.metadata()?.is_dir() {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "The selected item is not a folder.",
+        ));
+    }
+    Ok(file)
 }
 
 /// Atomic same-volume publication on macOS. Never falls back to ordinary rename.
@@ -151,6 +210,67 @@ mod tests {
     use std::fs;
 
     #[test]
+    #[cfg(windows)]
+    fn windows_directory_selection_rejects_junctions() {
+        let fixture = tempfile::tempdir().unwrap();
+        let target = fixture.path().join("target");
+        let junction = fixture.path().join("junction");
+        fs::create_dir(&target).unwrap();
+        fs::write(target.join("preserved.bin"), b"original bytes").unwrap();
+        // Windows junction creation needs no Developer Mode or symlink privilege.
+        // Paths are environment data, never interpolated into PowerShell code.
+        let status = std::process::Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "$ErrorActionPreference='Stop'; New-Item -ItemType Junction -Path $env:STILLHARBOUR_TEST_JUNCTION -Target $env:STILLHARBOUR_TEST_TARGET | Out-Null",
+            ])
+            .env("STILLHARBOUR_TEST_JUNCTION", &junction)
+            .env("STILLHARBOUR_TEST_TARGET", &target)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert_eq!(
+            open_directory_readonly(&junction).unwrap_err().code,
+            ErrorCode::Unsupported
+        );
+        assert_eq!(
+            fs::read(target.join("preserved.bin")).unwrap(),
+            b"original bytes"
+        );
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn windows_directory_selection_accepts_fixture_and_drive_root_without_scanning() {
+        use std::io::Write;
+        let fixture = tempfile::tempdir().unwrap();
+        let source = fixture.path().join("preserved.bin");
+        fs::write(&source, b"original bytes").unwrap();
+        let mut directory = open_directory_readonly(fixture.path()).unwrap();
+        assert!(directory.metadata().unwrap().is_dir());
+        assert!(directory.write_all(b"must not write").is_err());
+        // Inspect only the containing drive's directory handle, never list it.
+        let root = fixture.path().ancestors().last().unwrap();
+        assert!(root.has_root());
+        assert!(
+            open_directory_readonly(root)
+                .unwrap()
+                .metadata()
+                .unwrap()
+                .is_dir()
+        );
+        assert_eq!(fs::read(&source).unwrap(), b"original bytes");
+        assert_eq!(
+            open_directory_readonly(&source).unwrap_err().code,
+            ErrorCode::InvalidInput
+        );
+        assert!(open_directory_readonly(&fixture.path().join("absent")).is_err());
+        assert!(!fixture.path().join("absent").exists());
+    }
+
+    #[test]
     #[cfg(not(unix))]
     fn unverified_native_primitives_fail_closed_without_changing_files() {
         let data = tempfile::tempdir().unwrap();
@@ -159,6 +279,9 @@ mod tests {
         fs::write(&source, b"source preserved").unwrap();
         fs::write(&destination, b"existing destination preserved").unwrap();
         let handle = open_readonly(&source).unwrap();
+        #[cfg(windows)]
+        assert!(identity(&handle).is_ok());
+        #[cfg(not(windows))]
         assert_eq!(identity(&handle).unwrap_err().code, ErrorCode::Unsupported);
         assert_eq!(
             publish_noreplace(&source, &destination).unwrap_err().code,

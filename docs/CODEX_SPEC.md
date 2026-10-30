@@ -144,6 +144,10 @@ Store the active catalog and thumbnail cache on a local writable disk, outside i
 
 ### 6.2 Root identity and reconnection
 
+Windows selection correction, 2026-10-30: drive roots and ordinary folders are validated through metadata-only directory handles without enumerating children. Final-component reparse points are rejected. Selection must not implicitly scan, register a root or require elevation. The later owner-approved Windows NTFS adapter supplies file/volume identity only where its native prerequisites pass; unsupported selections retain the disabled action. Directory-open failures explain permissions/drive availability without exposing private native diagnostics.
+
+Identity-unavailable selections show a visible blocking alert, titled Scanning is unavailable for this folder, rather than low-emphasis status/help copy suggesting that another Windows folder will work. The alert explains that the current build cannot verify this platform/volume and explains Windows local NTFS requirements. The disabled Save & Start scanning button references that alert as its accessible description. Direct form submission must also refuse an unverified new selection; renderer and native guards remain in force. The separately approved Windows backend is described in ADR-0021; this alert never overrides a failed native prerequisite.
+
 Store a stable root UUID, native path representation, platform, mount/volume identity when available, root mode, and observed filesystem capabilities. Drive letters and mount paths are location hints, not identity.
 
 Reject duplicate or overlapping root selections in the first release. Show the existing owner root and suggest a folder filter instead. This avoids double indexing and conflicting mutation ownership. A later implementation may support overlaps only with explicit ownership rules and tests.
@@ -732,3 +736,10 @@ Fix the original-format gate rejecting otherwise viewable HEIC images. Extend th
 ### Owner-approved restrained interface polish — 2026-10-30
 
 Apply [INTERFACE_POLISH.md](INTERFACE_POLISH.md) across the existing app: consistent 36px standard native fields/selects, 44px primary/viewer controls, readable system typography, neutral secondary actions and ordinary spacing. Keep the original logo, graphite/sea-green identity, image layout algorithms/4px gutters and native focus/availability states. Shortened help retains preservation and validation meaning; organization rows show library names with stable IDs available for inspection and losslessly grouped byte totals. Favorites retain backend confirmation and Reduced Motion with a restrained 180ms ease-out response. This presentation change does not authorize M2 execution or waive preservation, performance or platform gates.
+
+
+### Owner-approved Windows local NTFS scanning — 2026-10-30
+
+The owner explicitly includes the Windows backend in this PR. Implement read-only local NTFS scanning with native file identity, captured/revalidated volume GUIDs, held-handle enumeration, exact UTF-16 names and file-ID child opens with fresh parent membership checks. Reuse the existing catalog/filter/job/worker boundaries and preserve incomplete/offline/replaced-root inventory. Save & Start scanning becomes available only for a supported verified selection; the blocking alert remains for unsupported selections. No original-file mutation is enabled. See [ADR-0021](decisions/ADR-0021-windows-ntfs-scanning.md) and the current [M1 validation continuation](M1_VALIDATION.md).
+
+Windows baseline JPEG/PNG/WebP dimensions/orientation use the supervised worker and filesystem date fallback, without fabricated EXIF/capture/camera/GPS fields. Cached preview publication is an app-owned no-replace adapter, not the original-file executor. Network volumes, non-NTFS filesystems, unvalidated formats, wide-directory performance, signed/clean-machine distribution and all preservation/recovery gates remain open. No existing catalog/root/application identity is migrated.

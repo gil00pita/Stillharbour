@@ -24,3 +24,4 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 - [ADR-0015: Bounded tall-JPEG previews](ADR-0015-tall-jpeg-previews.md).
 
 - [ADR-0020: Catalog-only organization template previews](ADR-0020-organization-template-previews.md).
+- [ADR-0021: Windows local NTFS read-only scanning](ADR-0021-windows-ntfs-scanning.md).

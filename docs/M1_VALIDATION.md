@@ -67,7 +67,7 @@ The packaged-code probe uses the actual `.app` executable and ExifTool resources
 
 JPEG/PNG/WebP previews are exercised locally with EXIF orientation and bounded dimensions/allocation. ICC-managed images are explicitly refused pending color transformation tests. Animated/multipage completeness, RAW/HEIC/video previews and color-fidelity matrices are not claimed. Inputs over 32 MiB or dimensions over 12,000 are retained in the catalog with an explicit unavailable state. A thumbnail is not a deep integrity check.
 
-ExifTool 13.55 code is packaged, checksummed and licensed in `vendor/`; it uses explicit system Perl on macOS. Clean-machine, minimum macOS 13, Intel, Windows, notarization/signing and standalone Perl distribution remain open gates. Windows root scanning is deliberately unavailable pending a safe native adapter. This milestone does not establish cross-platform release readiness.
+ExifTool 13.55 code is packaged, checksummed and licensed in `vendor/`; it uses explicit system Perl on macOS. Clean-machine, minimum macOS 13, Intel, Windows, notarization/signing and standalone Perl distribution remain open gates. This original macOS evidence predates the Windows adapter; the later NTFS continuation below supersedes the former Windows scan block only for its stated local scope. This milestone does not establish cross-platform release readiness.
 
 ## Interface finish review
 
@@ -170,3 +170,11 @@ Commands/evidence: npm run check; npm run desktop:test:build; npm run desktop:te
 ## Subsequent format slice — 2026-10-28
 
 The earlier M1 format/ICC limits above describe historical M1 evidence. The owner subsequently approved a bounded M5 read-only preview slice. [FORMAT_SUPPORT.md](FORMAT_SUPPORT.md) records actual macOS HEIC/HEIF, TIFF/GIF/BMP and six camera sample results, native HEIC gallery/viewer evidence, legacy failure retry and compatible offline M1 positive caches. This does not retroactively pass M1's unrun cross-platform or broad release gates.
+
+## Windows local NTFS continuation — 2026-10-30
+
+The owner explicitly requested the Windows backend and a blocking identity alert. Native file identity, a separate volume GUID, handle-based enumeration/file-ID opens and source revision checks now support a bounded read-only local NTFS scan. Registration/relink bind both file and volume identity from the native picker session; no existing root/catalog IDs or schema are changed. Network/non-NTFS roots, links/reparse points and offline/recall placeholders fail closed or remain visible issues. Missing/replaced roots retain their last inventory. See [ADR-0021](decisions/ADR-0021-windows-ntfs-scanning.md).
+
+The existing bounded worker provides JPEG/PNG/WebP dimensions, orientation and previews; capture/camera/GPS metadata is unavailable and dates retain filesystem provenance. No embedded metadata is rewritten. The app-owned cache can publish a flushed closed stage without replacing a destination; the generic original-file publication and durability primitives remain unavailable. Original mutation/recovery gates are unchanged.
+
+Focused native tests cover exact UTF-16 names, 601 entries across buffers, file IDs, volume mismatch, junction escape, writer sharing, root overlap/filter reconciliation, source-read cancellation, cache collisions and missing/replaced roots. The shared desktop fixture has valid Windows hostile names; its verifier also retains size/time/attribute evidence. Full/native command outcomes are recorded in IMPLEMENTATION_LOG.md. This is local fixture evidence, not a signed installer, full cross-platform M1 acceptance, all Windows filesystem/codec support or a large-directory performance result. Earlier macOS results remain historical and have not been rerun on this host.

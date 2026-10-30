@@ -112,6 +112,11 @@ describe('native library onboarding', () => {
     await ready();
     fireEvent.click(screen.getByRole('button', { name: 'Choose a folder' }));
     expect(await screen.findByRole('button', { name: 'Save & Start scanning' })).toBeDisabled();
+    expect(screen.getByRole('alert')).toHaveTextContent('Scanning is unavailable for this folder');
+    expect(screen.getByRole('alert')).toHaveTextContent('ordinary local NTFS');
+    expect(
+      screen.getByRole('button', { name: 'Save & Start scanning' }),
+    ).toHaveAccessibleDescription(/cannot verify folder identity/);
     expect(library).not.toHaveBeenCalled();
   });
 });
