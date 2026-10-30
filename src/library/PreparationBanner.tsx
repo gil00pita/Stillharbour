@@ -85,21 +85,20 @@ function PreparationStatus({
     }
   }
   return (
-    <section className="preparation-banner" aria-label="Library preparation">
-      <div className="preparation-heading">
-        <div>
-          <strong>
-            {job
-              ? job.kind === 'thumbnails'
-                ? 'Preparing photo previews'
-                : 'Finding your photos'
-              : 'Preview preparation paused'}
-          </strong>
-          <p>
-            <bdi>{root.label}</bdi>
-            {otherRoots > 0 && ` · ${otherRoots} more folders in Jobs`}
-          </p>
-        </div>
+    <section
+      className="preparation-banner"
+      aria-label="Library preparation"
+      title={`${root.label}${otherRoots > 0 ? ` · ${otherRoots} more folders in Jobs` : ''}`}
+    >
+      <div className="preparation-row">
+        <span className="preparation-summary">
+          {!job
+            ? 'Preview preparation paused'
+            : thumbnails?.percentage !== undefined
+              ? `${thumbnails.remaining.toLocaleString()} remaining`
+              : 'Remaining unknown'}
+        </span>
+        {job ? <ScanJobProgress job={job} label={root.label} compact /> : <span />}
         <button disabled={busy || stopping} onClick={() => void act()}>
           {busy
             ? 'Updating…'
@@ -112,23 +111,13 @@ function PreparationStatus({
                   : 'Stop scan'}
         </button>
       </div>
-      {job ? (
-        <>
-          <ScanJobProgress job={job} label={root.label} />
-          <p className="preparation-detail">
-            {thumbnails && thumbnails.percentage !== undefined
-              ? `${thumbnails.remaining.toLocaleString()} remaining${job.errors ? ` · ${job.errors.toLocaleString()} previews unavailable` : ''}`
-              : job.kind === 'thumbnails'
-                ? 'Waiting for the preview inventory. The remaining count is not known yet.'
-                : `${job.discovered.toLocaleString()} files found · ${job.indexed.toLocaleString()} indexed. The remaining count is not known yet.`}
-          </p>
-        </>
-      ) : (
+      {job && job.errors > 0 && (
         <p className="preparation-detail">
-          {pausedMessage ? `${pausedMessage} ` : ''}Your indexed photos are kept. Resume to prepare
-          the remaining previews.
+          {job.errors.toLocaleString()} {thumbnails ? 'previews unavailable' : 'scan issues'} ·
+          Details in Jobs
         </p>
       )}
+      {!job && pausedMessage && <p className="preparation-detail">{pausedMessage}</p>}
       {error && <p role="alert">{error}</p>}
     </section>
   );

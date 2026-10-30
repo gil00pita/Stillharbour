@@ -3,6 +3,7 @@ import type {
   OrganizationIssue,
   OrganizationPreview as Preview,
   OrganizationTemplate,
+  LibraryRoot,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 
@@ -34,10 +35,12 @@ const issueLabels: Record<OrganizationIssue, string> = {
 export function OrganizationPreview({
   assetIds,
   revision,
+  roots,
   onClose,
 }: {
   assetIds: string[];
   revision: string;
+  roots: Pick<LibraryRoot, 'id' | 'label'>[];
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -120,10 +123,7 @@ export function OrganizationPreview({
         </button>
       </header>
       <div className="organization-body">
-        <p>
-          Try a folder and filename template for an organized copy. This preview uses indexed
-          metadata and does not read or change your originals.
-        </p>
+        <p>Preview folder and filename changes using indexed metadata. Originals stay in place.</p>
         <form onSubmit={(event) => void build(event)} aria-busy={busy}>
           <fieldset disabled={busy}>
             <label>
@@ -202,14 +202,13 @@ export function OrganizationPreview({
               </p>
             )}
             <p role="status">
-              {preview.proposed} proposed · {preview.blocked} blocked · {preview.selectedBytes}{' '}
-              selected file bytes
+              {preview.proposed} proposed · {preview.blocked} blocked ·{' '}
+              {BigInt(preview.selectedBytes).toLocaleString()} selected file bytes
             </p>
             <p className="help">
-              Paths are relative to a future destination. Existing destination files, native case
-              and Unicode collisions, companion bundles, metadata fidelity and required free space
-              have not been checked. Sequence numbers follow library ID and native source path
-              order.
+              Relative paths only. Destination conflicts, native case and Unicode rules, companions,
+              metadata fidelity and free space still need review. Sequence numbers follow library ID
+              and native source path order.
             </p>
             <label>
               Find a path
@@ -236,7 +235,10 @@ export function OrganizationPreview({
                     <tr key={row.assetId}>
                       <td>
                         <bdi>{row.sourcePath}</bdi>
-                        <small>Library {row.rootId}</small>
+                        <small title={`Library ID: ${row.rootId}`}>
+                          {roots.find((root) => root.id === row.rootId)?.label ??
+                            'Unlisted library'}
+                        </small>
                       </td>
                       <td>
                         <bdi>{row.targetRelativePath ?? 'No valid target'}</bdi>

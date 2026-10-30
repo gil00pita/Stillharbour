@@ -11,7 +11,61 @@ async function native(request) {
     request,
   );
 }
+async function assertFormControlsAligned(selector) {
+  const controls = await browser.execute((selector) => {
+    const root = document.querySelector(selector);
+    return [...root.querySelectorAll('select, input:not([type="checkbox"]):not([type="range"])')]
+      .filter((element) => element.getClientRects().length && !element.closest('.tag-editor'))
+      .map((element) => ({
+        tag: element.tagName,
+        height: element.getBoundingClientRect().height,
+        font: parseFloat(getComputedStyle(element).fontSize),
+        fits: element.getBoundingClientRect().width <= element.parentElement.clientWidth + 1,
+      }));
+  }, selector);
+  assert.ok(controls.some((control) => control.tag === 'SELECT'));
+  assert.ok(
+    controls.every((control) => control.height >= 36 && control.font >= 13 && control.fits),
+    JSON.stringify(controls),
+  );
+  assert.ok(
+    Math.max(...controls.map((control) => control.height)) -
+      Math.min(...controls.map((control) => control.height)) <=
+      1,
+    JSON.stringify(controls),
+  );
+}
 async function assertViewerControlsOverlay() {
+  const before = await browser.execute(() => {
+    const viewer = document.querySelector('.photo-viewer');
+    const canvas = viewer.querySelector('.viewer-canvas').getBoundingClientRect();
+    const frame = viewer.querySelector('.viewer-image-frame').getBoundingClientRect();
+    return {
+      motion: viewer.dataset.motion,
+      canvas: { width: canvas.width, height: canvas.height },
+      frame: { width: frame.width, height: frame.height },
+    };
+  });
+  observations.viewerReadiness ??= [];
+  observations.viewerReadiness.push(before);
+  await browser.waitUntil(
+    async () =>
+      browser.execute(() => {
+        const viewer = document.querySelector('.photo-viewer');
+        const canvas = viewer.querySelector('.viewer-canvas').getBoundingClientRect();
+        const frame = viewer.querySelector('.viewer-image-frame').getBoundingClientRect();
+        return (
+          viewer.dataset.motion === 'open' &&
+          frame.width > 0 &&
+          frame.height > 0 &&
+          frame.left >= canvas.left - 1 &&
+          frame.right <= canvas.right + 1 &&
+          frame.top >= canvas.top - 1 &&
+          frame.bottom <= canvas.bottom + 1
+        );
+      }),
+    { timeoutMsg: 'Viewer opening and fitted image geometry did not settle' },
+  );
   const geometry = await browser.execute(() => {
     const controls = document.querySelector('.viewer-controls');
     const bar = controls.getBoundingClientRect();
@@ -411,12 +465,20 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           const banner = document.querySelector('.preparation-banner');
           const box = banner.getBoundingClientRect();
           const button = banner.querySelector('button').getBoundingClientRect();
+          const progress = banner.querySelector('[role="progressbar"]').getBoundingClientRect();
           return {
-            fits: box.right <= innerWidth + 1 && box.left >= 0 && button.right <= box.right + 1,
+            fits:
+              box.right <= innerWidth + 1 &&
+              box.left >= 0 &&
+              button.right <= box.right + 1 &&
+              banner.scrollWidth <= banner.clientWidth,
+            compact: box.height <= 54,
+            inline:
+              Math.abs(progress.top + progress.height / 2 - (button.top + button.height / 2)) <= 1,
             hasPhotos: Boolean(document.querySelector('.collection-main [data-asset-id]')),
           };
         });
-        assert.deepEqual(layout, { fits: true, hasPhotos: false });
+        assert.deepEqual(layout, { fits: true, compact: true, inline: true, hasPhotos: false });
         await browser.saveScreenshot(`.context/screenshots/initial-previews-${name}.png`);
       }
       await $('.preparation-banner button').click();
@@ -711,14 +773,43 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       [660, 560, 'minimum'],
     ]) {
       await browser.setWindowSize(width, height);
-      await browser.waitUntil(
-        async () =>
-          browser.execute(() => {
-            const viewport = document.querySelector('.asset-viewport');
-            return viewport.scrollWidth <= viewport.clientWidth + 1;
-          }),
-        { timeout: 3000, timeoutMsg: 'Gallery width did not settle after resize' },
-      );
+      try {
+        await browser.waitUntil(
+          async () =>
+            browser.execute(() => {
+              const viewport = document.querySelector('.asset-viewport');
+              return viewport.scrollWidth <= viewport.clientWidth + 1;
+            }),
+          { timeout: 3000, timeoutMsg: 'Gallery width did not settle after resize' },
+        );
+      } catch (error) {
+        const geometry = await browser.execute(() => {
+          const viewport = document.querySelector('.asset-viewport');
+          return {
+            visibility: document.visibilityState,
+            focused: document.hasFocus(),
+            innerWidth,
+            innerHeight,
+            viewport: {
+              width: viewport.clientWidth,
+              scrollWidth: viewport.scrollWidth,
+              height: viewport.clientHeight,
+            },
+            rows: [...document.querySelectorAll('.asset-row.gallery')].slice(0, 16).map((row) => ({
+              width: row.getBoundingClientRect().width,
+              children: [...row.querySelectorAll('.asset')].map((asset) => ({
+                left: asset.offsetLeft,
+                width: asset.getBoundingClientRect().width,
+              })),
+            })),
+          };
+        });
+        await writeFile(
+          `${evidence}/resize-failure.json`,
+          JSON.stringify({ requested: { width, height }, geometry }, null, 2),
+        );
+        throw error;
+      }
       const geometry = await browser.execute(() => {
         const rows = [...document.querySelectorAll('.asset-row.gallery')];
         const viewport = document.querySelector('.asset-viewport');
@@ -1216,6 +1307,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.saveScreenshot('.context/screenshots/filter-canvas-desktop.png');
     await openFilters();
     await $('#library-filter-panel input', { strict: false }).waitForDisplayed();
+    await assertFormControlsAligned('#library-filter-panel');
     await browser.saveScreenshot('.context/screenshots/filter-panel-desktop.png');
     await browser.execute(() => {
       const tag = [...document.querySelectorAll('#library-filter-panel label')]
@@ -1270,6 +1362,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       'auto',
     );
     await browser.saveScreenshot('.context/screenshots/filter-panel-minimum.png');
+    await assertFormControlsAligned('#library-filter-panel');
     await browser.execute(() => {
       document.querySelector('.filter-panel-body').scrollTop =
         document.querySelector('.filter-panel-body').scrollHeight;
@@ -1381,6 +1474,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       assert.equal(expected.data.executionAvailable, false);
       await $('button=Preview organization').click();
       await $('.organization-preview[open]').waitForDisplayed();
+      await assertFormControlsAligned('.organization-preview');
       await $('button=Build preview').click();
       await $('.organization-table tbody tr:first-child').waitForDisplayed();
       assert.equal(
@@ -1646,6 +1740,14 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       }),
     );
     await browser.saveScreenshot('.context/screenshots/viewer-overlay-favorite.png');
+    observations.favoriteFeedback = await browser.execute(() => {
+      const heart = document.querySelector('.viewer-favorite');
+      const style = getComputedStyle(heart);
+      return {
+        duration: style.getPropertyValue('--like-pop').trim(),
+        ease: style.getPropertyValue('--like-pop-ease').trim(),
+      };
+    });
     await $('.viewer-favorite').click();
     await browser.waitUntil(
       async () => (await $('.viewer-favorite').getAttribute('aria-pressed')) === initialFavorite,
@@ -1849,6 +1951,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       document.querySelector('main').scrollTop = 0;
     });
     await browser.saveScreenshot('.context/screenshots/settings-desktop.png');
+    await assertFormControlsAligned('.settings-page');
     await $('.settings-defaults-form .scan-options summary').click();
     await $('.settings-defaults-form input[name="minBytes"]').setValue('-1');
     assert.equal(

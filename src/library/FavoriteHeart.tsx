@@ -17,9 +17,13 @@ export function FavoriteHeart({
   const button = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!animate) return;
-    const duration = button.current
-      ? parseFloat(getComputedStyle(button.current).getPropertyValue('--like-pop')) || 350
-      : 350;
+    const value = button.current
+      ? getComputedStyle(button.current).getPropertyValue('--like-pop').trim()
+      : '';
+    // Bundled CSS may serialize milliseconds as seconds (180ms becomes .18s).
+    const milliseconds =
+      parseFloat(value) * (value.endsWith('ms') ? 1 : value.endsWith('s') ? 1000 : NaN);
+    const duration = Number.isFinite(milliseconds) && milliseconds >= 0 ? milliseconds : 180;
     // Occluded WebViews can suspend animationend; always finish at saved state.
     const timer = setTimeout(onAnimationEnd, hidden ? 0 : duration + 70);
     return () => clearTimeout(timer);

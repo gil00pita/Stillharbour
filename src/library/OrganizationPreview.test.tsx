@@ -55,7 +55,12 @@ beforeEach(() => {
   vi.mocked(libraryData).mockReset().mockResolvedValue(response());
 });
 function setup() {
-  const props = { assetIds: ['photo-id'], revision: '1', onClose: vi.fn() };
+  const props = {
+    assetIds: ['photo-id'],
+    revision: '1',
+    roots: [{ id: 'root-id', label: 'Generated library' }],
+    onClose: vi.fn(),
+  };
   return { ...render(<OrganizationPreview {...props} />), props };
 }
 async function build() {
@@ -79,6 +84,7 @@ it('sends catalog IDs and typed settings, renders untrusted paths as text and ke
     'organization_preview',
   );
   expect(screen.getByText('Source/<photo>.JPG')).toBeVisible();
+  expect(screen.getByText('Generated library')).toHaveAttribute('title', 'Library ID: root-id');
   expect(screen.getByText('Undated/<photo>.JPG')).toBeVisible();
   expect(screen.getByText(/2 indexed companion candidates/)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Create organized copy' })).toBeDisabled();

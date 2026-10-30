@@ -12,10 +12,20 @@ const descriptions: Record<string, string> = {
   failed: 'Scan failed',
 };
 
-export function ScanJobProgress({ job, label }: { job: ScanJob; label: string }) {
+export function ScanJobProgress({
+  job,
+  label,
+  compact = false,
+}: {
+  job: ScanJob;
+  label: string;
+  compact?: boolean;
+}) {
   const descriptionId = useId();
   if (job.kind === 'thumbnails')
-    return <ThumbnailProgress job={job} label={label} descriptionId={descriptionId} />;
+    return (
+      <ThumbnailProgress job={job} label={label} descriptionId={descriptionId} compact={compact} />
+    );
   const active = job.state === 'running' || job.state === 'cancel_requested';
   const completed = job.state === 'completed';
   const description = descriptions[job.state] ?? 'Scan not running';
@@ -37,7 +47,7 @@ export function ScanJobProgress({ job, label }: { job: ScanJob; label: string })
       ) : (
         <div className="job-progress-track" aria-hidden="true" />
       )}
-      <p id={descriptionId} className="help">
+      <p id={descriptionId} className="help" hidden={compact}>
         {description}
       </p>
     </div>
@@ -48,10 +58,12 @@ function ThumbnailProgress({
   job,
   label,
   descriptionId,
+  compact,
 }: {
   job: ScanJob;
   label: string;
   descriptionId: string;
+  compact: boolean;
 }) {
   const active =
     job.state === 'running' || job.state === 'cancel_requested' || job.state === 'queued';
@@ -79,7 +91,7 @@ function ThumbnailProgress({
           style={indeterminate ? undefined : { width: `${value}%` }}
         />
       </div>
-      <p id={descriptionId} className="help">
+      <p id={descriptionId} className="help" hidden={compact}>
         {description}
       </p>
     </div>

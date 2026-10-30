@@ -202,6 +202,7 @@ export function LibraryScreen({
         <OrganizationPreview
           assetIds={organizationIds}
           revision={status.revision}
+          roots={status.roots}
           onClose={() => setOrganizationIds(null)}
         />
       )}

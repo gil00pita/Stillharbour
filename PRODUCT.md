@@ -66,7 +66,7 @@ Keep the established photo-first canvas and dark native shell. The owner-request
 
 ## First scan preview preparation — 2026-10-30
 
-Owner first-scan revision (2026-10-30): the initial Photos/Tags collection waits for generated tiny previews or explicit unavailable outcomes, while raw catalog discovery remains early. A temporary top banner shows indeterminate discovery, then counted preview preparation and remaining media. Pausing/restarting retains the indexed collection and requires explicit resume; existing completed libraries and image-free Text list behavior remain intact. This supersedes the earlier removal of scan banners only for active/paused preparation; header Jobs and its history remain unchanged. Details: docs/INITIAL_LIBRARY_PREPARATION.md and ADR-0016.
+Owner first-scan revision (2026-10-30): the initial Photos/Tags collection waits for generated tiny previews or explicit unavailable outcomes, while raw catalog discovery remains early. A temporary single-row top banner shows remaining media, an inline progress bar and stop/pause; unknown totals read “Remaining unknown”. Details stay in Jobs, with unavailable outcomes and paused/error feedback visible when needed. Pausing/restarting retains the indexed collection and requires explicit resume; existing completed libraries and image-free Text list behavior remain intact. This supersedes the earlier removal of scan banners only for active/paused preparation; header Jobs and its history remain unchanged. Details: docs/INITIAL_LIBRARY_PREPARATION.md and ADR-0016.
 
 ## Single-photo viewing — 2026-10-30
 
@@ -83,3 +83,7 @@ HEIC viewer fix (2026-10-30): detected HEIC/HEIF still-image originals also open
 ## Organization template previews — 2026-10-30
 
 M2 begins with a catalog-only preview from the Photos selection toolbar for 1–240 individually selected photos. Preserve the existing Operate shell, system type, neutral surfaces and protected dialog focus. Editable session presets/custom templates show exact relative proposals, missing-date policy, conflicts and unconfirmed companion candidates. Destination checks, saved/versioned templates, export, approvals and all copying/original operations remain unavailable. See docs/M2_ORGANIZATION_PREVIEWS.md for behavior and gates.
+
+## Restrained polish — owner approval, 2026-10-30
+
+Retain Stillharbour's current photo-first brand and layouts while making shared controls, spacing and supporting text consistent. Use neutral secondary actions, 36px standard fields/selects, 44px primary/viewer targets, native system type, readable help text and restrained confirmed-favorite feedback. Library names lead over UUIDs in organization previews; identities remain available for inspection. No backend capability, milestone or original-file permission changes. See docs/INTERFACE_POLISH.md.
