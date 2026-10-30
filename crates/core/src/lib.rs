@@ -9,6 +9,7 @@ pub mod library;
 pub mod media;
 #[cfg(target_os = "macos")]
 mod native_preview;
+pub mod organization;
 pub mod rendition;
 
 #[cfg(feature = "fixture-probes")]

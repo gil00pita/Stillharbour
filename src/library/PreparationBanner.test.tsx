@@ -48,11 +48,13 @@ beforeEach(() => {
 
 it('keeps discovery indeterminate even when every found file is indexed', () => {
   render(<PreparationBanner status={status} rootId={null} onRefresh={refresh} />);
-  expect(screen.getByText('Finding your photos')).toBeVisible();
+  expect(screen.getByText('Remaining unknown')).toBeVisible();
   expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
-  expect(screen.getByText(/20 files found · 20 indexed/)).toHaveTextContent(
-    'remaining count is not known yet',
+  expect(screen.getByRole('progressbar')).toHaveAccessibleDescription(
+    'Scanning · total files not yet known',
   );
+  expect(screen.getByText('Scanning · total files not yet known')).not.toBeVisible();
+  expect(screen.queryByText('Generated photos')).not.toBeInTheDocument();
   expect(screen.queryByText(/0 remaining/)).not.toBeInTheDocument();
 });
 
@@ -69,7 +71,11 @@ it('shows a real remaining count after inventory, including errors as processed'
     <PreparationBanner status={{ ...status, jobs: [job] }} rootId={null} onRefresh={refresh} />,
   );
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
-  expect(screen.getByText('60 remaining · 5 previews unavailable')).toBeVisible();
+  expect(screen.getByText('60 remaining')).toBeVisible();
+  expect(screen.getByText('5 previews unavailable · Details in Jobs')).toBeVisible();
+  expect(screen.getByRole('progressbar')).toHaveAccessibleDescription(
+    'Preparing thumbnails · 40 of 100',
+  );
   rerender(
     <PreparationBanner
       status={{ ...status, jobs: [{ ...job, discovered: 0, indexed: 0, skipped: 0, errors: 0 }] }}
@@ -79,6 +85,27 @@ it('shows a real remaining count after inventory, including errors as processed'
   );
   expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
   expect(screen.queryByText(/0 remaining/)).not.toBeInTheDocument();
+  expect(screen.getByText('Remaining unknown')).toBeVisible();
+});
+
+it('keeps queued inventory indeterminate and stop requests disabled until confirmed', () => {
+  const job = { ...scan, kind: 'thumbnails' as const, state: 'queued' as const };
+  const { rerender } = render(
+    <PreparationBanner status={{ ...status, jobs: [job] }} rootId={null} onRefresh={refresh} />,
+  );
+  expect(screen.getByText('Remaining unknown')).toBeVisible();
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
+  rerender(
+    <PreparationBanner
+      status={{ ...status, jobs: [{ ...job, state: 'cancel_requested' }] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Stopping…' })).toBeDisabled();
+  expect(screen.getByRole('progressbar')).toHaveAccessibleDescription(
+    'Stopping thumbnail generation…',
+  );
 });
 
 it('cancels with the native ID and resumes a paused library explicitly', async () => {

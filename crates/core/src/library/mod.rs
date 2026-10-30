@@ -4,6 +4,7 @@ mod directory;
 pub mod filters;
 pub mod model;
 mod monitor;
+mod organization;
 pub use service::original::{ORIGINAL_IMAGE_POLICY, OriginalImage};
 pub mod native;
 pub(crate) mod read_cache;

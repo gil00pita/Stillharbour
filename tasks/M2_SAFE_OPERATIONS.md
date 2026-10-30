@@ -4,6 +4,10 @@
 
 Enable safe operations only after immutable planning, no-clobber execution and crash recovery work on disposable fixtures.
 
+## Current authorized work — 2026-10-30
+
+The owner requested the next stage and prioritized Organization templates and previews. M2 is in progress; [the first preview slice](../docs/M2_ORGANIZATION_PREVIEWS.md) adds bounded catalog-only template previews through actual library IPC. It is not a persisted executable plan, destination preflight or M2 acceptance. Production copying and original mutation remain unavailable. Continue next with destination-aware persistent planning and companion review before implementing/authorizing the executor. Preserve all P4-06 and preservation gates below.
+
 ## Prerequisites and references
 
 M0-M1; docs/CODEX_SPEC.md sections 5, 9, 10, 12; acceptance AC-023 through AC-039, AC-081, AC-082, AC-084.

@@ -146,8 +146,8 @@ export function SettingsScreen({
               ))}
             </ul>
             <p className="help">
-              Change location reconnects the same folder after a move. To index a different folder,
-              use Add photo folder. A changed location is checked before reconciliation starts.
+              Use Change location to reconnect a moved folder, or Add photo folder for a different
+              library. Reconnected locations are checked before reconciliation.
             </p>
           </>
         )}
@@ -155,8 +155,7 @@ export function SettingsScreen({
       <section className="settings-section" aria-labelledby="preview-cache-title">
         <h2 id="preview-cache-title">Preview cache</h2>
         <p className="help">
-          Clear Stillharbour’s indexed cached previews for all libraries. Original photos and
-          catalog notes stay unchanged.
+          Clears indexed previews for all libraries. Originals and catalog notes stay unchanged.
         </p>
         <button
           type="button"

@@ -2,7 +2,7 @@
 
 Date: 2026-10-30. Owner request: “Finish up P4.” This is the current acceptance ledger; [PERFORMANCE_P4.md](PERFORMANCE_P4.md) retains the original historical results, including failures. [Cold filename summaries](PERFORMANCE_COLD_SUMMARIES.md) and [local closeout](PERFORMANCE_LOCAL_CLOSEOUT.md) record the subsequent fixes and exact validation identities.
 
-**Full P4 acceptance is blocked by P4-06.** The read-only implementation and local macOS validation are tracked separately from missing cross-platform, whole-process, presented-frame and M4-dependent evidence. No requirement is waived or converted into a pass because an environment is unavailable. M2 has not started; original-file mutation remains disabled.
+**Full P4 acceptance is blocked by P4-06.** The read-only implementation and local macOS validation are tracked separately from missing cross-platform, whole-process, presented-frame and M4-dependent evidence. No requirement is waived or converted into a pass because an environment is unavailable. M2 subsequently began with [catalog-only organization template previews](M2_ORGANIZATION_PREVIEWS.md) under the owner's next-stage continuation; original-file mutation remains disabled.
 
 ## Acceptance ledger
 
@@ -55,4 +55,4 @@ The final npm run check passes all 191 frontend/harness and 100 Rust tests (75 u
 
 The Rust/frontend source is unchanged from the local-closeout native/package verification, as confirmed by source hashes and the production executable hash. Its complete 100-test release core run, catalog/recorder stress repeats and 15 native macOS cases remain actual supporting evidence; those native suites and the unsigned app were not rebuilt/rerun for the final manifest-runner/documentation-only changes. No signed release or whole-process/presented-frame result is invented.
 
-Delivery scope is a normal commit/push on the existing feat/next-stage-continue branch under the owner’s earlier commit-and-push instruction. No PR, merge, branch rename or deployment. Generated logs, media and raw private diagnostics stay ignored under .context/. Read-only P4 implementation and available local verification are complete; full P4 acceptance remains blocked at P4-06. M2 has not started.
+Delivery scope is a normal commit/push on the existing feat/next-stage-continue branch under the owner’s earlier commit-and-push instruction. No PR, merge, branch rename or deployment. Generated logs, media and raw private diagnostics stay ignored under .context/. Read-only P4 implementation and available local verification are complete; full P4 acceptance remains blocked at P4-06. M2 had not started at that audit; the subsequent catalog-only preview authorization is recorded above.

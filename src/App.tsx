@@ -130,11 +130,13 @@ function NavigationToggle({ collapsed, onToggle }: { collapsed: boolean; onToggl
   );
 }
 
-function NavigationIcon({ section }: { section: AppSection }) {
-  const paths: Record<AppSection, string> = {
+function NavigationIcon({ section }: { section: AppSection | 'Map' | 'Utilities' }) {
+  const paths: Record<typeof section, string> = {
     Photos: 'M4 4h16v16H4ZM4 15l5-5 5 5 3-3 3 3',
     Folders: 'M3 7h7l2 2h9v11H3ZM3 7V4h7l2 3',
     Tags: 'M3 3h8l10 10-8 8L3 11ZM7 7h.01',
+    Map: 'M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16',
+    Utilities: 'M4 7h16M4 17h16M8 4v6M16 14v6',
     Settings:
       'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z',
   };
@@ -184,10 +186,14 @@ function Sidebar({
               </button>
             ))}
             <button disabled title="Map browsing is planned for a later milestone">
-              Map <small>Coming later</small>
+              <NavigationIcon section="Map" />
+              <span className="nav-label">Map</span>
+              <small>Later</small>
             </button>
             <button disabled title="File operations remain unavailable in this read-only release">
-              Utilities <small>Coming later</small>
+              <NavigationIcon section="Utilities" />
+              <span className="nav-label">Utilities</span>
+              <small>Later</small>
             </button>
           </>
         ) : (
