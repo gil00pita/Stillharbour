@@ -59,6 +59,30 @@ function add(label: string, value: string) {
   return input;
 }
 
+it('highlights unsupported identity as an alert and blocks direct form submission', () => {
+  const onSave = vi.fn();
+  const props = {
+    selected: { ...selected, identityAvailable: false },
+    busy: false,
+    onSave,
+    onCancel: vi.fn(),
+    onError: vi.fn(),
+  };
+  const { rerender } = render(<RootSetup {...props} />);
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveClass('error');
+  expect(alert).toHaveTextContent('Scanning is unavailable for this folder');
+  const save = screen.getByRole('button', { name: 'Save & Start scanning' });
+  expect(save).toBeDisabled();
+  expect(save).toHaveAccessibleDescription(/cannot verify folder identity/);
+  fireEvent.submit(save.closest('form')!);
+  expect(onSave).not.toHaveBeenCalled();
+  rerender(<RootSetup {...props} selected={selected} />);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(save).toBeEnabled();
+  expect(save).not.toHaveAttribute('aria-describedby');
+});
+
 describe('advanced folder setup', () => {
   it('defaults to Managed and the exact 33-photo preset with independent hidden switches', () => {
     const onSave = setup();

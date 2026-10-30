@@ -362,7 +362,7 @@ pub fn discover_batch(
     if changed {bump(&tx)?;}tx.commit()?;Ok(ids)
 })
 }
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub fn directory(
     catalog: &Catalog,
     root_id: String,
@@ -389,11 +389,11 @@ pub fn exclude_scope(
     job_id: String,
 ) -> Result<()> {
     catalog.call(move|db|{
-    let raw=native::encode_path(&path);let mut prefix=raw.clone();prefix.push(b'/');
+    let raw=native::encode_path(&path);let mut prefix=raw.clone();prefix.extend_from_slice(&native::encode_path(Path::new(std::path::MAIN_SEPARATOR_STR)));
     db.execute("UPDATE assets SET presence='excluded',seen_scan=? WHERE root_id=? AND (relative_native=? OR substr(relative_native,1,?)=?)",params![job_id,root_id,raw,prefix.len() as i64,prefix])?;Ok(())
 })
 }
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 pub fn uncertain(catalog: &Catalog, root_id: String, path: PathBuf, job_id: String) -> Result<()> {
     catalog.call(move|db|{
     db.execute("UPDATE assets SET presence='inaccessible',seen_scan=? WHERE root_id=? AND relative_native=?",params![job_id,root_id,native::encode_path(&path)])?;Ok(())

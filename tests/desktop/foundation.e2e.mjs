@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { warmPhotoForScroll } from './warmPhoto.mjs';
+import { createEvidenceDirectory } from './evidence.mjs';
 
 async function native(request) {
   return browser.tauri.execute(
@@ -224,6 +225,132 @@ describe('native read-only library', () => {
     await mkdir('.context/screenshots', { recursive: true });
     await browser.saveScreenshot('.context/screenshots/m1-onboarding.png');
   });
+  (process.platform === 'win32' ? it : it.skip)(
+    'highlights an identity-unavailable selection without starting a scan',
+    async () => {
+      const picker = await browser.tauri.mock('foundation_request');
+      try {
+        // UI-state fixture only: no filesystem selection or scan is authorized.
+        await picker.mockReturnValue({
+          kind: 'directory',
+          data: {
+            id: 'identity-unavailable-ui-fixture',
+            displayPath: 'Generated identity-unavailable selection',
+            identityAvailable: false,
+          },
+        });
+        await $('button.primary').click();
+        await $('.root-setup [role="alert"]').waitForDisplayed();
+        assert.equal(await $('.folder-actions button.primary').isEnabled(), false);
+        const alert = await $('.root-setup [role="alert"]');
+        assert.ok((await alert.getText()).includes('Scanning is unavailable for this folder'));
+        assert.equal(
+          await $('.folder-actions button.primary').getAttribute('aria-describedby'),
+          await alert.getAttribute('id'),
+        );
+        for (const [name, width, height] of [
+          ['desktop', 1180, 780],
+          ['minimum', 660, 560],
+        ]) {
+          await browser.setWindowSize(width, height);
+          await browser.execute(() =>
+            document
+              .querySelector('.root-setup [role="alert"]')
+              .scrollIntoView({ block: 'center' }),
+          );
+          await browser.saveScreenshot(`.context/screenshots/identity-alert-${name}.png`);
+        }
+        assert.equal((await native({ kind: 'status' })).data.roots.length, 0);
+        assert.equal((await native({ kind: 'status' })).data.jobs.length, 0);
+      } finally {
+        await picker.mockRestore();
+        if (await $('.selected-folder').isExisting())
+          await $('.folder-actions button:first-child').click();
+        await browser.setWindowSize(1180, 780);
+      }
+    },
+  );
+  (process.platform === 'win32' ? it : it.skip)(
+    'saves and scans a generated NTFS library and displays real cached previews',
+    async () => {
+      const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
+      const selection = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_library_fixture', { verify: false }),
+      );
+      assert.equal(selection.identityAvailable, true);
+      const picker = await browser.tauri.mock('foundation_request');
+      try {
+        await picker.mockReturnValue({ kind: 'directory', data: selection });
+        await $('button.primary').click();
+        await $('.selected-folder').waitForDisplayed();
+        assert.equal((await $$('.root-setup [role="alert"]')).length, 0);
+        assert.equal(await $('.folder-actions button.primary').isEnabled(), true);
+        await $('.root-setup input[required]').setValue('Generated Windows library');
+        await $('.folder-actions button.primary').click();
+        await browser.waitUntil(
+          async () => {
+            const status = (await native({ kind: 'status' })).data;
+            await writeFile(`${evidence}/windows-status.json`, JSON.stringify(status));
+            return (
+              status.roots.length === 1 &&
+              status.roots[0].fileCount >= 18 &&
+              status.jobs.some((j) => j.kind === 'thumbnails') &&
+              status.jobs.every((j) => !['queued', 'running', 'cancel_requested'].includes(j.state))
+            );
+          },
+          { timeout: 25000, timeoutMsg: 'Generated Windows scan/previews did not settle' },
+        );
+        await browser.waitUntil(
+          async () =>
+            browser.execute(() =>
+              [...document.querySelectorAll('.asset-open img')].some(
+                (img) => img.complete && img.naturalWidth > 0,
+              ),
+            ),
+          { timeout: 15000 },
+        );
+        await browser.waitUntil(
+          async () => browser.execute(() => !document.querySelector('.preparation-banner')),
+          {
+            timeout: 10000,
+            timeoutMsg: 'The frontend did not observe terminal preview preparation',
+          },
+        );
+        const observations = await browser.execute(() =>
+          [...document.querySelectorAll('.asset-open img')]
+            .filter((img) => img.complete && img.naturalWidth > 0)
+            .map((img) => ({
+              width: img.naturalWidth,
+              height: img.naturalHeight,
+              source: img.src,
+            })),
+        );
+        assert.ok(observations.some((image) => image.source.includes('thumbnail.localhost')));
+        await writeFile(
+          `${evidence}/windows-preview-observations.json`,
+          JSON.stringify(observations),
+        );
+        for (const [name, width, height] of [
+          ['desktop', 1180, 780],
+          ['minimum', 660, 560],
+        ]) {
+          await browser.setWindowSize(width, height);
+          await browser.saveScreenshot(`.context/screenshots/windows-library-${name}.png`);
+        }
+      } finally {
+        await picker.mockRestore();
+        const verification = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_library_fixture', { verify: true }),
+        );
+        await writeFile(
+          `${evidence}/windows-source-verification.json`,
+          JSON.stringify(verification),
+        );
+        assert.ok(verification.verifiedFiles > 20);
+        await browser.setWindowSize(1180, 780);
+      }
+    },
+  );
 });
 const describeMac = process.platform === 'darwin' ? describe : describe.skip;
 describeMac('macOS M1 library — generated native fixtures', () => {
@@ -1499,6 +1626,30 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       assert.deepEqual(
         shown,
         expected.data.rows.map((row) => row.targetRelativePath ?? 'No valid target'),
+      );
+      assert.equal(await $('button=Create organized copy').isEnabled(), false);
+      const companions = await native({
+        kind: 'organization_companions',
+        asset_id: expected.data.rows[0].assetId,
+      });
+      assert.equal(companions.kind, 'organization_companions');
+      assert.equal(companions.data.inventoryComplete, false);
+      assert.equal(companions.data.executionAvailable, false);
+      await writeFile(`${evidence}/organization-companions.json`, JSON.stringify(companions.data));
+      await $('.organization-table tbody tr:first-child .organization-companions button').click();
+      await $(
+        '.organization-table tbody tr:first-child .organization-companions section',
+      ).waitForDisplayed();
+      const candidatePaths = await browser.execute(() =>
+        [
+          ...document.querySelectorAll(
+            '.organization-table tbody tr:first-child .organization-companions li bdi',
+          ),
+        ].map((node) => node.textContent),
+      );
+      assert.deepEqual(
+        candidatePaths,
+        companions.data.candidates.map((candidate) => candidate.sourcePath),
       );
       assert.equal(await $('button=Create organized copy').isEnabled(), false);
       for (const [name, width, height] of [

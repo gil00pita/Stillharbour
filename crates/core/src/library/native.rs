@@ -50,6 +50,9 @@ fn decode_utf16_units(bytes: &[u8]) -> Result<Vec<u16>> {
 }
 
 pub fn open_root(path: &Path, expected: Option<&FileIdentity>) -> Result<File> {
+    #[cfg(windows)]
+    let file = filesystem::windows::open_root(path)?;
+    #[cfg(not(windows))]
     let file = filesystem::open_readonly(path)?;
     if !file.metadata()?.is_dir() {
         return Err(AppError::new(
@@ -78,6 +81,10 @@ pub fn open_root(path: &Path, expected: Option<&FileIdentity>) -> Result<File> {
 }
 
 pub fn volume_token(file: &File) -> Result<String> {
+    #[cfg(windows)]
+    {
+        filesystem::windows::volume_token(file)
+    }
     #[cfg(target_os = "macos")]
     {
         use std::os::fd::AsRawFd;
@@ -114,7 +121,7 @@ pub fn volume_token(file: &File) -> Result<String> {
         }
         Ok(result[4..].iter().map(|b| format!("{b:02x}")).collect())
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = file;
         Err(AppError::new(
@@ -132,7 +139,9 @@ pub fn revision(file: &File) -> Result<String> {
         use std::os::unix::fs::MetadataExt;
         format!("{}:{}", m.ctime(), m.ctime_nsec())
     };
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    let changed = filesystem::windows::change_time(file)?.to_string();
+    #[cfg(not(any(unix, windows)))]
     let changed = String::new();
     let bytes = format!(
         "{}:{}:{}:{:?}:{}",
@@ -216,7 +225,35 @@ pub fn open_asset(
         }
         Ok(parent)
     }
-    #[cfg(not(unix))]
+    #[cfg(windows)]
+    {
+        let mut parent = open_root(root, Some(expected))?;
+        if volume_token(&parent)? != volume {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The library volume has changed. Relink before reading originals.",
+            ));
+        }
+        let parts: Vec<_> = relative.components().collect();
+        if parts.is_empty() {
+            return Err(AppError::new(
+                ErrorCode::InvalidInput,
+                "Missing asset path.",
+            ));
+        }
+        for (index, part) in parts.iter().enumerate() {
+            parent =
+                filesystem::windows::child(&parent, part.as_os_str(), index + 1 < parts.len())?;
+        }
+        if !parent.metadata()?.is_file() {
+            return Err(AppError::new(
+                ErrorCode::Unsupported,
+                "The original is not a regular file.",
+            ));
+        }
+        Ok(parent)
+    }
+    #[cfg(not(any(unix, windows)))]
     {
         let _ = (root, expected, volume);
         Err(AppError::new(

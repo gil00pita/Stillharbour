@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { DirectorySelection, LibraryRoot, RootMode, ScanFilter } from '../bindings';
 import { defaultFilter, normalizeFileExtensions } from './model';
 import { Switch } from '../components/Switch';
@@ -31,6 +31,8 @@ export function RootSetup({
   const labelInput = useRef<HTMLInputElement>(null);
   const focusedSelection = useRef<string | undefined>(undefined);
   const selectionId = selected?.id;
+  const identityAlertId = useId();
+  const identityUnavailable = !root && selected?.identityAvailable === false;
   useEffect(() => {
     if (selectionId && !busy && focusedSelection.current !== selectionId) {
       labelInput.current?.focus();
@@ -51,7 +53,7 @@ export function RootSetup({
       className={`root-setup ${embedded ? 'inline-scan-settings' : 'selected-folder'}`}
       onSubmit={(event) => {
         event.preventDefault();
-        if (!busy && !scanRunning && event.currentTarget.reportValidity())
+        if (!busy && !scanRunning && !identityUnavailable && event.currentTarget.reportValidity())
           void onSave(label, mode, scanFilterFromForm(filter, event.currentTarget));
       }}
     >
@@ -92,11 +94,16 @@ export function RootSetup({
           ? 'Originals stay in this folder. Scanning only reads them.'
           : 'Managed permission is saved for future approved operations. This version only reads originals.'}
       </p>
-      {selected && !selected.identityAvailable && (
-        <p className="help" role="status">
-          Folder identity is unavailable on this platform or volume. Choose a supported local
-          folder.
-        </p>
+      {identityUnavailable && (
+        <div className="error" role="alert" id={identityAlertId}>
+          <strong>Scanning is unavailable for this folder</strong>
+          <p>
+            Stillharbour cannot verify folder identity on this platform or volume. Save &amp; Start
+            scanning is disabled to protect your library. On Windows, select an ordinary local NTFS
+            folder; network volumes, other filesystems, links and cloud placeholders are not
+            supported.
+          </p>
+        </div>
       )}
       <ScanOptions filter={filter} disabled={busy} onChange={setFilter} onError={onError} />
       <div className="folder-actions">
@@ -107,6 +114,7 @@ export function RootSetup({
           className="primary"
           type="submit"
           disabled={busy || scanRunning || (!root && !selected?.identityAvailable)}
+          aria-describedby={identityUnavailable ? identityAlertId : undefined}
         >
           {scanSubmitLabel(busy, scanRunning, Boolean(root))}
         </button>

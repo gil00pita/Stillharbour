@@ -7,7 +7,33 @@ use std::collections::BTreeMap;
 use ts_rs::TS;
 
 pub const PREVIEW_LIMIT: usize = 240;
+pub const COMPANION_REVIEW_LIMIT: usize = 64;
 const POLICY: &str = "organization-preview-v1";
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationCompanion {
+    pub asset_id: String,
+    pub source_path: String,
+    pub source_revision: String,
+    pub bytes: String,
+    pub presence: String,
+    pub root_availability: String,
+    pub is_media: bool,
+    pub filename_sidecar: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationCompanionReview {
+    pub asset_id: String,
+    pub catalog_revision: String,
+    pub fingerprint: String,
+    pub candidates: Vec<OrganizationCompanion>,
+    pub truncated: bool,
+    pub inventory_complete: bool,
+    pub execution_available: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

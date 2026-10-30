@@ -471,6 +471,9 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    OrganizationCompanions {
+        asset_id: String,
+    },
     OrganizationPreview {
         asset_ids: Vec<String>,
         template: crate::organization::OrganizationTemplate,
@@ -582,6 +585,7 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    OrganizationCompanions(crate::organization::OrganizationCompanionReview),
     OrganizationPreview(crate::organization::OrganizationPreview),
     Changes(LibraryChangePage),
     Directory(DirectoryPage),

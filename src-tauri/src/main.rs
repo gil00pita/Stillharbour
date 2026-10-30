@@ -22,6 +22,7 @@ struct NativeSelection {
     id: String,
     path: PathBuf,
     identity: Option<FileIdentity>,
+    volume: Option<String>,
 }
 
 struct Foundation {
@@ -112,16 +113,15 @@ async fn foundation_request(
                 AppError::new(ErrorCode::InvalidInput, "Select a local folder.").caused_by(error)
             })?;
             let (response, native) = tauri::async_runtime::spawn_blocking(move || -> Result<_> {
-                let handle = filesystem::open_readonly(&path)?;
-                if !handle.metadata()?.is_dir() {
-                    return Err(AppError::new(
-                        ErrorCode::InvalidInput,
-                        "The selected item is not a folder.",
-                    ));
-                }
-                let identity = match filesystem::identity(&handle) {
-                    Ok(identity) => Some(identity),
-                    Err(error) if error.code == ErrorCode::Unsupported => None,
+                let handle = filesystem::open_directory_readonly(&path)?;
+                let (identity, volume) = match filesystem::identity(&handle) {
+                    Ok(identity) => match stillharbour_core::library::native::volume_token(&handle)
+                    {
+                        Ok(volume) => (Some(identity), Some(volume)),
+                        Err(error) if error.code == ErrorCode::Unsupported => (None, None),
+                        Err(error) => return Err(error),
+                    },
+                    Err(error) if error.code == ErrorCode::Unsupported => (None, None),
                     Err(error) => return Err(error),
                 };
                 let response = DirectorySelection {
@@ -130,7 +130,15 @@ async fn foundation_request(
                     identity_available: identity.is_some(),
                 };
                 let id = response.id.clone();
-                Ok((response, NativeSelection { id, path, identity }))
+                Ok((
+                    response,
+                    NativeSelection {
+                        id,
+                        path,
+                        identity,
+                        volume,
+                    },
+                ))
             })
             .await
             .map_err(|error| {
@@ -161,6 +169,16 @@ fn selected(state: &Foundation, id: &str) -> Result<NativeSelection> {
         })
 }
 
+fn selected_identity(selection: &NativeSelection) -> Result<(FileIdentity, String)> {
+    match (&selection.identity, &selection.volume) {
+        (Some(identity), Some(volume)) => Ok((identity.clone(), volume.clone())),
+        _ => Err(AppError::new(
+            ErrorCode::Unsupported,
+            "This folder's identity and volume could not be verified. Select a supported local folder.",
+        )),
+    }
+}
+
 #[tauri::command]
 async fn library_request(
     window: tauri::WebviewWindow,
@@ -181,6 +199,9 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationCompanions { asset_id } => {
+                LibraryResponse::OrganizationCompanions(library.organization_companions(asset_id)?)
+            }
             LibraryRequest::OrganizationPreview {
                 asset_ids,
                 template,
@@ -227,9 +248,10 @@ async fn library_request(
                 let selection = selection.ok_or_else(|| {
                     AppError::new(ErrorCode::InvalidInput, "Missing native selection.")
                 })?;
-                LibraryResponse::Job(library.register(
+                let expected = selected_identity(&selection)?;
+                LibraryResponse::Job(library.register_verified(
                     selection.path,
-                    selection.identity,
+                    expected,
                     label,
                     mode,
                     filter,
@@ -249,7 +271,8 @@ async fn library_request(
                 let selection = selection.ok_or_else(|| {
                     AppError::new(ErrorCode::InvalidInput, "Missing native selection.")
                 })?;
-                LibraryResponse::Job(library.relink(root_id, selection.path, selection.identity)?)
+                let expected = selected_identity(&selection)?;
+                LibraryResponse::Job(library.relink_verified(root_id, selection.path, expected)?)
             }
             LibraryRequest::UpdateMode { root_id, mode } => {
                 library.update_mode(root_id, mode)?;
@@ -369,7 +392,9 @@ fn test_library_fixture(
         stillharbour_core::library_fixture::LibraryFixture::generate()?
     };
     let path = generated.path().to_owned();
-    let identity = filesystem::identity(&filesystem::open_readonly(&path)?)?;
+    let handle = filesystem::open_readonly(&path)?;
+    let identity = filesystem::identity(&handle)?;
+    let volume = stillharbour_core::library::native::volume_token(&handle)?;
     let id = uuid::Uuid::new_v4().to_string();
     *state
         .selection
@@ -379,6 +404,7 @@ fn test_library_fixture(
             id: id.clone(),
             path,
             identity: Some(identity),
+            volume: Some(volume),
         });
     *fixture = Some(generated);
     Ok(serde_json::to_value(DirectorySelection {

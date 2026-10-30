@@ -35,3 +35,4 @@ jobs:
             .context/wdio
             .context/gallery/**/warm-scroll.json
             .context/gallery/**/manifest-*.json
+            .context/windows-directory-selection/native-*/*.json
