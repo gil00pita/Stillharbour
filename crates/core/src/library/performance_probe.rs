@@ -118,6 +118,58 @@ fn measure<T>(n: usize, mut work: impl FnMut() -> Result<T>) -> Result<Value> {
     Ok(distribution(&samples))
 }
 
+/// Current filtered reads of an existing disposable fixture. Never scans sources.
+pub fn measure_filtered(path: &Path, rows: u32) -> Result<Value> {
+    let catalog = Catalog::open(path.to_owned())?;
+    let actual: u32 =
+        catalog.call(|db| Ok(db.query_row("SELECT count(*) FROM assets", [], |r| r.get(0))?))?;
+    if actual != rows {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Fixture row count changed.",
+        ));
+    }
+    let mut results = Vec::new();
+    for (label, name) in [
+        ("none", "Generated"),
+        ("narrow", "Synthetic 0000"),
+        ("broad", "Synthetic"),
+    ] {
+        let query = AssetQuery {
+            name: name.into(),
+            ..Default::default()
+        };
+        let mut samples = Vec::new();
+        let mut matched = 0;
+        for _ in 0..3 {
+            catalog.cached(|_, cache| {
+                cache.reset_for_probe();
+                Ok(())
+            })?;
+            let start = Instant::now();
+            let page = store::query(&catalog, query.clone(), None, 240)?;
+            let page_ms = elapsed(start);
+            matched = page.total;
+            let start = Instant::now();
+            let buckets = store::buckets(&catalog, query.clone())?;
+            let bucket_ms = elapsed(start);
+            assert_eq!(buckets.iter().map(|b| b.count).sum::<u32>(), page.total);
+            let start = Instant::now();
+            store::buckets(&catalog, query.clone())?;
+            samples.push(
+                json!({"pageMs":page_ms,"bucketsMs":bucket_ms,"warmBucketsMs":elapsed(start)}),
+            );
+        }
+        let (where_sql, values) = store::query_where(&query)?;
+        let plans = catalog.call(move |db| {
+            let sql = format!("EXPLAIN QUERY PLAN SELECT CASE WHEN length(date)<10 THEN 'Undated' ELSE substr(date,1,7) END AS period,count(*) FROM assets WHERE {where_sql} GROUP BY period ORDER BY (period='Undated'),period DESC");
+            Ok(db.prepare(&sql)?.query_map(rusqlite::params_from_iter(values), |r| r.get::<_,String>(3))?.collect::<rusqlite::Result<Vec<_>>>()?)
+        })?;
+        results.push(json!({"scope":label,"matched":matched,"samples":samples,"bucketPlan":plans}));
+    }
+    Ok(json!({"sqlite":sqlite_info(&catalog)?,"scenarios":results}))
+}
+
 /// P1 focused release measurements. All cache resets affect derived reads of
 /// this disposable catalog only; no OS cache purge or production cache eviction.
 pub fn measure_p1(path: &Path, fixture: &Value) -> Result<Value> {
@@ -438,6 +490,169 @@ pub async fn measure_media(root: &Path, worker: &Path, working_directory: &Path)
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
+    #[test]
+    fn exact_empty_pages_do_not_repeat_the_asset_scan() {
+        let owned = tempfile::tempdir().unwrap();
+        let catalog = Catalog::open(owned.path().join("Fixture.stillharbour")).unwrap();
+        seed_catalog(&catalog, owned.path(), 10_000).unwrap();
+        for sort in ["capture", "name", "size", "modified", "added"] {
+            let query = AssetQuery {
+                name: "Generated".into(),
+                sort: sort.into(),
+                ..Default::default()
+            };
+            assert_eq!(
+                store::query(&catalog, query.clone(), None, 240)
+                    .unwrap()
+                    .total,
+                0
+            );
+            catalog
+                .call(|db| {
+                    db.execute_batch("PRAGMA shrink_memory")?;
+                    Ok(())
+                })
+                .unwrap();
+            let before = catalog
+                .call(|db| Ok(performance::pager_counters(db).unwrap()))
+                .unwrap();
+            let page = store::query(&catalog, query, None, 240).unwrap();
+            let after = catalog
+                .call(|db| Ok(performance::pager_counters(db).unwrap()))
+                .unwrap();
+            assert!(page.assets.is_empty() && page.next_cursor.is_none() && page.total == 0);
+            let bytes = (after.0 - before.0) as u64 * before.2;
+            eprintln!("Empty {sort} page logical pager bytes: {bytes}");
+            assert!(
+                bytes < 64 * 1024,
+                "Empty {sort} page repeated {bytes} logical pager bytes"
+            );
+        }
+        // Streaming scans may publish rows before refreshing inventory counters.
+        catalog
+            .call(|db| {
+                db.execute("UPDATE roots SET file_count=0", [])?;
+                Ok(())
+            })
+            .unwrap();
+        let partial = store::query(&catalog, AssetQuery::default(), None, 240).unwrap();
+        assert_eq!(partial.total, 0);
+        assert_eq!(partial.assets.len(), 240);
+        assert_eq!(
+            store::buckets(&catalog, AssetQuery::default())
+                .unwrap()
+                .iter()
+                .map(|b| b.count)
+                .sum::<u32>(),
+            10_000
+        );
+    }
+
+    #[test]
+    fn empty_pages_and_timeline_share_exact_counts_without_stale_results() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("Fixture.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        seed_catalog(&catalog, owned.path(), 10_000).unwrap();
+        let query = AssetQuery {
+            name: "Generated".into(),
+            ..Default::default()
+        };
+        assert!(store::buckets(&catalog, query.clone()).unwrap().is_empty());
+        catalog
+            .call(|db| {
+                db.execute_batch("PRAGMA shrink_memory")?;
+                Ok(())
+            })
+            .unwrap();
+        let before = catalog
+            .call(|db| Ok(performance::pager_counters(db).unwrap()))
+            .unwrap();
+        let page = store::query(&catalog, query.clone(), None, 240).unwrap();
+        let after = catalog
+            .call(|db| Ok(performance::pager_counters(db).unwrap()))
+            .unwrap();
+        let bytes = (after.0 - before.0) as u64 * before.2;
+        assert_eq!(page.total, 0);
+        eprintln!("Empty timeline/page logical pager bytes: {bytes}");
+        assert!(
+            bytes < 64 * 1024,
+            "Empty timeline/page repeated {bytes} logical pager bytes"
+        );
+        assert_eq!(
+            store::query(&catalog, query.clone(), Some("invalid".into()), 240)
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            store::query(&catalog, query.clone(), None, 0)
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidInput
+        );
+        for invalid in [
+            AssetQuery {
+                min_bytes: "-1".into(),
+                ..query.clone()
+            },
+            AssetQuery {
+                sort: "unknown".into(),
+                ..query.clone()
+            },
+        ] {
+            assert_eq!(
+                store::query(&catalog, invalid, None, 240).unwrap_err().code,
+                ErrorCode::InvalidInput
+            );
+        }
+        catalog.call(|db| {
+            db.execute("UPDATE assets SET name='Generated new' WHERE id='70000000-0000-4000-8000-000000000001'",[])?;
+            Ok(())
+        }).unwrap();
+        assert_eq!(
+            store::query(&catalog, query.clone(), None, 240)
+                .unwrap()
+                .total,
+            1
+        );
+        assert_eq!(
+            store::buckets(&catalog, query.clone())
+                .unwrap()
+                .iter()
+                .map(|b| b.count)
+                .sum::<u32>(),
+            1
+        );
+        let external = rusqlite::Connection::open(path).unwrap();
+        external.execute("UPDATE assets SET name='Synthetic restored' WHERE id='70000000-0000-4000-8000-000000000001'",[]).unwrap();
+        assert_eq!(
+            store::query(&catalog, query.clone(), None, 240)
+                .unwrap()
+                .total,
+            0
+        );
+        catalog
+            .call(|db| {
+                db.execute_batch("PRAGMA shrink_memory")?;
+                Ok(())
+            })
+            .unwrap();
+        let before = catalog
+            .call(|db| Ok(performance::pager_counters(db).unwrap()))
+            .unwrap();
+        assert!(store::buckets(&catalog, query).unwrap().is_empty());
+        let after = catalog
+            .call(|db| Ok(performance::pager_counters(db).unwrap()))
+            .unwrap();
+        let bytes = (after.0 - before.0) as u64 * before.2;
+        eprintln!("Empty page/timeline logical pager bytes: {bytes}");
+        assert!(
+            bytes < 64 * 1024,
+            "Empty page/timeline repeated {bytes} logical pager bytes"
+        );
+    }
+
     #[test]
     fn summary_cache_observes_actor_and_external_writes_and_query_scope() {
         let owned = tempfile::tempdir().unwrap();

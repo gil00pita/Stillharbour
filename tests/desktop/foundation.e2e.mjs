@@ -855,6 +855,21 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(async () =>
       browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
     );
+    await $('input[aria-label="Search filenames"]').setValue('No fixture matches %_literal');
+    await browser.waitUntil(async () =>
+      browser.execute(
+        () => document.querySelector('.empty-results h2')?.textContent === 'No matching photos yet',
+      ),
+    );
+    assert.equal(
+      await browser.execute(() => document.querySelectorAll('.gallery .asset').length),
+      0,
+    );
+    assert.equal(await browser.execute(() => document.querySelectorAll('.date-rail').length), 0);
+    await $('input[aria-label="Search filenames"]').setValue('');
+    await browser.waitUntil(async () =>
+      browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
+    );
     observations.scrolling = await browser.execute(async () => {
       const gaps = [];
       const viewport = document.querySelector('.asset-viewport');
@@ -2089,7 +2104,25 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     const before = (await native({ kind: 'status' })).data;
     const root = before.roots[0];
     await $('button[aria-label="Remove library ' + root.label + '"]').click();
-    await $('button=Remove library and its previews').waitForEnabled();
+    try {
+      await $('button=Remove library and its previews').waitForEnabled();
+    } catch (error) {
+      const status = (await native({ kind: 'status' })).data;
+      await writeFile(
+        `.context/evidence/maintenance-admission-${randomUUID()}.json`,
+        JSON.stringify({
+          review: await browser.execute(() => ({
+            alert: document.querySelector('.maintenance-review [role="alert"]')?.textContent,
+            buttons: [...document.querySelectorAll('.maintenance-review button')].map((button) => ({
+              text: button.textContent,
+              disabled: button.disabled,
+            })),
+          })),
+          jobs: status.jobs.map(({ kind, state }) => ({ kind, state })),
+        }),
+      );
+      throw error;
+    }
     assert.equal((await native({ kind: 'status' })).data.roots.length, before.roots.length);
     assert.ok(
       (await $('.maintenance-review').getText()).includes('catalog favorites, ratings, tags'),

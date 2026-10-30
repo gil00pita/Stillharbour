@@ -110,3 +110,7 @@ React Doctor changed-scope regression results are retained under .context/p4; th
 | P4-06    | Blocked / not run                                      | Real backup/physical endpoint/accounted pacing and native release presented frames, full WebContent/GPU/XPC memory, Windows/minimum OS/clean machines, physical input and controlled NAS/HDD remain unavailable.                           |
 
 Stop at this bounded local P4 evidence gate. Before claiming full acceptance, address recorder trace coverage and memory attribution, reproduce the filtered aggregation/actor waits in release before choosing a reviewed search/index change, and obtain the missing backup/endpoint/platform/physical-media evidence. No further milestone or source mutation is authorized by this work.
+
+## Owner continuation — empty filtered reads
+
+The owner's next-step request authorizes [the bounded empty-result follow-up](PERFORMANCE_FILTERED_READS.md) and [task](../tasks/P4_EMPTY_RESULTS.md). Release measurement confirms an expensive ordered scan after an exact zero count and redundant empty summary scans. The continuation preserves earlier P4 failures and unavailable gates, including positive-filter costs; it does not relabel this report or authorize a later milestone/original mutation.

@@ -134,3 +134,7 @@ The owner replaces side-by-side sparse dates with separate justified rows and fu
 ## P4 local evidence stage — 2026-10-29
 
 Reuse the existing fixture/probe/native infrastructure for [bounded local stress checks](PERFORMANCE_P4.md). Consume diagnostic event segments without increasing the recorder bounds or restarting observers. Keep the compile-time release automation prohibition and distinguish release core/worker evidence from debug UI diagnostics. Production optimization requires a measured reproducible bottleneck; outstanding P3 backup/physical-endpoint/pacing and platform/presentation gates remain intact.
+
+## P4 continuation — exact empty display reads, 2026-10-29
+
+The next-step request continues P4's measured filtered reads. Reuse the existing page and summary-cache boundaries: an exact zero count avoids the ordered projection and empty page/timeline results share evidence within the same query/epoch. Preserve inventory-counter lag, conservative invalidation and every validation/field. [PERFORMANCE_FILTERED_READS.md](PERFORMANCE_FILTERED_READS.md) retains the release reproduction and positive controls; no schema/index/dependency/IPC or safety change.
