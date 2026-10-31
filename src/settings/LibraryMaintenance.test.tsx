@@ -43,6 +43,33 @@ it('previews scope and warns about lost catalog notes without removing anything 
   expect(c.onClose).toHaveBeenCalledOnce();
   expect(c.onComplete).not.toHaveBeenCalled();
 });
+it('shows stopping progress until the backend returns a review and explains that cancellation leaves jobs stopped', async () => {
+  let resolve!: (value: import('../bindings').MaintenancePreview) => void;
+  vi.mocked(libraryData).mockImplementationOnce(
+    () =>
+      new Promise<import('../bindings').MaintenancePreview>((done) => {
+        resolve = done;
+      }),
+  );
+  setup();
+  expect(screen.getByRole('status')).toHaveTextContent('Stopping this library’s jobs');
+  expect(screen.getByRole('button', { name: 'Stopping jobs…' })).toBeDisabled();
+  resolve({
+    id: 'native-plan',
+    target,
+    rootLabel: 'Stopped library',
+    rootDisplayPath: 'Generated folder',
+    assetCount: 1,
+    cachedPreviews: 0,
+    cacheBytes: '0',
+  });
+  await screen.findByText('Stopped library');
+  expect(screen.getByText(/Canceling removal does not restart them/)).toBeVisible();
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Remove library and its previews' })).toBeEnabled(),
+  );
+  expect(libraryData).toHaveBeenCalledOnce();
+});
 it('executes only the backend-issued reviewed plan and reports actual completion', async () => {
   const c = setup();
   await screen.findByText('Generated library');
@@ -60,6 +87,14 @@ it('executes only the backend-issued reviewed plan and reports actual completion
   expect(await screen.findByRole('status')).toHaveTextContent(
     'Original photos and sidecars are unchanged',
   );
+});
+it('does not claim jobs have stopped when preparing removal fails', async () => {
+  vi.mocked(libraryData).mockRejectedValueOnce(new Error('Jobs are still stopping. Try again.'));
+  setup();
+  expect(await screen.findByRole('alert')).toHaveTextContent('Jobs are still stopping');
+  expect(screen.queryByText(/active jobs are stopped before review/)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Remove library and its previews' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review again' })).toBeEnabled();
 });
 it('rejects stale/failed execution without success and requires another review before retry', async () => {
   const c = setup();

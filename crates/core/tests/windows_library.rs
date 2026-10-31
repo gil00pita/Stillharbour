@@ -91,6 +91,8 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
         .map(|p| (p, fs::read(source.path().join(p)).unwrap()))
         .collect();
     let (catalog, library) = open(data.path());
+    #[cfg(feature = "fixture-probes")]
+    library.hold_initial_previews_for_probe(true);
     let handle = filesystem::open_directory_readonly(source.path()).unwrap();
     let identity = filesystem::identity(&handle).unwrap();
     drop(handle);
@@ -135,6 +137,20 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
         "filesystem_modified" | "filesystem_created"
     )));
     let root_id = page.assets[0].root_id.clone();
+    let removal = library
+        .prepare_maintenance(MaintenanceTarget::Library {
+            root_id: root_id.clone(),
+        })
+        .unwrap();
+    assert_eq!(removal.asset_count, 4);
+    assert!(library.root_exists(root_id.clone()).unwrap());
+    assert!(library.status().unwrap().jobs.iter().all(|job| !matches!(
+        job.state.as_str(),
+        "queued" | "running" | "cancel_requested"
+    )));
+    #[cfg(feature = "fixture-probes")]
+    library.hold_initial_previews_for_probe(false);
+    library.generate_thumbnails(root_id.clone()).unwrap();
     // Destination preflight is read-only and bound to this exact preview.
     settle(&library);
     let template = stillharbour_core::organization::OrganizationTemplate {

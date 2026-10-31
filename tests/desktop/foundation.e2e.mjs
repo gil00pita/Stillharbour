@@ -12,6 +12,40 @@ async function native(request) {
     request,
   );
 }
+async function reviewRemovalStopsJobs(receipt) {
+  const before = (await native({ kind: 'status' })).data;
+  const root = before.roots[0];
+  assert.ok(
+    before.jobs.some(
+      (job) =>
+        job.rootId === root.id && ['queued', 'running', 'cancel_requested'].includes(job.state),
+    ),
+  );
+  await $('button[aria-label="Settings"]').click();
+  await $(`button[aria-label="Remove library ${root.label}"]`).click();
+  await $('button=Remove library and its previews').waitForEnabled({ timeout: 35000 });
+  const after = (await native({ kind: 'status' })).data;
+  assert.ok(after.roots.some((value) => value.id === root.id));
+  assert.ok(
+    after.jobs
+      .filter((job) => job.rootId === root.id)
+      .every((job) => !['queued', 'running', 'cancel_requested'].includes(job.state)),
+  );
+  assert.ok(after.jobs.some((job) => job.rootId === root.id && job.state === 'canceled'));
+  assert.ok(
+    (await $('.maintenance-review').getText()).includes('Canceling removal does not restart them'),
+  );
+  await writeFile(
+    receipt,
+    JSON.stringify({ rootId: root.id, before: before.jobs, after: after.jobs, retained: true }),
+  );
+  await browser.saveScreenshot(
+    `.context/screenshots/remove-library-stopped-${process.platform}.png`,
+  );
+  await $('button=Cancel').click();
+  assert.ok((await native({ kind: 'status' })).data.roots.some((value) => value.id === root.id));
+  await $('button[aria-label="Photos"]').click();
+}
 async function preparationLayout() {
   return browser.execute(() => {
     const banner = document.querySelector('.preparation-banner');
@@ -358,12 +392,15 @@ describe('native read-only library', () => {
             await writeFile(`${evidence}/windows-banner-${name}.json`, JSON.stringify(layout));
             await browser.saveScreenshot(`.context/screenshots/windows-banner-${name}.png`);
           }
+          await reviewRemovalStopsJobs(`${evidence}/windows-removal-stopped-jobs.json`);
         } finally {
           await browser.tauri.execute(async ({ core }) =>
             core.invoke('test_performance', { action: 'initial_previews_release', rows: null }),
           );
           await browser.setWindowSize(1180, 780);
         }
+        const retainedRoot = (await native({ kind: 'status' })).data.roots[0];
+        await native({ kind: 'generate_thumbnails', root_id: retainedRoot.id });
         await browser.waitUntil(
           async () => {
             const status = (await native({ kind: 'status' })).data;
@@ -881,6 +918,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       );
       assert.equal(await $('.preparation-banner button').getText(), 'Resume previews');
       await browser.saveScreenshot('.context/screenshots/initial-previews-paused.png');
+      await native({ kind: 'generate_thumbnails', root_id: root.id });
+      await reviewRemovalStopsJobs(`${evidence}/removal-stopped-jobs.json`);
       observations.initialPreparation = {
         total: thumbnail.discovered,
         processed: 0,
@@ -3140,7 +3179,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     );
     await browser.saveScreenshot('.context/screenshots/remove-library-review-minimum-actions.png');
     await $('button=Remove library and its previews').click();
-    await $('.maintenance-review [role="status"]').waitForDisplayed();
+    await browser.waitUntil(async () =>
+      (await $('.maintenance-review [role="status"]').getText()).includes('Library removed.'),
+    );
     assert.equal((await native({ kind: 'status' })).data.roots.length, 0);
     const preferences = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'get_preferences' } }),

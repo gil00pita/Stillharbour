@@ -48,6 +48,7 @@ pub struct LibraryOptions {
 }
 struct ActiveScan {
     id: String,
+    root_id: String,
     cancel: Arc<AtomicBool>,
 }
 struct ThumbnailWork {
@@ -71,12 +72,23 @@ struct MaintenancePlan {
     revision: String,
     created: Instant,
 }
+struct MaintenanceGuard<'a> {
+    pending: &'a AtomicBool,
+    active: &'a AtomicBool,
+}
+impl Drop for MaintenanceGuard<'_> {
+    fn drop(&mut self) {
+        self.active.store(false, Ordering::Release);
+        self.pending.store(false, Ordering::Release);
+    }
+}
 
 pub struct Library {
     monitor: Mutex<Option<super::monitor::Monitor>>,
     cache_cleanup: super::cache_cleanup::CacheCleanup,
     cache_gate: RwLock<()>,
     maintenance: AtomicBool,
+    maintenance_pending: AtomicBool,
     maintenance_plan: Mutex<Option<MaintenancePlan>>,
     pub(crate) catalog: Arc<Catalog>,
     pub(super) options: LibraryOptions,
@@ -163,24 +175,7 @@ impl Library {
         store::root_exists(&self.catalog, id)
     }
     pub fn prepare_maintenance(&self, target: MaintenanceTarget) -> Result<MaintenancePreview> {
-        let _scan = self.scan_gate.try_start().map_err(|error| {
-            AppError::new(
-                ErrorCode::Busy,
-                "Finish or cancel the active scan in Jobs, then review this action again.",
-            )
-            .caused_by(error)
-        })?;
-        if !self
-            .thumbnail_jobs
-            .lock()
-            .map_err(|_| lock_error())?
-            .is_empty()
-        {
-            return Err(AppError::new(
-                ErrorCode::Busy,
-                "Finish or cancel thumbnail jobs in Jobs, then review this action again.",
-            ));
-        }
+        let (_maintenance, _scan) = self.maintenance_context(&target)?;
         let (preview, revision) = store::maintenance_preview(&self.catalog, target)?;
         *self.maintenance_plan.lock().map_err(|_| lock_error())? = Some(MaintenancePlan {
             preview: preview.clone(),
@@ -189,38 +184,150 @@ impl Library {
         });
         Ok(preview)
     }
-    pub fn apply_maintenance(&self, id: String) -> Result<MaintenanceResult> {
-        let _scan = self.scan_gate.try_start().map_err(|error| {
-            AppError::new(
+    pub(super) fn ensure_work_admission(&self) -> Result<()> {
+        if self.maintenance_pending.load(Ordering::Acquire) {
+            return Err(AppError::new(
                 ErrorCode::Busy,
-                "Finish or cancel the active scan in Jobs, then review this action again.",
-            )
-            .caused_by(error)
-        })?;
-        if !self
-            .thumbnail_jobs
-            .lock()
-            .map_err(|_| lock_error())?
-            .is_empty()
+                "Library maintenance is running.",
+            ));
+        }
+        Ok(())
+    }
+    fn begin_maintenance(&self) -> Result<MaintenanceGuard<'_>> {
+        if self.maintenance_pending.swap(true, Ordering::AcqRel) {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Library maintenance is already running.",
+            ));
+        }
+        Ok(MaintenanceGuard {
+            pending: &self.maintenance_pending,
+            active: &self.maintenance,
+        })
+    }
+    fn maintenance_context(
+        &self,
+        target: &MaintenanceTarget,
+    ) -> Result<(MaintenanceGuard<'_>, crate::jobs::JobPermit)> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        if matches!(target, MaintenanceTarget::Library { .. }) {
+            let guard = self.begin_maintenance()?;
+            let permit = self.maintenance_admission(target, deadline)?;
+            self.maintenance.store(true, Ordering::Release);
+            Ok((guard, permit))
+        } else {
+            // Cache-only review must reject active jobs without disturbing them.
+            let permit = self.maintenance_admission(target, deadline)?;
+            let guard = self.begin_maintenance()?;
+            self.maintenance.store(true, Ordering::Release);
+            Ok((guard, permit))
+        }
+    }
+    fn stop_library_jobs(&self, root_id: &str) -> Result<()> {
+        if let Some(active) = self.active.lock().map_err(|_| lock_error())?.as_ref()
+            && active.root_id == root_id
+            && !active.cancel.swap(true, Ordering::Relaxed)
         {
-            return Err(AppError::new(
-                ErrorCode::Busy,
-                "Finish or cancel thumbnail jobs in Jobs, then review this action again.",
-            ));
+            store::cancel_requested(&self.catalog, active.id.clone())?;
         }
-        if self.maintenance.swap(true, Ordering::AcqRel) {
-            return Err(AppError::new(
-                ErrorCode::Busy,
-                "Cache maintenance is already running.",
-            ));
-        }
-        struct Reset<'a>(&'a AtomicBool);
-        impl Drop for Reset<'_> {
-            fn drop(&mut self) {
-                self.0.store(false, Ordering::Release);
+        let jobs = self.thumbnail_jobs.lock().map_err(|_| lock_error())?;
+        for job in jobs.iter().filter(|job| job.root_id == root_id) {
+            if !job.cancel.swap(true, Ordering::Relaxed) {
+                store::cancel_requested(&self.catalog, job.id.clone())?;
             }
         }
-        let _reset = Reset(&self.maintenance);
+        store::stop_initial_preparation(
+            &self.catalog,
+            root_id.into(),
+            "canceled".into(),
+            "Stopped for library removal. Resume previews if removal is canceled.".into(),
+        )?;
+        Ok(())
+    }
+    fn maintenance_admission(
+        &self,
+        target: &MaintenanceTarget,
+        deadline: Instant,
+    ) -> Result<crate::jobs::JobPermit> {
+        let removing = match target {
+            MaintenanceTarget::Library { root_id } => {
+                uuid::Uuid::parse_str(root_id).map_err(|_| invalid("Invalid library identity."))?;
+                self.validate_root_id(root_id.clone())?;
+                Some(root_id.as_str())
+            }
+            MaintenanceTarget::PreviewCache => None,
+        };
+        let permit = loop {
+            if let Some(root_id) = removing {
+                self.stop_library_jobs(root_id)?;
+            }
+            match self.scan_gate.try_start() {
+                Ok(permit) => break permit,
+                Err(error) if error.code == ErrorCode::Busy && removing.is_some() => {
+                    if self
+                        .active
+                        .lock()
+                        .map_err(|_| lock_error())?
+                        .as_ref()
+                        .is_some_and(|scan| Some(scan.root_id.as_str()) != removing)
+                    {
+                        return Err(AppError::new(
+                            ErrorCode::Busy,
+                            "Another library is scanning. Its jobs were not stopped. Try removal after it finishes.",
+                        ));
+                    }
+                    if Instant::now() >= deadline {
+                        return Err(AppError::new(
+                            ErrorCode::Busy,
+                            "Jobs are still stopping. The library is retained; try removal again.",
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                }
+                Err(error) => {
+                    return Err(AppError::new(
+                        ErrorCode::Busy,
+                        "Finish or cancel the active scan in Jobs, then review this action again.",
+                    )
+                    .caused_by(error));
+                }
+            }
+        };
+        loop {
+            let jobs = self.thumbnail_jobs.lock().map_err(|_| lock_error())?;
+            if jobs.is_empty() {
+                return Ok(permit);
+            }
+            if removing.is_none()
+                || jobs
+                    .iter()
+                    .any(|job| Some(job.root_id.as_str()) != removing)
+            {
+                return Err(AppError::new(
+                    ErrorCode::Busy,
+                    "Another thumbnail job is active. Its library is retained; try this action after it finishes.",
+                ));
+            }
+            drop(jobs);
+            if Instant::now() >= deadline {
+                return Err(AppError::new(
+                    ErrorCode::Busy,
+                    "Jobs are still stopping. The library is retained; try removal again.",
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+    pub fn apply_maintenance(&self, id: String) -> Result<MaintenanceResult> {
+        let target = {
+            let stored = self.maintenance_plan.lock().map_err(|_| lock_error())?;
+            let plan = stored
+                .as_ref()
+                .filter(|p| p.preview.id == id && p.created.elapsed() < Duration::from_secs(300))
+                .ok_or_else(|| invalid("Review this action again before confirming."))?;
+            plan.preview.target.clone()
+        };
+        let (_maintenance, _scan) = self.maintenance_context(&target)?;
         let plan = {
             let mut stored = self.maintenance_plan.lock().map_err(|_| lock_error())?;
             if !stored.as_ref().is_some_and(|p| {
@@ -304,6 +411,7 @@ impl Library {
             cache_cleanup: super::cache_cleanup::CacheCleanup::open(&options.data_directory)?,
             cache_gate: RwLock::new(()),
             maintenance: AtomicBool::new(false),
+            maintenance_pending: AtomicBool::new(false),
             maintenance_plan: Mutex::new(None),
             catalog,
             options,
@@ -485,6 +593,7 @@ impl Library {
         // Admission happens before persistence, so a busy scan cannot leave a
         // partly registered root and an ambiguous Save result.
         let permit = self.scan_gate.try_start()?;
+        self.ensure_work_admission()?;
         let id = store::add_root(
             &self.catalog,
             path,
@@ -533,6 +642,7 @@ impl Library {
     pub fn scan(self: &Arc<Self>, id: String, filter: ScanFilter) -> Result<ScanJob> {
         CompiledFilter::new(filter.clone())?;
         let permit = self.scan_gate.try_start()?;
+        self.ensure_work_admission()?;
         self.start_with_permit(id, filter, permit)
     }
     fn start_with_permit(
@@ -558,6 +668,7 @@ impl Library {
         let cancel = permit.cancellation();
         *self.active.lock().map_err(|_| lock_error())? = Some(ActiveScan {
             id: job.id.clone(),
+            root_id: root.view.id.clone(),
             cancel: cancel.clone(),
         });
         let owner = self.clone();
@@ -578,7 +689,7 @@ impl Library {
                     data_directory: owner.options.data_directory.clone(),
                     #[cfg(any(unix, windows))]
                     data_identity: managed_identity,
-                    canceled: cancel,
+                    canceled: cancel.clone(),
                     resources: owner.resources.clone(),
                     discovered: 0,
                     indexed: 0,
@@ -594,13 +705,19 @@ impl Library {
                         error.message,
                     );
                 }
-                if let Ok(mut active) = owner.active.lock() {
-                    *active = None;
+                // Keep the root visible through handoff. Removal can cancel its
+                // own scan, or reject an unrelated scan without failing that
+                // scan's initial preparation while admission is briefly paused.
+                while owner.maintenance_pending.load(Ordering::Acquire)
+                    && !cancel.load(Ordering::Relaxed)
+                {
+                    std::thread::sleep(Duration::from_millis(20));
                 }
                 // Enqueue only after the scan has published its inventory. A separate
                 // bounded worker owns all rendition decoding and its own progress.
-                if store::job(&owner.catalog, job_id.clone())
-                    .is_ok_and(|job| matches!(job.state.as_str(), "completed" | "partial"))
+                if !cancel.load(Ordering::Relaxed)
+                    && store::job(&owner.catalog, job_id.clone())
+                        .is_ok_and(|job| matches!(job.state.as_str(), "completed" | "partial"))
                 {
                     if let Err(error) = owner.enqueue_thumbnails(thumbnail_root.clone(), false) {
                         let _ = store::stop_initial_preparation(
@@ -617,6 +734,9 @@ impl Library {
                         "interrupted".into(),
                         "Discovery stopped. Resume previews for the indexed photos.".into(),
                     );
+                }
+                if let Ok(mut active) = owner.active.lock() {
+                    *active = None;
                 }
             });
         if let Err(error) = spawned {
@@ -852,6 +972,7 @@ impl Library {
             }
         }
         let permit = self.scan_gate.try_start()?;
+        self.ensure_work_admission()?;
         store::relink(&self.catalog, id.clone(), canonical, identity, volume)?;
         self.start_with_permit(id, root.view.filter, permit)
     }
@@ -1333,6 +1454,147 @@ impl Drop for Library {
 #[cfg(test)]
 mod maintenance_tests {
     use super::*;
+    fn removal_fixture() -> (tempfile::TempDir, Arc<Library>, String) {
+        let data = tempfile::tempdir().unwrap();
+        let catalog = Arc::new(Catalog::open(data.path().join("fixture.stillharbour")).unwrap());
+        let library = Library::new(
+            catalog,
+            LibraryOptions {
+                data_directory: data.path().to_owned(),
+                workers: workers::WorkerPaths {
+                    executable: data.path().join("missing-worker"),
+                    exiftool: None,
+                    working_directory: data.path().join("worker"),
+                },
+            },
+        )
+        .unwrap();
+        let root = fixture_root(&library, &data.path().join("generated-source"));
+        (data, library, root)
+    }
+    fn fixture_root(library: &Library, path: &Path) -> String {
+        fs::create_dir(path).unwrap();
+        fs::write(path.join("original.txt"), b"generated source retained").unwrap();
+        let handle = filesystem::open_directory_readonly(path).unwrap();
+        store::add_root(
+            &library.catalog,
+            path.to_owned(),
+            filesystem::identity(&handle).unwrap(),
+            native::volume_token(&handle).unwrap(),
+            "Generated fixture".into(),
+            RootMode::Referenced,
+            ScanFilter::default(),
+        )
+        .unwrap()
+    }
+    fn simulated_scan(library: &Arc<Library>, root: &str) -> (String, std::thread::JoinHandle<()>) {
+        let permit = library.scan_gate.try_start().unwrap();
+        let cancel = permit.cancellation();
+        let job = store::begin_job(&library.catalog, root.into(), ScanFilter::default()).unwrap();
+        *library.active.lock().unwrap() = Some(ActiveScan {
+            id: job.id.clone(),
+            root_id: root.into(),
+            cancel: cancel.clone(),
+        });
+        let owner = library.clone();
+        let id = job.id.clone();
+        let worker = std::thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !cancel.load(Ordering::Relaxed) {
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(owner.ensure_work_admission().is_err());
+            store::finish_job(
+                &owner.catalog,
+                id,
+                "canceled".into(),
+                "Stopped at fixture boundary".into(),
+            )
+            .unwrap();
+            *owner.active.lock().unwrap() = None;
+            drop(permit);
+        });
+        (job.id, worker)
+    }
+    #[test]
+    fn removal_stops_selected_scan_before_review_and_preserves_sources() {
+        let (data, library, root) = removal_fixture();
+        let (job, worker) = simulated_scan(&library, &root);
+        let preview = library
+            .prepare_maintenance(MaintenanceTarget::Library {
+                root_id: root.clone(),
+            })
+            .unwrap();
+        worker.join().unwrap();
+        assert_eq!(store::job(&library.catalog, job).unwrap().state, "canceled");
+        assert_eq!(preview.root_label.as_deref(), Some("Generated fixture"));
+        assert!(library.root_exists(root.clone()).unwrap());
+        assert!(!library.maintenance.load(Ordering::Acquire));
+        assert!(library.scan_gate.try_start().is_ok());
+        // A forged approval cannot stop a newly started scan. A real but stale
+        // review may stop it, then must retain the library and require review.
+        let (next, worker) = simulated_scan(&library, &root);
+        assert!(library.apply_maintenance("invented".into()).is_err());
+        assert!(
+            !library
+                .active
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .cancel
+                .load(Ordering::Relaxed)
+        );
+        assert_eq!(
+            library.apply_maintenance(preview.id).unwrap_err().code,
+            ErrorCode::Conflict
+        );
+        worker.join().unwrap();
+        assert_eq!(
+            store::job(&library.catalog, next).unwrap().state,
+            "canceled"
+        );
+        assert!(library.root_exists(root).unwrap());
+        assert_eq!(
+            fs::read(data.path().join("generated-source/original.txt")).unwrap(),
+            b"generated source retained"
+        );
+    }
+    #[test]
+    fn removal_retains_other_library_jobs_and_fails_closed_if_selected_work_does_not_stop() {
+        let (data, library, root) = removal_fixture();
+        let other = fixture_root(&library, &data.path().join("other-source"));
+        let permit = library.scan_gate.try_start().unwrap();
+        let cancel = permit.cancellation();
+        let job = store::begin_job(&library.catalog, root.clone(), ScanFilter::default()).unwrap();
+        *library.active.lock().unwrap() = Some(ActiveScan {
+            id: job.id,
+            root_id: root.clone(),
+            cancel: cancel.clone(),
+        });
+        assert_eq!(
+            library
+                .prepare_maintenance(MaintenanceTarget::Library {
+                    root_id: other.clone()
+                })
+                .unwrap_err()
+                .code,
+            ErrorCode::Busy
+        );
+        assert!(!cancel.load(Ordering::Relaxed));
+        let guard = library.begin_maintenance().unwrap();
+        assert!(
+            matches!(library.maintenance_admission(&MaintenanceTarget::Library {root_id:root.clone()},Instant::now()),Err(error) if error.code==ErrorCode::Busy)
+        );
+        drop(guard);
+        assert!(cancel.load(Ordering::Relaxed));
+        assert!(library.root_exists(root).unwrap() && library.root_exists(other).unwrap());
+        assert!(!library.maintenance.load(Ordering::Acquire));
+        *library.active.lock().unwrap() = None;
+        drop(permit);
+        assert!(library.scan_gate.try_start().is_ok());
+    }
 
     #[test]
     #[cfg(windows)]
@@ -1414,6 +1676,40 @@ mod maintenance_tests {
                 .code,
             ErrorCode::InvalidInput
         );
+    }
+    #[test]
+    fn removal_cancels_and_drains_queued_thumbnail_work_without_manual_jobs_actions() {
+        let (data, library, root) = removal_fixture();
+        let gate = library.thumbnail_job_gate.try_start().unwrap();
+        let job = library.generate_thumbnails(root.clone()).unwrap();
+        assert_eq!(
+            library
+                .prepare_maintenance(MaintenanceTarget::PreviewCache)
+                .unwrap_err()
+                .code,
+            ErrorCode::Busy
+        );
+        assert!(
+            !library.thumbnail_jobs.lock().unwrap()[0]
+                .cancel
+                .load(Ordering::Relaxed)
+        );
+        library
+            .prepare_maintenance(MaintenanceTarget::Library {
+                root_id: root.clone(),
+            })
+            .unwrap();
+        assert!(library.thumbnail_jobs.lock().unwrap().is_empty());
+        assert_eq!(
+            store::job(&library.catalog, job.id).unwrap().state,
+            "canceled"
+        );
+        assert!(library.root_exists(root).unwrap());
+        assert_eq!(
+            fs::read(data.path().join("generated-source/original.txt")).unwrap(),
+            b"generated source retained"
+        );
+        drop(gate);
     }
     #[test]
     fn scan_admission_blocks_maintenance_and_keeps_the_review_retryable() {

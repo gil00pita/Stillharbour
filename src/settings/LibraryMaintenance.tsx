@@ -83,6 +83,15 @@ export function LibraryMaintenance({
           </p>
         ) : (
           <>
+            {removing && (
+              <p role={busy ? 'status' : undefined}>
+                {busy
+                  ? 'Stopping this library’s jobs and preparing removal…'
+                  : preview
+                    ? 'This library’s active jobs are stopped before review. Canceling removal does not restart them.'
+                    : 'Review could not be completed. Check the error before trying again.'}
+              </p>
+            )}
             <p>
               {removing
                 ? 'This forgets the selected folder, its indexed records, catalog favorites, ratings, tags and scan history, and clears its indexed cached previews. You can add the folder again, but its catalog notes will not return. Library change history, including previous paths, remains in this catalog.'
@@ -139,7 +148,9 @@ export function LibraryMaintenance({
               disabled={busy || !preview}
             >
               {busy
-                ? 'Please wait…'
+                ? removing
+                  ? 'Stopping jobs…'
+                  : 'Please wait…'
                 : removing
                   ? 'Remove library and its previews'
                   : 'Clear all cached previews'}
