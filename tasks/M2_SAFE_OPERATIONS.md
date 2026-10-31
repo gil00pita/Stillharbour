@@ -54,3 +54,5 @@ Applicable AC-023 through AC-039, AC-081, AC-082 and AC-084 pass. A source-prese
 ## Version 1.1 preservation gate
 
 Read docs/PRESERVATION_CONTRACT.md and docs/PRESERVATION_TESTS.md. Default to source-retaining verified copies. Develop mutation/recovery against disposable fixtures, but leave real-library in-place mutations and duplicate quarantine disabled until exact-version independent recovery evidence and applicable native failure gates are available. M4 may supply that provider later; do not waive it to complete an earlier milestone. No speed optimization may bypass full verification or protected-version retention.
+
+Native-name continuation, 2026-10-31: ADR-0029 exercises exclusive future-name creation, all-participant conflict reporting and retained empty stages in a constructor-owned pending namespace. Bounded journal evidence, interrupted preparation and fresh membership/stage/target-absence checks fail closed. This advances the native-name prerequisite only; complete namespace sealing, ready-plan approval, capacity/fidelity, catalog/job/locks, import, undo and full target-platform acceptance remain open.

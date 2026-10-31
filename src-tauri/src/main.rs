@@ -529,6 +529,23 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "organization_name_preparation_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The owned name-preparation fixture accepts no supplied scope.",
+                ));
+            }
+            tokio::task::spawn_blocking(stillharbour_core::executor::run_preparation_fixture_probe)
+                .await
+                .map_err(|error| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "The owned name-preparation worker failed.",
+                    )
+                    .caused_by(error)
+                })?
+        }
         "organization_copy_executor_fixture" => {
             if rows.is_some() {
                 return Err(AppError::new(

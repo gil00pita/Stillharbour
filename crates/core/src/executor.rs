@@ -1,6 +1,7 @@
 //! Central source-retaining copy engine under disposable-fixture capability.
 //! No renderer requests or arbitrary user paths can construct this scope yet.
 mod native;
+mod preparation;
 use crate::{
     domain::{AppError, ErrorCode, Result},
     filesystem::{self, DirectoryChain},
@@ -83,6 +84,10 @@ pub fn run_fixture_probe() -> Result<serde_json::Value> {
         serde_json::json!({"scope":"generated-temporary-only","nativeOs":std::env::consts::OS,"policy":"m2-owned-copy-fixture-v1","configuredAggregateBytesPerSecond":PacedIo::shared().bytes_per_second()?,"chunkBytes":CHUNK_BYTES,"burstBytes":crate::jobs::paced_io::ISSUED_BURST_BYTES,
         "completed":case(None)?,"interruptedAfterPublish":case(Some(CopyFault::AfterPublish))?}),
     )
+}
+/// Read/write name preparation is limited to a newly owned temporary namespace.
+pub fn run_preparation_fixture_probe() -> Result<serde_json::Value> {
+    preparation::fixture_probe()
 }
 #[derive(Debug)]
 pub struct RecoveredFile {
@@ -187,9 +192,16 @@ impl Journal {
         Ok(journal)
     }
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()> {
+        let encoded = evidence.to_string();
+        if encoded.len() > crate::operations::MAX_PLAN_BYTES {
+            return Err(AppError::new(
+                ErrorCode::InvalidInput,
+                "Operation evidence exceeds 8 MiB. Retain the current scope and use a smaller selection.",
+            ));
+        }
         self.0.execute(
             "INSERT INTO events(item,phase,evidence) VALUES(?1,?2,?3)",
-            params![item.map(|index| index as i64), phase, evidence.to_string()],
+            params![item.map(|index| index as i64), phase, encoded],
         )?;
         Ok(())
     }

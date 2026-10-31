@@ -195,3 +195,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Owned copy executor development — 2026-10-31
 
 [ADR-0028](decisions/ADR-0028-owned-copy-executor-fixtures.md) develops the central source-retaining stage/copy/verify/no-replace/recovery sequence with a shared precharged byte budget against constructor-owned temporary fixtures. Real process-exit and journal-denial tests supplement cooperative interruption; retained originals/neighbors are independently checked. The production catalog/job/ready-plan/approval adapters and mutation gates remain pending. Do not treat fixture completion as real-library authorization or full metadata/backup fidelity.
+
+## Native future-name preparation — 2026-10-31
+
+[ADR-0029](decisions/ADR-0029-native-name-preparation.md) extends the constructor-owned M2 fixture capability with actual exclusive name creation in a new pending output namespace. It retains empty identified stages, native collision evidence and an immutable fingerprint, with bounded inputs/journal records and no execution authority. This is a prerequisite for ready-plan approval, not production destination reservation or copying.

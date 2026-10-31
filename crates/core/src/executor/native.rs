@@ -6,6 +6,16 @@ use crate::{
     organization::portable_filename,
 };
 use std::fs::File;
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum EntryKind {
+    File,
+    Directory,
+    Unsupported,
+}
+pub(super) struct Entry {
+    pub object: super::Object,
+    pub kind: EntryKind,
+}
 fn conflict(message: &str) -> AppError {
     AppError::new(ErrorCode::Conflict, message)
 }
@@ -17,6 +27,116 @@ fn name(value: &str) -> Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Inspect only this held directory; never recurse into unknown entries.
+pub(super) fn verify_entries(parent: &File, expected: &[(super::Object, EntryKind)]) -> Result<()> {
+    let mut remaining: std::collections::BTreeMap<_, _> = expected
+        .iter()
+        .map(|(object, kind)| ((object.volume, object.file), *kind))
+        .collect();
+    if remaining.len() != expected.len() {
+        return Err(conflict("Repeated prepared namespace object."));
+    }
+    let mut check = |leaf: &std::ffi::OsStr| -> Result<()> {
+        let leaf = leaf
+            .to_str()
+            .ok_or_else(|| conflict("Unknown native name in prepared namespace."))?;
+        let entry = lookup(parent, leaf)?
+            .ok_or_else(|| conflict("A prepared namespace entry disappeared during inspection."))?;
+        if remaining.remove(&(entry.object.volume, entry.object.file)) != Some(entry.kind)
+            || entry.kind == EntryKind::Unsupported
+        {
+            return Err(conflict(
+                "Unexpected, repeated or changed prepared namespace entry. Retain it for review.",
+            ));
+        }
+        Ok(())
+    };
+    #[cfg(windows)]
+    {
+        let mut directory = filesystem::windows::Directory::new(parent)?;
+        while let Some(entry) = directory.next()? {
+            if entry.name != "." && entry.name != ".." {
+                check(&entry.name)?;
+            }
+        }
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::ffi::OsStrExt;
+        for entry in rustix::fs::Dir::read_from(parent).map_err(std::io::Error::from)? {
+            let entry = entry.map_err(std::io::Error::from)?;
+            if !matches!(entry.file_name().to_bytes(), b"." | b"..") {
+                check(std::ffi::OsStr::from_bytes(entry.file_name().to_bytes()))?;
+            }
+        }
+    }
+    if !remaining.is_empty() {
+        return Err(conflict("Prepared namespace inventory is incomplete."));
+    }
+    Ok(())
+}
+
+pub(super) fn lookup(parent: &File, leaf: &str) -> Result<Option<Entry>> {
+    name(leaf)?;
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Storage::FileSystem::*;
+        let volume = filesystem::identity(parent)?.volume;
+        Ok(
+            filesystem::windows::destination_entry(parent, std::ffi::OsStr::new(leaf))?.map(
+                |entry| Entry {
+                    object: super::Object {
+                        volume,
+                        file: entry.file_id,
+                    },
+                    kind: if entry.attributes
+                        & (FILE_ATTRIBUTE_REPARSE_POINT
+                            | FILE_ATTRIBUTE_OFFLINE
+                            | FILE_ATTRIBUTE_RECALL_ON_OPEN
+                            | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS)
+                        != 0
+                    {
+                        EntryKind::Unsupported
+                    } else if entry.attributes & FILE_ATTRIBUTE_DIRECTORY != 0 {
+                        EntryKind::Directory
+                    } else {
+                        EntryKind::File
+                    },
+                },
+            ),
+        )
+    }
+    #[cfg(unix)]
+    {
+        use rustix::fs::{AtFlags, FileType, statat};
+        let stat = match statat(parent, leaf, AtFlags::SYMLINK_NOFOLLOW) {
+            Ok(stat) => stat,
+            Err(rustix::io::Errno::NOENT) => return Ok(None),
+            Err(error) => return Err(std::io::Error::from(error).into()),
+        };
+        #[cfg(target_os = "macos")]
+        let volume = stat.st_dev as u64;
+        #[cfg(not(target_os = "macos"))]
+        let volume = stat.st_dev;
+        let mut kind = match FileType::from_raw_mode(stat.st_mode) {
+            FileType::Directory => EntryKind::Directory,
+            FileType::RegularFile => EntryKind::File,
+            _ => EntryKind::Unsupported,
+        };
+        #[cfg(target_os = "macos")]
+        if stat.st_flags & 0x40000000 != 0 {
+            kind = EntryKind::Unsupported;
+        }
+        Ok(Some(Entry {
+            object: super::Object {
+                volume,
+                file: stat.st_ino,
+            },
+            kind,
+        }))
+    }
 }
 
 #[cfg(windows)]

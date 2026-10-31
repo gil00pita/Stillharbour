@@ -366,10 +366,29 @@ describe('native read-only library', () => {
     assert.equal(receipt.interruptedAfterPublish.publishedOutputsVerified, 1);
     assert.equal(receipt.interruptedAfterPublish.allOutputsByteVerified, false);
     assert.equal(receipt.interruptedAfterPublish.retryBlocked, true);
+    const preparation = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', {
+        action: 'organization_name_preparation_fixture',
+        rows: null,
+      }),
+    );
+    assert.equal(preparation.scope, 'generated-temporary-only');
+    assert.equal(preparation.sourcesPreserved, true);
+    assert.equal(preparation.report.executionAvailable, false);
+    assert.equal(preparation.report.rows.length, 3);
+    assert.equal(preparation.report.retainedStages, 3);
+    assert.equal(
+      preparation.report.rows.every((row) => row.state === 'prepared'),
+      true,
+    );
     const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
     await writeFile(
       `${evidence}/owned-copy-executor-${process.platform}.json`,
       JSON.stringify(receipt),
+    );
+    await writeFile(
+      `${evidence}/owned-name-preparation-${process.platform}.json`,
+      JSON.stringify(preparation),
     );
   });
   (process.platform === 'win32' ? it : it.skip)(
