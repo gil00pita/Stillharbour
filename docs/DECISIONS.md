@@ -243,3 +243,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Retained copy inspection - 2026-10-31
 
 [ADR-0040](decisions/ADR-0040-retained-copy-inspection.md) adds read-only existing-job inspection with fresh private destination selection, exact catalog/native binding and referenced-root read scopes. No anchor, session, approval or replay is created. Typed per-file errors remain visible; incomplete preparation without a ready stream remains blocked. Default copying/original mutation gates are unchanged.
+
+## Reviewed copy continuation fixture - 2026-10-31
+
+[ADR-0041](decisions/ADR-0041-reviewed-copy-continuation.md) adds an explicit ResumeFiles grant for the exact retained journal/native observations, full-prefix comparison before append, same-object no-replace publication, missing-phase reconciliation and fresh-verified completed no-op. It remains under fixture-probes/test only; no application retry authority or default-copy/original mutation gate changes.

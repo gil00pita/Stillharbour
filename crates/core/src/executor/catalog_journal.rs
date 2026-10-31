@@ -304,6 +304,97 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
     Ok(())
 }
 impl CatalogJournal {
+    #[cfg(any(test, feature = "fixture-probes"))]
+    fn recovery_history(&self) -> Result<(Vec<super::resume::Cursor>, String, bool)> {
+        let binding = self.binding.clone();
+        let encoded = self.encoded.clone();
+        let anchor = self.anchor;
+        let memory = self
+            .history
+            .lock()
+            .map_err(|_| failed("Copy history is unavailable."))?;
+        self.catalog.call(move|db| {
+            validate_binding(db,&binding)?;
+            let valid:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM operation_journal WHERE sequence=?1 AND plan_id=?2 AND item_id=?3 AND phase=?4 AND evidence=?5) AND (SELECT count(*) FROM operation_journal WHERE plan_id=?2 AND item_id=?3 AND phase=?4)=1",params![anchor,binding.owner_id,binding.plan.id,PLAN_PHASE,encoded],|row|row.get(0))?;
+            if !valid {return Err(failed("Recovery copy anchor changed."));}
+            let mut history=History::new(&binding.plan);
+            let mut hash=blake3::Hasher::new();
+            hash.update(encoded.as_bytes());
+            let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=8192 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT ?4")?;
+            let mut rows=query.query(params![binding.owner_id,binding.plan.id,EVENT_PHASE,binding.plan.files.len() as i64*6+4])?;
+            while let Some(row)=rows.next()? {
+                let text:Option<String>=row.get(0)?;
+                let text=text.ok_or_else(||failed("Recovery event exceeds 8 KiB."))?;
+                history.apply(&decode(&text,MAX_EVENT)?,&binding.plan)?;
+                hash.update(&(text.len() as u64).to_le_bytes());hash.update(text.as_bytes());
+            }
+            if history.terminal && !history.items.iter().all(|item|item.phase==6) {return Err(failed("A terminal incomplete stream requires separate reconciliation."));}
+            Ok((history,hash.finalize().to_hex().to_string()))
+        }).and_then(|(history,digest)| {
+            if history.count!=memory.count {return Err(failed("Another writer changed recovery history. Reopen it."));}
+            Ok((history.items.into_iter().map(|item|super::resume::Cursor{phase:item.phase,object:item.object,digest:item.digest}).collect(),digest,history.terminal))
+        })
+    }
+    #[cfg(any(test, feature = "fixture-probes"))]
+    fn recovery_review(&self, inputs: &super::CopyInputs<'_>) -> Result<super::resume::Review> {
+        let (cursors, digest, _) = self.recovery_history()?;
+        super::resume::Review::capture(&self.binding.plan, &cursors, digest, inputs)
+    }
+    #[cfg(any(test, feature = "fixture-probes"))]
+    fn resume_approved(
+        &self,
+        inputs: super::CopyInputs<'_>,
+        selection: &str,
+        review: super::resume::Review,
+        proof: super::approval::Proof,
+        fault: Option<super::CopyFault>,
+    ) -> Result<super::CopyOutcome> {
+        proof.authorize(&review.approval(&self.binding.plan, selection)?)?;
+        let (cursors, digest, terminal) = self.recovery_history()?;
+        let binding = self.binding.clone();
+        let root = self.catalog.call(move |db| {
+            Ok(
+                copy_manifest::load(db, &binding.owner_id, &binding.manifest_id)?.files[0]
+                    .view
+                    .root_id
+                    .clone(),
+            )
+        })?;
+        let validate = || {
+            (inputs.validate_scope)()?;
+            self.validate_root_grant(&root)
+        };
+        let scoped_inputs = super::CopyInputs {
+            source_root: inputs.source_root,
+            destination: inputs.destination,
+            io: inputs.io,
+            cancel: inputs.cancel,
+            validate_scope: &validate,
+        };
+        super::resume::Continuation {
+            plan: &self.binding.plan,
+            journal: self,
+            cursors: &cursors,
+            terminal,
+            review: &review,
+            history_digest: digest,
+            inputs: &scoped_inputs,
+            fault,
+        }
+        .execute()
+    }
+    fn validate_root_grant(&self, root: &str) -> Result<()> {
+        let root = root.to_owned();
+        let object = self.binding.plan.source.clone();
+        let expected_volume = self.binding.plan.source_volume.clone();
+        self.catalog.call(move|db| {
+            let (device,inode,volume,mode):(String,String,String,String)=db.query_row("SELECT device,inode,volume,mode FROM roots WHERE id=?",[root],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)))?;
+            if device!=object.volume.to_string() || inode!=object.file.to_string() || volume!=expected_volume || mode!="managed" {
+                return Err(failed("The source root managed grant changed. Retain current outputs and review again."));
+            }
+            Ok(())
+        })
+    }
     #[cfg(any(test, feature = "copy-workflow"))]
     pub(in crate::executor) fn matches_job(
         &self,
@@ -453,16 +544,7 @@ impl CatalogJournal {
         })?;
         let validate = || {
             (inputs.validate_scope)()?;
-            let root = root.clone();
-            let object = self.binding.plan.source.clone();
-            let expected_volume = self.binding.plan.source_volume.clone();
-            self.catalog.call(move|db| {
-                let (device,inode,volume,mode):(String,String,String,String)=db.query_row("SELECT device,inode,volume,mode FROM roots WHERE id=?",[root],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)))?;
-                if device!=object.volume.to_string() || inode!=object.file.to_string() || volume!=expected_volume || mode!="managed" {
-                    return Err(failed("The source root managed grant changed. Retain current outputs and review again."));
-                }
-                Ok(())
-            })
+            self.validate_root_grant(&root)
         };
         let journal = ObservedJournal {
             inner: self,
@@ -635,6 +717,9 @@ impl Fixture {
         Self::with_nested(false)
     }
     fn with_nested(nested: bool) -> Result<Self> {
+        Self::with_media(nested, generated_photo_bytes()?)
+    }
+    fn with_media(nested: bool, photo: Vec<u8>) -> Result<Self> {
         use crate::library::{
             Library, LibraryOptions, WorkerPaths,
             model::{RootMode, ScanFilter},
@@ -663,7 +748,7 @@ impl Fixture {
             std::fs::create_dir(&source_folder)?;
             std::fs::create_dir(destination.join("organized"))?;
         }
-        std::fs::write(source_folder.join("Photo.JPG"), generated_photo_bytes()?)?;
+        std::fs::write(source_folder.join("Photo.JPG"), photo)?;
         std::fs::write(source_folder.join("Photo.xmp"), COMPANION_BYTES)?;
         std::fs::write(destination.join("destination-only.bin"), NEIGHBOR_BYTES)?;
         let baseline = ["Photo.JPG", "Photo.xmp"]
@@ -893,6 +978,42 @@ impl Fixture {
         }
         .execute(fault)
     }
+    #[cfg(any(test, feature = "fixture-probes"))]
+    fn resume(
+        &self,
+        journal: &CatalogJournal,
+        fault: Option<super::CopyFault>,
+    ) -> Result<super::CopyOutcome> {
+        use crate::jobs::operation_locks::{Access, Registry, Scope};
+        let (source, output) = self.scope()?;
+        let lease = Registry::shared().try_acquire(vec![
+            Scope::new(source, Access::Read),
+            Scope::new(output, Access::Write),
+        ])?;
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let validate = || {
+            let binding = journal.binding.clone();
+            self.library
+                .catalog
+                .call(move |db| validate_binding(db, &binding))?;
+            self.scope().map(|_| ())
+        };
+        let io = crate::jobs::paced_io::PacedIo::shared();
+        let inputs = super::CopyInputs {
+            source_root: lease.directory(0).leaf(),
+            destination: lease.directory(1).leaf(),
+            io: &io,
+            cancel: &cancel,
+            validate_scope: &validate,
+        };
+        let review = journal.recovery_review(&inputs)?;
+        let selection = uuid::Uuid::new_v4().to_string();
+        let expected = review.approval(&journal.binding.plan, &selection)?;
+        let approvals = super::approval::Approvals::new();
+        let ticket = approvals.issue(expected.clone())?;
+        let proof = approvals.consume(&ticket, &expected)?;
+        journal.resume_approved(inputs, &selection, review, proof, fault)
+    }
     fn inspect(&self, journal: &CatalogJournal) -> Result<Vec<super::RecoveredItem>> {
         use crate::jobs::operation_locks::{Access, Registry, Scope};
         let (source, output) = self.scope()?;
@@ -919,6 +1040,61 @@ impl Fixture {
             })
             .collect()
     }
+}
+#[cfg(any(test, feature = "fixture-probes"))]
+fn resume_fixture_probe() -> Result<serde_json::Value> {
+    let mut photo = generated_photo_bytes()?;
+    photo.resize(crate::jobs::paced_io::CHUNK_BYTES * 3 + 117, 0x5a);
+    let fixture = Fixture::with_media(false, photo)?;
+    let journal = fixture.journal()?;
+    fixture.execute(&journal, Some(super::CopyFault::AfterCopyChunk))?;
+    let staged = super::native::read(
+        super::output_chain(&fixture.destination)?.leaf(),
+        &fixture.plan.files[0].stage,
+    )?;
+    let original = filesystem::identity(&staged)?;
+    let partial_bytes = staged.metadata()?.len();
+    drop(staged);
+    drop(journal);
+    let reopened = fixture.journal()?;
+    if fixture.resume(&reopened, Some(super::CopyFault::AfterPublish))?
+        != super::CopyOutcome::Interrupted
+    {
+        return Err(failed(
+            "Owned continuation did not interrupt after publication.",
+        ));
+    }
+    let interrupted = reopened.history_count()?;
+    drop(reopened);
+    let reopened = fixture.journal()?;
+    let outcome = fixture.resume(&reopened, None)?;
+    let events = reopened.history_count()?;
+    let states = fixture.inspect(&reopened)?;
+    let published = super::native::read(
+        super::output_chain(&fixture.destination)?.leaf(),
+        &fixture.plan.files[0].target,
+    )?;
+    let same_object = filesystem::identity(&published)? == original;
+    let no_op = fixture.resume(&reopened, None)? == super::CopyOutcome::CompletedVerified
+        && reopened.history_count()? == events;
+    let preserved = fixture.preserved()?;
+    if outcome != super::CopyOutcome::CompletedVerified
+        || events != 13
+        || interrupted != 5
+        || !same_object
+        || !no_op
+        || !preserved
+        || states
+            .iter()
+            .any(|state| *state != super::RecoveredItem::PublishedVerified)
+    {
+        return Err(failed(
+            "Owned reviewed continuation failed its byte/identity/history checks.",
+        ));
+    }
+    Ok(
+        serde_json::json!({"policy":"reviewed-copy-continuation-v1","scope":"generated-temporary-only","executionApproval":false,"initialPartialBytes":partial_bytes.to_string(),"interruptedEvents":interrupted,"completedEvents":events,"publishedVerified":states.len(),"originalStageObjectPublished":same_object,"freshVerifiedNoOp":no_op,"sourceAndNeighborPreserved":preserved}),
+    )
 }
 #[cfg(any(test, feature = "fixture-probes"))]
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
@@ -958,13 +1134,276 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
         cases.push(serde_json::json!({"outcome":outcome,"publishedVerified":verified,"sourceAndNeighborPreserved":preserved,"replayBlocked":rejected,"journalEvents":reopened.history_count()?}));
     }
     Ok(
-        serde_json::json!({"scope":"generated-temporary-only","catalogSchema":crate::catalog::SCHEMA_VERSION,"completed":cases[0],"interruptedAfterPublish":cases[1],"nested":cases[2],"namespacePreparation":namespace_journal::fixture_probe()?}),
+        serde_json::json!({"scope":"generated-temporary-only","catalogSchema":crate::catalog::SCHEMA_VERSION,"completed":cases[0],"interruptedAfterPublish":cases[1],"nested":cases[2],"namespacePreparation":namespace_journal::fixture_probe()?,"reviewedContinuation":resume_fixture_probe()?}),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn reviewed_continuation_reconciles_every_retained_phase_without_duplicate_streams() {
+        use crate::executor::{CopyFault, CopyOutcome};
+        for fault in [
+            CopyFault::AfterIntent,
+            CopyFault::AfterStageCreation,
+            CopyFault::AfterCopyChunk,
+            CopyFault::AfterFlush,
+            CopyFault::AfterVerification,
+            CopyFault::BeforePublish,
+            CopyFault::AfterPublish,
+            CopyFault::AfterItemCommit,
+            CopyFault::AfterPlanCommit,
+        ] {
+            let fixture = Fixture::with_nested(true).unwrap();
+            let journal = fixture.journal().unwrap();
+            assert_eq!(
+                fixture.execute(&journal, Some(fault)).unwrap(),
+                CopyOutcome::Interrupted
+            );
+            drop(journal);
+            let reopened = fixture.journal().unwrap();
+            assert_eq!(
+                fixture.resume(&reopened, None).unwrap(),
+                CopyOutcome::CompletedVerified,
+                "{fault:?}"
+            );
+            assert_eq!(reopened.history_count().unwrap(), 13);
+            assert_eq!(
+                fixture.inspect(&reopened).unwrap(),
+                vec![super::super::RecoveredItem::PublishedVerified; 2]
+            );
+            assert!(fixture.preserved().unwrap());
+            let count = reopened.history_count().unwrap();
+            assert_eq!(
+                fixture.resume(&reopened, None).unwrap(),
+                CopyOutcome::CompletedVerified
+            );
+            assert_eq!(
+                reopened.history_count().unwrap(),
+                count,
+                "completed continuation must be a freshly verified no-op"
+            );
+        }
+    }
+    #[test]
+    fn reviewed_partial_stage_continuation_verifies_every_prefix_byte_before_append() {
+        for corrupt in [false, true] {
+            let mut photo = generated_photo_bytes().unwrap();
+            photo.resize(crate::jobs::paced_io::CHUNK_BYTES * 3 + 117, 0x5a);
+            let fixture = Fixture::with_media(false, photo).unwrap();
+            let journal = fixture.journal().unwrap();
+            fixture
+                .execute(&journal, Some(super::super::CopyFault::AfterCopyChunk))
+                .unwrap();
+            let stage = fixture.destination.join(&fixture.plan.files[0].stage);
+            let mut prefix =
+                fixture.baseline[0].1[..crate::jobs::paced_io::CHUNK_BYTES * 2 + 17].to_vec();
+            if corrupt {
+                prefix[crate::jobs::paced_io::CHUNK_BYTES + 7] ^= 1;
+            }
+            std::fs::write(&stage, prefix).unwrap();
+            let before = std::fs::read(&stage).unwrap();
+            let count = journal.history_count().unwrap();
+            let result = fixture.resume(&journal, None);
+            if corrupt {
+                assert!(result.is_err());
+                assert_eq!(std::fs::read(&stage).unwrap(), before);
+                assert_eq!(journal.history_count().unwrap(), count);
+                assert!(
+                    !fixture
+                        .destination
+                        .join(&fixture.plan.files[0].target)
+                        .exists()
+                );
+            } else {
+                assert_eq!(
+                    result.unwrap(),
+                    super::super::CopyOutcome::CompletedVerified
+                );
+                assert_eq!(
+                    std::fs::read(fixture.destination.join(&fixture.plan.files[0].target)).unwrap(),
+                    fixture.baseline[0].1
+                );
+            }
+            assert!(fixture.preserved().unwrap());
+        }
+    }
+    #[test]
+    fn reviewed_continuation_can_itself_stop_at_each_boundary_and_continue_again() {
+        use crate::executor::{CopyFault, CopyOutcome};
+        for fault in [
+            CopyFault::AfterIntent,
+            CopyFault::AfterStageCreation,
+            CopyFault::AfterCopyChunk,
+            CopyFault::AfterFlush,
+            CopyFault::AfterVerification,
+            CopyFault::BeforePublish,
+            CopyFault::AfterPublish,
+            CopyFault::AfterItemCommit,
+            CopyFault::AfterPlanCommit,
+        ] {
+            let mut photo = generated_photo_bytes().unwrap();
+            photo.resize(crate::jobs::paced_io::CHUNK_BYTES * 3 + 117, 0x5a);
+            let fixture = Fixture::with_media(false, photo).unwrap();
+            let journal = fixture.journal().unwrap();
+            assert_eq!(
+                fixture.resume(&journal, Some(fault)).unwrap(),
+                CopyOutcome::Interrupted,
+                "{fault:?}"
+            );
+            assert!(fixture.preserved().unwrap());
+            drop(journal);
+            let reopened = fixture.journal().unwrap();
+            assert_eq!(
+                fixture.resume(&reopened, None).unwrap(),
+                CopyOutcome::CompletedVerified,
+                "{fault:?}"
+            );
+            assert_eq!(reopened.history_count().unwrap(), 13);
+            assert!(fixture.preserved().unwrap());
+        }
+    }
+    #[test]
+    fn reviewed_continuation_rejects_stale_observations_and_other_action_approvals_before_append() {
+        use crate::executor::{CopyFault, CopyInputs};
+        for stale in [false, true] {
+            let fixture = Fixture::new().unwrap();
+            let journal = fixture.journal().unwrap();
+            fixture
+                .execute(&journal, Some(CopyFault::AfterCopyChunk))
+                .unwrap();
+            let (source, output) = fixture.scope().unwrap();
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            let io = crate::jobs::paced_io::PacedIo::shared();
+            let validate = || fixture.scope().map(|_| ());
+            let inputs = CopyInputs {
+                source_root: source.leaf(),
+                destination: output.leaf(),
+                io: &io,
+                cancel: &cancel,
+                validate_scope: &validate,
+            };
+            let review = journal.recovery_review(&inputs).unwrap();
+            let selection = uuid::Uuid::new_v4().to_string();
+            let expected = if stale {
+                review.approval(&fixture.plan, &selection).unwrap()
+            } else {
+                journal.copy_review(&selection).unwrap()
+            };
+            let approvals = crate::executor::approval::Approvals::new();
+            let ticket = approvals.issue(expected.clone()).unwrap();
+            let proof = approvals.consume(&ticket, &expected).unwrap();
+            let stage = fixture.destination.join(&fixture.plan.files[0].stage);
+            if stale {
+                std::fs::write(&stage, b"changed retained bytes").unwrap();
+            }
+            let before = std::fs::read(&stage).unwrap();
+            let count = journal.history_count().unwrap();
+            assert!(
+                journal
+                    .resume_approved(inputs, &selection, review, proof, None)
+                    .is_err()
+            );
+            assert_eq!(std::fs::read(stage).unwrap(), before);
+            assert_eq!(journal.history_count().unwrap(), count);
+            assert!(approvals.consume(&ticket, &expected).is_err());
+            assert!(fixture.preserved().unwrap());
+        }
+    }
+    #[test]
+    fn reviewed_continuation_rechecks_managed_grants_before_publication_and_retains_journal_failures()
+     {
+        use crate::executor::{CopyFault, CopyInputs};
+        for at_admission in [false, true] {
+            let fixture = Fixture::new().unwrap();
+            let journal = fixture.journal().unwrap();
+            fixture
+                .execute(&journal, Some(CopyFault::AfterVerification))
+                .unwrap();
+            let (source, output) = fixture.scope().unwrap();
+            let cancel = std::sync::atomic::AtomicBool::new(false);
+            let io = crate::jobs::paced_io::PacedIo::shared();
+            let armed = std::sync::atomic::AtomicBool::new(false);
+            let calls = std::sync::atomic::AtomicUsize::new(0);
+            let validate = || {
+                if armed.load(std::sync::atomic::Ordering::Acquire)
+                    && calls.fetch_add(1, std::sync::atomic::Ordering::AcqRel) == 2
+                {
+                    fixture.library.catalog.call(|db| {
+                        db.execute("UPDATE roots SET mode='referenced'", [])?;
+                        Ok(())
+                    })?;
+                }
+                fixture.scope().map(|_| ())
+            };
+            let inputs = CopyInputs {
+                source_root: source.leaf(),
+                destination: output.leaf(),
+                io: &io,
+                cancel: &cancel,
+                validate_scope: &validate,
+            };
+            let review = journal.recovery_review(&inputs).unwrap();
+            let selection = uuid::Uuid::new_v4().to_string();
+            let expected = review.approval(&fixture.plan, &selection).unwrap();
+            let approvals = crate::executor::approval::Approvals::new();
+            let ticket = approvals.issue(expected.clone()).unwrap();
+            let proof = approvals.consume(&ticket, &expected).unwrap();
+            if at_admission {
+                fixture
+                    .library
+                    .catalog
+                    .call(|db| {
+                        db.execute("UPDATE roots SET mode='referenced'", [])?;
+                        Ok(())
+                    })
+                    .unwrap();
+            } else {
+                armed.store(true, std::sync::atomic::Ordering::Release);
+            }
+            assert!(
+                journal
+                    .resume_approved(inputs, &selection, review, proof, None)
+                    .is_err()
+            );
+            assert_eq!(journal.history_count().unwrap(), 4);
+            assert!(
+                fixture
+                    .destination
+                    .join(&fixture.plan.files[0].stage)
+                    .exists()
+            );
+            assert!(
+                !fixture
+                    .destination
+                    .join(&fixture.plan.files[0].target)
+                    .exists()
+            );
+            assert!(fixture.preserved().unwrap());
+        }
+        let fixture = Fixture::new().unwrap();
+        let journal = fixture.journal().unwrap();
+        fixture
+            .execute(&journal, Some(CopyFault::AfterVerification))
+            .unwrap();
+        fixture.library.catalog.call(|db| {
+            db.execute_batch("CREATE TRIGGER deny_resume_completion BEFORE INSERT ON operation_journal WHEN NEW.phase='copy_execution_event_v1' AND json_extract(NEW.evidence,'$.phase')='item_completed_verified' BEGIN SELECT RAISE(ABORT,'fixture journal completion denied'); END;")?;Ok(())
+        }).unwrap();
+        assert!(fixture.resume(&journal, None).is_err());
+        assert_eq!(journal.history_count().unwrap(), 5);
+        assert!(
+            fixture
+                .destination
+                .join(&fixture.plan.files[0].target)
+                .exists()
+        );
+        assert!(fixture.preserved().unwrap());
+        assert_eq!(
+            fixture.inspect(&journal).unwrap()[0],
+            crate::executor::RecoveredItem::PublishedVerified
+        );
+    }
     #[test]
     fn durable_operation_job_transitions_are_atomic_monotonic_and_recover_without_io() {
         use crate::library::operation_jobs;
@@ -1574,6 +2013,27 @@ mod tests {
         let io = crate::jobs::paced_io::PacedIo::shared();
         let cancel = std::sync::atomic::AtomicBool::new(false);
         super::super::CRASH_ON_FAULT.store(true, std::sync::atomic::Ordering::Release);
+        if std::env::var_os("STILLHARBOUR_M2_CATALOG_CHILD_RESUME").is_some() {
+            assert_eq!(
+                std::env::var("STILLHARBOUR_M2_CATALOG_CHILD_RESUME").unwrap(),
+                "1"
+            );
+            let inputs = super::super::CopyInputs {
+                source_root: lease.directory(0).leaf(),
+                destination: lease.directory(1).leaf(),
+                io: &io,
+                cancel: &cancel,
+                validate_scope: &validate,
+            };
+            let review = journal.recovery_review(&inputs).unwrap();
+            let selection = uuid::Uuid::new_v4().to_string();
+            let expected = review.approval(&binding.plan, &selection).unwrap();
+            let approvals = super::super::approval::Approvals::new();
+            let ticket = approvals.issue(expected.clone()).unwrap();
+            let proof = approvals.consume(&ticket, &expected).unwrap();
+            let _ = journal.resume_approved(inputs, &selection, review, proof, Some(fault));
+            panic!("Owned reviewed continuation process-exit boundary was not reached");
+        }
         let _ = super::super::CopyContext {
             plan: &binding.plan,
             journal: &journal,
@@ -1588,6 +2048,13 @@ mod tests {
     }
     #[test]
     fn catalog_actor_process_exit_matrix_reopens_real_state_without_replay_or_source_loss() {
+        catalog_exit_matrix(false);
+    }
+    #[test]
+    fn reviewed_continuation_process_exit_matrix_requires_fresh_approval_after_reopening() {
+        catalog_exit_matrix(true);
+    }
+    fn catalog_exit_matrix(resume: bool) {
         for fault in crash_boundaries() {
             let fixture = Fixture::new().unwrap();
             drop(fixture.journal().unwrap());
@@ -1614,6 +2081,11 @@ mod tests {
                 .env("STILLHARBOUR_M2_CATALOG_CHILD_ROOT", &root)
                 .env("STILLHARBOUR_M2_CATALOG_CHILD_TOKEN", &plan.id)
                 .env("STILLHARBOUR_M2_CATALOG_CHILD_FAULT", format!("{fault:?}"));
+            if resume {
+                command.env("STILLHARBOUR_M2_CATALOG_CHILD_RESUME", "1");
+            } else {
+                command.env_remove("STILLHARBOUR_M2_CATALOG_CHILD_RESUME");
+            }
             #[cfg(windows)]
             {
                 use std::os::windows::process::CommandExt;
@@ -1692,6 +2164,19 @@ mod tests {
             assert!(fixture.execute(&journal, None).is_err());
             assert_eq!(journal.history_count().unwrap(), before);
             assert!(fixture.preserved().unwrap());
+            if resume {
+                assert_eq!(
+                    fixture.resume(&journal, None).unwrap(),
+                    super::super::CopyOutcome::CompletedVerified
+                );
+                assert_eq!(journal.history_count().unwrap(), 13);
+                assert!(fixture.preserved().unwrap());
+                assert_eq!(
+                    fixture.resume(&journal, None).unwrap(),
+                    super::super::CopyOutcome::CompletedVerified
+                );
+                assert_eq!(journal.history_count().unwrap(), 13);
+            }
         }
     }
     #[test]

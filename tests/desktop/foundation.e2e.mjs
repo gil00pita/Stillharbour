@@ -387,6 +387,23 @@ describe('native read-only library', () => {
     assert.equal(receipt.catalogJournal.nested.journalEvents, 13);
     assert.equal(receipt.catalogJournal.nested.sourceAndNeighborPreserved, true);
     assert.equal(receipt.catalogJournal.nested.replayBlocked, true);
+    assert.equal(receipt.catalogJournal.reviewedContinuation.initialPartialBytes, '65536');
+    assert.equal(receipt.catalogJournal.reviewedContinuation.interruptedEvents, 5);
+    assert.equal(receipt.catalogJournal.reviewedContinuation.completedEvents, 13);
+    assert.equal(receipt.catalogJournal.reviewedContinuation.publishedVerified, 2);
+    assert.equal(receipt.catalogJournal.reviewedContinuation.originalStageObjectPublished, true);
+    assert.equal(receipt.catalogJournal.reviewedContinuation.freshVerifiedNoOp, true);
+    assert.equal(receipt.catalogJournal.reviewedContinuation.sourceAndNeighborPreserved, true);
+    assert.equal(receipt.catalogJournal.reviewedContinuation.executionApproval, false);
+    assert.equal(
+      receipt.catalogJournal.namespacePreparation.reviewedContinuation.preparedCopy.journalEvents,
+      13,
+    );
+    assert.equal(
+      receipt.catalogJournal.namespacePreparation.reviewedContinuation.preparedCopy
+        .samePreparedObjectsPublished,
+      2,
+    );
     assert.equal(receipt.catalogJournal.namespacePreparation.retainedFacts, 13);
     assert.equal(receipt.catalogJournal.namespacePreparation.reopenedCompleted, true);
     assert.equal(receipt.catalogJournal.namespacePreparation.replayBlocked, true);

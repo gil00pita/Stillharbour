@@ -455,3 +455,7 @@ Run application_copy_api, catalog::tests and namespace_ Rust cases, denied-warni
 ## Retained copy inspection - 2026-10-31
 
 ADR-0040 adds RetainedCopyInspection in recent Jobs and an ID-only recovery-inspect request. Run application_copy_api and RetainedCopyInspection/JobsDropdown regressions, full checks, then the isolated native suite. Its Windows scenario discards live session authority before Jobs inspection and writes windows-retained-copy-inspection.json. Read-only reopening must leave journal count and media unchanged; changed bytes remain structured per-file errors. Incomplete preparation without an existing ready stream, approved resume and imported-catalog authorization are separate gates.
+
+## Reviewed copy continuation fixtures - 2026-10-31
+
+ADR-0041 adds executor::resume under fixture-probes/test only. Run reviewed_ Rust cases plus catalog_stream_uses_actual_retained_scope, full checks and isolated native suites. The reviewed_continuation_process_exit_matrix uses the existing exact owned child entry and a fixed resume-mode flag after all temporary-root/token/native/fixed-source-byte checks. The native receipt adds catalogJournal.reviewedContinuation and namespacePreparation.reviewedContinuation, proving partial-prefix verification, same-stream completion/no-op and original prepared object publication. These are fixture grants, not application resume approvals. Production workflow-only builds must exclude the new module; real retry and complete namespace recovery inventory need separate integration.

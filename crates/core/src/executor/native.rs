@@ -351,6 +351,43 @@ pub(super) fn reopen_stage(parent: &File, leaf: &str, expected: &FileIdentity) -
     }
     Ok(file)
 }
+#[cfg(any(test, feature = "fixture-probes"))]
+pub(super) fn reopen_append_stage(
+    parent: &File,
+    leaf: &str,
+    expected: &FileIdentity,
+) -> Result<File> {
+    name(leaf)?;
+    // Windows' retained writable handle denies all other writers/deleters.
+    #[cfg(windows)]
+    let file = reopen_stage(parent, leaf, expected)?;
+    #[cfg(unix)]
+    let file = {
+        use rustix::fs::{Mode, OFlags, openat};
+        File::from(
+            openat(
+                parent,
+                leaf,
+                OFlags::RDWR
+                    | OFlags::APPEND
+                    | OFlags::NOFOLLOW
+                    | OFlags::NONBLOCK
+                    | OFlags::CLOEXEC,
+                Mode::empty(),
+            )
+            .map_err(std::io::Error::from)?,
+        )
+    };
+    if filesystem::identity(&file)? != *expected
+        || expected.links != 1
+        || !file.metadata()?.is_file()
+    {
+        return Err(conflict(
+            "Retained append stage changed identity, type or link count.",
+        ));
+    }
+    Ok(file)
+}
 pub(super) fn read(parent: &File, leaf: &str) -> Result<File> {
     name(leaf)?;
     #[cfg(windows)]

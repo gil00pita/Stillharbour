@@ -13,6 +13,8 @@ const LIFETIME: Duration = Duration::from_secs(600);
 pub(super) enum Action {
     PrepareNames,
     CopyFiles,
+    #[cfg(any(test, feature = "fixture-probes"))]
+    ResumeFiles,
 }
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct Review {

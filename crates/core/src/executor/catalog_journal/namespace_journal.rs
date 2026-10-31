@@ -486,19 +486,25 @@ pub(super) fn check_copy_stream_admission(db: &Connection, binding: &Binding) ->
 }
 #[cfg(any(test, feature = "fixture-probes"))]
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
-    let mut receipt = fixture_case(None)?;
+    let mut receipt = fixture_case(None, false)?;
     receipt["interruptedAfterPublish"] =
-        fixture_case(Some(crate::executor::CopyFault::AfterPublish))?;
+        fixture_case(Some(crate::executor::CopyFault::AfterPublish), false)?;
+    receipt["reviewedContinuation"] =
+        fixture_case(Some(crate::executor::CopyFault::AfterPublish), true)?;
     Ok(receipt)
 }
 #[cfg(any(test, feature = "fixture-probes"))]
-fn fixture_case(fault: Option<crate::executor::CopyFault>) -> Result<serde_json::Value> {
-    fixture_case_for(Fixture::with_nested(true)?, fault)
+fn fixture_case(
+    fault: Option<crate::executor::CopyFault>,
+    continue_reviewed: bool,
+) -> Result<serde_json::Value> {
+    fixture_case_for(Fixture::with_nested(true)?, fault, continue_reviewed)
 }
 #[cfg(any(test, feature = "fixture-probes"))]
 fn fixture_case_for(
     fixture: Fixture,
     fault: Option<crate::executor::CopyFault>,
+    continue_reviewed: bool,
 ) -> Result<serde_json::Value> {
     use crate::jobs::operation_locks::Access;
     let token = uuid::Uuid::new_v4().to_string();
@@ -666,7 +672,7 @@ fn fixture_case_for(
         cancel: &cancel,
         validate_scope: &validate,
     };
-    let outcome = copy.execute_approved(
+    let mut outcome = copy.execute_approved(
         inputs,
         &selection,
         approvals.consume(&copy_ticket, &copy_review)?,
@@ -681,6 +687,25 @@ fn fixture_case_for(
         plan.clone(),
         Some(reference.clone()),
     )?;
+    if continue_reviewed {
+        let inputs = crate::executor::CopyInputs {
+            source_root: _lease.directory(0).leaf(),
+            destination: root.leaf(),
+            io: &io,
+            cancel: &cancel,
+            validate_scope: &validate,
+        };
+        let review = copy.recovery_review(&inputs)?;
+        let expected = review.approval(&plan, &selection)?;
+        let ticket = approvals.issue(expected.clone())?;
+        outcome = copy.resume_approved(
+            inputs,
+            &selection,
+            review,
+            approvals.consume(&ticket, &expected)?,
+            None,
+        )?;
+    }
     let after = plan
         .files
         .iter()
@@ -697,8 +722,12 @@ fn fixture_case_for(
             )
         })
         .collect::<Result<Vec<_>>>()?;
-    let published = if fault.is_none() { plan.files.len() } else { 1 };
-    let expected_outcome = if fault.is_none() {
+    let published = if fault.is_none() || continue_reviewed {
+        plan.files.len()
+    } else {
+        1
+    };
+    let expected_outcome = if fault.is_none() || continue_reviewed {
         crate::executor::CopyOutcome::CompletedVerified
     } else {
         crate::executor::CopyOutcome::Interrupted
@@ -937,7 +966,7 @@ mod tests {
         assert!(!fixture.destination.join("future").exists());
         assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
         assert!(fixture.preserved().unwrap());
-        let receipt = fixture_case_for(fixture, None).unwrap();
+        let receipt = fixture_case_for(fixture, None, false).unwrap();
         assert_eq!(receipt["retainedFacts"], 15);
         assert_eq!(receipt["preparedCopy"]["samePreparedObjectsPublished"], 2);
         assert_eq!(
