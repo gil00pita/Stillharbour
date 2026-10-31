@@ -82,7 +82,41 @@ pub fn run_fixture_probe() -> Result<serde_json::Value> {
     }
     Ok(
         serde_json::json!({"scope":"generated-temporary-only","nativeOs":std::env::consts::OS,"policy":"m2-owned-copy-fixture-v1","configuredAggregateBytesPerSecond":PacedIo::shared().bytes_per_second()?,"chunkBytes":CHUNK_BYTES,"burstBytes":crate::jobs::paced_io::ISSUED_BURST_BYTES,
-        "completed":case(None)?,"interruptedAfterPublish":case(Some(CopyFault::AfterPublish))?}),
+        "completed":case(None)?,"interruptedAfterPublish":case(Some(CopyFault::AfterPublish))?,"scopeLocks":scope_lock_fixture_probe()?}),
+    )
+}
+fn scope_lock_fixture_probe() -> Result<serde_json::Value> {
+    use crate::jobs::operation_locks::{Access, Registry, Scope};
+    let fixture = CopyFixture::new()?;
+    let (_, output) = fixture.scope()?;
+    let writer = Registry::shared().try_acquire(vec![Scope::new(output, Access::Write)])?;
+    let cancel = AtomicBool::new(false);
+    let copy_blocked = fixture
+        .run_until(None, &cancel)
+        .is_err_and(|error| error.code == ErrorCode::Busy);
+    let recovery_blocked = fixture
+        .recover(&cancel)
+        .is_err_and(|error| error.code == ErrorCode::Busy);
+    let journal = Journal::open(&fixture.run.path().join("operation.sqlite"), &fixture.plan)?;
+    let count: i64 = journal
+        .0
+        .query_row("SELECT count(*) FROM events", [], |row| row.get(0))?;
+    if !copy_blocked || !recovery_blocked || count != 0 {
+        return Err(failed(
+            "Owned scope conflict did not block before copy journaling.",
+        ));
+    }
+    drop((writer, journal));
+    let (source, _) = fixture.scope()?;
+    let _reader = Registry::shared().try_acquire(vec![Scope::new(source, Access::Read)])?;
+    let completed = fixture.run_until(None, &cancel)? == CopyOutcome::CompletedVerified;
+    let verified = fixture.recover(&cancel)?.all_outputs_byte_verified;
+    let preserved = fixture.sources_preserved()?;
+    if !completed || !verified || !preserved {
+        return Err(failed("Owned read-scope coexistence or release failed."));
+    }
+    Ok(
+        serde_json::json!({"incompatibleCopyBlocked":true,"incompatibleRecoveryBlocked":true,"deniedJournalEvents":count,"sharedSourceReaderCoexists":true,"completedAfterRelease":true,"sourcesPreserved":true}),
     )
 }
 /// Read/write name preparation is limited to a newly owned temporary namespace.
@@ -690,6 +724,13 @@ impl CopyFixture {
             )
         })?;
         let (source, output) = self.scope()?;
+        use crate::jobs::operation_locks::{Access, Registry, Scope};
+        let scope_lease = Registry::shared().try_acquire(vec![
+            Scope::new(source, Access::Read),
+            Scope::new(output, Access::Write),
+        ])?;
+        let source = scope_lease.directory(0);
+        let output = scope_lease.directory(1);
         let journal = Journal::open(&self.run.path().join("operation.sqlite"), &self.plan)?;
         let validate_scope = || self.scope().map(|_| ());
         let context = CopyContext {
@@ -727,6 +768,13 @@ impl CopyFixture {
             )
         })?;
         let (source, output) = self.scope()?;
+        use crate::jobs::operation_locks::{Access, Registry, Scope};
+        let scope_lease = Registry::shared().try_acquire(vec![
+            Scope::new(source, Access::Read),
+            Scope::new(output, Access::Read),
+        ])?;
+        let source = scope_lease.directory(0);
+        let output = scope_lease.directory(1);
         let journal = Journal::open(&self.run.path().join("operation.sqlite"), &self.plan)?;
         let items = self
             .plan
@@ -782,6 +830,40 @@ impl CopyFixture {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn shared_scope_locks_block_copy_and_recovery_without_a_journal_change_then_release() {
+        use crate::jobs::operation_locks::{Access, Registry, Scope};
+        let fixture = CopyFixture::new().unwrap();
+        let (_, output) = fixture.scope().unwrap();
+        let held = Registry::shared()
+            .try_acquire(vec![Scope::new(output, Access::Write)])
+            .unwrap();
+        let cancel = AtomicBool::new(false);
+        assert_eq!(
+            fixture.run_until(None, &cancel).unwrap_err().code,
+            ErrorCode::Busy
+        );
+        assert_eq!(fixture.recover(&cancel).unwrap_err().code, ErrorCode::Busy);
+        let journal =
+            Journal::open(&fixture.run.path().join("operation.sqlite"), &fixture.plan).unwrap();
+        let count: i64 = journal
+            .0
+            .query_row("SELECT count(*) FROM events", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+        drop((held, journal));
+        let (source, _) = fixture.scope().unwrap();
+        let reader = Registry::shared()
+            .try_acquire(vec![Scope::new(source, Access::Read)])
+            .unwrap();
+        assert_eq!(
+            fixture.run_until(None, &cancel).unwrap(),
+            CopyOutcome::CompletedVerified
+        );
+        assert!(fixture.recover(&cancel).unwrap().all_outputs_byte_verified);
+        assert!(fixture.sources_preserved().unwrap());
+        drop(reader);
+    }
     #[test]
     fn verified_output_versions_and_fresh_source_membership_cannot_be_reused_after_changes() {
         let fixture = CopyFixture::new().unwrap();

@@ -668,6 +668,22 @@ impl Library {
             ));
         }
         let compiled = CompiledFilter::new(filter.clone())?;
+        let scope_chain = filesystem::DirectoryChain::open(&root.path.canonicalize()?)?;
+        if scope_chain.identity().volume != root.identity.volume
+            || scope_chain.identity().file != root.identity.file
+            || native::volume_token(scope_chain.leaf())? != root.volume
+        {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The scan root changed before operation admission.",
+            ));
+        }
+        let scope_lease = crate::jobs::operation_locks::Registry::shared().try_acquire(vec![
+            crate::jobs::operation_locks::Scope::new(
+                scope_chain,
+                crate::jobs::operation_locks::Access::Read,
+            ),
+        ])?;
         #[cfg(any(unix, windows))]
         let managed_identity =
             filesystem::identity(&native::open_root(&self.options.data_directory, None)?)?;
@@ -686,6 +702,7 @@ impl Library {
             .name("library-scan".into())
             .spawn(move || {
                 let _permit = permit;
+                let _scope_lease = scope_lease;
                 let thumbnail_root = root.view.id.clone();
                 let context = ScanContext {
                     catalog: owner.catalog.clone(),
@@ -1462,6 +1479,36 @@ impl Drop for Library {
 #[cfg(test)]
 mod maintenance_tests {
     use super::*;
+    #[test]
+    fn scan_scope_conflicts_are_rejected_before_catalog_job_creation() {
+        use crate::jobs::operation_locks::{Access, Registry, Scope};
+        let (_run, library, root) = removal_fixture();
+        let record = store::root(&library.catalog, root.clone()).unwrap();
+        let chain = filesystem::DirectoryChain::open(&record.path.canonicalize().unwrap()).unwrap();
+        let writer = Registry::shared()
+            .try_acquire(vec![Scope::new(chain, Access::Write)])
+            .unwrap();
+        assert_eq!(
+            library
+                .scan(root.clone(), ScanFilter::default())
+                .unwrap_err()
+                .code,
+            ErrorCode::Busy
+        );
+        assert!(store::jobs(&library.catalog).unwrap().is_empty());
+        assert!(library.scan_gate.try_start().is_ok());
+        assert_eq!(
+            fs::read(record.path.join("original.txt")).unwrap(),
+            b"generated source retained"
+        );
+        drop(writer);
+        let chain = filesystem::DirectoryChain::open(&record.path.canonicalize().unwrap()).unwrap();
+        assert!(
+            Registry::shared()
+                .try_acquire(vec![Scope::new(chain, Access::Read)])
+                .is_ok()
+        );
+    }
     fn removal_fixture() -> (tempfile::TempDir, Arc<Library>, String) {
         let data = tempfile::tempdir().unwrap();
         let catalog = Arc::new(Catalog::open(data.path().join("fixture.stillharbour")).unwrap());

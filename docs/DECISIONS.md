@@ -203,3 +203,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Copy capacity and fidelity review — 2026-10-31
 
 [ADR-0030](decisions/ADR-0030-copy-capacity-and-fidelity-review.md) adds an ID-only on-demand assessment of a freshly revalidated retained manifest/destination. Show native allocation units, exact per-file rounded data and explicit metadata/journal/headroom allowances against observed free bytes. Report unverified metadata aspects, retained sources and absent independent backup without granting approval. Capacity remains an estimate, not a reservation or completed executor gate.
+
+## Shared operation scopes — 2026-10-31
+
+[ADR-0031](decisions/ADR-0031-shared-native-operation-scopes.md) supplies bounded process-wide all-or-none native directory read/write admission. Scans acquire shared root leases before catalog job creation; constructor-owned copy/preparation fixtures take source-read/output-write scopes and recovery takes read scopes. Native identities/ancestry, not text prefixes, determine overlap. Other read/write adapters and cross-process coordination remain outside this partial integration; no production mutation or full AC-081 acceptance follows.

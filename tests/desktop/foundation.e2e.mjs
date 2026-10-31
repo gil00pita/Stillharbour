@@ -366,6 +366,14 @@ describe('native read-only library', () => {
     assert.equal(receipt.interruptedAfterPublish.publishedOutputsVerified, 1);
     assert.equal(receipt.interruptedAfterPublish.allOutputsByteVerified, false);
     assert.equal(receipt.interruptedAfterPublish.retryBlocked, true);
+    assert.deepEqual(receipt.scopeLocks, {
+      incompatibleCopyBlocked: true,
+      incompatibleRecoveryBlocked: true,
+      deniedJournalEvents: 0,
+      sharedSourceReaderCoexists: true,
+      completedAfterRelease: true,
+      sourcesPreserved: true,
+    });
     const preparation = await browser.tauri.execute(async ({ core }) =>
       core.invoke('test_performance', {
         action: 'organization_name_preparation_fixture',

@@ -471,7 +471,13 @@ fn targets(paths: &[&str]) -> Vec<Target> {
 }
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     let fixture = CopyFixture::new()?;
-    let (_, output) = fixture.scope()?;
+    let (source, output) = fixture.scope()?;
+    use crate::jobs::operation_locks::{Access, Registry, Scope};
+    let scope_lease = Registry::shared().try_acquire(vec![
+        Scope::new(source, Access::Read),
+        Scope::new(output, Access::Write),
+    ])?;
+    let output = scope_lease.directory(1);
     let journal = Journal::open(&fixture.run.path().join("operation.sqlite"), &fixture.plan)?;
     let prepared = prepare(
         output.leaf(),
