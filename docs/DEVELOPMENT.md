@@ -395,3 +395,7 @@ ADR-0026 adds generated inventory/confirmation/history IPC. Run `node scripts/ca
 ## Compiled companion scopes — 2026-10-31
 
 ADR-0027 adds ID-only copy-manifest compilation and retained opening. Run pure `copy_manifest` Rust tests and the generated-fixture `companion_confirmation_requires_full_inventory` regression, then full checks. Component coverage is in CopyManifestReview.test.tsx; the foundation scenario records windows-copy-manifest.json and m2-copy-manifest.png. Compile unchanged explicit decisions to retry idempotently; opening history alone is not live validation. Current manifests remain blocked from execution.
+
+## Owned M2 executor fixtures — 2026-10-31
+
+ADR-0028 adds process-wide paced operation I/O and a source-retaining copy engine under fixture-probes/Rust-test capability. CopyFixture accepts no source/destination path; it creates its own generated run. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --lib executor::tests` and `node scripts/cargo.mjs test --locked -p stillharbour-core --lib paced_io`, then full checks and both native CI jobs. Tests spawn their own validated child executable and terminate it at recorded boundaries; never point these tests at a real library. Process-exit/flush evidence does not establish physical power-loss durability. The fixture SQLite journal is not yet the production catalog executor adapter; real copying, import, undo and in-place operations remain unavailable.

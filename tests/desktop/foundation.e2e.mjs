@@ -345,6 +345,33 @@ describe('native read-only library', () => {
     await mkdir('.context/screenshots', { recursive: true });
     await browser.saveScreenshot('.context/screenshots/m1-onboarding.png');
   });
+  it('copies and inspects only backend-owned operation fixtures through native IPC', async () => {
+    const receipt = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_copy_executor_fixture', rows: null }),
+    );
+    assert.equal(receipt.scope, 'generated-temporary-only');
+    assert.equal(receipt.chunkBytes, 65_536);
+    assert.equal(receipt.burstBytes, 131_072);
+    assert.equal(receipt.nativeOs, process.platform === 'darwin' ? 'macos' : 'windows');
+    assert.equal(receipt.completed.outcome, 'completed_verified');
+    assert.equal(receipt.completed.sourcesPreserved, true);
+    assert.equal(receipt.completed.destinationNeighborPreserved, true);
+    assert.equal(receipt.completed.verifiedSourceFiles, 3);
+    assert.equal(receipt.completed.publishedOutputsVerified, 3);
+    assert.equal(receipt.completed.allOutputsByteVerified, true);
+    assert.equal(receipt.completed.retryBlocked, true);
+    assert.equal(receipt.interruptedAfterPublish.outcome, 'interrupted');
+    assert.equal(receipt.interruptedAfterPublish.sourcesPreserved, true);
+    assert.equal(receipt.interruptedAfterPublish.destinationNeighborPreserved, true);
+    assert.equal(receipt.interruptedAfterPublish.publishedOutputsVerified, 1);
+    assert.equal(receipt.interruptedAfterPublish.allOutputsByteVerified, false);
+    assert.equal(receipt.interruptedAfterPublish.retryBlocked, true);
+    const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
+    await writeFile(
+      `${evidence}/owned-copy-executor-${process.platform}.json`,
+      JSON.stringify(receipt),
+    );
+  });
   (process.platform === 'win32' ? it : it.skip)(
     'highlights an identity-unavailable selection without starting a scan',
     async () => {

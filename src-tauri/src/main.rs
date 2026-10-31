@@ -529,6 +529,23 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "organization_copy_executor_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The owned executor fixture accepts no supplied scope.",
+                ));
+            }
+            tokio::task::spawn_blocking(stillharbour_core::executor::run_fixture_probe)
+                .await
+                .map_err(|error| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "The owned executor fixture worker failed.",
+                    )
+                    .caused_by(error)
+                })?
+        }
         "organization_destination_fixture" | "organization_export_fixture" => {
             if state
                 .fixture

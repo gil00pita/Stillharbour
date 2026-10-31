@@ -191,3 +191,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Explicit compiled copy scopes — 2026-10-31
 
 [ADR-0027](decisions/ADR-0027-compiled-copy-manifests.md) reconciles explicit per-photo companion decisions into bounded immutable manifests, combines only identical mappings and preserves cross-bundle conflicts. Original draft digests/schema stay unchanged; fresh retries are idempotent and retained opening recomputes reconciliation. Destination/content/fidelity/capacity/approval/executor gates remain pending.
+
+## Owned copy executor development — 2026-10-31
+
+[ADR-0028](decisions/ADR-0028-owned-copy-executor-fixtures.md) develops the central source-retaining stage/copy/verify/no-replace/recovery sequence with a shared precharged byte budget against constructor-owned temporary fixtures. Real process-exit and journal-denial tests supplement cooperative interruption; retained originals/neighbors are independently checked. The production catalog/job/ready-plan/approval adapters and mutation gates remain pending. Do not treat fixture completion as real-library authorization or full metadata/backup fidelity.
