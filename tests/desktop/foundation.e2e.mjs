@@ -1689,7 +1689,16 @@ describeMac('macOS M1 library — generated native fixtures', () => {
   });
   it('puts query and display controls in a keyboard-accessible side panel', async () => {
     assert.equal((await $$('.filter-bar')).length, 0);
-    assert.equal((await $$('.photo-toolbar button')).length, 3);
+    assert.deepEqual(
+      await browser.execute(() =>
+        [...document.querySelectorAll('.photo-toolbar button')].map((button) =>
+          button.getAttribute('aria-controls') === 'library-filter-panel'
+            ? 'Filter'
+            : (button.getAttribute('aria-label') ?? button.textContent.trim()),
+        ),
+      ),
+      ['Collapse navigation', 'Filter', 'Jobs', 'Saved plans'],
+    );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
     await browser.setWindowSize(1180, 780);
