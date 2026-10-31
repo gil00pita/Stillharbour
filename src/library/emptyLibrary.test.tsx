@@ -32,8 +32,8 @@ beforeEach(() => {
     });
 });
 
-function show(roots: LibraryRoot[], jobs: LibraryStatus['jobs'] = []) {
-  return render(
+function libraryView(roots: LibraryRoot[], jobs: LibraryStatus['jobs'] = []) {
+  return (
     <LibraryScreen
       defaults={fixturePreferences()}
       status={{
@@ -49,13 +49,18 @@ function show(roots: LibraryRoot[], jobs: LibraryStatus['jobs'] = []) {
       onRefresh={vi.fn()}
       onSettings={vi.fn()}
       onRelink={vi.fn()}
-    />,
+    />
   );
+}
+
+function show(roots: LibraryRoot[], jobs: LibraryStatus['jobs'] = []) {
+  return render(libraryView(roots, jobs));
 }
 
 it('shows the themed illustration only after an empty library has finished loading', async () => {
   show([root]);
   expect(document.querySelector('.empty-library-art')).not.toBeInTheDocument();
+  expect(document.querySelector('.photo-scanning-art')).not.toBeInTheDocument();
   expect(await screen.findByRole('heading', { name: 'Your library is empty' })).toBeVisible();
   expect(document.querySelector('.empty-library-art')).toHaveAttribute('aria-hidden', 'true');
 });
@@ -70,12 +75,14 @@ it.each([
   show([...roots]);
   await screen.findByRole('heading', { name: 'No matching photos yet' });
   expect(document.querySelector('.empty-library-art')).not.toBeInTheDocument();
+  expect(document.querySelector('.photo-scanning-art')).not.toBeInTheDocument();
 });
 
 it('does not show the illustration while previews are preparing', async () => {
   show([{ ...root, preparingPreviews: true }]);
   await screen.findByRole('heading', { name: 'Preparing your photos' });
   expect(document.querySelector('.empty-library-art')).not.toBeInTheDocument();
+  expect(document.querySelector('.photo-scanning-art')).toHaveAttribute('data-active', 'false');
 });
 
 it('does not show the illustration after a query failure', async () => {
@@ -83,6 +90,7 @@ it('does not show the illustration after a query failure', async () => {
   show([root]);
   await screen.findByRole('heading', { name: 'Library couldn’t be loaded' });
   expect(document.querySelector('.empty-library-art')).not.toBeInTheDocument();
+  expect(document.querySelector('.photo-scanning-art')).not.toBeInTheDocument();
 });
 
 it.each(['queued', 'running', 'cancel_requested'])(
@@ -105,7 +113,40 @@ it.each(['queued', 'running', 'cancel_requested'])(
         },
       ],
     );
-    await screen.findByText('0 matching photos and videos');
+    await screen.findByRole('heading', { name: 'Scanning your photos' });
     expect(document.querySelector('.empty-library-art')).not.toBeInTheDocument();
+    expect(document.querySelector('.photo-scanning-art')).toHaveAttribute('aria-hidden', 'true');
+    expect(document.querySelector('.photo-scanning-art')).toHaveAttribute(
+      'data-active',
+      String(state !== 'cancel_requested'),
+    );
+    expect(
+      screen.queryByRole('heading', { name: 'No matching photos yet' }),
+    ).not.toBeInTheDocument();
   },
 );
+
+it('animates preview preparation and returns to the empty view after completion', async () => {
+  const view = show(
+    [{ ...root, preparingPreviews: true }],
+    [
+      {
+        id: 'generated-previews',
+        rootId: root.id,
+        kind: 'thumbnails',
+        state: 'running',
+        discovered: 0,
+        indexed: 0,
+        skipped: 0,
+        errors: 0,
+        message: 'Preparing generated previews',
+        startedAt: '2026-10-31',
+      },
+    ],
+  );
+  await screen.findByRole('heading', { name: 'Preparing your photos' });
+  expect(document.querySelector('.photo-scanning-art')).toHaveAttribute('data-active', 'true');
+  view.rerender(libraryView([root]));
+  await screen.findByRole('heading', { name: 'Your library is empty' });
+  expect(document.querySelector('.photo-scanning-art')).not.toBeInTheDocument();
+});

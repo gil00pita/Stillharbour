@@ -7,6 +7,8 @@ import { AssetBrowser, type PhotoViewportHandle } from './AssetBrowser';
 import type { GalleryDisplay } from './FilterPanel';
 import type { TextColumn } from './textColumns';
 import { DateTimeline } from './DateTimeline';
+import { EmptyLibraryArt } from '../EmptyLibraryArt';
+import { PhotoScanningArt } from './PhotoScanningArt';
 export function PhotoCollection({
   display,
   viewportHandle,
@@ -107,7 +109,15 @@ export function PhotoCollection({
               (root) => root.preparingPreviews && (!query.rootId || root.id === query.rootId),
             )}
             scanning={status.jobs.some(
-              (job) => job.kind !== 'thumbnails' && job.state === 'running',
+              (job) =>
+                (!query.rootId || job.rootId === query.rootId) &&
+                job.kind !== 'thumbnails' &&
+                ['queued', 'running', 'cancel_requested'].includes(job.state),
+            )}
+            animating={status.jobs.some(
+              (job) =>
+                (!query.rootId || job.rootId === query.rootId) &&
+                ['queued', 'running'].includes(job.state),
             )}
           />
         )}
@@ -143,24 +153,29 @@ function CollectionEmpty({
   loading,
   scanning,
   preparing,
+  animating,
 }: {
   emptyLibrary: boolean;
   loading: boolean;
   scanning: boolean;
   preparing: boolean;
+  animating: boolean;
 }) {
   const showIllustration = emptyLibrary && !loading && !scanning && !preparing;
   return (
     <div className="empty-results">
+      {(preparing || scanning) && <PhotoScanningArt active={animating} />}
       {showIllustration && <EmptyLibraryArt />}
       <h2>
         {preparing
           ? 'Preparing your photos'
-          : loading
-            ? 'Reading your catalog…'
-            : showIllustration
-              ? 'Your library is empty'
-              : 'No matching photos yet'}
+          : scanning
+            ? 'Scanning your photos'
+            : loading
+              ? 'Reading your catalog…'
+              : showIllustration
+                ? 'Your library is empty'
+                : 'No matching photos yet'}
       </h2>
       <p>
         {preparing
