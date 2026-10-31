@@ -32,6 +32,8 @@ struct Foundation {
     fixture: Mutex<Option<stillharbour_core::library_fixture::LibraryFixture>>,
     #[cfg(feature = "desktop-test")]
     destination_fixture: Mutex<Option<tempfile::TempDir>>,
+    #[cfg(feature = "desktop-test")]
+    export_fixture: Mutex<Option<tempfile::TempDir>>,
     _catalog: Arc<Catalog>,
     preferences: Arc<stillharbour_core::preferences::PreferencesStore>,
     library: Arc<Library>,
@@ -195,6 +197,7 @@ async fn library_request(
     }
     let selection = match &request {
         LibraryRequest::SaveAndScan { selection_id, .. }
+        | LibraryRequest::OrganizationPlanSaveExport { selection_id, .. }
         | LibraryRequest::OrganizationPlanCreate { selection_id, .. }
         | LibraryRequest::OrganizationDestination { selection_id, .. }
         | LibraryRequest::Relink { selection_id, .. } => Some(selected(&state, selection_id)?),
@@ -218,6 +221,21 @@ async fn library_request(
             LibraryRequest::OrganizationPlanExport { plan_id, format } => {
                 LibraryResponse::OrganizationPlanExport(
                     library.organization_plan_export(plan_id, format)?,
+                )
+            }
+            LibraryRequest::OrganizationPlanSaveExport {
+                plan_id, format, ..
+            } => {
+                let selection = selection.as_ref().ok_or_else(|| {
+                    AppError::new(ErrorCode::InvalidInput, "Choose an export folder again.")
+                })?;
+                LibraryResponse::OrganizationPlanExportSaved(
+                    library.organization_plan_save_export(
+                        plan_id,
+                        format,
+                        selection.path.clone(),
+                        selected_identity(selection)?,
+                    )?,
                 )
             }
             LibraryRequest::OrganizationPlanCreate { draft, .. } => {
@@ -484,7 +502,7 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
-        "organization_destination_fixture" => {
+        "organization_destination_fixture" | "organization_export_fixture" => {
             if state
                 .fixture
                 .lock()
@@ -496,7 +514,14 @@ async fn test_performance(
                     "Generate an owned library fixture first.",
                 ));
             }
-            let mut owned = state.destination_fixture.lock().map_err(|_| {
+            let is_export = action == "organization_export_fixture";
+            let mut owned = if is_export {
+                &state.export_fixture
+            } else {
+                &state.destination_fixture
+            }
+            .lock()
+            .map_err(|_| {
                 AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
             })?;
             if owned.is_some() {
@@ -532,8 +557,15 @@ async fn test_performance(
                 serde_json::json!({"id":id, "displayPath":"Generated destination fixture", "identityAvailable":true}),
             )
         }
-        "organization_destination_verify" => {
-            let owned = state.destination_fixture.lock().map_err(|_| {
+        "organization_destination_verify" | "organization_export_verify" => {
+            let is_export = action == "organization_export_verify";
+            let owned = if is_export {
+                &state.export_fixture
+            } else {
+                &state.destination_fixture
+            }
+            .lock()
+            .map_err(|_| {
                 AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
             })?;
             let directory = owned.as_ref().ok_or_else(|| {
@@ -543,8 +575,32 @@ async fn test_performance(
                 )
             })?;
             let unchanged = std::fs::read(directory.path().join("destination-only.txt"))?
-                == b"retained destination"
-                && std::fs::read_dir(directory.path())?.count() == 1;
+                == b"retained destination";
+            if is_export {
+                if !unchanged {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "The generated export neighbor changed.",
+                    ));
+                }
+                let mut exports = Vec::new();
+                for entry in std::fs::read_dir(directory.path())? {
+                    let entry = entry?;
+                    if entry.file_name() == "destination-only.txt" {
+                        continue;
+                    }
+                    if !entry.file_type()?.is_file() || entry.metadata()?.len() > 16 * 1024 * 1024 {
+                        return Err(AppError::new(
+                            ErrorCode::Conflict,
+                            "Unexpected generated export entry.",
+                        ));
+                    }
+                    let text = std::fs::read_to_string(entry.path())?;
+                    exports.push(serde_json::json!({"filename":entry.file_name().to_string_lossy(),"bytes":text.len().to_string(),"text":text}));
+                }
+                return Ok(serde_json::json!({"neighborUnchanged":true,"exports":exports}));
+            }
+            let unchanged = unchanged && std::fs::read_dir(directory.path())?.count() == 1;
             if !unchanged {
                 return Err(AppError::new(
                     ErrorCode::Conflict,
@@ -880,6 +936,8 @@ fn main() {
                 fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 destination_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                export_fixture: Mutex::new(None),
                 _catalog: catalog,
                 preferences: Arc::new(stillharbour_core::preferences::PreferencesStore::new(
                     &data,

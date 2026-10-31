@@ -16,10 +16,12 @@ Owner continuation, 2026-10-31: continue M2 planning, then finish M2 if unfinish
 
 Current checklist:
 
+Owner continuation, 2026-10-31: continue working through M2 and then M3 without stopping after individual planning slices. Preserve prerequisite/native/preservation gates; an unavailable platform or recovery provider is not a passing result. ADR-0024 adds existing-target observations and native source components while retaining draft-only authority.
+
 Conditional M3 request, 2026-10-31: M2 is unfinished, so do not start M3. Continue M2. Selected-path Before/After views now group source labels by library and proposed folders by DSL separators; full native source-folder hierarchy remains open alongside the requirements below. All executor/preservation gates remain unchanged.
 
-- Implemented: pure bounded DSL/relative previews; indexed companion review; native destination identity/overlap; retained migration snapshot and schema-3 transaction; saved template version/CAS; immutable fingerprint-bound drafts/history/staleness and JSON/CSV review text.
-- Open planning: native target/case/Unicode checks; complete confirmed companion bundles; capacity/fidelity; template samples/policy validation; full native source-folder hierarchy; native export-file save; executable-plan approval/preconditions. Selected-path Before/After review is implemented as described above.
+- Implemented: pure bounded DSL/relative previews; indexed companion review; native destination identity/overlap; retained migration snapshot and schema-3 transaction; saved template version/CAS and bounded resolver-validated examples; immutable fingerprint-bound drafts/history/staleness and JSON/CSV review text.
+- Open planning: equivalence between future native target/case/Unicode names; complete confirmed companion bundles; full capacity/fidelity evidence; selectable additional template policies; executable-plan approval/preconditions. Existing-target lookup, observed space, backend component-based selected-source hierarchy and no-replace review-file saves (ADR-0025) are implemented; these are not complete inventories or original-file execution acceptance.
 - Open execution: central locks/journal state transitions, staging/no-replace verified copy, cancellation/recovery/fault injection, reverse-plan undo, fixture folder import/duplicate skipping/idempotency and target-platform native acceptance.
 - Production gate: exact-version independent recovery and native failure gates still required. No real-library mutation enablement.
 
@@ -41,7 +43,7 @@ Inject failure after every journal/copy/publish/catalog stage. Exercise source c
 
 ## Gate
 
-Applicable AC-023 through AC-039, AC-081, AC-082 and AC-084 pass. A source-preserving generated import and reviewed same-volume organization work through real UI/IPC on target systems. Any unverified safety primitive keeps original mutation disabled. Record evidence and stop before M3.
+Applicable AC-023 through AC-039, AC-081, AC-082 and AC-084 pass. A source-preserving generated import and reviewed same-volume organization work through real UI/IPC on target systems. Any unverified safety primitive keeps original mutation disabled. Record evidence before proceeding to the owner's subsequently authorized M3 continuation; do not skip this prerequisite gate.
 
 ## Version 1.1 preservation gate
 

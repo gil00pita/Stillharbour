@@ -40,6 +40,9 @@ const response: OrganizationDestinationReview = {
   fingerprint: 'destination',
   executionAvailable: false,
   persisted: false,
+  targets: [],
+  availableBytes: '10000000000000000',
+  totalBytes: '20000000000000000',
 };
 beforeEach(() => {
   vi.mocked(pickDirectory).mockReset().mockResolvedValue({
@@ -108,6 +111,42 @@ it('checks only an explicit native selection and discloses unfinished planning',
   expect(screen.getByText('Fixture/<destination>')).toBeVisible();
   expect(document.querySelector('destination')).toBeNull();
   expect(screen.getByText(/without reserving target names/)).toBeVisible();
+});
+
+it('shows native target conflicts and exact space observations while retaining a draft-only action', async () => {
+  vi.mocked(libraryData).mockResolvedValueOnce({
+    ...response,
+    targets: [
+      {
+        assetId: 'occupied',
+        targetRelativePath: 'Family/<photo>.JPG',
+        state: 'occupied',
+        blockingComponent: 'Family/<photo>.JPG',
+      },
+      {
+        assetId: 'new',
+        targetRelativePath: 'New/photo.JPG',
+        state: 'unoccupied_observed',
+        blockingComponent: null,
+      },
+      {
+        assetId: 'blocked',
+        targetRelativePath: 'file/photo.JPG',
+        state: 'ancestor_not_directory',
+        blockingComponent: 'file',
+      },
+    ],
+  });
+  render(<OrganizationDestination preview={preview} revision="1" />);
+  choose();
+  await screen.findByRole('table', { name: 'Existing target review' });
+  expect(screen.getByText('Target already exists — retained')).toBeVisible();
+  expect(screen.getByText('No existing target observed')).toBeVisible();
+  expect(screen.getByText('A parent name is occupied by a file')).toBeVisible();
+  expect(screen.getByText(/10,000,000,000,000,000 bytes available/)).toBeVisible();
+  expect(screen.getByText(/space is not reserved/)).toBeVisible();
+  expect(document.querySelector('photo')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Save plan draft' })).toBeEnabled();
 });
 it('retains the previous observation on picker cancellation without another check', async () => {
   render(<OrganizationDestination preview={preview} revision="1" />);

@@ -34,6 +34,8 @@ pub struct TemplateSave {
     pub name: String,
     pub description: String,
     pub template: OrganizationTemplate,
+    #[serde(default)]
+    pub samples: Vec<crate::organization::TemplateSample>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -164,6 +166,14 @@ pub struct PlanExport {
     pub text: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanExportSaved {
+    pub path: String,
+    pub bytes: String,
+    pub digest: String,
+}
+
 pub fn validate_template_save(save: &TemplateSave) -> Result<()> {
     let valid_text = |s: &str, max: usize| {
         !s.trim().is_empty() && s.len() <= max && !s.chars().any(char::is_control)
@@ -178,6 +188,7 @@ pub fn validate_template_save(save: &TemplateSave) -> Result<()> {
         ));
     }
     crate::organization::validate_template(&save.template)?;
+    crate::organization::validate_samples(&save.template, &save.samples)?;
     if let Some(reference) = &save.previous {
         validate_id(&reference.id)?;
         if reference.version == 0 || reference.version >= MAX_TEMPLATE_VERSIONS {

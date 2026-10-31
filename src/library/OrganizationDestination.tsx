@@ -5,8 +5,17 @@ import type {
   OrganizationPreview,
   OrganizationPlanDetail,
   TemplateRef,
+  OrganizationTargetState,
 } from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
+
+const targetLabels: Record<OrganizationTargetState, string> = {
+  unoccupied_observed: 'No existing target observed',
+  occupied: 'Target already exists — retained',
+  ancestor_not_directory: 'A parent name is occupied by a file',
+  unsupported_ancestor: 'A parent or package cannot be used',
+  preview_blocked: 'Blocked in the template preview',
+};
 
 export function OrganizationDestination({
   preview,
@@ -132,6 +141,41 @@ export function OrganizationDestination({
       {review && !stale && (
         <>
           <p role="status">Destination identity and indexed-root overlap checked.</p>
+          <p>
+            {BigInt(review.availableBytes).toLocaleString()} bytes available of{' '}
+            {BigInt(review.totalBytes).toLocaleString()} total at review time. Selected photo bytes:{' '}
+            {BigInt(preview.selectedBytes).toLocaleString()}. Companions, staging, retained versions
+            and metadata reserves are not included; space is not reserved.
+          </p>
+          <div className="organization-table">
+            <table>
+              <caption>Existing target review</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Proposed relative path</th>
+                  <th scope="col">Observation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {review.targets.map((target) => (
+                  <tr key={target.assetId}>
+                    <td>
+                      <bdi>{target.targetRelativePath ?? 'No proposed target'}</bdi>
+                    </td>
+                    <td>
+                      {targetLabels[target.state]}
+                      {target.blockingComponent && (
+                        <>
+                          <br />
+                          <bdi>{target.blockingComponent}</bdi>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <button type="button" disabled={busy || saved !== null} onClick={() => void save()}>
             Save plan draft
           </button>
@@ -143,9 +187,10 @@ export function OrganizationDestination({
         </p>
       )}
       <p className="help">
-        Existing target names, case and Unicode rules, companion inventory, capacity and metadata
-        fidelity still need review. Saving retains a draft without reserving target names. Copying
-        remains unavailable.
+        Native lookup checks existing entries without following links. Missing parent folders and
+        names are observations, not reservations. Equivalence between future case/Unicode names,
+        complete companions, full space requirements and metadata fidelity still need review. Saving
+        retains a draft without reserving target names. Copying remains unavailable.
       </p>
     </section>
   );

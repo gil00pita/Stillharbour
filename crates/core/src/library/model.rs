@@ -489,6 +489,11 @@ pub enum LibraryRequest {
         plan_id: String,
         format: crate::operations::PlanExportFormat,
     },
+    OrganizationPlanSaveExport {
+        selection_id: String,
+        plan_id: String,
+        format: crate::operations::PlanExportFormat,
+    },
     OrganizationDestination {
         selection_id: String,
         asset_ids: Vec<String>,
@@ -614,6 +619,7 @@ pub enum LibraryResponse {
     OrganizationPlans(crate::operations::OrganizationPlanPage),
     OrganizationPlan(Box<crate::operations::OrganizationPlanDetail>),
     OrganizationPlanExport(crate::operations::PlanExport),
+    OrganizationPlanExportSaved(crate::operations::PlanExportSaved),
     OrganizationDestination(crate::organization::OrganizationDestinationReview),
     OrganizationCompanions(crate::organization::OrganizationCompanionReview),
     OrganizationPreview(crate::organization::OrganizationPreview),

@@ -49,10 +49,33 @@ it('retains colliding files, a file/folder collision and unresolved targets with
 });
 it('renders only frozen selection rows without loading the filesystem or expanding a catalog scope', () => {
   const { rerender } = render(<OrganizationTrees rows={[row('a', 'root', '2026/photo.JPG')]} />);
-  expect(screen.getByText(/excluded, unknown and unselected/)).toBeInTheDocument();
+  expect(screen.getByText(/unknown and unselected/)).toBeInTheDocument();
   expect(document.querySelectorAll('details[open]')).toHaveLength(0);
   rerender(<OrganizationTrees rows={[row('b', 'root', '2027/new.JPG')]} />);
   expect(screen.queryByText('2026')).not.toBeInTheDocument();
   expect(screen.queryByText('photo.JPG')).not.toBeInTheDocument();
   expect(screen.getByText('2027')).toBeInTheDocument();
+});
+
+it('uses backend native components without parsing source display strings or filename backslashes', () => {
+  const a = {
+    ...row('a', 'root', 'new/a.JPG'),
+    sourcePath: 'display must stay literal',
+    sourceComponents: ['Family', 'Trips', 'a\\b.JPG'],
+  };
+  const b = {
+    ...row('b', 'root', 'new/b.JPG'),
+    sourceComponents: ['Family', '__proto__', '<photo>.JPG'],
+  };
+  render(<OrganizationTrees rows={[a, b]} />);
+  const before = screen.getByText('Before · 2 selected paths').parentElement!;
+  expect(within(before).getByText('Family')).toBeInTheDocument();
+  expect(within(before).getByText('Trips')).toBeInTheDocument();
+  expect(within(before).getByText('__proto__')).toBeInTheDocument();
+  expect(within(before).getByText('a\\b.JPG')).toHaveAttribute(
+    'title',
+    'display must stay literal',
+  );
+  expect(within(before).getByText('<photo>.JPG')).toBeInTheDocument();
+  expect(document.querySelector('photo')).toBeNull();
 });

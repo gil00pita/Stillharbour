@@ -4,8 +4,9 @@ import type {
   OrganizationPlanPage,
   PlanExport,
   PlanExportFormat,
+  PlanExportSaved,
 } from '../bindings';
-import { errorMessage, libraryData } from '../ipc';
+import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import { OrganizationTrees } from './OrganizationTrees';
 
 export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
@@ -14,6 +15,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
   const [page, setPage] = useState<OrganizationPlanPage | null>(null);
   const [detail, setDetail] = useState<OrganizationPlanDetail | null>(null);
   const [exported, setExported] = useState<PlanExport | null>(null);
+  const [savedExport, setSavedExport] = useState<PlanExportSaved | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   async function list(before: string | null = null) {
@@ -63,6 +65,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
     setError(null);
     setDetail(null);
     setExported(null);
+    setSavedExport(null);
     try {
       const result = await libraryData(
         { kind: 'organization_plan', plan_id: id },
@@ -87,6 +90,33 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
         'organization_plan_export',
       );
       if (token === request.current) setExported(result);
+    } catch (error) {
+      if (token === request.current) setError(errorMessage(error));
+    } finally {
+      if (token === request.current) setBusy(false);
+    }
+  }
+  async function saveFile(format: PlanExportFormat) {
+    if (!detail || busy) return;
+    const token = ++request.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const selected = await pickDirectory();
+      if (token !== request.current || !selected) return;
+      if (!selected.identityAvailable)
+        throw new Error('Choose an export folder with a verifiable native identity.');
+      setSavedExport(null);
+      const result = await libraryData(
+        {
+          kind: 'organization_plan_save_export',
+          plan_id: detail.plan.id,
+          format,
+          selection_id: selected.id,
+        },
+        'organization_plan_export_saved',
+      );
+      if (token === request.current) setSavedExport(result);
     } catch (error) {
       if (token === request.current) setError(errorMessage(error));
     } finally {
@@ -198,6 +228,23 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
             <button disabled={busy} onClick={() => void exportText('csv')}>
               View CSV export
             </button>
+            <p className="help">
+              Save a new review file to a native-selected folder outside your libraries. The
+              generated filename is preserved; an existing file is never replaced. Exports contain
+              review data, not original photos or execution approval.
+            </p>
+            <button disabled={busy} onClick={() => void saveFile('json')}>
+              Save JSON file…
+            </button>
+            <button disabled={busy} onClick={() => void saveFile('csv')}>
+              Save CSV file…
+            </button>
+            {savedExport && (
+              <p role="status">
+                Review file saved: <bdi>{savedExport.path}</bdi> ·{' '}
+                {BigInt(savedExport.bytes).toLocaleString()} bytes verified.
+              </p>
+            )}
             {exported && (
               <label>
                 Export text — {exported.filename}

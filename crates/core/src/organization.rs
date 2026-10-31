@@ -45,6 +45,28 @@ pub struct OrganizationDestinationReview {
     pub fingerprint: String,
     pub execution_available: bool,
     pub persisted: bool,
+    pub targets: Vec<OrganizationTargetReview>,
+    pub available_bytes: String,
+    pub total_bytes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OrganizationTargetState {
+    UnoccupiedObserved,
+    Occupied,
+    AncestorNotDirectory,
+    UnsupportedAncestor,
+    PreviewBlocked,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationTargetReview {
+    pub asset_id: String,
+    pub target_relative_path: Option<String>,
+    pub state: OrganizationTargetState,
+    pub blocking_component: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
@@ -60,6 +82,78 @@ pub struct OrganizationTemplate {
     pub pattern: String,
     pub event: String,
     pub missing_date: MissingDatePolicy,
+}
+
+/// Synthetic examples only: slash-separated portable names, never native locators.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TemplateSample {
+    pub relative_path: String,
+    pub capture: Option<String>,
+    pub sequence: u32,
+    pub expected_target: String,
+}
+
+pub(crate) fn validate_samples(
+    template: &OrganizationTemplate,
+    samples: &[TemplateSample],
+) -> Result<()> {
+    if samples.len() > 4 {
+        return Err(invalid("Use at most four template examples."));
+    }
+    let components = parse(&template.pattern)?;
+    for (index, sample) in samples.iter().enumerate() {
+        if sample.relative_path.len() > 256
+            || sample.relative_path.split('/').count() > 32
+            || !sample.relative_path.split('/').all(valid_component)
+            || sample.expected_target.is_empty()
+            || sample.expected_target.len() > 1024
+            || !(1..=PREVIEW_LIMIT as u32).contains(&sample.sequence)
+            || sample.capture.as_ref().is_some_and(|date| {
+                date.len() > 32
+                    || NaiveDateTime::parse_from_str(date, "%Y-%m-%dT%H:%M:%S%.f").is_err()
+            })
+        {
+            return Err(invalid(&format!(
+                "Example {} needs a portable relative source name (at most 256 bytes), a valid capture-local date or no date, a sequence from 1–240 and an expected target (at most 1,024 bytes).",
+                index + 1
+            )));
+        }
+        let source = PreviewSource {
+            id: String::new(),
+            root_id: String::new(),
+            root_identity: String::new(),
+            native_path: Vec::new(),
+            relative_path: Some(sample.relative_path.clone()),
+            display_path: sample.relative_path.clone(),
+            revision: String::new(),
+            bytes: 0,
+            capture: sample.capture.clone(),
+            available: true,
+            companion_candidates: 0,
+        };
+        match resolve(&components, template, &source, sample.sequence) {
+            Ok((target, _)) if target == sample.expected_target => {}
+            Ok((target, _)) => {
+                return Err(invalid(&format!(
+                    "Example {} does not match. The template produces: {target}",
+                    index + 1
+                )));
+            }
+            Err(issue) => {
+                let reason = match issue {
+                    OrganizationIssue::MissingCaptureDate => "a capture date is required",
+                    OrganizationIssue::MissingValue => "a required token value is missing",
+                    _ => "the resolved name violates the portable naming or extension policy",
+                };
+                return Err(invalid(&format!(
+                    "Example {} is blocked: {reason}. Fix the example or template before saving.",
+                    index + 1
+                )));
+            }
+        }
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
@@ -81,6 +175,11 @@ pub struct OrganizationRow {
     pub root_id: String,
     pub source_path: String,
     pub source_revision: String,
+    /// Display-only components derived by the backend from the lossless native
+    /// relative path. Old immutable rows omit this field and retain their digest.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source_components: Option<Vec<String>>,
     pub target_relative_path: Option<String>,
     pub sequence: u32,
     pub bytes: String,
@@ -379,6 +478,16 @@ pub(crate) fn preview(
             root_id: source.root_id.clone(),
             source_path: source.display_path.clone(),
             source_revision: source.revision.clone(),
+            source_components: source.relative_path.as_deref().and_then(|path| {
+                std::path::Path::new(path)
+                    .components()
+                    .map(|component| match component {
+                        std::path::Component::Normal(name) => name.to_str().map(str::to_owned),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>()
+                    .filter(|parts| !parts.is_empty() && parts.len() <= 65)
+            }),
             target_relative_path,
             sequence,
             bytes: source.bytes.to_string(),

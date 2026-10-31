@@ -196,6 +196,7 @@ impl Library {
 }
 
 fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplate> {
+    validate_template_save(&save)?;
     let tx = db.transaction()?;
     let (id, version) = if let Some(previous) = save.previous {
         let latest: Option<u32> = tx.query_row(
@@ -229,15 +230,33 @@ fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplat
         description: save.description,
         created_at: store::now(),
         template: save.template,
-        policies: TemplatePolicies::default(),
+        policies: TemplatePolicies {
+            sample_inputs: save
+                .samples
+                .iter()
+                .map(encode)
+                .collect::<Result<Vec<_>>>()?,
+            sample_outputs: save
+                .samples
+                .iter()
+                .map(|s| s.expected_target.clone())
+                .collect(),
+            ..TemplatePolicies::default()
+        },
     };
+    let payload = encode(&result)?;
+    if payload.len() > 8192 {
+        return Err(invalid(
+            "The saved template and examples must fit within 8,192 bytes.",
+        ));
+    }
     tx.execute(
         "INSERT INTO organization_templates VALUES(?1,?2,?3,?4)",
         params![
             result.reference.id,
             result.reference.version,
             result.created_at,
-            encode(&result)?
+            payload
         ],
     )?;
     tx.commit()?;
@@ -404,6 +423,17 @@ mod tests {
             destination_file: 2,
         };
         record.view.digest = record.digest().unwrap();
+        // A pre-component schema-3 row must round-trip with an identical
+        // immutable digest. Missing presentation data is not a migration.
+        let mut legacy = record.clone();
+        for row in &mut legacy.view.preview.rows {
+            row.source_components = None;
+        }
+        legacy.view.digest = legacy.digest().unwrap();
+        let legacy_json = encode(&legacy).unwrap();
+        assert!(!legacy_json.contains("sourceComponents"));
+        let decoded_legacy: StoredPlan = decode(&legacy_json, MAX_PLAN_BYTES).unwrap();
+        assert_eq!(decoded_legacy.digest().unwrap(), legacy.view.digest);
         assert!(insert_plan(&mut db, &record, "2").is_err());
         assert_eq!(
             db.query_row("SELECT count(*) FROM organization_plans", [], |r| r
@@ -447,6 +477,7 @@ mod tests {
         let mut db = Connection::open_in_memory().unwrap();
         migrate(&db).unwrap();
         let input = TemplateSave {
+            samples: Vec::new(),
             previous: None,
             name: "Retained".into(),
             description: String::new(),
@@ -493,6 +524,107 @@ mod tests {
                 .template
                 .pattern,
             first.template.pattern
+        );
+    }
+
+    #[test]
+    fn template_examples_are_validated_before_append_and_retained_with_the_version() {
+        let mut db = Connection::open_in_memory().unwrap();
+        migrate(&db).unwrap();
+        let mut input = TemplateSave {
+            previous: None,
+            name: "Examples".into(),
+            description: String::new(),
+            template: OrganizationTemplate {
+                pattern: "{original_stem}.{ext}".into(),
+                event: String::new(),
+                missing_date: MissingDatePolicy::Block,
+            },
+            samples: vec![crate::organization::TemplateSample {
+                relative_path: "Family/Photo.JPG".into(),
+                capture: None,
+                sequence: 1,
+                expected_target: "wrong.JPG".into(),
+            }],
+        };
+        assert_eq!(
+            save_template(&mut db, input.clone()).unwrap_err().code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM organization_templates", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            0
+        );
+        input.samples[0].expected_target = "Photo.JPG".into();
+        let saved = save_template(&mut db, input.clone()).unwrap();
+        assert_eq!(saved.policies.sample_outputs, ["Photo.JPG"]);
+        let sample: crate::organization::TemplateSample =
+            serde_json::from_str(&saved.policies.sample_inputs[0]).unwrap();
+        assert_eq!(sample.relative_path, "Family/Photo.JPG");
+        input.previous = Some(saved.reference.clone());
+        input.template.pattern = "copy/{original_stem}.{ext}".into();
+        assert!(save_template(&mut db, input).is_err());
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM organization_templates", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            1
+        );
+        let payload: String = db
+            .query_row("SELECT payload FROM organization_templates", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let retained = decode::<SavedTemplate>(&payload, 8192).unwrap();
+        assert_eq!(
+            retained.policies.sample_inputs,
+            saved.policies.sample_inputs
+        );
+        assert_eq!(
+            retained.policies.sample_outputs,
+            saved.policies.sample_outputs
+        );
+    }
+
+    #[test]
+    fn template_examples_obey_total_encoded_payload_limit_and_legacy_requests() {
+        let mut db = Connection::open_in_memory().unwrap();
+        migrate(&db).unwrap();
+        let mut input: TemplateSave = serde_json::from_value(serde_json::json!({
+            "previous": null, "name": "Legacy", "description": "",
+            "template": {"pattern": "{original_stem}.{ext}", "event": "", "missingDate": "block"}
+        }))
+        .unwrap();
+        assert!(input.samples.is_empty());
+        let legacy = save_template(&mut db, input.clone()).unwrap();
+        assert!(legacy.policies.sample_inputs.is_empty());
+        let folders = format!("{}/", "a".repeat(200)).repeat(4);
+        input.template.pattern = format!("{folders}{{original_stem}}.{{ext}}");
+        input.description = "d".repeat(1024);
+        input.template.event = "e".repeat(512);
+        input.samples = vec![
+            crate::organization::TemplateSample {
+                relative_path: "Family/Photo.JPG".into(),
+                capture: None,
+                sequence: 1,
+                expected_target: format!("{folders}Photo.JPG"),
+            };
+            4
+        ];
+        // Each input and resolved output fits its individual bounds, but the
+        // immutable payload also includes four paired outputs and JSON escaping.
+        validate_template_save(&input).unwrap();
+        assert_eq!(
+            save_template(&mut db, input).unwrap_err().code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM organization_templates", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            1
         );
     }
 }
