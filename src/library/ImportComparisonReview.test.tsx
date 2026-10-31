@@ -86,6 +86,21 @@ function completed(): ImportComparisonJob {
       excludedOrMissingFiles: 0,
       bundleReviewRequired: true,
       mutationAuthorized: false,
+      bundles: [
+        {
+          bundleAssetIds: ['photo'],
+          fileIds: ['source-file'],
+          disposition: 'review_existing_bundle',
+          existingGroups: [
+            {
+              id: 'b'.repeat(64),
+              rootId: 'keeper-root',
+              members: [{ fileId: 'source-file', assetId: 'keeper' }],
+            },
+          ],
+          reason: 'Complete observed group; fresh verification remains required.',
+        },
+      ],
       files: [
         {
           fileId: 'source-file',
@@ -170,6 +185,8 @@ it('keeps incomplete indexed coverage unknown rather than claiming a new file', 
   result.report!.allScopeAvailable = false;
   result.report!.files[0]!.state = 'needs_attention';
   result.report!.files[0]!.matches = [];
+  result.report!.bundles[0]!.disposition = 'needs_attention';
+  result.report!.bundles[0]!.existingGroups = [];
   result.report!.issues = [
     {
       rootId: 'keeper-root',
@@ -194,6 +211,24 @@ it('rejects a foreign comparison response without showing its report', async () 
   expect(
     screen.queryByRole('heading', { name: 'Observed file comparison' }),
   ).not.toBeInTheDocument();
+});
+it('shows whole-bundle evidence without granting skip permission', async () => {
+  mockRequests();
+  render(<ImportComparisonReview manifest={manifest} />);
+  await chooseScope();
+  await screen.findByText('Whole-bundle import observations (1)');
+  expect(screen.getByText(/1 complete existing groups to review/)).toBeInTheDocument();
+  expect(screen.getByText(/fresh complete-byte verification and/)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /skip|import now/i })).not.toBeInTheDocument();
+});
+it('rejects bundle evidence pointing at an unverified keeper', async () => {
+  const result = completed();
+  result.report!.bundles[0]!.existingGroups[0]!.members[0]!.assetId = 'foreign';
+  mockRequests(result);
+  render(<ImportComparisonReview manifest={manifest} />);
+  await chooseScope();
+  await screen.findByRole('alert');
+  expect(screen.queryByText('Whole-bundle import observations (1)')).not.toBeInTheDocument();
 });
 it('cancels at a read boundary and discards a retained job when its view closes', async () => {
   mockRequests(queued());

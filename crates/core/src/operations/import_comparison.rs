@@ -77,7 +77,37 @@ pub struct ImportComparisonReport {
     pub bundle_review_required: bool,
     pub mutation_authorized: bool,
     pub files: Vec<ImportComparisonFile>,
+    pub bundles: Vec<ImportBundleObservation>,
     pub issues: Vec<ImportComparisonIssue>,
+}
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportBundleDisposition {
+    CopyWholeBundle,
+    ReviewExistingBundle,
+    NeedsAttention,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportBundleMember {
+    pub file_id: String,
+    pub asset_id: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportBundleMatch {
+    pub id: String,
+    pub root_id: String,
+    pub members: Vec<ImportBundleMember>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportBundleObservation {
+    pub bundle_asset_ids: Vec<String>,
+    pub file_ids: Vec<String>,
+    pub disposition: ImportBundleDisposition,
+    pub existing_groups: Vec<ImportBundleMatch>,
+    pub reason: String,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

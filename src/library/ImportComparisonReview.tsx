@@ -37,6 +37,47 @@ function validate(job: ImportComparisonJob, manifest: CopyManifest, roots: strin
       (job.state === 'completed') !== report.allScopeAvailable ||
       report.files.length !== manifest.files.length ||
       new Set(report.files.map((file) => file.fileId)).size !== manifest.files.length ||
+      report.bundles.length === 0 ||
+      report.bundles.length > manifest.files.length ||
+      report.bundles.flatMap((bundle) => bundle.fileIds).length !== manifest.files.length ||
+      new Set(report.bundles.flatMap((bundle) => bundle.fileIds)).size !== manifest.files.length ||
+      report.bundles.some((bundle) => {
+        const members = manifest.files.filter((file) => bundle.fileIds.includes(file.id));
+        const ids = [...new Set(members.flatMap((file) => file.bundleAssetIds))].sort();
+        return (
+          !members.length ||
+          members.length !== bundle.fileIds.length ||
+          JSON.stringify(ids) !== JSON.stringify(bundle.bundleAssetIds) ||
+          manifest.files.some(
+            (file) =>
+              file.bundleAssetIds.some((id) => ids.includes(id)) &&
+              !bundle.fileIds.includes(file.id),
+          ) ||
+          !['copy_whole_bundle', 'review_existing_bundle', 'needs_attention'].includes(
+            bundle.disposition,
+          ) ||
+          (bundle.disposition === 'review_existing_bundle') !== bundle.existingGroups.length > 0 ||
+          (!report.allScopeAvailable && bundle.disposition !== 'needs_attention') ||
+          bundle.existingGroups.length > 4 ||
+          bundle.existingGroups.some(
+            (group) =>
+              !/^[a-f0-9]{64}$/.test(group.id) ||
+              !roots.includes(group.rootId) ||
+              group.members.length !== members.length ||
+              new Set(group.members.map((member) => member.fileId)).size !== members.length ||
+              new Set(group.members.map((member) => member.assetId)).size !== members.length ||
+              group.members.some(
+                (member) =>
+                  !bundle.fileIds.includes(member.fileId) ||
+                  !report.files
+                    .find((file) => file.fileId === member.fileId)
+                    ?.matches.some(
+                      (match) => match.assetId === member.assetId && match.rootId === group.rootId,
+                    ),
+              ),
+          )
+        );
+      }) ||
       report.files.some((file) => {
         const source = manifest.files.find((source) => source.id === file.fileId);
         return (
@@ -287,10 +328,33 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
             Observed {report.observedAt}; this is not an atomic filesystem snapshot.
           </p>
           <p>
-            Matches describe file bytes only. Confirmed bundles and accessible keepers need separate
-            import review. No files were skipped, copied or removed by this comparison. Reports must
-            be rerun after restart.
+            Bundle observations keep confirmed companions together. No files were skipped, copied or
+            removed by this comparison. Existing groups need fresh complete-byte verification and
+            separate import approval. Reports must be rerun after restart.
           </p>
+          <details>
+            <summary>Whole-bundle import observations ({report.bundles.length})</summary>
+            {report.bundles.map((bundle) => (
+              <div key={bundle.fileIds[0]}>
+                <p>
+                  {bundle.fileIds.length} selected members ·{' '}
+                  {bundle.disposition === 'review_existing_bundle'
+                    ? `${bundle.existingGroups.length} complete existing groups to review`
+                    : bundle.disposition === 'copy_whole_bundle'
+                      ? 'Copy the whole bundle'
+                      : 'Bundle needs attention'}
+                </p>
+                <p>{bundle.reason}</p>
+                <ul>
+                  {bundle.fileIds.map((id) => (
+                    <li key={id}>
+                      <bdi>{manifest.files.find((file) => file.id === id)?.sourceName}</bdi>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </details>
           <div className="organization-table-scroll">
             <table>
               <caption>

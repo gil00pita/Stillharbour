@@ -1,5 +1,6 @@
 //! Application workflow; native filesystem effects remain in the central
 //! preparation/copy engine, after a separate exact session approval.
+mod import_bundles;
 mod import_comparison;
 #[cfg(test)]
 pub(in crate::executor) use import_comparison::compare_fixture;

@@ -124,6 +124,18 @@ async function compareGeneratedImportScope(manifest, evidence, outputAudit) {
     assert.equal(finalJob.report.mutationAuthorized, false);
     assert.equal(finalJob.report.bundleReviewRequired, true);
     assert.equal(finalJob.report.files.length, manifest.files.length);
+    assert.deepEqual(
+      finalJob.report.bundles.flatMap((bundle) => bundle.fileIds).sort(),
+      manifest.files.map((file) => file.id).sort(),
+    );
+    if (!finalJob.report.allScopeAvailable) {
+      assert.ok(
+        finalJob.report.bundles.every((bundle) => bundle.disposition === 'needs_attention'),
+      );
+    }
+    const bundleSummary = await $('summary*=Whole-bundle import observations');
+    await bundleSummary.waitForExist();
+    await bundleSummary.click();
     assert.ok(finalJob.report.files.some((file) => file.matches.length > 0));
     assert.ok(
       finalJob.report.files

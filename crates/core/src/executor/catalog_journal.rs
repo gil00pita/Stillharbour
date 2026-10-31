@@ -1316,6 +1316,13 @@ mod tests {
         assert!(!report.mutation_authorized);
         assert!(report.bundle_review_required);
         assert_eq!(report.files.len(), 2);
+        assert_eq!(report.bundles.len(), 1);
+        assert_eq!(
+            report.bundles[0].disposition,
+            crate::operations::ImportBundleDisposition::ReviewExistingBundle
+        );
+        assert_eq!(report.bundles[0].existing_groups.len(), 1);
+        assert_eq!(report.bundles[0].existing_groups[0].members.len(), 2);
         assert!(
             report
                 .files

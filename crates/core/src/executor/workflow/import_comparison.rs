@@ -102,6 +102,7 @@ struct Raw {
     native_file: String,
     revision: String,
     bytes: u64,
+    media: bool,
 }
 fn load_root(
     catalog: &Catalog,
@@ -117,7 +118,7 @@ fn load_root(
         let unresolved:u32=db.query_row("SELECT count(*) FROM assets WHERE root_id=? AND presence NOT IN ('present','missing','excluded')",[&id],|r|r.get(0))?;
         let complete=complete_scan && unresolved==0;
         let excluded:u32=db.query_row("SELECT count(*) FROM assets WHERE root_id=? AND presence IN ('missing','excluded')",[&id],|r|r.get(0))?;
-        let mut query=db.prepare("SELECT CASE WHEN length(CAST(id AS BLOB))<=128 THEN id END,CASE WHEN length(relative_native)<=8192 THEN relative_native END,CASE WHEN length(native_file)<=128 THEN native_file END,CASE WHEN length(revision)=64 THEN revision END,bytes FROM assets WHERE root_id=?1 AND presence='present' ORDER BY id LIMIT ?2")?;
+        let mut query=db.prepare("SELECT CASE WHEN length(CAST(id AS BLOB))<=128 THEN id END,CASE WHEN length(relative_native)<=8192 THEN relative_native END,CASE WHEN length(native_file)<=128 THEN native_file END,CASE WHEN length(revision)=64 THEN revision END,bytes,is_media FROM assets WHERE root_id=?1 AND presence='present' ORDER BY id LIMIT ?2")?;
         let mut rows=query.query(params![id,(remaining+1) as i64])?;
         let mut files=Vec::new();
         while let Some(row)=rows.next()? {
@@ -125,7 +126,7 @@ fn load_root(
             let location:Option<Vec<u8>>=row.get(1)?;
             let identity:Option<String>=row.get(2)?;
             let revision:Option<String>=row.get(3)?;
-            files.push(Raw{id:asset_id.ok_or_else(||failed("An indexed asset ID exceeds its bound."))?,location:location.ok_or_else(||failed("An indexed native locator exceeds its bound."))?,native_file:identity.ok_or_else(||failed("An indexed native identity exceeds its bound."))?,revision:revision.ok_or_else(||failed("An indexed file revision is invalid."))?,bytes:row.get::<_,i64>(4)?.try_into().map_err(|_|failed("An indexed file length is negative."))?});
+            files.push(Raw{id:asset_id.ok_or_else(||failed("An indexed asset ID exceeds its bound."))?,location:location.ok_or_else(||failed("An indexed native locator exceeds its bound."))?,native_file:identity.ok_or_else(||failed("An indexed native identity exceeds its bound."))?,revision:revision.ok_or_else(||failed("An indexed file revision is invalid."))?,bytes:row.get::<_,i64>(4)?.try_into().map_err(|_|failed("An indexed file length is negative."))?,media:row.get(5)?});
             if files.len()>remaining {return Err(failed("Compare at most 4,096 indexed candidate files. Choose a smaller root scope."));}
         }
         Ok((Root{id,path:native::decode_path(&path)?,object,volume,scan},files,excluded,complete))
@@ -302,6 +303,7 @@ fn run(
         .map(|file| file.bytes)
         .collect::<BTreeSet<_>>();
     let mut candidates = Vec::new();
+    let mut media = BTreeSet::new();
     for index in 0..scope.roots.len() {
         let root = &scope.roots[index];
         let file = scope.lease.directory(index).leaf();
@@ -310,6 +312,9 @@ fn run(
                 return Ok(IoStep::Canceled);
             }
             let id = raw.id.clone();
+            if raw.media {
+                media.insert(id.clone());
+            }
             match entry(raw, root, file) {
                 Ok(entry) => candidates.push((index, entry)),
                 Err(error) => scope.issues.push(issue(&root.id, Some(id), error)),
@@ -554,6 +559,59 @@ fn run(
             file.open(source_root)?;
         }
     }
+    let (draft, manifest) = workflow.catalog.call({
+        let owner = input.plan_id.clone();
+        let manifest = input.manifest_id.clone();
+        move |db| {
+            Ok((
+                crate::library::operation_store::load(db, &owner)?,
+                crate::library::copy_manifest::load(db, &owner, &manifest)?,
+            ))
+        }
+    })?;
+    if manifest.view.digest != source.manifest_digest || draft.view.digest != source.owner_digest {
+        return Err(failed(
+            "The import source manifest changed during comparison.",
+        ));
+    }
+    let members = manifest
+        .files
+        .iter()
+        .map(|file| {
+            Ok(super::import_bundles::Member {
+                id: file.view.id.clone(),
+                bundles: file.view.bundle_asset_ids.clone(),
+                path: native::decode_path(&file.relative_native)?,
+                primary: draft.sources.iter().any(|primary| {
+                    primary.root_id == file.view.root_id
+                        && native::decode_path(&primary.native_path).is_ok_and(|path| {
+                            native::decode_path(&file.relative_native)
+                                .is_ok_and(|member| path == member)
+                        })
+                }),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let mut keepers = Vec::new();
+    for file in &files {
+        for found in &file.matches {
+            let candidate = candidates
+                .iter()
+                .find(|(_, candidate)| {
+                    candidate.id == found.asset_id && candidate.root_id == found.root_id
+                })
+                .ok_or_else(|| failed("A compared bundle candidate is unavailable."))?;
+            keepers.push(super::import_bundles::Keeper {
+                source: file.file_id.clone(),
+                asset: found.asset_id.clone(),
+                root: found.root_id.clone(),
+                path: native::decode_path(&candidate.1.location.relative_native)?,
+                media: media.contains(&found.asset_id),
+            });
+        }
+    }
+    let bundles =
+        super::import_bundles::observe(&members, &keepers, &files, scope.issues.is_empty());
     Ok(IoStep::Completed(ImportComparisonReport {
         policy: "indexed-import-comparison-v1".into(),
         sample_policy: fingerprints::SAMPLE_POLICY.into(),
@@ -565,6 +623,7 @@ fn run(
         bundle_review_required: true,
         mutation_authorized: false,
         files,
+        bundles,
         issues: scope.issues,
     }))
 }

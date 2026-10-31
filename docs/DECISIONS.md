@@ -263,3 +263,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Read-only import comparison - 2026-10-31
 
 [ADR-0045](decisions/ADR-0045-read-only-import-comparison.md) adds bounded ephemeral comparison jobs against explicitly selected indexed roots. Size/sample/full BLAKE3 filters always precede direct byte equality evidence, with native version/membership checks and shared pacing/cancellation. Referenced reads do not enable managed copying. Offline, inaccessible and incomplete scope stays unknown. Reports grant no skip/removal authority; bundle-aware import planning and execution remain unfinished.
+
+## Whole-bundle import observations - 2026-10-31
+
+[ADR-0046](decisions/ADR-0046-import-bundle-observations.md) groups connected confirmed companions and requires coherent native folder/stem mappings, distinct byte-compared keepers and indexed-media primary matches before showing an existing bundle. Incomplete/ambiguous layouts require attention. Observations grant no execution authority.
