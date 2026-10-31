@@ -18,12 +18,14 @@ it('keeps the tiny preview until the clear image actually loads, then reveals wi
     <TileImage {...props} tinyPreview={result(32, 'ready')} preview={result(256, 'pending')} />,
   );
   expect(container.querySelectorAll('img')).toHaveLength(1);
+  expect(container.querySelector('img')).toHaveClass('photo-tiny-preview');
   expect(container.querySelector('.photo-area')).toHaveStyle({ height: '180px' });
   expect(container.querySelector('.t-skel')).not.toHaveClass('is-revealed');
   rerender(
     <TileImage {...props} tinyPreview={result(32, 'ready')} preview={result(256, 'ready')} />,
   );
   expect(container.querySelectorAll('img')).toHaveLength(2);
+  expect(container.querySelector('.t-skel-content')).not.toHaveClass('photo-tiny-preview');
   expect(container.querySelector('.t-skel')).not.toHaveClass('is-revealed');
   fireEvent.load(container.querySelector('img.t-skel-content')!);
   expect(container.querySelector('.t-skel')).toHaveClass('is-revealed');
@@ -62,9 +64,11 @@ it('uses an indexed smaller clear rendition while a larger tier is loading or un
     />,
   );
   expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/512/'));
+  expect(container.querySelector('img')).not.toHaveClass('photo-tiny-preview');
   fireEvent.error(container.querySelector('img')!);
   fireEvent.error(container.querySelector('img')!);
   expect(container.querySelector('img')).toHaveAttribute('src', expect.stringContaining('/32/'));
+  expect(container.querySelector('img')).toHaveClass('photo-tiny-preview');
   rerender(
     <TileImage
       {...props}

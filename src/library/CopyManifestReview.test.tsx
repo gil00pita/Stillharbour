@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { BundleConfirmation, CopyManifest, OrganizationPlanDetail } from '../bindings';
 import { libraryData } from '../ipc';
@@ -88,7 +88,9 @@ it('requires explicit decisions and sends only retained IDs, preserving exact by
   expect(screen.getByRole('button', { name: 'Compile copy review' })).toBeDisabled();
   view.rerender(<CopyManifestReview detail={detail} choices={{ photo: choice }} />);
   fireEvent.click(screen.getByRole('button', { name: 'Compile copy review' }));
-  expect(await screen.findByRole('heading', { name: 'Compiled file manifest' })).toHaveFocus();
+  await waitFor(() =>
+    expect(screen.getByRole('heading', { name: 'Compiled file manifest' })).toHaveFocus(),
+  );
   expect(libraryData).toHaveBeenCalledWith(
     {
       kind: 'organization_copy_manifest',

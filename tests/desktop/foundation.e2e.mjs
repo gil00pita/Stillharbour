@@ -87,6 +87,50 @@ async function preparationLayout() {
     };
   });
 }
+async function assertPhotoScanningArt() {
+  const art = await browser.execute(() => {
+    const image = document.querySelector('.photo-scanning-art');
+    const lens = image?.querySelector('.photo-scanning-lens');
+    const box = image?.getBoundingClientRect();
+    return {
+      active: image?.getAttribute('data-active'),
+      decorative: image?.getAttribute('aria-hidden'),
+      fits: box?.width > 0 && box.left >= 0 && box.right <= window.innerWidth,
+      animation: lens && getComputedStyle(lens).animationName,
+      expectedAnimation: matchMedia('(prefers-reduced-motion: reduce)').matches
+        ? 'none'
+        : 'photo-scan-search',
+    };
+  });
+  assert.equal(art.active, 'true');
+  assert.equal(art.decorative, 'true');
+  assert.equal(art.fits, true);
+  assert.equal(art.animation, art.expectedAnimation);
+  const palettes = await browser.execute(() => {
+    const root = document.documentElement;
+    const previous = root.getAttribute('data-theme');
+    const image = document.querySelector('.photo-scanning-art');
+    const lens = image.querySelector('.photo-scanning-lens');
+    const frame = image.querySelector('.photo-scanning-card rect');
+    const palette = () => ({
+      accent: getComputedStyle(lens).stroke,
+      frame: getComputedStyle(frame).fill,
+    });
+    try {
+      root.setAttribute('data-theme', 'light');
+      const light = palette();
+      root.setAttribute('data-theme', 'dark');
+      return { light, dark: palette() };
+    } finally {
+      if (previous === null) root.removeAttribute('data-theme');
+      else root.setAttribute('data-theme', previous);
+    }
+  });
+  assert.deepEqual(palettes, {
+    light: { accent: 'rgb(55, 120, 89)', frame: 'rgb(255, 255, 255)' },
+    dark: { accent: 'rgb(182, 214, 200)', frame: 'rgb(29, 33, 35)' },
+  });
+}
 async function assertFormControlsAligned(selector) {
   const controls = await browser.execute((selector) => {
     const root = document.querySelector(selector);
@@ -414,6 +458,7 @@ describe('native read-only library', () => {
             ['minimum', 660, 560],
           ]) {
             await browser.setWindowSize(width, height);
+            await assertPhotoScanningArt();
             const layout = await preparationLayout();
             assert.deepEqual(layout, {
               fits: true,
@@ -1077,6 +1122,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         ['minimum', 660, 560],
       ]) {
         await browser.setWindowSize(width, height);
+        await assertPhotoScanningArt();
         const layout = await preparationLayout();
         assert.deepEqual(layout, {
           fits: true,
@@ -1512,16 +1558,20 @@ describeMac('macOS M1 library — generated native fixtures', () => {
                 [...row.querySelectorAll('.asset')].map((asset) => asset.dataset.date.slice(0, 10)),
               ).size <= 1,
           ),
-          noFilters: [
-            ...document.querySelectorAll('.photo-layers, .photo-layers img, .t-skel-skeleton'),
-          ].every((element) => getComputedStyle(element).filter === 'none'),
+          clippedPreviews: [...document.querySelectorAll('.photo-layers')].every(
+            (element) => getComputedStyle(element).overflow === 'hidden',
+          ),
+          blurredTinyPreviews: [...document.querySelectorAll('.photo-tiny-preview')].every(
+            (element) => getComputedStyle(element).filter === 'blur(8px)',
+          ),
         };
       });
       assert.deepEqual(sticky, {
         aligned: true,
         sticky: true,
         separateDays: true,
-        noFilters: true,
+        clippedPreviews: true,
+        blurredTinyPreviews: true,
       });
       await browser.saveScreenshot(`.context/screenshots/gallery-dates-sticky-${size}.png`);
       await browser.saveScreenshot(`.context/screenshots/photo-canvas-timeline-${size}.png`);
