@@ -9,6 +9,8 @@ npm ci
 npm run desktop:dev
 ```
 
+To prefetch the exact Rust dependency graph without changing versions, run `node scripts/cargo.mjs fetch --locked`. Cargo stores dependencies in its user cache. A restricted agent sandbox may need approved access both to crates.io and to that cache; an offline missing-package error can also reflect denied cache access. Do not change dependency pins or cache permissions to work around that restriction.
+
 The native command uses Conductor's allocated port when present and updates both Vite and Tauri's dev URL. Vite binds loopback and fails on port collisions. `npm run dev` alone opens a frontend development server; outside Tauri, the UI truthfully reports the missing native connection. It has no successful browser fallback.
 
 Conductor configuration lives in `.conductor/settings.toml`. Each worktree gets its own debug catalog under `.context/native-data`, so desktop development can run concurrently across workspaces. Conductor's Mac client reads shared settings after they reach the remote default branch; the commands can be run directly immediately. Native test sessions own fresh temporary catalogs and generated source folders; they do not share the development or production catalog.
@@ -341,3 +343,7 @@ The Windows native harness creates `.context/windows-directory-selection` recurs
 For native validation, build with desktop:test:build and run desktop:test serially. If a development executable is running, use an isolated CARGO_TARGET_DIR and an ignored WDIO wrapper setting both the service and capability executable paths plus absolute spec paths. The Windows case creates only backend-owned media, performs real Save & Start scanning and cached-image loading, and calls the native fixture verifier in finally. Evidence includes windows-library-desktop/minimum screenshots and source/preview receipts under .context/windows-directory-selection. Its fixture baseline covers native names and regular-file bytes, sizes, creation/write times and Windows attributes; access-time updates remain OS behavior. An unsupported-selection case separately verifies role=alert, the disabled action's description and zero roots/jobs. It uses mocked picker data, never a real user drive.
 
 Large flat NTFS directories incur repeated membership enumeration and have no throughput acceptance result. Do not generalize this local fixture evidence to all Windows volumes, remote filesystems, EXIF/RAW/HEIC/ICC support, signed installers or preservation/recovery. The existing generic original no-replace/durability guard remains closed; only private regenerable cache publication has a Windows hard-link adapter.
+
+## Empty library presentation — 2026-10-31
+
+The no-root welcome uses the owner-supplied assets/branding/empty-library.svg, a short source-preservation description and Import photos. This action reuses native folder selection and explicit scan setup. Existing filtered-empty, loading, scan and preparation states remain distinct. Validate onboarding with src/App.test.tsx and the native foundation suite; use only generated media for native checks. No copying or mutation capability is added.

@@ -8,21 +8,9 @@ import { LibraryScreen, type Section } from './library/LibraryScreen';
 import { FolderExplorer } from './library/FolderExplorer';
 import { RootSetup } from './library/RootSetup';
 import logo from '../assets/branding/stillharbour-logo.svg';
+import emptyLibrary from '../assets/branding/empty-library.svg';
 
 type AppSection = Section | 'Settings';
-
-function FolderIcon() {
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-      <path
-        d="M5 12a3 3 0 0 1 3-3h9l4 4h11a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V12Z"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <path d="M5 18h30" stroke="currentColor" strokeWidth="1.5" />
-    </svg>
-  );
-}
 
 export default function App() {
   const app = useFoundation();
@@ -249,16 +237,16 @@ function LibraryWelcome({
 }) {
   return (
     <section className="welcome" aria-labelledby="welcome-title">
-      <div className="folder-mark">
-        <FolderIcon />
-      </div>
+      <img className="empty-library-art" src={emptyLibrary} alt="" width="302" height="215" />
       <h2 id="welcome-title">
-        {hasLibrary
-          ? 'Add another library folder.'
-          : 'Start by selecting your Photo library folder.'}
+        {hasLibrary ? 'Add another library folder.' : 'Your library is waiting'}
       </h2>
+      <p className="welcome-description">
+        Choose a folder to bring your photos and videos into Stillharbour. Your originals stay in
+        place.
+      </p>
       <button className="primary" onClick={onChoose} disabled={disabled}>
-        {busy ? 'Please wait…' : 'Choose a folder'}
+        {busy ? 'Please wait…' : 'Import photos'}
       </button>
     </section>
   );

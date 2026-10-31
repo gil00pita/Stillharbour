@@ -1108,3 +1108,19 @@ The supervised baseline worker supplies dimensions/orientation/content digest un
 **Final local checks:** npm run check passes: 208 frontend/harness tests and 70 Rust tests, strict types, lint/format, generated bindings, Rustfmt, denied-warning Clippy and production frontend build. The isolated native run passes all three Windows cases in 18 seconds. Git whitespace checks pass. Commit/push this harness-only correction to the existing PR; hosted results will be checked separately.
 
 **Release exclusions:** the first sandboxed release check cannot reach crates.io; rerun with network access passes production configuration/default-graph instrumentation exclusions, reviewed helper manifest and production frontend test-route exclusions.
+
+## 2026-10-31 — Illustrated empty library
+
+**Request/scope:** add the supplied SVG, a description and an import button when the library is empty. Replace the no-root welcome icon with assets/branding/empty-library.svg, preserving its paths, gradients and dimensions. Use a responsive decorative image, “Your library is waiting”, concise folder-selection/source-preservation copy and “Import photos”. The button reuses native folder selection and explicit scan setup, including readiness, cancellation and error handling. Filtered-empty, scan/preparation and query-error behavior remains unchanged; no original operations or dependency changes are introduced.
+
+**Files/documentation:** update App.tsx, shared styles, existing onboarding component/native assertions, DESIGN.md, the specification, AC-001 and the development guide. The selected product logo is unchanged.
+
+**Validation:** npm run check passes formatting, lint, strict types and all 208 frontend/harness tests, then fails at bindings:check because crates.io is unreachable while resolving version_check. Separate offline rust:check and desktop:test:build attempts also stop on that missing cached dependency; the instrumented frontend build itself passes. Native desktop tests cannot run without the executable, so no new native screenshot or platform result is claimed. Production npm run build passes and is restored after the instrumented attempt. Git diff --check passes. Rust Clippy/tests, bindings verification, native smoke and packaging remain unverified in this workspace. No real user library is scanned or changed. Next gate remains the existing M2 persistent planning/confirmed-companion and preservation gates.
+
+## 2026-10-31 — Fetch locked Rust dependencies
+
+**Request/scope:** install the Rust dependency that blocked empty-state validation. Run node scripts/cargo.mjs fetch --locked with approved network/cache access. Fetch completes successfully; version_check 0.9.5 subsequently compiles. No manifest, lockfile, dependency version or Cargo-cache permission changes. The ordinary sandbox still reports the package missing because access to its cache entry is denied; run validation with approved cache access rather than weakening permissions. Document the prefetch command and this distinction in docs/DEVELOPMENT.md.
+
+**Validation:** generated bindings verification and Rustfmt pass; workspace/all-target fixture-probe Clippy passes with warnings denied. Rust workspace tests follow below. Existing empty-state frontend/build evidence remains valid; this request introduces no application change or library operation. Native desktop smoke and packaging remain separate gates; M2 and preservation gates are unchanged.
+
+**Final outcome:** npm run bindings:check and npm run rust:check both exit 0 with approved cache access and CARGO_NET_OFFLINE=true. Rustfmt, denied-warning workspace/all-target Clippy and all 70 Windows-applicable Rust tests pass (66 unit, one supervised-worker integration, three Windows library integrations). Generated disposable fixtures only; macOS-only cases are not executed on this host. Lockfiles remain unchanged. Documentation formatting and git diff --check pass.
