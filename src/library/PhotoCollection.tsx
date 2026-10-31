@@ -6,7 +6,6 @@ import { AssetBrowser, type PhotoViewportHandle } from './AssetBrowser';
 import type { GalleryDisplay } from './FilterPanel';
 import type { TextColumn } from './textColumns';
 import { DateTimeline } from './DateTimeline';
-import { EmptyLibraryArt } from '../EmptyLibraryArt';
 export function PhotoCollection({
   display,
   viewportHandle,
