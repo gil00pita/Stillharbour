@@ -35,16 +35,14 @@ beforeEach(() => {
   vi.mocked(pickDirectory).mockReset();
 });
 async function ready() {
-  await waitFor(() =>
-    expect(screen.getByRole('button', { name: 'Choose a folder' })).toBeEnabled(),
-  );
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Import photos' })).toBeEnabled());
 }
 describe('native library onboarding', () => {
   it('shows a native failure and retries without presenting a working library', async () => {
     vi.mocked(getStatus).mockRejectedValueOnce(new Error('Desktop connection unavailable.'));
     render(<App />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Desktop connection unavailable.');
-    expect(screen.getByRole('button', { name: 'Choose a folder' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Import photos' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
     await ready();
   });
@@ -58,14 +56,16 @@ describe('native library onboarding', () => {
       .mockResolvedValueOnce(null);
     render(<App />);
     await ready();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose a folder' }));
+    expect(screen.getByText(/Your originals stay in place/)).toBeVisible();
+    expect(document.querySelector('.empty-library-art')).toHaveAttribute('alt', '');
+    fireEvent.click(screen.getByRole('button', { name: 'Import photos' }));
     await screen.findByText('Selected folder');
     expect(screen.getByRole('textbox', { name: 'Library name' })).toHaveFocus();
     expect(screen.getByText('Not scanned')).toBeVisible();
     expect(library).not.toHaveBeenCalled();
-    expect(screen.queryByRole('button', { name: 'Choose a folder' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import photos' })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Start by selecting your Photo library folder.' }),
+      screen.queryByRole('heading', { name: 'Your library is waiting' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Local by design.')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Application version')).toHaveTextContent('Version 0.1.0');
@@ -94,7 +94,7 @@ describe('native library onboarding', () => {
     });
     render(<App />);
     await ready();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose a folder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import photos' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Save & Start scanning' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'This folder overlaps an existing library.',
@@ -110,7 +110,7 @@ describe('native library onboarding', () => {
     });
     render(<App />);
     await ready();
-    fireEvent.click(screen.getByRole('button', { name: 'Choose a folder' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Import photos' }));
     expect(await screen.findByRole('button', { name: 'Save & Start scanning' })).toBeDisabled();
     expect(screen.getByRole('alert')).toHaveTextContent('Scanning is unavailable for this folder');
     expect(screen.getByRole('alert')).toHaveTextContent('ordinary local NTFS');
@@ -125,9 +125,9 @@ it('returns to the folder chooser when the selected form is canceled', async () 
   vi.mocked(pickDirectory).mockResolvedValue(selectedDirectory());
   render(<App />);
   await ready();
-  fireEvent.click(screen.getByRole('button', { name: 'Choose a folder' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Import photos' }));
   fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
-  expect(screen.getByRole('button', { name: 'Choose a folder' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Import photos' })).toBeVisible();
   expect(screen.queryByText('Selected folder')).not.toBeInTheDocument();
 });
 function selectedDirectory() {
@@ -149,7 +149,7 @@ it('keeps failed settings explicit and retries without silently using defaults',
   vi.mocked(getPreferences).mockRejectedValueOnce(new Error('Saved settings could not be read'));
   render(<App />);
   expect(await screen.findByRole('alert')).toHaveTextContent('Saved settings could not be read');
-  expect(screen.queryByRole('button', { name: 'Choose a folder' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Import photos' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Retry settings' }));
   await ready();
 });

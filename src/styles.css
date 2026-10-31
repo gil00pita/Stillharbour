@@ -265,9 +265,18 @@ h1 {
   max-width: 570px;
   margin: 0 auto;
 }
-.folder-mark {
-  color: var(--accent);
-  margin-bottom: 24px;
+.empty-library-art {
+  display: block;
+  width: min(302px, 100%);
+  height: auto;
+  margin: 0 auto 24px;
+}
+.welcome-description {
+  max-width: 380px;
+  margin: 16px auto 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
 }
 h2 {
   font-size: clamp(24px, 3vw, 31px);
