@@ -135,6 +135,177 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
         "filesystem_modified" | "filesystem_created"
     )));
     let root_id = page.assets[0].root_id.clone();
+    // Destination preflight is read-only and bound to this exact preview.
+    settle(&library);
+    let template = stillharbour_core::organization::OrganizationTemplate {
+        pattern: "{original_stem}.{ext}".into(),
+        event: String::new(),
+        missing_date: stillharbour_core::organization::MissingDatePolicy::Undated,
+    };
+    let ids = page
+        .assets
+        .iter()
+        .map(|asset| asset.id.clone())
+        .collect::<Vec<_>>();
+    let preview = library
+        .organization_preview(ids.clone(), template.clone())
+        .unwrap();
+    let destination = tempfile::tempdir().unwrap();
+    fs::write(
+        destination.path().join("destination-only.txt"),
+        b"retain destination",
+    )
+    .unwrap();
+    let check = |path: &Path, fingerprint: String, volume_override: Option<&str>| {
+        let handle = filesystem::open_directory_readonly(path).unwrap();
+        let expected = (
+            filesystem::identity(&handle).unwrap(),
+            volume_override.map(str::to_owned).unwrap_or_else(|| {
+                stillharbour_core::library::native::volume_token(&handle).unwrap()
+            }),
+        );
+        drop(handle);
+        library.organization_destination(
+            ids.clone(),
+            template.clone(),
+            fingerprint,
+            path.to_owned(),
+            expected,
+        )
+    };
+    let review = check(destination.path(), preview.fingerprint.clone(), None).unwrap();
+    assert!(!review.execution_available && !review.persisted);
+    assert_eq!(review.preview_fingerprint, preview.fingerprint);
+    assert_eq!(
+        review.fingerprint,
+        check(destination.path(), preview.fingerprint.clone(), None)
+            .unwrap()
+            .fingerprint
+    );
+    for path in [
+        source.path(),
+        &source.path().join("nested"),
+        data.path(),
+        destination.path().parent().unwrap(),
+    ] {
+        assert!(check(path, preview.fingerprint.clone(), None).is_err());
+    }
+    assert_eq!(
+        check(destination.path(), "stale".into(), None)
+            .unwrap_err()
+            .code,
+        ErrorCode::Conflict
+    );
+    assert_eq!(
+        check(
+            destination.path(),
+            preview.fingerprint.clone(),
+            Some("wrong-volume")
+        )
+        .unwrap_err()
+        .code,
+        ErrorCode::Conflict
+    );
+    assert_eq!(
+        fs::read(destination.path().join("destination-only.txt")).unwrap(),
+        b"retain destination"
+    );
+    assert_eq!(fs::read_dir(destination.path()).unwrap().count(), 1);
+    // Saved versions and drafts change only the catalog, survive reopening and
+    // retain the old template even when a new version is saved.
+    use stillharbour_core::operations::{
+        PlanDraftInput, PlanExportFormat, PlanState, TemplateSave,
+    };
+    let saved = library
+        .organization_template_save(TemplateSave {
+            previous: None,
+            name: "Fixture template".into(),
+            description: "Generated sources".into(),
+            template: template.clone(),
+        })
+        .unwrap();
+    let handle = filesystem::open_directory_readonly(destination.path()).unwrap();
+    let expected = (
+        filesystem::identity(&handle).unwrap(),
+        stillharbour_core::library::native::volume_token(&handle).unwrap(),
+    );
+    drop(handle);
+    let draft = library
+        .organization_plan_create(
+            PlanDraftInput {
+                asset_ids: ids.clone(),
+                template: template.clone(),
+                preview_fingerprint: preview.fingerprint.clone(),
+                template_reference: Some(saved.reference.clone()),
+            },
+            destination.path().to_owned(),
+            expected,
+        )
+        .unwrap();
+    assert_eq!(draft.plan.state, PlanState::Draft);
+    assert!(!draft.plan.execution_available && !draft.stale);
+    assert_eq!(draft.plan.blockers.len(), 4);
+    let next = library
+        .organization_template_save(TemplateSave {
+            previous: Some(saved.reference.clone()),
+            name: "Fixture template".into(),
+            description: "New version".into(),
+            template: stillharbour_core::organization::OrganizationTemplate {
+                pattern: "new/{original_stem}.{ext}".into(),
+                ..template.clone()
+            },
+        })
+        .unwrap();
+    assert_eq!(next.reference.version, 2);
+    assert_eq!(library.organization_templates().unwrap().len(), 1);
+    assert_eq!(
+        library
+            .organization_plan(draft.plan.id.clone())
+            .unwrap()
+            .plan
+            .template_reference
+            .unwrap()
+            .version,
+        1
+    );
+    let json = library
+        .organization_plan_export(draft.plan.id.clone(), PlanExportFormat::Json)
+        .unwrap();
+    assert!(!json.text.contains("destination_native"));
+    let csv = library
+        .organization_plan_export(draft.plan.id.clone(), PlanExportFormat::Csv)
+        .unwrap();
+    assert_eq!(csv.text.lines().count(), 4);
+    library
+        .annotate(
+            AssetSelection::Ids {
+                ids: vec![ids[0].clone()],
+            },
+            AnnotationPatch {
+                favorite: Some(true),
+                rating: None,
+                tags: None,
+            },
+        )
+        .unwrap();
+    assert!(
+        library
+            .organization_plan(draft.plan.id.clone())
+            .unwrap()
+            .stale
+    );
+    let frozen_digest = draft.plan.digest.clone();
+    settle(&library);
+    drop(library);
+    drop(catalog);
+    let (catalog, library) = open(data.path());
+    let reopened = library.organization_plan(draft.plan.id.clone()).unwrap();
+    assert!(reopened.stale);
+    assert_eq!(reopened.plan.digest, frozen_digest);
+    assert_eq!(
+        library.organization_plans(None).unwrap().plans[0].id,
+        draft.plan.id
+    );
     assert!(
         library
             .register(
@@ -215,9 +386,41 @@ fn missing_and_replaced_ntfs_roots_retain_inventory_and_require_identity_match()
     wait(&library, &job.id);
     settle(&library);
     let root_id = library.status().unwrap().roots[0].id.clone();
+    let destination = tempfile::tempdir().unwrap();
+    let destination_review = || {
+        let ids = library
+            .query(AssetQuery::default(), None, 240)
+            .unwrap()
+            .assets
+            .into_iter()
+            .map(|asset| asset.id)
+            .collect::<Vec<_>>();
+        let template = stillharbour_core::organization::OrganizationTemplate {
+            pattern: "{original_stem}.{ext}".into(),
+            event: String::new(),
+            missing_date: stillharbour_core::organization::MissingDatePolicy::Undated,
+        };
+        let preview = library
+            .organization_preview(ids.clone(), template.clone())
+            .unwrap();
+        let handle = filesystem::open_directory_readonly(destination.path()).unwrap();
+        let expected = (
+            filesystem::identity(&handle).unwrap(),
+            stillharbour_core::library::native::volume_token(&handle).unwrap(),
+        );
+        drop(handle);
+        library.organization_destination(
+            ids,
+            template,
+            preview.fingerprint,
+            destination.path().to_owned(),
+            expected,
+        )
+    };
     // External fixture changes only, under this run's owned parent.
     fs::rename(&source, &offline).unwrap();
     assert_eq!(library.status().unwrap().roots[0].availability, "offline");
+    assert!(destination_review().is_err());
     assert_eq!(
         library
             .query(AssetQuery::default(), None, 240)
@@ -235,6 +438,7 @@ fn missing_and_replaced_ntfs_roots_retain_inventory_and_require_identity_match()
         library.status().unwrap().roots[0].availability,
         "needs_relink"
     );
+    assert_eq!(destination_review().unwrap_err().code, ErrorCode::Conflict);
     assert_eq!(
         library
             .scan(root_id.clone(), ScanFilter::default())

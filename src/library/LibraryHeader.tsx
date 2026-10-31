@@ -10,6 +10,7 @@ export function LibraryHeader({
   onFilter,
   filterOpen,
   activeCount,
+  onPlans,
 }: {
   jobsControl?: ReactNode;
   navigationControl?: ReactNode;
@@ -20,6 +21,7 @@ export function LibraryHeader({
   onFilter: () => void;
   filterOpen: boolean;
   activeCount: number;
+  onPlans?: () => void;
 }) {
   return (
     <header className="toolbar photo-toolbar">
@@ -48,6 +50,11 @@ export function LibraryHeader({
         Filter{activeCount > 0 && <span className="filter-count">{activeCount}</span>}
       </button>
       {jobsControl}
+      {onPlans && (
+        <button onClick={onPlans} disabled={busy}>
+          Saved plans
+        </button>
+      )}
     </header>
   );
 }

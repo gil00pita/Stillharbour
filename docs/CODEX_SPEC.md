@@ -194,6 +194,8 @@ Retain the cache index as a durable retry list until deletions and cache-directo
 
 Use a streaming discovery pipeline: enumerate permitted entries -> record stat/identity -> identify format -> metadata and companion association -> schedule thumbnails -> optional integrity/hash work. Discoveries are committed in bounded batches. A bad file must not terminate the scan.
 
+Windows local NTFS membership validation uses bounded exact-name queries on fresh held-directory handles, with exact native-name/ID checks before and after child opening. Avoid full sibling enumeration per ordinary file; native names containing DOS search metacharacters retain literal enumeration. Preserve root/volume/revision checks, no-reparse/no-recall behavior and incomplete-inventory handling. See ADR-0021 for the native API boundary and measured lookup-only evidence; no end-to-end throughput guarantee is implied.
+
 Treat filesystem notifications as invalidation hints. Debounce bursts and do a reconciliation scan after restart, root reconnection, missed notifications, or a user request. Scope disappearance checks to a successfully completed directory scan; do not mark an entire root missing after one error.
 
 Store the observed extension and independently detected format. A misleading extension is a warning, not automatic corruption. Preserve original metadata values and their provenance before deriving normalized fields.
@@ -256,7 +258,7 @@ Unknown XMP namespaces and existing editing instructions must be preserved on an
 
 ## 9. Organization templates and dry-run preview
 
-Current M2 implementation (owner continuation, 2026-10-30): [organization template previews](M2_ORGANIZATION_PREVIEWS.md) implement the first catalog-only slice for 1–240 explicit photo IDs. Editable session presets/custom DSL produce relative names and typed issues with deterministic snapshot fingerprints. Destination-aware persistent plans, saved templates, trees/export, confirmed companions, approvals and execution remain pending. This slice does not relax sections 9–10 or preservation/native acceptance gates.
+Current M2 implementation (owner continuation, 2026-10-31): [organization planning](M2_ORGANIZATION_PREVIEWS.md) supports 1–240 explicit photo IDs, relative previews, indexed companion review, destination identity/overlap, immutable saved template versions and schema-3 retained draft/history with selected-path Before/After views and JSON/CSV review text. Executable native target checks, confirmed companions, validated template samples/policies, full native source-folder hierarchy, native export-file saving, approvals, executor/import/undo and recovery remain pending. Sections 9–10 and all preservation/native acceptance gates remain unchanged.
 
 ### 9.1 Template model
 
@@ -281,11 +283,15 @@ Sequence assignment is deterministic within a persisted plan. Sort by a document
 
 ### 9.2 Portable destination validation
 
+M2 continuation, 2026-10-31: a native picker-session-based destination preflight verifies identity/volume and bidirectional ancestor overlap against indexed roots and app-data, bound to the exact current catalog preview. It performs only read-only directory metadata/membership operations. Unavailable roots block the check. This temporary observation neither reserves targets nor verifies native target collisions, complete companions, capacity/fidelity or write capability. ADR-0023 subsequently adds retained independently read Windows migration snapshots and transactional schema-3 immutable draft/template history. Saved drafts remain blocked and carry no execution authority. See ADR-0022/0023 and the M2 contract for tested limits; execution/recovery gates remain unchanged.
+
 Render tokens into individual path components, sanitize each component, then apply destination-filesystem validation. Reject absolute paths, parent traversal, NUL/control characters, path separators embedded in values, reserved device names, empty components, illegal suffixes, and unsupported lengths. Detect case-only collisions and Unicode normalization collisions using destination capabilities and native checks, not universal lowercasing of all filesystem paths. Windows naming rules require explicit handling. [R24]
 
 Default collision policy: add a stable suffix or require resolution. Never overwrite. The preview labels every collision and its exact final resolution. Store the original names and target names in the journal.
 
 ### 9.3 Preview and execution flow
+
+M2 review continuation, 2026-10-31: previews and saved drafts provide expandable Before/After views over the frozen selected rows. Before groups literal source display paths by library ID without interpreting native separators; After groups DSL-relative proposed folders and retains colliding/blocked/unresolved rows. This is selected-path presentation only, with no complete source-folder inventory or destination filesystem verification. M2 remains unfinished and the owner's conditional M3 start has not taken effect.
 
 The screen shows a before tree, an after tree, and a searchable per-file diff table. Display counts for unchanged, rename, same-volume move, cross-volume copy, blocked, conflict, companions, and unknown non-photo files. Show destination-space needs and whether a later source removal is involved. Provide JSON and CSV plan export; CSV export must mitigate spreadsheet formula injection.
 
@@ -703,7 +709,7 @@ For an unscoped filename-only display query with an already-known exact total of
 
 For a folder's first scan, keep catalog observations early but defer Photos/Tags collection entries until tiny preview publication or an explicit unavailable outcome. Do not fill the first collection with generation placeholders. Use a durable initial thumbnail job in the existing schema and a consistent typed ready-scope predicate for pages, counts, dates, seeks and selection. Existing completed libraries/cache/offline behavior remain unchanged. Keep decoding separate from discovery and originals read-only.
 
-Show a temporary single-row top banner with remaining count, inline progress bar and safe stop/pause action. Discovery and unknown preview inventories show “Remaining unknown” with indeterminate progress, then actual remaining eligible media after inventory. Keep progress descriptions accessible and detailed found/indexed counts in header Jobs; show unavailable outcomes and explicit resume/error states when applicable; preserve pending preparation across cancellation/restart and do not let reconciliation undo a pause. Successful/partial completion requires no eligible pending current revisions. Header Jobs/history remain available; Text list stays image-free and shares the collection scope. [INITIAL_LIBRARY_PREPARATION.md](INITIAL_LIBRARY_PREPARATION.md) and [ADR-0016](decisions/ADR-0016-initial-preview-preparation.md) supersede earlier immediate-first-gallery and removed-scan-banner wording for this bounded initial phase, without passing wider milestone/preservation/platform gates.
+Show a temporary single-row top banner with actual count, inline progress bar and safe stop/pause action. Owner follow-up (2026-10-31): library-content has no padding; its content child retains the existing desktop/narrow padding while the banner spans the pane below the header. Discovery shows “N files scanned” from actual discovered file observations; preview generation shows “N previews processed”, including unavailable outcomes rather than calling them ready. Remove the remaining-count summary. Discovery and queued/unknown inventories retain indeterminate progress; known preview inventories still supply the percentage. Keep progress descriptions accessible and detailed found/indexed counts in header Jobs; show unavailable outcomes and explicit resume/error states when applicable; preserve pending preparation across cancellation/restart and do not let reconciliation undo a pause. Successful/partial completion requires no eligible pending current revisions. Header Jobs/history remain available; Text list stays image-free and shares the collection scope. [INITIAL_LIBRARY_PREPARATION.md](INITIAL_LIBRARY_PREPARATION.md) and [ADR-0016](decisions/ADR-0016-initial-preview-preparation.md) supersede earlier immediate-first-gallery and removed-scan-banner wording for this bounded initial phase, without passing wider milestone/preservation/platform gates.
 
 ### Owner single-photo viewer revision — 2026-10-30
 

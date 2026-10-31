@@ -619,7 +619,7 @@ fn migration_retains_a_consistent_v1_snapshot_and_catalog_identity() {
     drop(db);
     let catalog = Catalog::open(path).unwrap();
     assert_eq!(catalog.summary().unwrap().id, "unchanged-catalog-identity");
-    assert_eq!(catalog.summary().unwrap().schema, 2);
+    assert_eq!(catalog.summary().unwrap().schema, 3);
     let snapshot = std::fs::read_dir(data.path())
         .unwrap()
         .map(|e| e.unwrap().path())

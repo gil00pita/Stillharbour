@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { OrganizationPreview as Preview } from '../bindings';
 import { libraryData } from '../ipc';
@@ -83,15 +83,17 @@ it('sends catalog IDs and typed settings, renders untrusted paths as text and ke
     },
     'organization_preview',
   );
-  expect(screen.getByText('Source/<photo>.JPG')).toBeVisible();
+  expect(within(screen.getByRole('table')).getByText('Source/<photo>.JPG')).toBeVisible();
   expect(screen.getByText('Generated library')).toHaveAttribute('title', 'Library ID: root-id');
   expect(screen.getByText('Undated/<photo>.JPG')).toBeVisible();
   expect(screen.getByText(/2 indexed companion candidates/)).toBeVisible();
   expect(screen.getByRole('button', { name: 'Create organized copy' })).toBeDisabled();
   expect(document.querySelector('photo')).toBeNull();
-  expect(
-    screen.getByText('Selected photos: current path, proposed relative path and review issues'),
-  ).toHaveFocus();
+  await waitFor(() =>
+    expect(
+      screen.getByText('Selected photos: current path, proposed relative path and review issues'),
+    ).toHaveFocus(),
+  );
   fireEvent.change(screen.getByRole('searchbox', { name: 'Find a path' }), {
     target: { value: 'absent' },
   });

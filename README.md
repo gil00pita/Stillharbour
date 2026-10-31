@@ -23,7 +23,7 @@ A local-first photo library that keeps your originals in ordinary folders.
 - **Keep a local catalog.** Save multiple nonoverlapping photo folders, configure scan filters, follow background jobs, and retain indexed records and available cached previews when a root goes offline.
 - **Inspect and annotate.** View metadata and date provenance; add favourites, ratings and tags individually or in batches without rewriting originals or sidecars.
 - **Look closer.** Navigate photos with zoom, pan, filmstrip and Info, or visually compare 2–4 selected photos. Comparison does not establish duplicate equality.
-- **Preview organization.** Select up to 240 individual photos and try date, event and sequence templates. Review proposed relative paths, missing values and conflicts without changing files. Templates are session drafts; destination checks and execution are pending.
+- **Plan organization.** Select up to 240 individual photos and try date, event and sequence templates. Save immutable template versions and destination-bound plan drafts; reopen retained paths and JSON/CSV review text from Saved plans. Native target checks, complete companion bundles, execution, import and undo remain pending. Originals stay in place.
 
 Preview support includes JPEG, PNG and WebP, with tested HEIC/HEIF, TIFF and selected RAW camera samples on macOS. The viewer can display admitted JPEG/PNG/WebP originals and supported HEIC/HEIF originals on compatible macOS WebViews, within a 32 MiB / 32-million-pixel limit. Other cases retain a labelled preview or an explicit unavailable state. See [format coverage](docs/FORMAT_SUPPORT.md) and [original-image viewing](docs/ORIGINAL_IMAGE_VIEWING.md) for exact limits.
 
@@ -91,15 +91,15 @@ templates/           Data-only example presets and manifests
 
 Work proceeds through reviewed milestones. Individual later slices, such as macOS format previews, do not complete their parent milestone.
 
-| Milestone                                                                    | Scope and current position                                                                                        |
-| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| [M0 — Foundation](tasks/M0_FOUNDATION.md)                                    | Implemented foundation with recorded local evidence; cross-platform gates remain                                  |
-| [M1 — Read-only library](tasks/M1_READ_ONLY_LIBRARY.md)                      | Implemented native browsing and catalog annotations; platform and performance gates remain                        |
-| [M2 — Organization and import](tasks/M2_SAFE_OPERATIONS.md)                  | In progress: catalog-only template previews; persistent destination-aware planning and companion review come next |
-| [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Planned analysis and recoverable cleanup                                                                          |
-| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | Planned restic/rclone integration with verified restore                                                           |
-| [M5 — Maps, metadata and formats](tasks/M5_MAP_METADATA_FORMATS.md)          | macOS format-preview slice implemented; maps and remaining scope pending                                          |
-| [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | Pending packaging, signing and target-platform acceptance                                                         |
+| Milestone                                                                    | Scope and current position                                                                                                                     |
+| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| [M0 — Foundation](tasks/M0_FOUNDATION.md)                                    | Implemented foundation with recorded local evidence; cross-platform gates remain                                                               |
+| [M1 — Read-only library](tasks/M1_READ_ONLY_LIBRARY.md)                      | Implemented native browsing and catalog annotations; platform and performance gates remain                                                     |
+| [M2 — Organization and import](tasks/M2_SAFE_OPERATIONS.md)                  | In progress: previews, companion review, destination preflight, saved template versions and immutable drafts; execution/import/undo gates open |
+| [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Planned analysis and recoverable cleanup                                                                                                       |
+| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | Planned restic/rclone integration with verified restore                                                                                        |
+| [M5 — Maps, metadata and formats](tasks/M5_MAP_METADATA_FORMATS.md)          | macOS format-preview slice implemented; maps and remaining scope pending                                                                       |
+| [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | Pending packaging, signing and target-platform acceptance                                                                                      |
 
 Catalog portability, broader health checks, editing, provider imports and mobile are separately gated [library extensions](docs/LIBRARY_FEATURES_ADDENDUM.md). They are planned work, not current capabilities. [Performance status](docs/PERFORMANCE_P4_STATUS.md) records the remaining P4-06 gate.
 
