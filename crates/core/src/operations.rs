@@ -6,6 +6,11 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub(crate) mod copy_manifest;
+pub use copy_manifest::{
+    CopyManifest, CopyManifestFile, CopyManifestInput, CopyManifestIssue, CopyManifestIssueKind,
+};
+
 pub const PLAN_POLICY: &str = "organization-plan-v1";
 pub const MAX_TEMPLATES: usize = 100;
 pub const MAX_TEMPLATE_VERSIONS: u32 = 100;

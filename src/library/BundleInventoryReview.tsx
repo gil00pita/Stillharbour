@@ -30,12 +30,14 @@ export function BundleInventoryReview({
   catalogRevision,
   stale,
   onClose,
+  onChoose,
 }: {
   planId: string;
   row: OrganizationRow;
   catalogRevision: string;
   stale: boolean;
   onClose: () => void;
+  onChoose?: (decision: BundleConfirmation) => void;
 }) {
   const [inventory, setInventory] = useState<BundleInventory | null>(null);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
@@ -133,6 +135,7 @@ export function BundleInventoryReview({
         );
         if (request.current === token) {
           setConfirmation(value);
+          onChoose?.(value);
           setHistory((previous) => [
             value,
             ...(previous ?? []).filter((record) => record.id !== value.id),
@@ -320,7 +323,8 @@ export function BundleInventoryReview({
       {confirmation && (
         <section aria-label="Retained companion decision">
           <p role="status">
-            Companion review retained · {confirmation.files.length} files ·{' '}
+            Companion review retained · {confirmation.files.length}{' '}
+            {confirmation.files.length === 1 ? 'file' : 'files'} ·{' '}
             {BigInt(confirmation.totalBytes).toLocaleString()} bytes. Copying remains unavailable.
           </p>
           <ul>
@@ -330,6 +334,11 @@ export function BundleInventoryReview({
               </li>
             ))}
           </ul>
+          {onChoose && (
+            <button type="button" disabled={busy || changed} onClick={() => onChoose(confirmation)}>
+              Use this decision in copy review
+            </button>
+          )}
         </section>
       )}
       {history && (

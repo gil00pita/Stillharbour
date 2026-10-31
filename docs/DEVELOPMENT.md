@@ -389,3 +389,7 @@ Empty illustration palette refinement (2026-10-31): src/styles.css derives frame
 ## Companion filename confirmation — 2026-10-31
 
 ADR-0026 adds generated inventory/confirmation/history IPC. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib bundle_` and filesystem metadata-only descriptor regressions, then full `npm run check`. UI coverage is in `src/library/BundleInventoryReview.test.tsx`; Windows integration confirms and reopens retained decisions. The foundation native scenario records windows-complete-companions.json and m2-complete-companions.png on generated sources, followed by independent preservation receipts. Use the isolated native executable when the development app is running. Filename inventory/decision retention does not pass executor, content fidelity, recovery or physical power-loss acceptance.
+
+## Compiled companion scopes — 2026-10-31
+
+ADR-0027 adds ID-only copy-manifest compilation and retained opening. Run pure `copy_manifest` Rust tests and the generated-fixture `companion_confirmation_requires_full_inventory` regression, then full checks. Component coverage is in CopyManifestReview.test.tsx; the foundation scenario records windows-copy-manifest.json and m2-copy-manifest.png. Compile unchanged explicit decisions to retry idempotently; opening history alone is not live validation. Current manifests remain blocked from execution.

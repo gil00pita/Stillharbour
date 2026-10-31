@@ -223,6 +223,17 @@ async fn library_request(
                     library.organization_bundle_confirm(input)?,
                 )
             }
+            LibraryRequest::OrganizationCopyManifest { input } => {
+                LibraryResponse::OrganizationCopyManifest(
+                    library.organization_copy_manifest(input)?,
+                )
+            }
+            LibraryRequest::OrganizationCopyManifestOpen {
+                plan_id,
+                manifest_id,
+            } => LibraryResponse::OrganizationCopyManifest(
+                library.organization_copy_manifest_open(plan_id, manifest_id)?,
+            ),
             LibraryRequest::OrganizationPlans { before } => {
                 LibraryResponse::OrganizationPlans(library.organization_plans(before)?)
             }

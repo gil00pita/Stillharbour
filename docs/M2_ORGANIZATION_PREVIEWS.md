@@ -73,6 +73,12 @@ Saved rows offer **Review all companion filenames**, then explicit **Read all fi
 
 The remaining gate now requires explicit companion decision IDs integrated into executable plans, overlapping-bundle reconciliation and all target/capacity/fidelity/executor/recovery requirements above. Draft exports still cover primary rows. Filename completeness does not establish content integrity, provider relationships or recoverability. M2/M3 remain unfinished.
 
+## Compiled copy-manifest continuation — 2026-10-31
+
+Retaining a companion decision chooses it for that photo's current copy review; historical choices require an explicit **Use this decision in copy review**. Choose one decision for every selected photo, then **Compile copy review**. Rust revalidates the exact retained decisions and live folder inventories and reconciles all proposed file mappings. Identical source-to-target mappings combine memberships; conflicting sources/targets and file/folder relationships remain visible, never silently renamed. The UI pages 64 proposed outputs, preserves exact byte counts and marks changed choices stale.
+
+[ADR-0027](decisions/ADR-0027-compiled-copy-manifests.md) records aggregate evidence/manifest bounds, retained append-only manifests, idempotent fresh retries and validated history opening. Compilation takes IDs only. The original draft/export remains unchanged; the compiled view includes companion outputs. All manifests remain executionAvailable=false. Native target equivalence, full destination preconditions, capacity/fidelity/content checks, approval and executor/recovery/import/undo gates remain open.
+
 ## Validation
 
 Focused Rust coverage tests the token allowlist, hostile values, missing-date/value policies, extension retention, sequence/fingerprint determinism and invalidation, collisions, offline/non-Unicode sources, selection bounds and exact byte totals. Catalog tests use in-memory SQLite only. Component tests cover native request shape, literal rendering, failure/retry, draft invalidation, pending-request revision changes, conflicts and focus return. The native regression uses only the existing generated library, real Rust IPC, desktop/minimum layouts and independent before/after source manifests. Actual final command outcomes are recorded in [the implementation log](IMPLEMENTATION_LOG.md); unrun target-platform and executor scenarios remain open.

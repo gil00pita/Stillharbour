@@ -29,6 +29,8 @@ M0-M1; docs/CODEX_SPEC.md sections 5, 9, 10, 12; acceptance AC-023 through AC-03
 
 Companion continuation, 2026-10-31: ADR-0026 implements bounded live direct-folder filename inventory and retained per-photo companion decisions. Hidden/unindexed entries and incomplete states remain visible. These records remain separate from saved drafts and execution authority; future plans must explicitly bind/revalidate decisions.
 
+Compiled-scope continuation, 2026-10-31: ADR-0027 reconciles exactly one explicit companion decision per selected photo into an immutable, idempotent copy manifest. Live inventories are revalidated; overlaps combine only identical mappings, conflicts remain blocked. This is the manifest prerequisite for ready-plan/destination/content/approval checks, not execution acceptance.
+
 ## Work
 
 Implement a pure template parser/resolver with predefined and user-saved templates, token validation, explicit missing metadata/date policy and deterministic collision/sequence assignments. Add shared immutable plan records, revision/digest binding, typed conflicts and backend approval.

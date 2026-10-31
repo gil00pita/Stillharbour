@@ -187,3 +187,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Complete direct-folder companion review — 2026-10-31
 
 [ADR-0026](decisions/ADR-0026-confirmed-companion-review.md) adds metadata-only live folder-name inventory and append-only decisions bound to retained drafts. Full reviewed public inventory, selected exact native locators, acknowledgement and targets are retained without changing original draft digests. Limits and incomplete observations are explicit. Future executable manifests must bind explicit decision IDs and revalidate; no original mutation or execution approval is introduced.
+
+## Explicit compiled copy scopes — 2026-10-31
+
+[ADR-0027](decisions/ADR-0027-compiled-copy-manifests.md) reconciles explicit per-photo companion decisions into bounded immutable manifests, combines only identical mappings and preserves cross-bundle conflicts. Original draft digests/schema stay unchanged; fresh retries are idempotent and retained opening recomputes reconciliation. Destination/content/fidelity/capacity/approval/executor gates remain pending.

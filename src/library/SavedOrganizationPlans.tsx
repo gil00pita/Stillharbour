@@ -6,10 +6,12 @@ import type {
   PlanExportFormat,
   PlanExportSaved,
   OrganizationRow,
+  BundleConfirmation,
 } from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import { OrganizationTrees } from './OrganizationTrees';
 import { BundleInventoryReview } from './BundleInventoryReview';
+import { CopyManifestReview } from './CopyManifestReview';
 
 export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -19,6 +21,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
   const [exported, setExported] = useState<PlanExport | null>(null);
   const [savedExport, setSavedExport] = useState<PlanExportSaved | null>(null);
   const [companionRow, setCompanionRow] = useState<OrganizationRow | null>(null);
+  const [companionChoices, setCompanionChoices] = useState<Record<string, BundleConfirmation>>({});
   const companionOpener = useRef<HTMLButtonElement | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,6 +74,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
     setExported(null);
     setSavedExport(null);
     setCompanionRow(null);
+    setCompanionChoices({});
     try {
       const result = await libraryData(
         { kind: 'organization_plan', plan_id: id },
@@ -223,6 +227,9 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                         >
                           Review all companion filenames
                         </button>
+                        {companionChoices[row.assetId] && (
+                          <p className="help">Chosen review: {companionChoices[row.assetId]?.id}</p>
+                        )}
                       </td>
                       <td>
                         <bdi>{row.targetRelativePath ?? 'Blocked'}</bdi>
@@ -239,12 +246,23 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                 row={companionRow}
                 catalogRevision={detail.plan.preview.catalogRevision}
                 stale={detail.stale}
+                onChoose={(decision) => {
+                  if (
+                    decision.planId === detail.plan.id &&
+                    decision.assetId === companionRow.assetId
+                  )
+                    setCompanionChoices((previous) => ({
+                      ...previous,
+                      [decision.assetId]: decision,
+                    }));
+                }}
                 onClose={() => {
                   setCompanionRow(null);
                   if (companionOpener.current?.isConnected) companionOpener.current.focus();
                 }}
               />
             )}
+            <CopyManifestReview key={detail.plan.id} detail={detail} choices={companionChoices} />
             <p className="help">
               Native target names, complete companion inventory, capacity, metadata fidelity and
               execution recovery checks remain pending.

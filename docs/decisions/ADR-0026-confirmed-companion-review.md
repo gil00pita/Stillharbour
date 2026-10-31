@@ -8,7 +8,7 @@ A saved draft offers explicit metadata-only inventory of the selected photo's di
 
 Bound one concurrent inventory with the destination-review gate and shared interactive metadata reservation. Observe at most 4,096 native and 4,096 indexed entries; bound private locator storage to 8 MiB. Truncation, unreadable metadata and unobserved indexed companion candidates prevent completeness. This bounded direct-folder filename inventory is not recursive inventory, content integrity or provider-original fidelity. Resource reservations are estimates, not physical metadata-I/O rate guarantees.
 
-Windows files use by-ID attribute-only handles and exact-name checks before/after opening. macOS uses directory-relative O_EVTONLY/no-follow handles. Links, special files and cloud placeholders are exposed without following/downloading. Ordinary source content readers retain their access policy. Descriptor regressions must pass on each target platform.
+Windows files use by-ID attribute-only handles and exact-name checks before/after opening. macOS uses directory-relative O_EVTONLY/no-follow handles. Links, special files and cloud placeholders are exposed without following/downloading. Ordinary source content readers retain their access policy. Windows regressions prove content access is denied. macOS regressions verify event-only flags and metadata queries without reading contents; O_EVTONLY alone does not enforce read denial. See the [XNU open implementation](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/vfs/vfs_syscalls.c). Native regressions must pass on each target platform.
 
 ## Confirmation
 

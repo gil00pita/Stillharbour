@@ -41,7 +41,7 @@ fn conflict(message: &str) -> AppError {
 }
 
 impl StoredBundleConfirmation {
-    fn digest(&self) -> Result<String> {
+    pub(super) fn digest(&self) -> Result<String> {
         let mut value = self.clone();
         value.view.fingerprint.clear();
         Ok(blake3::hash(
@@ -50,6 +50,108 @@ impl StoredBundleConfirmation {
         )
         .to_hex()
         .to_string())
+    }
+
+    pub(super) fn validate_for(&self, draft: &operation_store::StoredPlan) -> Result<()> {
+        let row = draft
+            .view
+            .preview
+            .rows
+            .iter()
+            .find(|row| row.asset_id == self.view.asset_id)
+            .ok_or_else(|| conflict("The companion decision does not belong to this draft."))?;
+        if self.policy != "bundle-confirmation-v1"
+            || self.view.plan_id != draft.view.id
+            || self.view.execution_available
+            || self.inventory.execution_available
+            || self.draft_digest != draft.view.digest
+            || !self.reviewed_all_entries
+            || !self.inventory.inventory_complete
+            || self.inventory.truncated
+            || self.inventory.indexed_limit_exceeded
+            || !self.inventory.unobserved_candidates.is_empty()
+            || self.inventory.entries.len() > crate::operations::MAX_BUNDLE_DIRECTORY_ENTRIES
+            || self.inventory.fingerprint != self.view.inventory_fingerprint
+            || self.inventory.asset_id != self.view.asset_id
+            || self.inventory.source_revision != row.source_revision
+            || self.catalog_revision != self.inventory.catalog_revision
+            || self.catalog_revision != draft.view.preview.catalog_revision
+            || self.digest()? != self.view.fingerprint
+            || self.entries.is_empty()
+            || self.entries.len() > 65
+            || self.entries.len() != self.view.files.len()
+        {
+            return Err(conflict(
+                "Retained companion review failed its identity or fingerprint check.",
+            ));
+        }
+        let planned = draft
+            .sources
+            .iter()
+            .find(|source| source.id == self.view.asset_id)
+            .ok_or_else(|| conflict("The companion decision has no matching source."))?;
+        let mut source = self.source.clone();
+        source.companion_candidates = planned.companion_candidates;
+        if serde_json::to_vec(&source).ok() != serde_json::to_vec(planned).ok() {
+            return Err(conflict(
+                "The companion source does not match its retained draft.",
+            ));
+        }
+        let primary = row
+            .target_relative_path
+            .as_deref()
+            .filter(|_| row.issues.is_empty())
+            .ok_or_else(|| conflict("The retained draft source is blocked."))?;
+        let selected: BTreeSet<_> = self
+            .entries
+            .iter()
+            .map(|entry| entry.view.id.clone())
+            .collect();
+        if selected.len() != self.entries.len()
+            || self.inventory.entries.iter().any(|entry| {
+                !matches!(
+                    entry.relation,
+                    BundleRelation::Primary | BundleRelation::Additional
+                ) && !selected.contains(&entry.id)
+            })
+        {
+            return Err(conflict(
+                "Retained companion review omits a possible companion.",
+            ));
+        }
+        for entry in &self.entries {
+            let observed = self
+                .inventory
+                .entries
+                .iter()
+                .find(|candidate| candidate.id == entry.view.id)
+                .ok_or_else(|| {
+                    conflict("The companion selection is outside its reviewed inventory.")
+                })?;
+            if serde_json::to_vec(observed).ok() != serde_json::to_vec(&entry.view).ok() {
+                return Err(conflict(
+                    "The companion selection differs from its reviewed inventory.",
+                ));
+            }
+        }
+        let observation = InventoryObservation {
+            view: self.inventory.clone(),
+            source: self.source.clone(),
+            entries: self.entries.clone(),
+        };
+        let chosen = self
+            .entries
+            .iter()
+            .filter(|entry| entry.view.relation != BundleRelation::Primary)
+            .map(|entry| entry.view.id.clone())
+            .collect();
+        let (_, files, total) = selected_files(&observation, &chosen, primary)?;
+        if total != self.view.total_bytes
+            || serde_json::to_vec(&files).ok() != serde_json::to_vec(&self.view.files).ok()
+        {
+            return Err(conflict("Retained companion targets failed validation."));
+        }
+        Ok(())
     }
 }
 
@@ -186,14 +288,8 @@ impl Library {
                 let text = row?;
                 if text.len() > MAX_PLAN_BYTES { return Err(invalid("Retained companion review exceeds its size limit.")); }
                 let record: StoredBundleConfirmation = serde_json::from_str(&text).map_err(|e| invalid("Retained companion review is invalid.").caused_by(e))?;
-                if record.policy != "bundle-confirmation-v1" || record.view.plan_id != plan_id || record.view.asset_id != asset_id
-                    || record.view.execution_available || record.draft_digest != draft.view.digest
-                    || !record.reviewed_all_entries || !record.inventory.inventory_complete
-                    || record.inventory.fingerprint != record.view.inventory_fingerprint
-                    || record.digest()? != record.view.fingerprint || record.entries.is_empty() || record.entries.len() > 65
-                    || record.entries.len() != record.view.files.len() {
-                    return Err(conflict("Retained companion review failed its identity or fingerprint check."));
-                }
+                record.validate_for(&draft)?;
+                if record.view.asset_id != asset_id { return Err(conflict("The retained review belongs to a different photo.")); }
                 result.push(record.view);
             }
             if result.len() > 16 { return Err(invalid("Retained companion reviews exceed the supported count.")); }
@@ -452,6 +548,46 @@ mod tests {
             .unwrap();
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].fingerprint, confirmed.fingerprint);
+        let manifest_input = crate::operations::CopyManifestInput {
+            plan_id: draft.plan.id.clone(),
+            bundle_confirmation_ids: vec![confirmed.id.clone()],
+        };
+        let manifest = fixture
+            .library
+            .organization_copy_manifest(manifest_input.clone())
+            .unwrap();
+        assert_eq!(manifest.files.len(), 4);
+        assert!(manifest.issues.is_empty());
+        assert!(!manifest.execution_available);
+        assert_eq!(manifest.selected_bytes, confirmed.total_bytes);
+        assert_eq!(
+            manifest.bundle_confirmation_ids,
+            std::slice::from_ref(&confirmed.id)
+        );
+        assert_eq!(
+            fixture
+                .library
+                .organization_copy_manifest(manifest_input.clone())
+                .unwrap()
+                .id,
+            manifest.id
+        );
+        let mut invalid = manifest_input.clone();
+        invalid.bundle_confirmation_ids.push(confirmed.id.clone());
+        assert!(fixture.library.organization_copy_manifest(invalid).is_err());
+        std::fs::write(fixture.source.join("Photo.xmp"), b"changed companion").unwrap();
+        assert!(
+            fixture
+                .library
+                .organization_copy_manifest(manifest_input)
+                .is_err()
+        );
+        let retained = fixture
+            .library
+            .organization_copy_manifest_open(draft.plan.id.clone(), manifest.id.clone())
+            .unwrap();
+        assert_eq!(retained.digest, manifest.digest);
+        assert!(!retained.execution_available);
         input.companion_ids.push("0".repeat(64));
         assert!(fixture.library.organization_bundle_confirm(input).is_err());
         assert!(

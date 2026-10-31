@@ -678,6 +678,7 @@ describe('native read-only library', () => {
         await browser.saveScreenshot('.context/screenshots/m2-plan-trees.png');
         await $('button=Review all companion filenames').scrollIntoView();
         await $('button=Review all companion filenames').click();
+        await $('button=Read all filenames').waitForDisplayed();
         await $('button=Read all filenames').click();
         await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
         const inventory = await native({
@@ -710,6 +711,24 @@ describe('native read-only library', () => {
         );
         await browser.saveScreenshot('.context/screenshots/m2-complete-companions.png');
         await $('button=Close companion inventory').click();
+        await $('button=Compile copy review').scrollIntoView();
+        await $('button=Compile copy review').click();
+        await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+        const compiledManifest = await native({
+          kind: 'organization_copy_manifest',
+          input: {
+            planId: plan.data.plan.id,
+            bundleConfirmationIds: [companionReviews.data[0].id],
+          },
+        });
+        assert.equal(compiledManifest.data.executionAvailable, false);
+        assert.equal(compiledManifest.data.files.length, companionReviews.data[0].files.length);
+        assert.deepEqual(compiledManifest.data.issues, []);
+        await writeFile(
+          `${evidence}/windows-copy-manifest.json`,
+          JSON.stringify(compiledManifest.data),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-copy-manifest.png');
         await $('button=View JSON export').scrollIntoView();
         await $('button=View JSON export').click();
         await $('.organization-preview textarea').waitForDisplayed();

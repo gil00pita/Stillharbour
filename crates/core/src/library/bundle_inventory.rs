@@ -635,13 +635,23 @@ pub(super) mod tests {
 
     #[cfg(target_os = "macos")]
     #[test]
-    fn companion_metadata_descriptor_cannot_read_contents() {
-        use std::io::Read;
+    fn companion_metadata_observation_retains_event_only_flags_without_reading() {
+        use std::os::fd::AsRawFd;
         let fixture = fixture();
         let parent = native::open_root(&fixture.source, None).unwrap();
-        let mut file = open_child(&parent, OsStr::new("Photo.JPG"), false).unwrap();
+        let file = open_child(&parent, OsStr::new("Photo.JPG"), false).unwrap();
         assert!(file.metadata().unwrap().is_file());
-        assert!(file.read(&mut [0u8; 1]).is_err());
+        // SAFETY: a live owned descriptor and read-only descriptor queries.
+        let flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFL) };
+        assert_ne!(flags & libc::O_EVTONLY, 0);
+        assert_eq!(native::revision(&file).unwrap(), fixture.revision);
+        // O_EVTONLY is not an OS-enforced denial of content reads on every
+        // macOS version. This adapter performs metadata queries only.
+        // SAFETY: a live descriptor; SEEK_CUR with zero does not change offset.
+        assert_eq!(
+            unsafe { libc::lseek(file.as_raw_fd(), 0, libc::SEEK_CUR) },
+            0
+        );
     }
 
     #[cfg(windows)]

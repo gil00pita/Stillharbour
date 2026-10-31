@@ -2,6 +2,7 @@ pub(crate) mod bundle_confirmation;
 pub(crate) mod bundle_inventory;
 mod cache_cleanup;
 mod changes;
+mod copy_manifest;
 mod destination;
 mod directory;
 pub mod filters;
