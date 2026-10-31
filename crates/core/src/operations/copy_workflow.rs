@@ -192,3 +192,11 @@ pub struct CopyEffectMatch {
     pub existing: Vec<ExistingCopyEffect>,
     pub can_reuse_review: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyPreparationReopened {
+    pub job_id: String,
+    pub manifest: super::CopyManifest,
+    pub review: CopyActionReview,
+}

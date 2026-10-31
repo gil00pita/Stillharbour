@@ -118,6 +118,7 @@ pub(super) struct Preparation {
     stages: Vec<Stage>,
 }
 impl Preparation {
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn validate_parent(&self, parent: &File) -> Result<()> {
         validate_members(
             parent,
@@ -137,6 +138,7 @@ pub(super) fn validate_record(
 ) -> Result<()> {
     checked_record(value, parent, namespace, targets).map(|_| ())
 }
+#[cfg(any(test, feature = "copy-workflow"))]
 pub(super) fn validate_retained(
     parent: &File,
     value: &serde_json::Value,

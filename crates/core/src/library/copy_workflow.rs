@@ -14,6 +14,24 @@ fn unavailable() -> AppError {
     )
 }
 impl Library {
+    pub fn organization_copy_preparation_reopen(
+        &self,
+        _job: String,
+        _selection: String,
+        _path: PathBuf,
+        _identity: (FileIdentity, String),
+    ) -> Result<CopyPreparationReopened> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow
+                .reopen_preparation(self, _job, _selection, _path, _identity)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+
     pub fn organization_copy_effect_match(
         &self,
         _plan: String,

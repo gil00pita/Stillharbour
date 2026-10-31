@@ -505,6 +505,7 @@ impl CatalogJournal {
             namespace,
         ))
     }
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(in crate::executor) fn inspect(
         &self,
         inputs: super::CopyInputs<'_>,
@@ -531,6 +532,7 @@ impl CatalogJournal {
         (inputs.validate_scope)()?;
         Ok(states)
     }
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(in crate::executor) fn plan(&self) -> &CopyPlan {
         &self.binding.plan
     }
@@ -1248,6 +1250,342 @@ mod tests {
                 bundle_confirmation_ids: vec![confirmation.id],
             })
             .unwrap()
+    }
+    #[test]
+    fn preparation_reopen_retains_incomplete_changed_and_unknown_objects_without_binding() {
+        use crate::operations::{CopyAction, CopyApprovalInput, CopyJobState, CopyStartInput};
+        for variant in 0..3 {
+            let fixture = Fixture::with_nested(true).unwrap();
+            let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
+            let identity = crate::filesystem::identity(&selected).unwrap();
+            let volume = crate::library::native::volume_token(&selected).unwrap();
+            drop(selected);
+            let selection = uuid::Uuid::new_v4().to_string();
+            let review = fixture
+                .library
+                .organization_copy_review_create(
+                    fixture.owner.clone(),
+                    fixture.manifest.clone(),
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            if variant == 0 {
+                fixture.library.catalog.call(|db|{db.execute_batch("CREATE TRIGGER deny_namespace_created BEFORE INSERT ON operation_journal WHEN NEW.phase='namespace_preparation_fact_v2' AND json_extract(NEW.evidence,'$.phase')='namespace_created' BEGIN SELECT RAISE(ABORT,'owned namespace creation record denial'); END;")?;Ok(())}).unwrap();
+            }
+            let approval = fixture
+                .library
+                .organization_copy_approve(
+                    CopyApprovalInput {
+                        review_id: review.id.clone(),
+                        digest: review.digest.clone(),
+                        action: CopyAction::PrepareNames,
+                        fidelity_limits_acknowledged: false,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            let queued = fixture
+                .library
+                .organization_copy_start(
+                    CopyStartInput {
+                        review_id: review.id,
+                        digest: review.digest,
+                        approval_id: approval.id,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            let stopped =
+                wait_operation(|| fixture.library.organization_copy_job(queued.id.clone()));
+            assert_eq!(
+                stopped.state,
+                if variant == 0 {
+                    CopyJobState::NeedsAttention
+                } else {
+                    CopyJobState::Prepared
+                }
+            );
+            let root = fixture.destination.join(review.output_folder);
+            let handle = crate::library::native::open_root(&root, None).unwrap();
+            let original = Object::of(&handle).unwrap();
+            drop(handle);
+            let retained = if variant == 1 {
+                let path = std::fs::read_dir(root.join("organized"))
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .path();
+                std::fs::write(&path, b"changed stage").unwrap();
+                Some((path, b"changed stage".to_vec()))
+            } else if variant == 2 {
+                let path = root.join("unknown-preserved.txt");
+                std::fs::write(&path, b"unknown data").unwrap();
+                Some((path, b"unknown data".to_vec()))
+            } else {
+                None
+            };
+            let before: i64 = fixture
+                .library
+                .catalog
+                .call(|db| {
+                    Ok(db.query_row("SELECT count(*) FROM operation_journal", [], |r| r.get(0))?)
+                })
+                .unwrap();
+            assert!(
+                fixture
+                    .library
+                    .organization_copy_preparation_reopen(
+                        stopped.id,
+                        selection,
+                        fixture.destination.clone(),
+                        (identity, volume)
+                    )
+                    .is_err()
+            );
+            let after: i64 = fixture
+                .library
+                .catalog
+                .call(|db| {
+                    Ok(db.query_row("SELECT count(*) FROM operation_journal", [], |r| r.get(0))?)
+                })
+                .unwrap();
+            assert_eq!(before, after);
+            let handle = crate::library::native::open_root(&root, None).unwrap();
+            assert!(original.matches(&handle).unwrap());
+            if let Some((path, bytes)) = retained {
+                assert_eq!(std::fs::read(path).unwrap(), bytes);
+            } else {
+                assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+            }
+            assert!(fixture.preserved().unwrap());
+        }
+    }
+    #[test]
+    fn reopen_prepared_application_job_reconstructs_only_metadata_and_requires_new_approval() {
+        use crate::operations::{CopyAction, CopyApprovalInput, CopyJobState, CopyStartInput};
+        for deny_binding in [false, true] {
+            let fixture = Fixture::with_nested(true).unwrap();
+            let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
+            let identity = crate::filesystem::identity(&selected).unwrap();
+            let volume = crate::library::native::volume_token(&selected).unwrap();
+            drop(selected);
+            let selection = uuid::Uuid::new_v4().to_string();
+            let review = fixture
+                .library
+                .organization_copy_review_create(
+                    fixture.owner.clone(),
+                    fixture.manifest.clone(),
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            if deny_binding {
+                fixture.library.catalog.call(|db|{db.execute_batch("CREATE TRIGGER deny_ready_binding BEFORE INSERT ON operation_journal WHEN NEW.phase='copy_execution_plan_v1' BEGIN SELECT RAISE(ABORT,'owned ready binding denial'); END;")?;Ok(())}).unwrap();
+            }
+            let approved = fixture
+                .library
+                .organization_copy_approve(
+                    CopyApprovalInput {
+                        review_id: review.id.clone(),
+                        digest: review.digest.clone(),
+                        action: CopyAction::PrepareNames,
+                        fidelity_limits_acknowledged: false,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            let queued = fixture
+                .library
+                .organization_copy_start(
+                    CopyStartInput {
+                        review_id: review.id.clone(),
+                        digest: review.digest,
+                        approval_id: approved.id,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            let stopped =
+                wait_operation(|| fixture.library.organization_copy_job(queued.id.clone()));
+            assert_eq!(
+                stopped.state,
+                if deny_binding {
+                    CopyJobState::NeedsAttention
+                } else {
+                    CopyJobState::Prepared
+                }
+            );
+            assert_eq!(stopped.ready_review_id.is_none(), deny_binding);
+            let directory = fixture
+                .destination
+                .join(&review.output_folder)
+                .join("organized");
+            let inventory = || {
+                std::fs::read_dir(&directory)
+                    .unwrap()
+                    .map(|entry| {
+                        let path = entry.unwrap().path();
+                        let file = std::fs::File::open(&path).unwrap();
+                        (
+                            path.file_name().unwrap().to_os_string(),
+                            {
+                                let object = Object::of(&file).unwrap();
+                                (object.volume, object.file)
+                            },
+                            super::super::source_native::revision(&file).unwrap(),
+                            file.metadata().unwrap().len(),
+                        )
+                    })
+                    .collect::<Vec<_>>()
+            };
+            let mut before = inventory();
+            before.sort_by(|a, b| a.0.cmp(&b.0));
+            assert_eq!(before.len(), 2);
+            assert!(before.iter().all(|entry| entry.3 == 0));
+            fixture
+                .library
+                .organization_copy_discard(review.id)
+                .unwrap();
+            let fresh = crate::executor::CopyWorkflow::new(
+                fixture.library.catalog.clone(),
+                fixture._run.path().join("data"),
+            )
+            .unwrap();
+            if deny_binding {
+                assert!(
+                    fresh
+                        .reopen_preparation(
+                            &fixture.library,
+                            stopped.id.clone(),
+                            selection.clone(),
+                            fixture.destination.clone(),
+                            (identity.clone(), volume.clone())
+                        )
+                        .is_err()
+                );
+                fixture
+                    .library
+                    .catalog
+                    .call(|db| {
+                        db.execute_batch("DROP TRIGGER deny_ready_binding")?;
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+            let reopened = fresh
+                .reopen_preparation(
+                    &fixture.library,
+                    stopped.id.clone(),
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            assert_eq!(reopened.job_id, stopped.id);
+            assert_eq!(reopened.manifest.id, fixture.manifest);
+            assert_eq!(reopened.review.action, CopyAction::CopyFiles);
+            let mut after = inventory();
+            after.sort_by(|a, b| a.0.cmp(&b.0));
+            assert_eq!(before, after);
+            let stale = fresh
+                .approve(
+                    &fixture.library,
+                    CopyApprovalInput {
+                        review_id: reopened.review.id.clone(),
+                        digest: reopened.review.digest.clone(),
+                        action: CopyAction::CopyFiles,
+                        fidelity_limits_acknowledged: true,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    identity.clone(),
+                    volume.clone(),
+                )
+                .unwrap();
+            // Reopening the same exact scope/selection must still revoke old grants.
+            let reopened = fresh
+                .reopen_preparation(
+                    &fixture.library,
+                    stopped.id,
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            assert!(
+                fresh
+                    .start(
+                        fixture.library.clone(),
+                        CopyStartInput {
+                            review_id: reopened.review.id.clone(),
+                            digest: reopened.review.digest.clone(),
+                            approval_id: stale.id
+                        },
+                        selection.clone(),
+                        fixture.destination.clone(),
+                        identity.clone(),
+                        volume.clone()
+                    )
+                    .is_err()
+            );
+            let approval = fresh
+                .approve(
+                    &fixture.library,
+                    CopyApprovalInput {
+                        review_id: reopened.review.id.clone(),
+                        digest: reopened.review.digest.clone(),
+                        action: CopyAction::CopyFiles,
+                        fidelity_limits_acknowledged: true,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    identity.clone(),
+                    volume.clone(),
+                )
+                .unwrap();
+            let queued = fresh
+                .start(
+                    fixture.library.clone(),
+                    CopyStartInput {
+                        review_id: reopened.review.id,
+                        digest: reopened.review.digest,
+                        approval_id: approval.id,
+                    },
+                    selection,
+                    fixture.destination.clone(),
+                    identity,
+                    volume,
+                )
+                .unwrap();
+            let copied = wait_operation(|| fresh.job(queued.id.clone()));
+            assert_eq!(
+                copied.state,
+                CopyJobState::CompletedVerified,
+                "{:?}",
+                copied.error
+            );
+            let final_files = inventory();
+            let before_ids = before.iter().map(|entry| entry.1).collect::<Vec<_>>();
+            assert!(
+                final_files
+                    .iter()
+                    .all(|entry| before_ids.contains(&entry.1))
+            );
+            assert_eq!(final_files.len(), 2);
+            assert!(fixture.preserved().unwrap());
+        }
     }
     #[test]
     fn effect_binding_reuses_unstarted_review_and_blocks_cross_draft_duplicates() {

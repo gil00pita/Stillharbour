@@ -60,6 +60,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         CopyAction::decl(&config),
         CopyReviewFile::decl(&config),
         CopyActionReview::decl(&config),
+        CopyPreparationReopened::decl(&config),
         CopyEffectMatch::decl(&config),
         ExistingCopyEffect::decl(&config),
         CopyActionApproval::decl(&config),

@@ -1,14 +1,16 @@
 //! An effect is the native source/policy/target mapping, independently of draft,
 //! ticket, namespace UUID, creation time or unrelated catalog revision.
 use super::{Object, failed, locations, sources::Snapshot};
+#[cfg(any(test, feature = "copy-workflow"))]
+use crate::catalog::Catalog;
 use crate::{
-    catalog::Catalog,
     domain::Result,
     library::{copy_manifest, operation_store},
     organization::OrganizationTemplate,
 };
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
+#[cfg(any(test, feature = "copy-workflow"))]
 use std::sync::Arc;
 
 const GROUP: &str = "copy_effect_group_v1";
@@ -67,6 +69,7 @@ fn hash(text: &str) -> String {
     blake3::hash(text.as_bytes()).to_hex().to_string()
 }
 impl Effect {
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn lookup(
         catalog: &Arc<Catalog>,
         snapshot: &Snapshot,
@@ -173,15 +176,16 @@ impl Effect {
                 return Err(failed("Invalid effect namespace digest."));
             }
             super::preparation::validate_namespace(&candidate.token, &candidate.namespace)?;
-            let seed = super::catalog_journal::namespace_journal::effect_seed(
-                db,
-                &candidate.owner_id,
-                &candidate.token,
-                &candidate.scope_digest,
-            )?;
-            let actual = Self::capture(db, &seed.sources)?;
-            if seed.sources.manifest_id != candidate.manifest_id
-                || seed.namespace != candidate.namespace
+            let (seed_sources, seed_namespace) =
+                super::catalog_journal::namespace_journal::effect_seed(
+                    db,
+                    &candidate.owner_id,
+                    &candidate.token,
+                    &candidate.scope_digest,
+                )?;
+            let actual = Self::capture(db, &seed_sources)?;
+            if seed_sources.manifest_id != candidate.manifest_id
+                || seed_namespace != candidate.namespace
                 || actual.encoded != self.encoded
                 || actual.digest != self.digest
             {
@@ -252,6 +256,7 @@ impl Effect {
 }
 
 impl Candidate {
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn preparation_recorded(&self, catalog: &Catalog) -> Result<bool> {
         let owner = self.owner_id.clone();
         let token = self.token.clone();

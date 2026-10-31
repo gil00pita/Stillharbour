@@ -458,3 +458,117 @@ impl CopyWorkflow {
         Ok(())
     }
 }
+
+impl CopyWorkflow {
+    pub(crate) fn reopen_preparation(
+        &self,
+        library: &Library,
+        job_id: String,
+        selection: String,
+        path: PathBuf,
+        identity: (FileIdentity, String),
+    ) -> Result<CopyPreparationReopened> {
+        crate::operations::validate_id(&selection)?;
+        let _permit = self.gate.try_start()?;
+        let job = operation_jobs::load(&self.catalog, job_id.clone())?;
+        if job.action != CopyAction::PrepareNames
+            || !matches!(
+                job.state,
+                CopyJobState::Prepared
+                    | CopyJobState::NeedsAttention
+                    | CopyJobState::NeedsRecovery
+                    | CopyJobState::CanceledWithPartialCopies
+            )
+        {
+            return Err(failed(
+                "Reopen only a stopped name-preparation job. Existing copy execution requires retained inspection and continuation.",
+            ));
+        }
+        let digest = operation_jobs::scope_digest(&self.catalog, job_id.clone())?;
+        let namespace = Arc::new(NamespaceJournal::open_retained(
+            self.catalog.clone(),
+            job.plan_id.clone(),
+            job.review_id.clone(),
+            digest,
+        )?);
+        if namespace.sources().root_id != job.source_root_id
+            || namespace.sources().files.len() != job.total_files as usize
+        {
+            return Err(failed(
+                "Preparation job differs from its retained native scope.",
+            ));
+        }
+        let session = Arc::new(Session {
+            namespace,
+            selection: selection.clone(),
+            selected_path: path.clone(),
+            ready: Mutex::new(None),
+        });
+        Self::check_selection(&session, &selection, &path, &identity.0, &identity.1)?;
+        let assessment = self.fresh(library, &session)?;
+        let scope = session
+            .namespace
+            .sources()
+            .open_scope(&self.catalog, Access::Read)?;
+        session
+            .namespace
+            .validate_native(scope.directory(1).leaf())?;
+        {
+            let entries = self
+                .sessions
+                .lock()
+                .map_err(|_| failed("Copy reviews are unavailable."))?;
+            if entries.len() >= 64 && !entries.contains_key(session.namespace.id()) {
+                return Err(AppError::new(
+                    ErrorCode::Busy,
+                    "Close unused copy reviews before reopening preparation.",
+                ));
+            }
+        }
+        // Planning metadata may be reconstructed after complete retained/native
+        // validation. This never recreates a directory/stage or copies a byte.
+        let ready = Arc::new(session.namespace.ready_journal()?);
+        if job
+            .ready_review_id
+            .as_ref()
+            .is_some_and(|expected| expected != &ready.plan().id)
+        {
+            return Err(failed(
+                "The retained ready-plan identity differs from this job.",
+            ));
+        }
+        if ready.history_count()? != 0 {
+            return Err(failed(
+                "This namespace has copy execution history. Inspect it and approve continuation instead.",
+            ));
+        }
+        self.approvals.revoke_review(session.namespace.id())?;
+        self.approvals.revoke_review(&ready.plan().id)?;
+        *session
+            .ready
+            .lock()
+            .map_err(|_| failed("Ready copy review is unavailable."))? = Some(ready);
+        let view = self.view(&session, assessment)?;
+        let manifest = library
+            .organization_copy_manifest_open(view.plan_id.clone(), view.manifest_id.clone())?;
+        session
+            .namespace
+            .validate_native(scope.directory(1).leaf())?;
+        let mut sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| failed("Copy reviews are unavailable."))?;
+        if sessions.len() >= 64 && !sessions.contains_key(session.namespace.id()) {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Close unused copy reviews before reopening preparation.",
+            ));
+        }
+        sessions.insert(session.namespace.id().into(), Some(session));
+        Ok(CopyPreparationReopened {
+            job_id,
+            manifest,
+            review: view,
+        })
+    }
+}

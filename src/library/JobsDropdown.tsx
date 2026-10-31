@@ -7,6 +7,7 @@ import { LibraryChanges } from './LibraryChanges';
 import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
 import { copyJobActive } from './copyJobs';
 import { RetainedCopyInspection } from './RetainedCopyInspection';
+import { ReopenPreparedCopy } from './VerifiedCopyWorkflow';
 
 export function JobsDropdown({
   status,
@@ -169,6 +170,9 @@ export function JobsDropdown({
                   .map((job) => (
                     <div key={job.id}>
                       <CopyJobProgress job={job} onRefresh={onRefresh} />
+                      {job.action === 'prepare_names' && !job.readyReviewId && (
+                        <ReopenPreparedCopy job={job} />
+                      )}
                       {(job.action === 'copy_files' || job.readyReviewId) && (
                         <RetainedCopyInspection job={job} onRefresh={onRefresh} />
                       )}

@@ -78,6 +78,14 @@ impl Approvals {
             entries: Mutex::new(BTreeMap::new()),
         }
     }
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(super) fn revoke_review(&self, id: &str) -> Result<()> {
+        self.entries
+            .lock()
+            .map_err(|_| rejected("Session approvals are unavailable. Review again."))?
+            .retain(|_, entry| entry.review.id != id);
+        Ok(())
+    }
     pub(super) fn issue(&self, review: Review) -> Result<String> {
         self.issue_at(review, Instant::now())
     }

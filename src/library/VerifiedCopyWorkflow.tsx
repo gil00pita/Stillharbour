@@ -8,8 +8,9 @@ import type {
   CopyInspection,
   CopyEffectMatch,
   ExistingCopyEffect,
+  CopyPreparationReopened,
 } from '../bindings';
-import { errorMessage, libraryData, pickDirectory } from '../ipc';
+import { errorMessage, library, libraryData, pickDirectory } from '../ipc';
 import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
 import { copyJobActive } from './copyJobs';
 import { RetainedCopyInspection } from './RetainedCopyInspection';
@@ -28,10 +29,39 @@ function validateReview(value: CopyActionReview, plan: string, manifest: string)
     );
   }
 }
-export function VerifiedCopyWorkflow({ manifest }: { manifest: CopyManifest }) {
-  const [selection, setSelection] = useState<DirectorySelection | null>(null);
+type PreparedReview = { review: CopyActionReview; selection: DirectorySelection };
+function validateReopened(value: CopyPreparationReopened, job: CopyWorkflowJob) {
+  if (
+    value.jobId !== job.id ||
+    value.manifest.planId !== job.planId ||
+    value.review.sourceRootId !== job.sourceRootId ||
+    value.review.action !== 'copy_files' ||
+    value.review.files.length !== job.totalFiles ||
+    value.manifest.files.length !== job.totalFiles ||
+    value.manifest.files.some((file, index) => {
+      const observed = value.review.files[index];
+      return (
+        !observed ||
+        file.id !== observed.id ||
+        file.rootId !== job.sourceRootId ||
+        file.bytes !== observed.bytes ||
+        observed.targetPath !== `${value.review.outputFolder}/${file.targetRelativePath}`
+      );
+    })
+  )
+    throw new Error('The reopened preparation does not match this job.');
+  validateReview(value.review, job.planId, value.manifest.id);
+}
+export function VerifiedCopyWorkflow({
+  manifest,
+  initial,
+}: {
+  manifest: CopyManifest;
+  initial?: PreparedReview;
+}) {
+  const [selection, setSelection] = useState<DirectorySelection | null>(initial?.selection ?? null);
   const [existing, setExisting] = useState<CopyEffectMatch | null>(null);
-  const [review, setReview] = useState<CopyActionReview | null>(null);
+  const [review, setReview] = useState<CopyActionReview | null>(initial?.review ?? null);
   const [approval, setApproval] = useState<CopyActionApproval | null>(null);
   const [job, setJob] = useState<CopyWorkflowJob | null>(null);
   const [inspection, setInspection] = useState<CopyInspection | null>(null);
@@ -200,6 +230,42 @@ export function VerifiedCopyWorkflow({ manifest }: { manifest: CopyManifest }) {
       if (epoch.current === token) setBusy(false);
     }
   }
+  async function reopen() {
+    if (!job || job.action !== 'prepare_names') return;
+    const token = ++epoch.current;
+    setBusy(true);
+    setError(null);
+    setApproval(null);
+    setAcknowledged(false);
+    try {
+      const chosen = await pickDirectory();
+      if (epoch.current !== token || !chosen) return;
+      if (!chosen.identityAvailable)
+        throw new Error('The selected folder identity is unavailable.');
+      const value = await libraryData(
+        { kind: 'organization_copy_preparation_reopen', job_id: job.id, selection_id: chosen.id },
+        'organization_copy_preparation_reopened',
+      );
+      if (epoch.current !== token) {
+        if (value.jobId === job.id && value.review.planId === job.planId)
+          void library({ kind: 'organization_copy_discard', review_id: value.review.id }).catch(
+            () => {},
+          );
+        return;
+      }
+      validateReopened(value, job);
+      validateReview(value.review, manifest.planId, manifest.id);
+      setSelection(chosen);
+      setReview(value.review);
+      setJob(null);
+      setInspection(null);
+      setPage(0);
+    } catch (error) {
+      if (epoch.current === token) setError(errorMessage(error));
+    } finally {
+      if (epoch.current === token) setBusy(false);
+    }
+  }
   async function approve() {
     if (!review || !selection) return;
     const token = ++epoch.current;
@@ -319,6 +385,11 @@ export function VerifiedCopyWorkflow({ manifest }: { manifest: CopyManifest }) {
             <ExistingEffect key={entry.reviewId} entry={entry} />
           ))}
         </section>
+      )}
+      {job?.action === 'prepare_names' && prepared && review?.action === 'copy_files' && (
+        <button type="button" disabled={busy} onClick={() => void reopen()}>
+          Choose destination and reopen prepared review
+        </button>
       )}
       {prepared && review?.action === 'prepare_names' && (
         <button type="button" onClick={() => setReadyRetry(readyRetry + 1)}>
@@ -495,7 +566,11 @@ function ExistingEffect({ entry }: { entry: ExistingCopyEffect }) {
         Retained output folder: <bdi>{entry.outputFolder}</bdi>
       </p>
       {entry.job ? (
-        <RetainedCopyInspection job={entry.job} />
+        entry.job.action === 'prepare_names' && !entry.job.readyReviewId ? (
+          <ReopenPreparedCopy job={entry.job} />
+        ) : (
+          <RetainedCopyInspection job={entry.job} />
+        )
       ) : entry.preparationRecorded ? (
         <p>
           Preparation evidence exists without a linked job. Preserve the retained folder and review
@@ -510,5 +585,79 @@ function ExistingEffect({ entry }: { entry: ExistingCopyEffect }) {
       )}
       {error && <p role="alert">{error}</p>}
     </article>
+  );
+}
+
+export function ReopenPreparedCopy({ job }: { job: CopyWorkflowJob }) {
+  const [opened, setOpened] = useState<
+    (CopyPreparationReopened & { selection: DirectorySelection }) | null
+  >(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const epoch = useRef(0);
+  useEffect(
+    () => () => {
+      epoch.current += 1;
+    },
+    [job.id],
+  );
+  async function reopen() {
+    const token = ++epoch.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const capability = await libraryData(
+        { kind: 'organization_copy_capabilities' },
+        'organization_copy_capabilities',
+      );
+      if (epoch.current !== token) return;
+      if (!capability.available) throw new Error(capability.reason);
+      const selection = await pickDirectory();
+      if (epoch.current !== token || !selection) return;
+      if (!selection.identityAvailable)
+        throw new Error('The selected folder identity is unavailable.');
+      const value = await libraryData(
+        {
+          kind: 'organization_copy_preparation_reopen',
+          job_id: job.id,
+          selection_id: selection.id,
+        },
+        'organization_copy_preparation_reopened',
+      );
+      if (epoch.current !== token) {
+        if (value.jobId === job.id && value.review.planId === job.planId)
+          void library({ kind: 'organization_copy_discard', review_id: value.review.id }).catch(
+            () => {},
+          );
+        return;
+      }
+      validateReopened(value, job);
+      setOpened({ ...value, selection });
+    } catch (error) {
+      if (epoch.current === token) setError(errorMessage(error));
+    } finally {
+      if (epoch.current === token) setBusy(false);
+    }
+  }
+  return (
+    <section aria-label="Reopen retained preparation">
+      <p>
+        A complete retained preparation can be reopened after its original empty objects are
+        validated. New fidelity acknowledgment, copy approval and start are required. Incomplete or
+        changed objects remain retained and blocked.
+      </p>
+      {opened ? (
+        <VerifiedCopyWorkflow
+          key={opened.review.id}
+          manifest={opened.manifest}
+          initial={{ review: opened.review, selection: opened.selection }}
+        />
+      ) : (
+        <button type="button" disabled={busy} onClick={() => void reopen()}>
+          {busy ? 'Checking retained preparation…' : 'Choose destination and reopen preparation'}
+        </button>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </section>
   );
 }

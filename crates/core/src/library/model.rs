@@ -530,6 +530,10 @@ pub enum LibraryRequest {
         manifest_id: String,
         selection_id: String,
     },
+    OrganizationCopyPreparationReopen {
+        job_id: String,
+        selection_id: String,
+    },
     OrganizationCopyReviewCreate {
         plan_id: String,
         manifest_id: String,
@@ -702,6 +706,7 @@ pub enum LibraryResponse {
     OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),
     OrganizationCopyEffectMatch(crate::operations::CopyEffectMatch),
     OrganizationCopyReview(Box<crate::operations::CopyActionReview>),
+    OrganizationCopyPreparationReopened(Box<crate::operations::CopyPreparationReopened>),
     OrganizationCopyApproval(crate::operations::CopyActionApproval),
     OrganizationCopyJob(crate::operations::CopyWorkflowJob),
     OrganizationCopyIo(crate::operations::CopyIoStatus),

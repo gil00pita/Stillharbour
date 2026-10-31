@@ -200,6 +200,7 @@ async fn library_request(
         | LibraryRequest::OrganizationPlanSaveExport { selection_id, .. }
         | LibraryRequest::OrganizationPlanCreate { selection_id, .. }
         | LibraryRequest::OrganizationDestination { selection_id, .. }
+        | LibraryRequest::OrganizationCopyPreparationReopen { selection_id, .. }
         | LibraryRequest::OrganizationCopyEffectMatch { selection_id, .. }
         | LibraryRequest::OrganizationCopyReviewCreate { selection_id, .. }
         | LibraryRequest::OrganizationCopyReview { selection_id, .. }
@@ -220,6 +221,22 @@ async fn library_request(
                 LibraryResponse::OrganizationCopyCapabilities(
                     library.organization_copy_capabilities(),
                 )
+            }
+            LibraryRequest::OrganizationCopyPreparationReopen { job_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyPreparationReopened(Box::new(
+                    library.organization_copy_preparation_reopen(
+                        job_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
             }
             LibraryRequest::OrganizationCopyEffectMatch {
                 plan_id,

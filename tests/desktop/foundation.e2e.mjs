@@ -12,6 +12,59 @@ async function native(request) {
     request,
   );
 }
+async function reopenPreparedReview(original, destination, evidence) {
+  const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+    (job) => job.planId === original.id,
+  );
+  const prepared = jobs.find((job) => job.action === 'prepare_names' && job.state === 'prepared');
+  assert.ok(prepared?.readyReviewId);
+  const before = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+  );
+  assert.ok(before.files.length > 0);
+  assert.ok(
+    before.files.every((file) => file.bytes === '0' && file.relativePath.endsWith('.partial')),
+  );
+  await native({ kind: 'organization_copy_discard', review_id: prepared.readyReviewId });
+  await $('button=Choose destination and reopen prepared review').scrollIntoView();
+  await $('button=Choose destination and reopen prepared review').click();
+  await browser.waitUntil(
+    async () => !(await $('button=Choose destination and reopen prepared review').isExisting()),
+  );
+  await $('h4=Prepared copy review').waitForDisplayed();
+  assert.equal(await $('button=Approve byte-verified copy').isEnabled(), false);
+  assert.equal((await $$('button=Start verified copy')).length, 0);
+  const reopened = (
+    await native({
+      kind: 'organization_copy_review',
+      review_id: prepared.readyReviewId,
+      selection_id: destination.id,
+    })
+  ).data;
+  assert.equal(reopened.id, prepared.readyReviewId);
+  assert.equal(reopened.action, 'copy_files');
+  assert.equal(reopened.planId, original.id);
+  const after = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+  );
+  assert.deepEqual(after, before);
+  assert.deepEqual(
+    (await native({ kind: 'status' })).data.copyJobs.filter((job) => job.planId === original.id),
+    jobs,
+  );
+  await writeFile(
+    `${evidence}/prepared-review-reopened-${process.platform}.json`,
+    JSON.stringify({
+      jobId: prepared.id,
+      reopenedReview: reopened,
+      unchangedEmptyStages: after,
+      newApprovalRequired: true,
+    }),
+  );
+  await browser.saveScreenshot(
+    `.context/screenshots/m2-prepared-review-reopened-${process.platform}.png`,
+  );
+}
 async function reviewEquivalentDraft(original, destination, evidence, audit) {
   // Recreate the user's selected mapping through real ID-only IPC. Draft UUIDs
   // and approvals differ; output effect identity must remain the same.
@@ -1121,6 +1174,7 @@ describe('native read-only library', () => {
         copyAttempted = true;
         await $('button=Start output preparation').click();
         await $('h4=Prepared copy review').waitForDisplayed({ timeout: 15000 });
+        await reopenPreparedReview(plan.data.plan, copySelection, evidence);
         assert.equal(await $('button=Approve byte-verified copy').isEnabled(), false);
         const fidelityAck = await $(
           'section[aria-label="Verified organization copy"] input[type="checkbox"]',
@@ -2777,6 +2831,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await $('button=Start output preparation').scrollIntoView();
       await $('button=Start output preparation').click();
       await $('h4=Prepared copy review').waitForDisplayed();
+      await reopenPreparedReview(saved.data.plan, destination, evidence);
       assert.equal(await $('button=Approve byte-verified copy').isEnabled(), false);
       const acknowledge = await $(
         'section[aria-label="Verified organization copy"] input[type="checkbox"]',

@@ -614,6 +614,7 @@ impl CopyWorkflow {
                 ready: Mutex::new(None),
             });
             Self::check_selection(&session, &selection, &path, &identity, &volume)?;
+            self.approvals.revoke_review(session.namespace.id())?;
             let view = self.view(&session, assessment)?;
             self.sessions
                 .lock()
@@ -947,6 +948,15 @@ impl CopyWorkflow {
                 ErrorCode::Busy,
                 "Finish or cancel the active job before closing its review.",
             ));
+        }
+        self.approvals.revoke_review(session.namespace.id())?;
+        if let Some(ready) = session
+            .ready
+            .lock()
+            .map_err(|_| failed("Ready copy review is unavailable."))?
+            .as_ref()
+        {
+            self.approvals.revoke_review(&ready.plan().id)?;
         }
         self.sessions
             .lock()

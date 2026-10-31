@@ -43,9 +43,11 @@ pub(super) struct Review {
     digest: String,
 }
 impl Review {
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn digest(&self) -> &str {
         &self.digest
     }
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn observations(&self) -> Vec<(Option<u64>, bool)> {
         self.members
             .iter()
@@ -57,6 +59,7 @@ impl Review {
             })
             .collect()
     }
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn record(&self, plan: &CopyPlan) -> serde_json::Value {
         serde_json::json!({"policy":"reviewed-copy-continuation-v1","planDigest":plan.digest,"historyDigest":self.history_digest,"members":self.members,"digest":self.digest})
     }
@@ -119,6 +122,7 @@ impl Review {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[cfg(any(test, feature = "copy-workflow"))]
 struct RecordedReview {
     policy: String,
     plan_digest: String,
@@ -126,6 +130,7 @@ struct RecordedReview {
     members: Vec<Member>,
     digest: String,
 }
+#[cfg(any(test, feature = "copy-workflow"))]
 pub(super) fn validate_record(
     value: serde_json::Value,
     plan: &CopyPlan,

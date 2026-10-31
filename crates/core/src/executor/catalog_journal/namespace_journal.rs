@@ -23,12 +23,14 @@ struct Scope {
     namespace: String,
     targets: Vec<Target>,
 }
+#[cfg(any(test, feature = "copy-workflow"))]
 pub(in crate::executor) struct EffectSeed {
     pub sources: crate::executor::sources::Snapshot,
     pub token: String,
     pub namespace: String,
     pub digest: String,
 }
+#[cfg(any(test, feature = "copy-workflow"))]
 pub(in crate::executor) fn legacy_effect_seeds(
     db: &Connection,
     current: &crate::executor::sources::Snapshot,
@@ -71,7 +73,7 @@ pub(in crate::executor) fn effect_seed(
     owner: &str,
     token: &str,
     digest: &str,
-) -> Result<EffectSeed> {
+) -> Result<(crate::executor::sources::Snapshot, String)> {
     let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase='namespace_preparation_plan_v2' ORDER BY sequence LIMIT 2")?;
     let mut rows = query.query(params![owner, token])?;
     let text: Option<String> = rows
@@ -88,12 +90,7 @@ pub(in crate::executor) fn effect_seed(
     }
     preparation::validate_namespace(token, &scope.namespace)?;
     scope.sources.validate(db)?;
-    Ok(EffectSeed {
-        sources: scope.sources,
-        token: scope.token,
-        namespace: scope.namespace,
-        digest: digest.into(),
-    })
+    Ok((scope.sources, scope.namespace))
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -199,6 +196,41 @@ pub(in crate::executor) struct NamespaceJournal {
     state: Mutex<State>,
 }
 impl NamespaceJournal {
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(in crate::executor) fn open_retained(
+        catalog: Arc<Catalog>,
+        owner: String,
+        token: String,
+        digest: String,
+    ) -> Result<Self> {
+        let (scope,encoded,anchor,state)=catalog.call(move|db| {
+            let (seed_sources,seed_namespace)=effect_seed(db,&owner,&token,&digest)?;
+            let mut query=db.prepare("SELECT sequence,CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT 2")?;
+            let mut rows=query.query(params![owner,token,ANCHOR_PHASE])?;
+            let row=rows.next()?.ok_or_else(||failed("Preparation scope is missing."))?;
+            let anchor:i64=row.get(0)?;let encoded:Option<String>=row.get(1)?;let encoded=encoded.ok_or_else(||failed("Preparation scope exceeds 64 KiB."))?;
+            if rows.next()?.is_some() || blake3::hash(encoded.as_bytes()).to_hex().as_str()!=digest {return Err(failed("Preparation anchor changed."));}
+            let scope:Scope=decode(&encoded,MAX_RECORD)?;
+            if scope.namespace!=seed_namespace || scope.sources.manifest_id!=seed_sources.manifest_id {return Err(failed("Preparation source binding differs."));}
+            let mut state=State::default();
+            let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=8388608 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT ?4")?;
+            let mut rows=query.query(params![owner,token,FACT_PHASE,(scope.targets.len()*6+1024*2+4) as i64])?;
+            while let Some(row)=rows.next()? {
+                let text:Option<String>=row.get(0)?;let text=text.ok_or_else(||failed("Preparation fact exceeds 8 MiB."))?;
+                state.apply(&decode(&text,MAX_FACT)?,&text,&scope)?;
+            }
+            if !state.completed {return Err(failed("Preparation has no complete retained namespace proof. Preserve every existing object; automatic creation or adoption is unavailable."));}
+            Ok((scope,encoded,anchor,state))
+        })?;
+        Ok(Self {
+            catalog,
+            scope,
+            encoded,
+            anchor,
+            state: Mutex::new(state),
+        })
+    }
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(in crate::executor) fn validate_native(&self, parent: &std::fs::File) -> Result<()> {
         let owner = self.scope.sources.owner_id.clone();
         let token = self.scope.token.clone();
@@ -211,6 +243,7 @@ impl NamespaceJournal {
         })?;
         preparation::validate_retained(parent, &completion, &scope.namespace, &scope.targets)
     }
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(in crate::executor) fn ready_journal(&self) -> Result<CatalogJournal> {
         let owner = self.scope.sources.owner_id.clone();
         let token = self.scope.token.clone();

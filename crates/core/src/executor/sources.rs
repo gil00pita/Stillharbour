@@ -60,6 +60,7 @@ fn root(db: &Connection, id: &str, managed: bool) -> Result<(Vec<u8>, Object, St
     ))
 }
 impl Snapshot {
+    #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn validate_roots(&self, catalog: &Arc<Catalog>) -> Result<()> {
         self.validate_roots_for(catalog, true)
     }
@@ -67,6 +68,7 @@ impl Snapshot {
     pub(super) fn validate_read_roots(&self, catalog: &Arc<Catalog>) -> Result<()> {
         self.validate_roots_for(catalog, false)
     }
+    #[cfg(any(test, feature = "copy-workflow"))]
     fn validate_roots_for(&self, catalog: &Arc<Catalog>, managed: bool) -> Result<()> {
         let id = self.root_id.clone();
         let (path, object, volume) = catalog.call(move |db| root(db, &id, managed))?;

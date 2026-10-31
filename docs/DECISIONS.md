@@ -255,3 +255,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Copy effect identity and schema 6 - 2026-10-31
 
 [ADR-0043](decisions/ADR-0043-copy-effect-history.md) binds exact native source/template/target mappings to retained output history independently of new draft/session UUIDs. Atomic catalog admission refuses another namespace for that mapping. Existing output must be freshly byte-inspected; history never restores approval. Schema 6 adds immutable journal indexes after retained v5 snapshots. Experimental/default preservation gates remain unchanged.
+
+## Reopen complete retained preparation - 2026-10-31
+
+[ADR-0044](decisions/ADR-0044-reopen-complete-preparation.md) handles loss of the ready-copy binding after complete recorded native name preparation. Fresh private selection and exact retained/native validation reconstruct planning metadata only; the copy still needs new fidelity acknowledgment, approval and start. Unknown/changed/incomplete objects remain blocked and preserved. Reopened/discarded scopes revoke previous ephemeral grants. No schema/default feature/original mutation change.

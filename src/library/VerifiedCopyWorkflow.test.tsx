@@ -1,11 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { CopyActionReview, CopyManifest, CopyWorkflowJob, LibraryRequest } from '../bindings';
-import { libraryData, pickDirectory } from '../ipc';
-import { VerifiedCopyWorkflow } from './VerifiedCopyWorkflow';
+import { library, libraryData, pickDirectory } from '../ipc';
+import { VerifiedCopyWorkflow, ReopenPreparedCopy } from './VerifiedCopyWorkflow';
 vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
   libraryData: vi.fn(),
+  library: vi.fn(),
   pickDirectory: vi.fn(),
 }));
 const manifest: CopyManifest = {
@@ -90,6 +91,7 @@ function job(action: 'prepare_names' | 'copy_files', finished: boolean): CopyWor
 }
 beforeEach(() => {
   vi.mocked(libraryData).mockReset();
+  vi.mocked(library).mockReset().mockResolvedValue({ kind: 'done' });
   vi.mocked(pickDirectory).mockReset().mockResolvedValue({
     id: 'native-selection',
     displayPath: 'Chosen destination',
@@ -287,4 +289,93 @@ it('rejects foreign effect history before requesting a copy review', async () =>
       .mocked(libraryData)
       .mock.calls.some(([request]) => request.kind === 'organization_copy_review_create'),
   ).toBe(false);
+});
+
+const reopenedManifest: CopyManifest = {
+  ...manifest,
+  files: [
+    {
+      id: 'photo',
+      rootId: 'root',
+      sourceName: 'source/photo.JPG',
+      sourceRevision: 'revision',
+      targetRelativePath: 'after/photo.JPG',
+      bytes: '42',
+      bundleAssetIds: ['photo'],
+    },
+  ],
+};
+it('reopens stopped preparation as an unapproved copy review without replaying preparation', async () => {
+  const stopped = {
+    ...job('prepare_names', true),
+    state: 'needs_attention' as const,
+    readyReviewId: null,
+  };
+  vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) => {
+    if (request.kind === 'organization_copy_capabilities')
+      return { available: true, reason: 'test' };
+    if (request.kind === 'organization_copy_preparation_reopen')
+      return { jobId: stopped.id, manifest: reopenedManifest, review: copy };
+    throw new Error(`Unexpected request ${request.kind}`);
+  });
+  render(<ReopenPreparedCopy job={stopped} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose destination and reopen preparation' }),
+  );
+  await screen.findByRole('heading', { name: 'Prepared copy review' });
+  expect(screen.getByRole('button', { name: 'Approve byte-verified copy' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Start verified copy' })).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole('button', { name: 'Approve output preparation' }),
+  ).not.toBeInTheDocument();
+  expect(
+    vi
+      .mocked(libraryData)
+      .mock.calls.some(([request]) => request.kind === 'organization_copy_start'),
+  ).toBe(false);
+});
+it('retains an incomplete preparation error without exposing any approval', async () => {
+  vi.mocked(libraryData)
+    .mockResolvedValueOnce({ available: true, reason: 'test' })
+    .mockRejectedValueOnce(new Error('Preparation has no complete retained namespace proof.'));
+  render(<ReopenPreparedCopy job={{ ...job('prepare_names', true), readyReviewId: null }} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose destination and reopen preparation' }),
+  );
+  await screen.findByText('Preparation has no complete retained namespace proof.');
+  expect(
+    screen.queryByRole('button', { name: 'Approve byte-verified copy' }),
+  ).not.toBeInTheDocument();
+});
+it('discards a late preparation response after the job view closes', async () => {
+  const stopped = { ...job('prepare_names', true), readyReviewId: null };
+  const response = { jobId: stopped.id, manifest: reopenedManifest, review: copy };
+  let resolve!: (value: typeof response) => void;
+  const pending = new Promise<typeof response>((done) => {
+    resolve = done;
+  });
+  vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) => {
+    if (request.kind === 'organization_copy_capabilities')
+      return { available: true, reason: 'test' };
+    if (request.kind === 'organization_copy_preparation_reopen') return pending;
+    throw new Error(`Unexpected request ${request.kind}`);
+  });
+  const view = render(<ReopenPreparedCopy job={stopped} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose destination and reopen preparation' }),
+  );
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(libraryData)
+        .mock.calls.some(([request]) => request.kind === 'organization_copy_preparation_reopen'),
+    ).toBe(true),
+  );
+  view.unmount();
+  await act(async () => {
+    resolve(response);
+  });
+  await waitFor(() =>
+    expect(library).toHaveBeenCalledWith({ kind: 'organization_copy_discard', review_id: 'copy' }),
+  );
 });
