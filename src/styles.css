@@ -2654,11 +2654,13 @@ button.explorer-entry.asset-open:hover:enabled {
 }
 
 :root {
-  --reveal-dur: 160ms;
+  --reveal-dur: 400ms;
+  --reveal-blur: 2px;
   --reveal-ease: ease-in-out;
 }
 .photo-layers {
   isolation: isolate;
+  overflow: hidden;
   display: block;
   width: 100%;
   height: 100%;
@@ -2669,9 +2671,7 @@ button.explorer-entry.asset-open:hover:enabled {
   align-items: center;
   justify-content: center;
 }
-/* The wrap stacks two layers on the same coordinates. The
-   tiny image is already soft; opacity-only reveal avoids filtered tiled
-   textures and their dark seams in the native scrolling compositor. */
+/* Stack the blurred placeholder and clear image without changing geometry. */
 .t-skel {
   position: relative;
 }
@@ -2684,18 +2684,29 @@ button.explorer-entry.asset-open:hover:enabled {
 .t-skel-skeleton {
   z-index: 1;
   opacity: 1;
-  transition: opacity var(--reveal-dur) var(--reveal-ease);
+  filter: blur(0);
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter var(--reveal-dur) var(--reveal-ease);
 }
 .t-skel-content {
   z-index: 2;
   opacity: 0;
-  transition: opacity var(--reveal-dur) var(--reveal-ease);
+  filter: blur(var(--reveal-blur));
+  transition:
+    opacity var(--reveal-dur) var(--reveal-ease),
+    filter var(--reveal-dur) var(--reveal-ease);
 }
 .t-skel.is-revealed .t-skel-skeleton {
   opacity: 0;
+  filter: blur(var(--reveal-blur));
 }
 .t-skel.is-revealed .t-skel-content {
   opacity: 1;
+  filter: blur(0);
+}
+.photo-tiny-preview {
+  filter: blur(8px);
 }
 .photo-layers.without-motion .t-skel-skeleton,
 .photo-layers.without-motion .t-skel-content {
