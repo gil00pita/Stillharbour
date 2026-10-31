@@ -1,4 +1,5 @@
 import { useCallback, useState, type RefObject } from 'react';
+import { EmptyLibraryArt } from '../EmptyLibraryArt';
 import type { LibraryStatus } from '../bindings';
 import type { LibraryController } from './useLibraryController';
 import type { ViewMode } from './model';

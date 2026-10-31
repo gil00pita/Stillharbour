@@ -1340,16 +1340,20 @@ describeMac('macOS M1 library — generated native fixtures', () => {
                 [...row.querySelectorAll('.asset')].map((asset) => asset.dataset.date.slice(0, 10)),
               ).size <= 1,
           ),
-          noFilters: [
-            ...document.querySelectorAll('.photo-layers, .photo-layers img, .t-skel-skeleton'),
-          ].every((element) => getComputedStyle(element).filter === 'none'),
+          clippedPreviews: [...document.querySelectorAll('.photo-layers')].every(
+            (element) => getComputedStyle(element).overflow === 'hidden',
+          ),
+          blurredTinyPreviews: [...document.querySelectorAll('.photo-tiny-preview')].every(
+            (element) => getComputedStyle(element).filter === 'blur(8px)',
+          ),
         };
       });
       assert.deepEqual(sticky, {
         aligned: true,
         sticky: true,
         separateDays: true,
-        noFilters: true,
+        clippedPreviews: true,
+        blurredTinyPreviews: true,
       });
       await browser.saveScreenshot(`.context/screenshots/gallery-dates-sticky-${size}.png`);
       await browser.saveScreenshot(`.context/screenshots/photo-canvas-timeline-${size}.png`);
