@@ -183,3 +183,23 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Owner-approved Windows NTFS read adapter — 2026-10-30
 
 [ADR-0021](decisions/ADR-0021-windows-ntfs-scanning.md) records the explicit Windows-backend continuation. Use local NTFS volume GUID/file identities, bounded held-handle enumeration and file-ID opens with native name/membership checks. Baseline worker dimensions/previews preserve filesystem date provenance; unsupported roots show the blocking alert. Generic original publication/durability, non-NTFS/network support, full Windows metadata/format packaging and release/preservation gates remain separate. No persisted identity/schema migration.
+
+## Complete direct-folder companion review — 2026-10-31
+
+[ADR-0026](decisions/ADR-0026-confirmed-companion-review.md) adds metadata-only live folder-name inventory and append-only decisions bound to retained drafts. Full reviewed public inventory, selected exact native locators, acknowledgement and targets are retained without changing original draft digests. Limits and incomplete observations are explicit. Future executable manifests must bind explicit decision IDs and revalidate; no original mutation or execution approval is introduced.
+
+## Explicit compiled copy scopes — 2026-10-31
+
+[ADR-0027](decisions/ADR-0027-compiled-copy-manifests.md) reconciles explicit per-photo companion decisions into bounded immutable manifests, combines only identical mappings and preserves cross-bundle conflicts. Original draft digests/schema stay unchanged; fresh retries are idempotent and retained opening recomputes reconciliation. Destination/content/fidelity/capacity/approval/executor gates remain pending.
+
+## Owned copy executor development — 2026-10-31
+
+[ADR-0028](decisions/ADR-0028-owned-copy-executor-fixtures.md) develops the central source-retaining stage/copy/verify/no-replace/recovery sequence with a shared precharged byte budget against constructor-owned temporary fixtures. Real process-exit and journal-denial tests supplement cooperative interruption; retained originals/neighbors are independently checked. The production catalog/job/ready-plan/approval adapters and mutation gates remain pending. Do not treat fixture completion as real-library authorization or full metadata/backup fidelity.
+
+## Native future-name preparation — 2026-10-31
+
+[ADR-0029](decisions/ADR-0029-native-name-preparation.md) extends the constructor-owned M2 fixture capability with actual exclusive name creation in a new pending output namespace. It retains empty identified stages, native collision evidence and an immutable fingerprint, with bounded inputs/journal records and no execution authority. This is a prerequisite for ready-plan approval, not production destination reservation or copying.
+
+## Copy capacity and fidelity review — 2026-10-31
+
+[ADR-0030](decisions/ADR-0030-copy-capacity-and-fidelity-review.md) adds an ID-only on-demand assessment of a freshly revalidated retained manifest/destination. Show native allocation units, exact per-file rounded data and explicit metadata/journal/headroom allowances against observed free bytes. Report unverified metadata aspects, retained sources and absent independent backup without granting approval. Capacity remains an estimate, not a reservation or completed executor gate.

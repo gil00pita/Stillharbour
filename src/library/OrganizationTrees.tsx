@@ -37,8 +37,8 @@ export function OrganizationTrees({
   return (
     <section className="organization-trees" aria-label="Organization path trees">
       <p className="help">
-        Selected paths only. Source paths are grouped by library; excluded, unknown and unselected
-        files are outside this view. Proposed folders are not created or checked on disk.
+        Selected paths only. Source folders use components supplied by the backend; excluded,
+        unknown and unselected files are outside this view. Proposed folders are not created here.
       </p>
       <details>
         <summary>Before · {rows.length} selected paths</summary>
@@ -50,13 +50,15 @@ export function OrganizationTrees({
                   {roots.find((root) => root.id === id)?.label ?? `Library ${id}`} · {files.length}{' '}
                   paths
                 </summary>
-                <ul>
-                  {files.map((row) => (
-                    <li key={row.assetId}>
-                      <bdi>{row.sourcePath}</bdi> · {BigInt(row.bytes).toLocaleString()} bytes
-                    </li>
-                  ))}
-                </ul>
+                {files.some(
+                  (row) => !row.sourceComponents?.length || row.sourceComponents.length > 65,
+                ) && (
+                  <p className="help">
+                    Source hierarchy unavailable for some retained paths; those paths are shown
+                    literally.
+                  </p>
+                )}
+                <PathBranch node={sourceBranch(files)} source />
               </details>
             </li>
           ))}
@@ -71,7 +73,7 @@ export function OrganizationTrees({
           Relative to the selected destination. Paths with review issues stay blocked even when a
           proposed name is shown.
         </p>
-        <DestinationBranch node={destination} />
+        <PathBranch node={destination} />
         {unresolved.length > 0 && (
           <>
             <p>No resolved target</p>
@@ -89,7 +91,24 @@ export function OrganizationTrees({
   );
 }
 
-function DestinationBranch({ node }: { node: Branch }) {
+function sourceBranch(rows: OrganizationRow[]): Branch {
+  const root = branch();
+  for (const row of rows) {
+    const components = row.sourceComponents;
+    let node = root;
+    if (components && components.length > 0 && components.length <= 65) {
+      for (const component of components.slice(0, -1)) {
+        const child = node.folders.get(component) ?? branch();
+        node.folders.set(component, child);
+        node = child;
+      }
+    }
+    node.files.push(row);
+  }
+  return root;
+}
+
+function PathBranch({ node, source = false }: { node: Branch; source?: boolean }) {
   return (
     <ul>
       {ordered(node.folders).map(([name, child]) => (
@@ -98,15 +117,21 @@ function DestinationBranch({ node }: { node: Branch }) {
             <summary>
               <bdi>{name}</bdi> /
             </summary>
-            <DestinationBranch node={child} />
+            <PathBranch node={child} source={source} />
           </details>
         </li>
       ))}
       {node.files.map((row) => (
         <li key={`file:${row.assetId}`}>
-          <bdi>{row.targetRelativePath?.split('/').at(-1)}</bdi> ·{' '}
-          {BigInt(row.bytes).toLocaleString()} bytes
-          {row.issues.length > 0 && ' · blocked: review issues'}
+          <bdi title={source ? row.sourcePath : undefined}>
+            {source
+              ? row.sourceComponents?.length && row.sourceComponents.length <= 65
+                ? row.sourceComponents.at(-1)
+                : row.sourcePath
+              : row.targetRelativePath?.split('/').at(-1)}
+          </bdi>{' '}
+          · {BigInt(row.bytes).toLocaleString()} bytes
+          {!source && row.issues.length > 0 && ' · blocked: review issues'}
         </li>
       ))}
     </ul>

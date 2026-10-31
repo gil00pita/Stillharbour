@@ -172,6 +172,21 @@ pub(super) fn snapshot(
     db: &mut rusqlite::Connection,
     ids: Vec<String>,
 ) -> Result<(String, Vec<PreviewSource>)> {
+    snapshot_inner(db, ids, true)
+}
+
+pub(super) fn source_snapshot(
+    db: &mut rusqlite::Connection,
+    ids: Vec<String>,
+) -> Result<(String, Vec<PreviewSource>)> {
+    snapshot_inner(db, ids, false)
+}
+
+fn snapshot_inner(
+    db: &mut rusqlite::Connection,
+    ids: Vec<String>,
+    count_candidates: bool,
+) -> Result<(String, Vec<PreviewSource>)> {
     let tx = db.transaction()?;
     let revision: i64 = tx.query_row(
         "SELECT revision FROM library_state WHERE singleton=1",
@@ -212,7 +227,9 @@ pub(super) fn snapshot(
             }).optional()?.ok_or_else(|| invalid("A selected photo is no longer in the catalog. Refresh and select it again."))?;
             sources.push(source);
         }
-        count_companions(&tx, &mut sources)?;
+        if count_candidates {
+            count_companions(&tx, &mut sources)?;
+        }
         sources.into_iter().map(|entry| entry.source).collect()
     };
     tx.commit()?;

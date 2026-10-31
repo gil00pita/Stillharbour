@@ -65,7 +65,9 @@ describe('native library onboarding', () => {
     expect(document.querySelector('.empty-library-art')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Choose a folder' }));
     await screen.findByText('Selected folder');
-    expect(screen.getByRole('textbox', { name: 'Library name' })).toHaveFocus();
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Library name' })).toHaveFocus(),
+    );
     expect(screen.getByText('Not scanned')).toBeVisible();
     expect(library).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Choose a folder' })).not.toBeInTheDocument();

@@ -174,12 +174,24 @@ fn by_id(parent: &File, id: u64, directory: bool) -> Result<File> {
 }
 
 fn by_id_shared(parent: &File, id: u64, directory: bool, sharing: u32) -> Result<File> {
+    by_id_access(parent, id, directory, sharing, false)
+}
+
+fn by_id_access(
+    parent: &File,
+    id: u64,
+    directory: bool,
+    sharing: u32,
+    attributes_only: bool,
+) -> Result<File> {
     let descriptor = FILE_ID_DESCRIPTOR {
         dwSize: size_of::<FILE_ID_DESCRIPTOR>() as u32,
         Type: FileIdType,
         Anonymous: FILE_ID_DESCRIPTOR_0 { FileId: id as i64 },
     };
-    let access = if directory {
+    let access = if attributes_only {
+        FILE_READ_ATTRIBUTES | SYNCHRONIZE
+    } else if directory {
         FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE
     } else {
         FILE_GENERIC_READ
@@ -214,9 +226,28 @@ fn by_id_shared(parent: &File, id: u64, directory: bool, sharing: u32) -> Result
 fn entry_id(parent: &File, name: &OsStr) -> Result<u64> {
     // Native-only names can contain DOS search metacharacters. Enumerate those
     // literally rather than interpreting untrusted names as search expressions.
-    let mut wide: Vec<u16> = name.encode_wide().collect();
+    let wide: Vec<u16> = name.encode_wide().collect();
     if wide.iter().any(|c| matches!(*c, 34 | 42 | 60 | 62 | 63)) {
         return enumerated_entry_id(parent, name);
+    }
+    let entry = destination_entry(parent, name)?.ok_or_else(|| {
+        AppError::new(
+            ErrorCode::Conflict,
+            "The entry is no longer in its recorded directory.",
+        )
+    })?;
+    exact_entry_id(entry, name)
+}
+
+/// Native lookup for an already validated portable target component. A returned
+/// case/short-name alias is an occupied name, never authority to open that alias.
+pub(crate) fn destination_entry(parent: &File, name: &OsStr) -> Result<Option<Entry>> {
+    validate_component(name)?;
+    let mut wide: Vec<u16> = name.encode_wide().collect();
+    if wide.iter().any(|c| matches!(*c, 34 | 42 | 60 | 62 | 63)) {
+        return Err(unsupported(
+            "Target lookup does not accept search expressions.",
+        ));
     }
     // A fresh handle is essential: Windows captures the search expression on
     // its first query and ignores later FileName arguments on that handle.
@@ -247,10 +278,7 @@ fn entry_id(parent: &File, name: &OsStr) -> Result<u64> {
     };
     if status != 0 {
         if matches!(status, STATUS_NO_SUCH_FILE | STATUS_NO_MORE_FILES) {
-            return Err(AppError::new(
-                ErrorCode::Conflict,
-                "The entry is no longer in its recorded directory.",
-            ));
+            return Ok(None);
         }
         // NTSTATUS is not GetLastError; retain the actual native failure.
         return Err(std::io::Error::from_raw_os_error(unsafe {
@@ -258,10 +286,25 @@ fn entry_id(parent: &File, name: &OsStr) -> Result<u64> {
         })
         .into());
     }
-    lookup_id(&buffer, io.Information, name)
+    parse_lookup_entry(&buffer, io.Information).map(Some)
 }
 
+#[cfg(test)]
 fn lookup_id(buffer: &[u64], length: usize, name: &OsStr) -> Result<u64> {
+    exact_entry_id(parse_lookup_entry(buffer, length)?, name)
+}
+
+fn exact_entry_id(entry: Entry, name: &OsStr) -> Result<u64> {
+    if entry.name != name {
+        return Err(AppError::new(
+            ErrorCode::Conflict,
+            "Native entry name changed during lookup.",
+        ));
+    }
+    Ok(entry.file_id)
+}
+
+fn parse_lookup_entry(buffer: &[u64], length: usize) -> Result<Entry> {
     let header = offset_of!(FILE_ID_BOTH_DIR_INFORMATION, FileName);
     if length < header || length > size_of_val(buffer) {
         return Err(unsupported("Invalid native lookup response."));
@@ -282,21 +325,26 @@ fn lookup_id(buffer: &[u64], length: usize, name: &OsStr) -> Result<u64> {
         .as_chunks::<2>()
         .0
         .iter()
-        .map(|c| u16::from_le_bytes(*c));
-    // A short-name alias or case-insensitive match is not the exact entry that
-    // was observed. Do not authorize it, even when it refers to the same object.
-    if !returned.eq(name.encode_wide()) {
-        return Err(AppError::new(
-            ErrorCode::Conflict,
-            "Native entry name changed during lookup.",
-        ));
-    }
+        .map(|c| u16::from_le_bytes(*c))
+        .collect::<Vec<_>>();
     let at = offset_of!(FILE_ID_BOTH_DIR_INFORMATION, FileId);
     let id = u64::from_le_bytes(bytes[at..at + 8].try_into().unwrap());
     if id == 0 {
         return Err(unsupported("Invalid native lookup identity."));
     }
-    Ok(id)
+    let at = offset_of!(FILE_ID_BOTH_DIR_INFORMATION, FileAttributes);
+    let attributes = u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap());
+    let at = offset_of!(FILE_ID_BOTH_DIR_INFORMATION, EndOfFile);
+    let size = i64::from_le_bytes(bytes[at..at + 8].try_into().unwrap());
+    if size < 0 {
+        return Err(unsupported("Invalid native lookup file size."));
+    }
+    Ok(Entry {
+        name: OsString::from_wide(&returned),
+        file_id: id,
+        attributes,
+        bytes: size as u64,
+    })
 }
 
 fn enumerated_entry_id(parent: &File, name: &OsStr) -> Result<u64> {
@@ -323,6 +371,19 @@ pub fn child(parent: &File, name: &OsStr, directory: bool) -> Result<File> {
         return Err(AppError::new(
             ErrorCode::Conflict,
             "Entry membership changed while opening.",
+        ));
+    }
+    Ok(file)
+}
+
+pub(crate) fn metadata_child(parent: &File, name: &OsStr) -> Result<File> {
+    validate_component(name)?;
+    let id = entry_id(parent, name)?;
+    let file = by_id_access(parent, id, false, FILE_SHARE_READ, true)?;
+    if entry_id(parent, name)? != id {
+        return Err(AppError::new(
+            ErrorCode::Conflict,
+            "Entry membership changed during metadata review.",
         ));
     }
     Ok(file)
@@ -480,6 +541,23 @@ impl Directory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn metadata_only_children_cannot_read_source_contents() {
+        use std::io::Read;
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(fixture.path().join("Photo.xmp"), b"preserved metadata").unwrap();
+        let root = open_root(fixture.path()).unwrap();
+        let mut file = metadata_child(&root, OsStr::new("Photo.xmp")).unwrap();
+        assert_eq!(file.metadata().unwrap().len(), 18);
+        assert!(file.read(&mut [0u8; 1]).is_err());
+        assert!(metadata_child(&root, OsStr::new("PHOTO.XMP")).is_err());
+        drop(file);
+        assert_eq!(
+            std::fs::read(fixture.path().join("Photo.xmp")).unwrap(),
+            b"preserved metadata"
+        );
+    }
+
     #[test]
     fn exact_lookup_is_fresh_literal_and_preserves_locked_sources() {
         let fixture = tempfile::tempdir().unwrap();

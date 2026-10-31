@@ -8,6 +8,7 @@ use crate::{
     organization::{OrganizationDestinationReview, OrganizationTemplate},
 };
 use std::path::{Path, PathBuf};
+mod targets;
 fn same(left: &FileIdentity, right: &FileIdentity) -> bool {
     left.volume == right.volume && left.file == right.file
 }
@@ -105,6 +106,8 @@ impl Library {
             ));
             held.push(chain);
         }
+        let (targets, target_evidence) = targets::review(destination.leaf(), &preview.rows)?;
+        let space = crate::filesystem::volume_probe(&path)?;
         // A read-only review is an observation, not a reservation. Check the
         // selected path again and reject catalog changes during native work.
         let current_selected = native::open_root(&selected_path, Some(&expected.0))?;
@@ -122,13 +125,14 @@ impl Library {
             return Err(conflict());
         }
         let bytes = serde_json::to_vec(&(
-            "organization-destination-v1",
+            "organization-destination-v2-target-observations",
             &preview_fingerprint,
             native::encode_path(&path),
             &volume,
             destination.identity().volume,
             destination.identity().file,
             evidence,
+            target_evidence,
         ))
         .map_err(|e| invalid("Could not fingerprint destination observations.").caused_by(e))?;
         Ok(OrganizationDestinationReview {
@@ -138,6 +142,9 @@ impl Library {
             fingerprint: blake3::hash(&bytes).to_hex().to_string(),
             execution_available: false,
             persisted: false,
+            targets,
+            available_bytes: space.available_bytes.to_string(),
+            total_bytes: space.total_bytes.to_string(),
         })
     }
 }

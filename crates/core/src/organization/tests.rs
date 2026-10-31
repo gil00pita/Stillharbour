@@ -39,6 +39,34 @@ fn presets_resolve_capture_local_time_and_keep_extension_case() {
     assert_eq!(p.proposed, 1);
     assert!(!p.execution_available);
     assert_eq!(p.rows[0].companion_candidates, 1);
+    assert_eq!(
+        p.rows[0].source_components.as_deref(),
+        Some(["folder".to_owned(), "港.JPG".to_owned()].as_slice())
+    );
+}
+
+#[test]
+fn legacy_row_serialization_stays_exact_and_source_components_follow_host_native_separators() {
+    let p = run(
+        "{original_stem}.{ext}",
+        vec![source("Family/Trips/photo.JPG")],
+    );
+    let mut old = serde_json::to_value(&p.rows[0]).unwrap();
+    old.as_object_mut().unwrap().remove("sourceComponents");
+    let decoded: OrganizationRow = serde_json::from_value(old.clone()).unwrap();
+    assert!(decoded.source_components.is_none());
+    assert_eq!(serde_json::to_value(decoded).unwrap(), old);
+    let p = run("{original_stem}.{ext}", vec![source("Family\\photo.JPG")]);
+    #[cfg(windows)]
+    assert_eq!(
+        p.rows[0].source_components.as_ref().unwrap(),
+        &["Family", "photo.JPG"]
+    );
+    #[cfg(unix)]
+    assert_eq!(
+        p.rows[0].source_components.as_ref().unwrap(),
+        &["Family\\photo.JPG"]
+    );
 }
 
 #[test]
@@ -236,4 +264,61 @@ fn bounded_inputs_and_nonlossy_byte_totals() {
         run("{original_stem}.{ext}", vec![s.clone(), s]).selected_bytes,
         "36893488147419103230"
     );
+}
+#[test]
+fn template_examples_use_the_preview_resolver_without_filesystem_access() {
+    use super::{MissingDatePolicy, OrganizationTemplate, TemplateSample, validate_samples};
+    let mut template = OrganizationTemplate {
+        pattern: "{capture:%Y}/{original_folder}/{sequence:03}_{original_stem}.{ext}".into(),
+        event: String::new(),
+        missing_date: MissingDatePolicy::Undated,
+    };
+    let mut sample = TemplateSample {
+        relative_path: "Holiday/IMG.JPG".into(),
+        capture: Some("2026-10-31T14:30:00.123".into()),
+        sequence: 12,
+        expected_target: "2026/Holiday/012_IMG.JPG".into(),
+    };
+    validate_samples(&template, &[sample.clone()]).unwrap();
+    sample.expected_target = "2026/Holiday/012_IMG.jpg".into();
+    assert!(validate_samples(&template, &[sample.clone()]).is_err());
+    sample.capture = None;
+    sample.expected_target = "Undated/IMG.JPG".into();
+    validate_samples(&template, &[sample.clone()]).unwrap();
+    template.missing_date = MissingDatePolicy::Block;
+    assert!(validate_samples(&template, &[sample.clone()]).is_err());
+    template.pattern = "{original_stem}.{ext}".into();
+    sample.expected_target = "IMG.JPG".into();
+    for path in [
+        "../IMG.JPG",
+        "C:/IMG.JPG",
+        "a\\IMG.JPG",
+        "/IMG.JPG",
+        "a//IMG.JPG",
+        "NUL/IMG.JPG",
+    ] {
+        sample.relative_path = path.into();
+        assert!(
+            validate_samples(&template, &[sample.clone()]).is_err(),
+            "{path}"
+        );
+    }
+    sample.relative_path = "Holiday/IMG.JPG".into();
+    for date in [
+        "2026-02-30T12:00:00",
+        "2026-10-31T14:30:00Z",
+        "",
+        "not a date",
+    ] {
+        sample.capture = Some(date.into());
+        assert!(validate_samples(&template, &[sample.clone()]).is_err());
+    }
+    sample.capture = None;
+    for sequence in [0, 241, u32::MAX] {
+        sample.sequence = sequence;
+        assert!(validate_samples(&template, &[sample.clone()]).is_err());
+    }
+    sample.sequence = 1;
+    validate_samples(&template, &vec![sample.clone(); 4]).unwrap();
+    assert!(validate_samples(&template, &vec![sample; 5]).is_err());
 }

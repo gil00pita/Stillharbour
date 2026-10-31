@@ -1,4 +1,5 @@
-//! Windows local NTFS publication of an application-created SQLite snapshot.
+//! Windows local NTFS publication of an application-created SQLite snapshot
+//! or an explicitly requested, regenerable plan-review export.
 //! Not an original-file operation or a replacement primitive.
 use super::{DirectoryChain, FileIdentity, identity, windows};
 use crate::domain::{AppError, ErrorCode, Result};

@@ -345,6 +345,52 @@ describe('native read-only library', () => {
     await mkdir('.context/screenshots', { recursive: true });
     await browser.saveScreenshot('.context/screenshots/m1-onboarding.png');
   });
+  it('copies and inspects only backend-owned operation fixtures through native IPC', async () => {
+    const receipt = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_copy_executor_fixture', rows: null }),
+    );
+    assert.equal(receipt.scope, 'generated-temporary-only');
+    assert.equal(receipt.chunkBytes, 65_536);
+    assert.equal(receipt.burstBytes, 131_072);
+    assert.equal(receipt.nativeOs, process.platform === 'darwin' ? 'macos' : 'windows');
+    assert.equal(receipt.completed.outcome, 'completed_verified');
+    assert.equal(receipt.completed.sourcesPreserved, true);
+    assert.equal(receipt.completed.destinationNeighborPreserved, true);
+    assert.equal(receipt.completed.verifiedSourceFiles, 3);
+    assert.equal(receipt.completed.publishedOutputsVerified, 3);
+    assert.equal(receipt.completed.allOutputsByteVerified, true);
+    assert.equal(receipt.completed.retryBlocked, true);
+    assert.equal(receipt.interruptedAfterPublish.outcome, 'interrupted');
+    assert.equal(receipt.interruptedAfterPublish.sourcesPreserved, true);
+    assert.equal(receipt.interruptedAfterPublish.destinationNeighborPreserved, true);
+    assert.equal(receipt.interruptedAfterPublish.publishedOutputsVerified, 1);
+    assert.equal(receipt.interruptedAfterPublish.allOutputsByteVerified, false);
+    assert.equal(receipt.interruptedAfterPublish.retryBlocked, true);
+    const preparation = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', {
+        action: 'organization_name_preparation_fixture',
+        rows: null,
+      }),
+    );
+    assert.equal(preparation.scope, 'generated-temporary-only');
+    assert.equal(preparation.sourcesPreserved, true);
+    assert.equal(preparation.report.executionAvailable, false);
+    assert.equal(preparation.report.rows.length, 3);
+    assert.equal(preparation.report.retainedStages, 3);
+    assert.equal(
+      preparation.report.rows.every((row) => row.state === 'prepared'),
+      true,
+    );
+    const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
+    await writeFile(
+      `${evidence}/owned-copy-executor-${process.platform}.json`,
+      JSON.stringify(receipt),
+    );
+    await writeFile(
+      `${evidence}/owned-name-preparation-${process.platform}.json`,
+      JSON.stringify(preparation),
+    );
+  });
   (process.platform === 'win32' ? it : it.skip)(
     'highlights an identity-unavailable selection without starting a scan',
     async () => {
@@ -400,6 +446,7 @@ describe('native read-only library', () => {
       assert.equal(selection.identityAvailable, true);
       const picker = await browser.tauri.mock('foundation_request');
       let destinationCreated = false;
+      let exportCreated = false;
       try {
         await picker.mockReturnValue({ kind: 'directory', data: selection });
         await $('button.primary').click();
@@ -527,8 +574,32 @@ describe('native read-only library', () => {
         );
         await templateName.waitForDisplayed();
         await templateName.setValue('Generated native template');
+        await $('button=Add example').click();
+        await $('label*=Example 1 source name').$('input').setValue('Family/IMG.JPG');
+        await $('label*=Example 1 expected target').$('input').setValue('wrong.JPG');
+        await $('button=Save template').click();
+        const templateAlert = await $('section[aria-label="Saved templates"] [role="alert"]');
+        await templateAlert.waitForDisplayed();
+        assert.match(await templateAlert.getText(), /Example 1 does not match/);
+        const rejectedTemplates = await native({ kind: 'organization_templates' });
+        assert.equal(rejectedTemplates.data.length, 0);
+        await $('label*=Example 1 expected target').$('input').setValue('Undated/IMG.JPG');
         await $('button=Save template').click();
         await $('button=Use retained version').waitForDisplayed();
+        const sampleTemplates = await native({ kind: 'organization_templates' });
+        assert.equal(sampleTemplates.data.length, 1);
+        assert.deepEqual(sampleTemplates.data[0].policies.sampleOutputs, ['Undated/IMG.JPG']);
+        assert.equal(
+          JSON.parse(sampleTemplates.data[0].policies.sampleInputs[0]).relativePath,
+          'Family/IMG.JPG',
+        );
+        await writeFile(
+          `${evidence}/windows-template-examples.json`,
+          JSON.stringify(sampleTemplates.data),
+        );
+        await $('label*=Example 1 source name').scrollIntoView();
+        await browser.saveScreenshot('.context/screenshots/m2-template-examples.png');
+        await $('button=Use retained version').scrollIntoView();
         await $('button=Use retained version').click();
         for (let attempt = 0; attempt < 2; attempt++) {
           await $('button=Build preview').click();
@@ -605,8 +676,21 @@ describe('native read-only library', () => {
         });
         assert.equal(destinationReview.data.executionAvailable, false);
         assert.equal(destinationReview.data.persisted, false);
+        assert.equal(destinationReview.data.targets.length, selectedIds.length);
+        assert.ok(
+          destinationReview.data.targets.every((target) => target.state === 'unoccupied_observed'),
+        );
+        assert.ok(BigInt(destinationReview.data.availableBytes) > 0n);
+        assert.ok(
+          BigInt(destinationReview.data.totalBytes) >=
+            BigInt(destinationReview.data.availableBytes),
+        );
         assert.equal(
-          await $('section[aria-label="Organization destination"] bdi').getText(),
+          await $$('section[aria-label="Organization destination"] tbody tr').length,
+          selectedIds.length,
+        );
+        assert.equal(
+          await $('section[aria-label="Organization destination"] > p > bdi').getText(),
           destinationReview.data.destinationPath,
         );
         await writeFile(
@@ -666,6 +750,9 @@ describe('native read-only library', () => {
             after: after.querySelector(':scope > summary').textContent,
             expanded: after.open,
             files: after.querySelectorAll('li > bdi').length,
+            sourceNames: [
+              ...trees.querySelectorAll(':scope > details:first-of-type li > bdi[title]'),
+            ].map((element) => element.textContent),
           };
         });
         assert.equal(
@@ -674,8 +761,91 @@ describe('native read-only library', () => {
         );
         assert.equal(treeEvidence.expanded, true);
         assert.equal(treeEvidence.files, plan.data.plan.preview.rows.length);
+        assert.deepEqual(
+          treeEvidence.sourceNames.sort(),
+          plan.data.plan.preview.rows.map((row) => row.sourceComponents.at(-1)).sort(),
+        );
         await writeFile(`${evidence}/windows-plan-trees.json`, JSON.stringify(treeEvidence));
         await browser.saveScreenshot('.context/screenshots/m2-plan-trees.png');
+        await $('button=Review all companion filenames').scrollIntoView({
+          block: 'center',
+          inline: 'center',
+          behavior: 'instant',
+        });
+        await $('button=Review all companion filenames').waitForClickable();
+        await $('button=Review all companion filenames').click();
+        await $('button=Read all filenames').waitForDisplayed();
+        await $('button=Read all filenames').click();
+        await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+        const inventory = await native({
+          kind: 'organization_bundle_inventory',
+          asset_id: plan.data.plan.preview.rows[0].assetId,
+          source_revision: plan.data.plan.preview.rows[0].sourceRevision,
+        });
+        assert.equal(inventory.data.inventoryComplete, true);
+        assert.equal(
+          (await $$('section[aria-label="Complete companion inventory"] tbody tr')).length,
+          Math.min(64, inventory.data.entries.length),
+        );
+        await $('label*=I reviewed all filenames').scrollIntoView();
+        await $('label*=I reviewed all filenames').click();
+        await $('button=Save companion review').click();
+        await $(
+          'section[aria-label="Retained companion decision"] [role="status"]',
+        ).waitForDisplayed();
+        const companionReviews = await native({
+          kind: 'organization_bundle_reviews',
+          plan_id: plan.data.plan.id,
+          asset_id: plan.data.plan.preview.rows[0].assetId,
+        });
+        assert.equal(companionReviews.data.length, 1);
+        assert.equal(companionReviews.data[0].inventoryFingerprint, inventory.data.fingerprint);
+        assert.equal(companionReviews.data[0].executionAvailable, false);
+        await writeFile(
+          `${evidence}/windows-complete-companions.json`,
+          JSON.stringify({ inventory: inventory.data, confirmation: companionReviews.data[0] }),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-complete-companions.png');
+        await $('button=Close companion inventory').click();
+        await $('button=Compile copy review').scrollIntoView();
+        await $('button=Compile copy review').click();
+        await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+        const compiledManifest = await native({
+          kind: 'organization_copy_manifest',
+          input: {
+            planId: plan.data.plan.id,
+            bundleConfirmationIds: [companionReviews.data[0].id],
+          },
+        });
+        assert.equal(compiledManifest.data.executionAvailable, false);
+        assert.equal(compiledManifest.data.files.length, companionReviews.data[0].files.length);
+        assert.deepEqual(compiledManifest.data.issues, []);
+        await writeFile(
+          `${evidence}/windows-copy-manifest.json`,
+          JSON.stringify(compiledManifest.data),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-copy-manifest.png');
+        await $('button=Check copy space and fidelity').scrollIntoView();
+        await $('button=Check copy space and fidelity').click();
+        await $('section[aria-label="Copy space and fidelity"] table').waitForDisplayed();
+        const assessment = await native({
+          kind: 'organization_copy_assessment',
+          plan_id: plan.data.plan.id,
+          manifest_id: compiledManifest.data.id,
+        });
+        assert.equal(assessment.data.manifestDigest, compiledManifest.data.digest);
+        assert.equal(assessment.data.capacity.logicalBytes, compiledManifest.data.selectedBytes);
+        assert.equal(assessment.data.capacity.spaceReserved, false);
+        assert.equal(assessment.data.sourcesRetained, true);
+        assert.equal(assessment.data.independentBackupVerified, false);
+        assert.equal(assessment.data.executionAvailable, false);
+        assert(BigInt(assessment.data.capacity.allocationUnitBytes) > 0n);
+        assert.equal(assessment.data.fidelity.length, 7);
+        await writeFile(
+          `${evidence}/windows-copy-assessment.json`,
+          JSON.stringify(assessment.data),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-copy-assessment.png');
         await $('button=View JSON export').scrollIntoView();
         await $('button=View JSON export').click();
         await $('.organization-preview textarea').waitForDisplayed();
@@ -683,9 +853,72 @@ describe('native read-only library', () => {
         assert.equal(exported.digest, plan.data.plan.digest);
         assert.equal(exported.destination_native, undefined);
         await browser.saveScreenshot('.context/screenshots/m2-saved-plan.png');
+        const exportSelection = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_export_fixture', rows: null }),
+        );
+        exportCreated = true;
+        await picker.mockReturnValue({ kind: 'directory', data: exportSelection });
+        await $('button=Save JSON file…').scrollIntoView();
+        await $('button=Save JSON file…').click();
+        await $('section[aria-label="Saved plan detail"] [role="status"]').waitForDisplayed();
+        await $('button=Save CSV file…').scrollIntoView();
+        await $('button=Save CSV file…').click();
+        await browser.waitUntil(async () =>
+          (await $('section[aria-label="Saved plan detail"] [role="status"]').getText()).includes(
+            '.csv',
+          ),
+        );
+        const exportedFiles = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_export_verify', rows: null }),
+        );
+        assert.equal(exportedFiles.neighborUnchanged, true);
+        assert.equal(exportedFiles.exports.length, 2);
+        const savedJson = exportedFiles.exports.find((file) => file.filename.endsWith('.json'));
+        assert.deepEqual(JSON.parse(savedJson.text), exported);
+        assert.equal(savedJson.bytes, String(Buffer.byteLength(savedJson.text)));
+        const csvText = await native({
+          kind: 'organization_plan_export',
+          plan_id: plan.data.plan.id,
+          format: 'csv',
+        });
+        assert.equal(
+          exportedFiles.exports.find((file) => file.filename.endsWith('.csv')).text,
+          csvText.data.text,
+        );
+        await writeFile(
+          `${evidence}/windows-plan-export-files.json`,
+          JSON.stringify(exportedFiles),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-export-files.png');
         await $('button=Close saved plans').click();
+      } catch (error) {
+        await browser.saveScreenshot('.context/screenshots/windows-library-failure.png');
+        const diagnostics = await browser.execute(() => ({
+          viewport: { width: innerWidth, height: innerHeight },
+          inventoryPresent: Boolean(
+            document.querySelector('section[aria-label="Complete companion inventory"]'),
+          ),
+          reviewButtons: [...document.querySelectorAll('button')]
+            .filter((button) => button.textContent === 'Review all companion filenames')
+            .map((button) => ({
+              disabled: button.disabled,
+              rect: button.getBoundingClientRect().toJSON(),
+            })),
+        }));
+        await writeFile(`${evidence}/windows-library-failure.json`, JSON.stringify(diagnostics));
+        throw error;
       } finally {
         await picker.mockRestore();
+        if (exportCreated) {
+          const exportVerification = await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', { action: 'organization_export_verify', rows: null }),
+          );
+          await writeFile(
+            `${evidence}/windows-export-verification.json`,
+            JSON.stringify(exportVerification),
+          );
+          assert.equal(exportVerification.neighborUnchanged, true);
+        }
         const verification = await browser.tauri.execute(async ({ core }) =>
           core.invoke('test_library_fixture', { verify: true }),
         );

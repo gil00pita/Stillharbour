@@ -489,6 +489,11 @@ pub enum LibraryRequest {
         plan_id: String,
         format: crate::operations::PlanExportFormat,
     },
+    OrganizationPlanSaveExport {
+        selection_id: String,
+        plan_id: String,
+        format: crate::operations::PlanExportFormat,
+    },
     OrganizationDestination {
         selection_id: String,
         asset_ids: Vec<String>,
@@ -496,6 +501,28 @@ pub enum LibraryRequest {
         preview_fingerprint: String,
     },
     OrganizationCompanions {
+        asset_id: String,
+    },
+    OrganizationBundleInventory {
+        asset_id: String,
+        source_revision: String,
+    },
+    OrganizationBundleConfirm {
+        input: crate::operations::BundleConfirmationInput,
+    },
+    OrganizationCopyManifest {
+        input: crate::operations::CopyManifestInput,
+    },
+    OrganizationCopyManifestOpen {
+        plan_id: String,
+        manifest_id: String,
+    },
+    OrganizationCopyAssessment {
+        plan_id: String,
+        manifest_id: String,
+    },
+    OrganizationBundleReviews {
+        plan_id: String,
         asset_id: String,
     },
     OrganizationPreview {
@@ -614,6 +641,12 @@ pub enum LibraryResponse {
     OrganizationPlans(crate::operations::OrganizationPlanPage),
     OrganizationPlan(Box<crate::operations::OrganizationPlanDetail>),
     OrganizationPlanExport(crate::operations::PlanExport),
+    OrganizationPlanExportSaved(crate::operations::PlanExportSaved),
+    OrganizationBundleInventory(crate::operations::BundleInventory),
+    OrganizationBundleConfirmation(crate::operations::BundleConfirmation),
+    OrganizationBundleReviews(Vec<crate::operations::BundleConfirmation>),
+    OrganizationCopyManifest(crate::operations::CopyManifest),
+    OrganizationCopyAssessment(crate::operations::CopyAssessment),
     OrganizationDestination(crate::organization::OrganizationDestinationReview),
     OrganizationCompanions(crate::organization::OrganizationCompanionReview),
     OrganizationPreview(crate::organization::OrganizationPreview),

@@ -6,10 +6,105 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub(crate) mod copy_assessment;
+pub(crate) mod copy_manifest;
+pub use copy_assessment::{
+    CopyAssessment, CopyCapacityEstimate, CopyCapacityStatus, CopyFidelityAspect, CopyFidelityItem,
+    CopyFidelityStatus,
+};
+pub use copy_manifest::{
+    CopyManifest, CopyManifestFile, CopyManifestInput, CopyManifestIssue, CopyManifestIssueKind,
+};
+
 pub const PLAN_POLICY: &str = "organization-plan-v1";
 pub const MAX_TEMPLATES: usize = 100;
 pub const MAX_TEMPLATE_VERSIONS: u32 = 100;
 pub const MAX_PLAN_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_BUNDLE_DIRECTORY_ENTRIES: usize = 4096;
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BundleEntryKind {
+    File,
+    Directory,
+    LinkOrSpecial,
+    Placeholder,
+    Unreadable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BundleRelation {
+    Primary,
+    SameStem,
+    FilenameSidecar,
+    AppleDouble,
+    Additional,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleInventoryEntry {
+    pub id: String,
+    pub name: String,
+    pub kind: BundleEntryKind,
+    pub relation: BundleRelation,
+    pub bytes: Option<String>,
+    pub catalog_asset_id: Option<String>,
+    pub catalog_presence: Option<String>,
+    pub name_representable: bool,
+    pub selectable: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleInventory {
+    pub asset_id: String,
+    pub source_revision: String,
+    pub catalog_revision: String,
+    pub fingerprint: String,
+    pub entries: Vec<BundleInventoryEntry>,
+    pub inventory_complete: bool,
+    pub truncated: bool,
+    pub indexed_limit_exceeded: bool,
+    pub unobserved_candidates: Vec<String>,
+    pub execution_available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BundleConfirmationInput {
+    pub plan_id: String,
+    pub asset_id: String,
+    pub source_revision: String,
+    pub inventory_fingerprint: String,
+    pub companion_ids: Vec<String>,
+    pub reviewed_all_entries: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmedBundleFile {
+    pub entry_id: String,
+    pub source_name: String,
+    pub target_relative_path: String,
+    pub relation: BundleRelation,
+    pub bytes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleConfirmation {
+    pub id: String,
+    pub plan_id: String,
+    pub asset_id: String,
+    pub inventory_fingerprint: String,
+    pub fingerprint: String,
+    pub files: Vec<ConfirmedBundleFile>,
+    pub total_bytes: String,
+    pub execution_available: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -34,6 +129,8 @@ pub struct TemplateSave {
     pub name: String,
     pub description: String,
     pub template: OrganizationTemplate,
+    #[serde(default)]
+    pub samples: Vec<crate::organization::TemplateSample>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -164,6 +261,14 @@ pub struct PlanExport {
     pub text: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanExportSaved {
+    pub path: String,
+    pub bytes: String,
+    pub digest: String,
+}
+
 pub fn validate_template_save(save: &TemplateSave) -> Result<()> {
     let valid_text = |s: &str, max: usize| {
         !s.trim().is_empty() && s.len() <= max && !s.chars().any(char::is_control)
@@ -178,6 +283,7 @@ pub fn validate_template_save(save: &TemplateSave) -> Result<()> {
         ));
     }
     crate::organization::validate_template(&save.template)?;
+    crate::organization::validate_samples(&save.template, &save.samples)?;
     if let Some(reference) = &save.previous {
         validate_id(&reference.id)?;
         if reference.version == 0 || reference.version >= MAX_TEMPLATE_VERSIONS {
