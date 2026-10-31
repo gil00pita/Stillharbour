@@ -154,6 +154,7 @@ export function TileImage({
         <span className="t-skel-skeleton">
           {tinyReady ? (
             <CachedPreviewImage
+              className={fallbackEdge === 32 ? 'photo-tiny-preview' : undefined}
               src={previewUrl(asset, fallbackEdge!)}
               alt=""
               decoding="async"
