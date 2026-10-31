@@ -6,7 +6,12 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub(crate) mod copy_assessment;
 pub(crate) mod copy_manifest;
+pub use copy_assessment::{
+    CopyAssessment, CopyCapacityEstimate, CopyCapacityStatus, CopyFidelityAspect, CopyFidelityItem,
+    CopyFidelityStatus,
+};
 pub use copy_manifest::{
     CopyManifest, CopyManifestFile, CopyManifestInput, CopyManifestIssue, CopyManifestIssueKind,
 };

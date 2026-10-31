@@ -767,7 +767,12 @@ describe('native read-only library', () => {
         );
         await writeFile(`${evidence}/windows-plan-trees.json`, JSON.stringify(treeEvidence));
         await browser.saveScreenshot('.context/screenshots/m2-plan-trees.png');
-        await $('button=Review all companion filenames').scrollIntoView();
+        await $('button=Review all companion filenames').scrollIntoView({
+          block: 'center',
+          inline: 'center',
+          behavior: 'instant',
+        });
+        await $('button=Review all companion filenames').waitForClickable();
         await $('button=Review all companion filenames').click();
         await $('button=Read all filenames').waitForDisplayed();
         await $('button=Read all filenames').click();
@@ -820,6 +825,27 @@ describe('native read-only library', () => {
           JSON.stringify(compiledManifest.data),
         );
         await browser.saveScreenshot('.context/screenshots/m2-copy-manifest.png');
+        await $('button=Check copy space and fidelity').scrollIntoView();
+        await $('button=Check copy space and fidelity').click();
+        await $('section[aria-label="Copy space and fidelity"] table').waitForDisplayed();
+        const assessment = await native({
+          kind: 'organization_copy_assessment',
+          plan_id: plan.data.plan.id,
+          manifest_id: compiledManifest.data.id,
+        });
+        assert.equal(assessment.data.manifestDigest, compiledManifest.data.digest);
+        assert.equal(assessment.data.capacity.logicalBytes, compiledManifest.data.selectedBytes);
+        assert.equal(assessment.data.capacity.spaceReserved, false);
+        assert.equal(assessment.data.sourcesRetained, true);
+        assert.equal(assessment.data.independentBackupVerified, false);
+        assert.equal(assessment.data.executionAvailable, false);
+        assert(BigInt(assessment.data.capacity.allocationUnitBytes) > 0n);
+        assert.equal(assessment.data.fidelity.length, 7);
+        await writeFile(
+          `${evidence}/windows-copy-assessment.json`,
+          JSON.stringify(assessment.data),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-copy-assessment.png');
         await $('button=View JSON export').scrollIntoView();
         await $('button=View JSON export').click();
         await $('.organization-preview textarea').waitForDisplayed();
@@ -865,6 +891,22 @@ describe('native read-only library', () => {
         );
         await browser.saveScreenshot('.context/screenshots/m2-export-files.png');
         await $('button=Close saved plans').click();
+      } catch (error) {
+        await browser.saveScreenshot('.context/screenshots/windows-library-failure.png');
+        const diagnostics = await browser.execute(() => ({
+          viewport: { width: innerWidth, height: innerHeight },
+          inventoryPresent: Boolean(
+            document.querySelector('section[aria-label="Complete companion inventory"]'),
+          ),
+          reviewButtons: [...document.querySelectorAll('button')]
+            .filter((button) => button.textContent === 'Review all companion filenames')
+            .map((button) => ({
+              disabled: button.disabled,
+              rect: button.getBoundingClientRect().toJSON(),
+            })),
+        }));
+        await writeFile(`${evidence}/windows-library-failure.json`, JSON.stringify(diagnostics));
+        throw error;
       } finally {
         await picker.mockRestore();
         if (exportCreated) {

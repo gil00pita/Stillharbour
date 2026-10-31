@@ -517,6 +517,10 @@ pub enum LibraryRequest {
         plan_id: String,
         manifest_id: String,
     },
+    OrganizationCopyAssessment {
+        plan_id: String,
+        manifest_id: String,
+    },
     OrganizationBundleReviews {
         plan_id: String,
         asset_id: String,
@@ -642,6 +646,7 @@ pub enum LibraryResponse {
     OrganizationBundleConfirmation(crate::operations::BundleConfirmation),
     OrganizationBundleReviews(Vec<crate::operations::BundleConfirmation>),
     OrganizationCopyManifest(crate::operations::CopyManifest),
+    OrganizationCopyAssessment(crate::operations::CopyAssessment),
     OrganizationDestination(crate::organization::OrganizationDestinationReview),
     OrganizationCompanions(crate::organization::OrganizationCompanionReview),
     OrganizationPreview(crate::organization::OrganizationPreview),

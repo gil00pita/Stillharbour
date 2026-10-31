@@ -6,6 +6,7 @@ import type {
   OrganizationPlanDetail,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
+import { CopyAssessmentReview } from './CopyAssessmentReview';
 
 const issues: Record<CopyManifestIssueKind, string> = {
   source_has_multiple_targets: 'A source has different proposed destinations across bundles',
@@ -182,6 +183,7 @@ export function CopyManifestReview({
             Next compiled files
           </button>
           <p className="help">Manifest fingerprint: {manifest.digest}</p>
+          {!changed && <CopyAssessmentReview key={manifest.digest} manifest={manifest} />}
         </>
       )}
     </section>

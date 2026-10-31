@@ -199,3 +199,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Native future-name preparation — 2026-10-31
 
 [ADR-0029](decisions/ADR-0029-native-name-preparation.md) extends the constructor-owned M2 fixture capability with actual exclusive name creation in a new pending output namespace. It retains empty identified stages, native collision evidence and an immutable fingerprint, with bounded inputs/journal records and no execution authority. This is a prerequisite for ready-plan approval, not production destination reservation or copying.
+
+## Copy capacity and fidelity review — 2026-10-31
+
+[ADR-0030](decisions/ADR-0030-copy-capacity-and-fidelity-review.md) adds an ID-only on-demand assessment of a freshly revalidated retained manifest/destination. Show native allocation units, exact per-file rounded data and explicit metadata/journal/headroom allowances against observed free bytes. Report unverified metadata aspects, retained sources and absent independent backup without granting approval. Capacity remains an estimate, not a reservation or completed executor gate.

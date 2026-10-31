@@ -94,6 +94,87 @@ fn changed() -> AppError {
 }
 
 impl Library {
+    pub fn organization_copy_assessment(
+        &self,
+        plan_id: String,
+        manifest_id: String,
+    ) -> Result<crate::operations::CopyAssessment> {
+        validate_id(&plan_id)?;
+        validate_id(&manifest_id)?;
+        let retained_plan = plan_id.clone();
+        let retained_manifest = manifest_id.clone();
+        let (draft, manifest) = self.catalog.call(move |db| {
+            Ok((
+                operation_store::load(db, &retained_plan)?,
+                load(db, &retained_plan, &retained_manifest)?,
+            ))
+        })?;
+        // Reobserve exactly the explicitly retained decisions, not a latest scope.
+        let fresh = self.organization_copy_manifest(CopyManifestInput {
+            plan_id: plan_id.clone(),
+            bundle_confirmation_ids: manifest.view.bundle_confirmation_ids.clone(),
+        })?;
+        if fresh.id != manifest_id || fresh.digest != manifest.view.digest {
+            return Err(changed());
+        }
+        let path = super::native::decode_path(&draft.destination_native)?;
+        let expected = crate::filesystem::FileIdentity {
+            volume: draft.destination_device,
+            file: draft.destination_file,
+            links: 1,
+        };
+        let observed = self.organization_destination(
+            draft
+                .sources
+                .iter()
+                .map(|source| source.id.clone())
+                .collect(),
+            draft.view.preview.template.clone(),
+            draft.view.preview.fingerprint.clone(),
+            path.clone(),
+            (expected.clone(), draft.destination_volume.clone()),
+        )?;
+        if observed.fingerprint != draft.view.destination_fingerprint {
+            return Err(changed());
+        }
+        // One native stats response supplies allocation units and observed free
+        // bytes. No probe file, reservation, metadata-copy promise or approval.
+        let stats = fs2::statvfs(&path)?;
+        // Stored picker spelling may contain a Windows short-name alias. Bind
+        // that selected object before independently opening resolved components,
+        // as destination review does; never relax exact native child matching.
+        let selected = super::native::open_root(&path, Some(&expected))?;
+        if super::native::volume_token(&selected)? != draft.destination_volume {
+            return Err(changed());
+        }
+        let current = crate::filesystem::DirectoryChain::open(&path.canonicalize()?)?;
+        if current.identity().volume != expected.volume
+            || current.identity().file != expected.file
+            || super::native::volume_token(current.leaf())? != draft.destination_volume
+        {
+            return Err(changed());
+        }
+        let revision = observed.catalog_revision;
+        self.catalog.call(move |db| {
+            let actual: i64 = db.query_row(
+                "SELECT revision FROM library_state WHERE singleton=1",
+                [],
+                |row| row.get(0),
+            )?;
+            if actual.to_string() != revision {
+                return Err(changed());
+            }
+            Ok(())
+        })?;
+        let mut report = crate::operations::copy_assessment::assess(
+            &fresh,
+            stats.allocation_granularity(),
+            stats.available_space(),
+            stats.total_space(),
+        )?;
+        report.observed_at = store::now();
+        Ok(report)
+    }
     pub fn organization_copy_manifest_open(
         &self,
         plan_id: String,

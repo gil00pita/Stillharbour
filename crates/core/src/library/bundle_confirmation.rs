@@ -575,7 +575,52 @@ mod tests {
         let mut invalid = manifest_input.clone();
         invalid.bundle_confirmation_ids.push(confirmed.id.clone());
         assert!(fixture.library.organization_copy_manifest(invalid).is_err());
+        let assessment = fixture
+            .library
+            .organization_copy_assessment(draft.plan.id.clone(), manifest.id.clone())
+            .unwrap();
+        assert_eq!(assessment.manifest_digest, manifest.digest);
+        assert_eq!(assessment.capacity.logical_bytes, manifest.selected_bytes);
+        assert!(!assessment.capacity.space_reserved && !assessment.execution_available);
+        assert!(assessment.sources_retained && !assessment.independent_backup_verified);
+        assert!(
+            assessment
+                .capacity
+                .allocation_unit_bytes
+                .parse::<u64>()
+                .unwrap()
+                > 0
+        );
+        assert!(!assessment.observed_at.is_empty());
+        assert!(
+            fixture
+                .library
+                .organization_copy_assessment(
+                    draft.plan.id.clone(),
+                    uuid::Uuid::new_v4().to_string()
+                )
+                .is_err()
+        );
+        std::fs::write(destination.join("organized"), b"unrelated occupant").unwrap();
+        assert!(
+            fixture
+                .library
+                .organization_copy_assessment(draft.plan.id.clone(), manifest.id.clone())
+                .is_err()
+        );
+        assert_eq!(
+            std::fs::read(destination.join("organized")).unwrap(),
+            b"unrelated occupant"
+        );
+        // Test-owned neighbor only: restore the original empty destination scope.
+        std::fs::remove_file(destination.join("organized")).unwrap();
         std::fs::write(fixture.source.join("Photo.xmp"), b"changed companion").unwrap();
+        assert!(
+            fixture
+                .library
+                .organization_copy_assessment(draft.plan.id.clone(), manifest.id.clone())
+                .is_err()
+        );
         assert!(
             fixture
                 .library

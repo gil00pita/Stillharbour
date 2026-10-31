@@ -234,6 +234,12 @@ async fn library_request(
             } => LibraryResponse::OrganizationCopyManifest(
                 library.organization_copy_manifest_open(plan_id, manifest_id)?,
             ),
+            LibraryRequest::OrganizationCopyAssessment {
+                plan_id,
+                manifest_id,
+            } => LibraryResponse::OrganizationCopyAssessment(
+                library.organization_copy_assessment(plan_id, manifest_id)?,
+            ),
             LibraryRequest::OrganizationPlans { before } => {
                 LibraryResponse::OrganizationPlans(library.organization_plans(before)?)
             }
