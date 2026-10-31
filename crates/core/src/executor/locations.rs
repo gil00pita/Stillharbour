@@ -209,10 +209,25 @@ mod tests {
             use std::os::windows::ffi::OsStringExt;
             OsString::from_wide(&[114, 97, 119, 45, 0xd800, 46, 98, 105, 110])
         };
-        #[cfg(unix)]
+        #[cfg(all(unix, not(target_os = "macos")))]
         let name = {
             use std::os::unix::ffi::OsStringExt;
             OsString::from_vec(vec![b'r', b'a', b'w', 0xff, b'.', b'b', b'i', b'n'])
+        };
+        #[cfg(target_os = "macos")]
+        let name = {
+            use std::os::unix::ffi::OsStringExt;
+            let invalid = std::path::PathBuf::from("source-folder")
+                .join(OsString::from_vec(vec![b'r', b'a', b'w', 0xff]));
+            let encoded = native::encode_path(&invalid);
+            assert_eq!(
+                native::encode_path(&native::decode_path(&encoded).unwrap()),
+                encoded
+            );
+            let error =
+                std::fs::write(source.join(invalid), b"owned invalid-name probe").unwrap_err();
+            assert_eq!(error.raw_os_error(), Some(libc::EILSEQ));
+            OsString::from("literal\\cafe\u{301}.bin")
         };
         let relative = std::path::PathBuf::from("source-folder").join(name);
         let original = b"constructor-owned native filename bytes";
@@ -236,6 +251,7 @@ mod tests {
             destination_location: Some(
                 Destination::capture(output_scope.leaf(), "result-folder/deep").unwrap(),
             ),
+            prepared_stage: None,
         };
         let mut plan = CopyPlan {
             id: token,

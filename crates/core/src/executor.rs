@@ -45,6 +45,7 @@ pub enum CopyOutcome {
 #[serde(rename_all = "snake_case")]
 pub enum RecoveredItem {
     NotStarted,
+    PreparedEmptyStage,
     RetainedPartialStage,
     StagedVerified,
     PublishedVerified,
@@ -142,6 +143,34 @@ struct Object {
     volume: u64,
     file: u64,
 }
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PreparedStage {
+    object: Object,
+    revision: String,
+}
+impl PreparedStage {
+    fn identity(&self) -> filesystem::FileIdentity {
+        filesystem::FileIdentity {
+            volume: self.object.volume,
+            file: self.object.file,
+            links: 1,
+        }
+    }
+    fn validate_empty(&self, parent: &File, name: &str, file: &File) -> Result<()> {
+        if self.revision.len() != 64
+            || filesystem::identity(file)? != self.identity()
+            || file.metadata()?.len() != 0
+            || source_native::revision(file)? != self.revision
+            || !native::entry_matches(parent, name, &self.identity())?
+        {
+            return Err(failed(
+                "The identified prepared stage changed. Retain it without overwriting.",
+            ));
+        }
+        Ok(())
+    }
+}
 impl Object {
     fn of(file: &File) -> Result<Self> {
         let id = filesystem::identity(file)?;
@@ -167,6 +196,8 @@ struct CopyFile {
     source_location: Option<locations::Source>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     destination_location: Option<locations::Destination>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    prepared_stage: Option<PreparedStage>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -488,7 +519,13 @@ impl CopyContext<'_> {
             if stop(fault, CopyFault::AfterIntent) {
                 return Ok(CopyOutcome::Interrupted);
             }
-            let mut stage = native::create_file(destination, &item.stage)?;
+            let mut stage = if let Some(prepared) = &item.prepared_stage {
+                let stage = native::reopen_stage(destination, &item.stage, &prepared.identity())?;
+                prepared.validate_empty(destination, &item.stage, &stage)?;
+                stage
+            } else {
+                native::create_file(destination, &item.stage)?
+            };
             let identity = filesystem::identity(&stage)?;
             if identity.links != 1 || identity.volume != plan.destination.volume {
                 return Err(failed("The owned stage identity is unsupported."));
@@ -648,6 +685,20 @@ fn inspect_item(
     let published = native::maybe_read(destination, &plan.target)?;
     let stage = native::maybe_read(destination, &plan.stage)?;
     let expected = journal.stage_identity(index)?;
+    if expected.is_none()
+        && let Some(prepared) = &plan.prepared_stage
+    {
+        if published.is_some() {
+            return Err(failed(
+                "An unstarted prepared output has an unexpected published occupant.",
+            ));
+        }
+        let file = stage.ok_or_else(|| failed("An identified prepared stage is missing."))?;
+        prepared.validate_empty(destination, &plan.stage, &file)?;
+        source_member(source_root, plan)?;
+        destination_member(destination_root, plan, destination)?;
+        return Ok(RecoveredItem::PreparedEmptyStage);
+    }
     match (published, stage, expected) {
         (None, None, None) => Ok(RecoveredItem::NotStarted),
         (Some(mut file), None, Some(expected)) if filesystem::identity(&file)? == expected => {
@@ -734,6 +785,7 @@ impl CopyFixture {
                 bytes: file.metadata()?.len(),
                 source_location: None,
                 destination_location: None,
+                prepared_stage: None,
             });
         }
         let mut plan = CopyPlan {

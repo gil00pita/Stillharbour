@@ -396,6 +396,15 @@ describe('native read-only library', () => {
     assert.equal(preparation.scope, 'generated-temporary-only');
     assert.equal(preparation.sourcesPreserved, true);
     assert.equal(preparation.report.executionAvailable, false);
+    assert.equal(preparation.copyFromPreparedStages.outcome, 'completed_verified');
+    assert.deepEqual(
+      preparation.copyFromPreparedStages.before,
+      Array(3).fill('prepared_empty_stage'),
+    );
+    assert.deepEqual(preparation.copyFromPreparedStages.after, Array(3).fill('published_verified'));
+    assert.equal(preparation.copyFromPreparedStages.samePreparedObjectsPublished, 3);
+    assert.equal(preparation.copyFromPreparedStages.sourcesPreserved, true);
+    assert.equal(preparation.copyFromPreparedStages.destinationNeighborPreserved, true);
     assert.equal(preparation.report.rows.length, 3);
     assert.equal(preparation.report.retainedStages, 3);
     assert.equal(

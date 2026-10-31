@@ -215,3 +215,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Native copy parent locations — 2026-10-31
 
 [ADR-0033](decisions/ADR-0033-native-copy-parent-locations.md) extends the fixture-only engine/catalog adapter to exact single-root nested mappings. Native source bytes and intermediate object identities drive reads; portable target parents carry native identity proofs. Fresh parent/member checks reject substituted directories. Legacy omitted fields preserve flat stream digests. No production ready-plan/approval or multi-root copy authority is added.
+
+## Identified empty-stage reuse — 2026-10-31
+
+[ADR-0034](decisions/ADR-0034-identified-empty-stage-reuse.md) joins actual constructor-owned name preparation to copying through immutable empty-stage identity/revision proofs and a distinct copy journal. Verify single-link/empty/unchanged membership before writing; never recreate or truncate a changed stage. The catalog adapter rejects unbound prepared-stage authority. This fixture pipeline still grants no production approval.

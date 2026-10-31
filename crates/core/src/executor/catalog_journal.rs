@@ -236,6 +236,13 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
         ));
     }
     for (index, (expected, file)) in manifest.files.iter().zip(&plan.files).enumerate() {
+        // The catalog adapter does not yet accept prepared namespaces without
+        // their separate reviewed catalog evidence and ready-plan authority.
+        if file.prepared_stage.is_some() {
+            return Err(failed(
+                "Catalog prepared-stage authority is not integrated yet.",
+            ));
+        }
         let native_source = if let Some(location) = &file.source_location {
             location.validate()?;
             location.relative_native.clone()
@@ -577,6 +584,7 @@ impl Fixture {
                 } else {
                     None
                 },
+                prepared_stage: None,
             });
         }
         let mut plan = CopyPlan {
@@ -1144,6 +1152,21 @@ mod tests {
             .append(Some(0), "item_intent", intent.clone())
             .unwrap();
         assert!(second.append(Some(0), "item_intent", intent).is_err());
+        let mut wrong = fixture.plan.clone();
+        wrong.files[0].prepared_stage = Some(super::super::PreparedStage {
+            object: wrong.files[0].object.clone(),
+            revision: wrong.files[0].revision.clone(),
+        });
+        wrong.digest = wrong.digest().unwrap();
+        let error = CatalogJournal::bind(
+            fixture.library.catalog.clone(),
+            fixture.owner.clone(),
+            fixture.manifest.clone(),
+            wrong,
+        )
+        .err()
+        .expect("Unbound prepared-stage authority was accepted");
+        assert!(error.message.contains("Catalog prepared-stage authority"));
         let mut wrong = fixture.plan.clone();
         wrong.files[0].target = "different.JPG".into();
         wrong.digest = wrong.digest().unwrap();

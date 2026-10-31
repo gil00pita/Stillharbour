@@ -469,6 +469,52 @@ fn targets(paths: &[&str]) -> Vec<Target> {
         })
         .collect()
 }
+fn prepared_copy_plan(fixture: &CopyFixture, prepared: &Preparation) -> Result<super::CopyPlan> {
+    let mut files = Vec::new();
+    for source in &fixture.plan.files {
+        let path = format!("2026/Trip/{}", source.target);
+        let row = prepared
+            .report
+            .rows
+            .iter()
+            .find(|row| row.target_relative_path == path && row.state == State::Prepared)
+            .ok_or_else(|| failed("Missing prepared file row."))?;
+        let stage = prepared
+            .stages
+            .iter()
+            .find(|stage| stage.target_id == row.id)
+            .ok_or_else(|| failed("Missing identified empty stage."))?;
+        let relative_parent = prepared.directories[stage.parent].path.join("/");
+        let mut file = source.clone();
+        file.target = stage.original_leaf.clone();
+        file.stage = stage.stage_leaf.clone();
+        file.destination_location = if relative_parent.is_empty() {
+            None
+        } else {
+            Some(super::locations::Destination::capture(
+                &prepared.directories[0].handle,
+                &relative_parent,
+            )?)
+        };
+        file.prepared_stage = Some(super::PreparedStage {
+            object: stage.object.clone(),
+            revision: stage.revision.clone(),
+        });
+        files.push(file);
+    }
+    let mut plan = super::CopyPlan {
+        id: uuid::Uuid::new_v4().to_string(),
+        digest: String::new(),
+        source: fixture.plan.source.clone(),
+        destination: prepared.directories[0].object.clone(),
+        source_volume: fixture.plan.source_volume.clone(),
+        destination_volume: fixture.plan.destination_volume.clone(),
+        files,
+    };
+    plan.digest = plan.digest()?;
+    Ok(plan)
+}
+
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     let fixture = CopyFixture::new()?;
     let (source, output) = fixture.scope()?;
@@ -508,14 +554,233 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     if !fixture.sources_preserved()? {
         return Err(failed("The name-preparation fixture source changed."));
     }
+    let plan = prepared_copy_plan(&fixture, &prepared)?;
+    // Preparation facts and execution events have distinct immutable journals.
+    // Neither old intent nor an empty file acts as execution/replay authority.
+    let copy = Journal::create(&fixture.run.path().join("prepared-copy.sqlite"), &plan)?;
+    let cancel = AtomicBool::new(false);
+    let before = plan
+        .files
+        .iter()
+        .enumerate()
+        .map(|(index, file)| {
+            super::inspect_item(
+                file,
+                index,
+                &copy,
+                scope_lease.directory(0).leaf(),
+                &prepared.directories[0].handle,
+                &fixture.io,
+                &cancel,
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if before
+        .iter()
+        .any(|state| *state != super::RecoveredItem::PreparedEmptyStage)
+    {
+        return Err(failed(
+            "Prepared stages were not identified as empty unstarted objects.",
+        ));
+    }
+    let validate = || {
+        fixture.scope()?;
+        let root = native::lookup(output.leaf(), &prepared.report.temporary_namespace)?
+            .ok_or_else(|| failed("Prepared namespace disappeared."))?;
+        if root.kind != native::EntryKind::Directory
+            || root.object != prepared.directories[0].object
+        {
+            return Err(failed("Prepared namespace changed membership."));
+        }
+        Ok(())
+    };
+    let outcome = super::CopyContext {
+        plan: &plan,
+        journal: &copy,
+        source_root: scope_lease.directory(0).leaf(),
+        destination: &prepared.directories[0].handle,
+        io: &fixture.io,
+        cancel: &cancel,
+        validate_scope: &validate,
+    }
+    .execute(None)?;
+    if outcome != super::CopyOutcome::CompletedVerified {
+        return Err(failed("Prepared-stage fixture did not complete."));
+    }
+    let after = plan
+        .files
+        .iter()
+        .enumerate()
+        .map(|(index, file)| {
+            super::inspect_item(
+                file,
+                index,
+                &copy,
+                scope_lease.directory(0).leaf(),
+                &prepared.directories[0].handle,
+                &fixture.io,
+                &cancel,
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if after
+        .iter()
+        .any(|state| *state != super::RecoveredItem::PublishedVerified)
+        || !fixture.sources_preserved()?
+    {
+        return Err(failed(
+            "Prepared-stage copy failed readback or source preservation.",
+        ));
+    }
+    let mut final_ids = Vec::new();
+    for file in &plan.files {
+        let parent = super::destination_parent(&prepared.directories[0].handle, file)?;
+        let output = native::read(&parent, &file.target)?;
+        let initial = file
+            .prepared_stage
+            .as_ref()
+            .ok_or_else(|| failed("Missing prepared object proof."))?;
+        if !initial.object.matches(&output)? {
+            return Err(failed("Prepared stage was replaced rather than reused."));
+        }
+        final_ids.push(initial.object.clone());
+    }
     Ok(
-        serde_json::json!({"scope":"generated-temporary-only","sourcesPreserved":true,"report":prepared.report}),
+        serde_json::json!({"scope":"generated-temporary-only","sourcesPreserved":true,"report":prepared.report,"copyFromPreparedStages":{"outcome":outcome,"before":before,"after":after,"samePreparedObjectsPublished":final_ids.len(),"sourcesPreserved":true,"destinationNeighborPreserved":true}}),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn prepared_stage_changes_are_never_overwritten_recreated_or_adopted() {
+        use std::io::Write;
+        for change in [
+            "nonempty",
+            "changed_empty",
+            "replaced",
+            "missing",
+            "hardlink",
+        ] {
+            let fixture = CopyFixture::new().unwrap();
+            let (source, output) = fixture.scope().unwrap();
+            let journal =
+                Journal::open(&fixture.run.path().join("operation.sqlite"), &fixture.plan).unwrap();
+            let prepared = prepare(
+                output.leaf(),
+                &targets(&[
+                    "2026/Trip/Photo.JPG",
+                    "2026/Trip/Photo.xmp",
+                    "2026/Trip/unknown.bin",
+                ]),
+                &journal,
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+            let plan = prepared_copy_plan(&fixture, &prepared).unwrap();
+            let item = &plan.files[0];
+            let stage = &prepared.stages[0];
+            let parent = &prepared.directories[stage.parent].handle;
+            let proof = item.prepared_stage.as_ref().unwrap();
+            let stage_path = fixture
+                .destination
+                .join("organized")
+                .join(&prepared.report.temporary_namespace)
+                .join("2026/Trip")
+                .join(&stage.stage_leaf);
+            match change {
+                "nonempty" | "changed_empty" => {
+                    let mut file =
+                        native::reopen_stage(parent, &stage.stage_leaf, &proof.identity()).unwrap();
+                    let old_time = file.metadata().unwrap().modified().unwrap();
+                    file.write_all(b"unapproved stage data").unwrap();
+                    file.sync_all().unwrap();
+                    if change == "changed_empty" {
+                        file.set_len(0).unwrap();
+                        file.set_times(std::fs::FileTimes::new().set_modified(old_time))
+                            .unwrap();
+                        file.sync_all().unwrap();
+                    }
+                }
+                "replaced" | "missing" => {
+                    let file =
+                        native::reopen_stage(parent, &stage.stage_leaf, &proof.identity()).unwrap();
+                    drop(
+                        native::publish_new(
+                            parent,
+                            &stage.stage_leaf,
+                            file,
+                            "retained-stage.partial",
+                            &proof.identity(),
+                        )
+                        .unwrap(),
+                    );
+                    if change == "replaced" {
+                        drop(native::create_file(parent, &stage.stage_leaf).unwrap());
+                    }
+                }
+                "hardlink" => std::fs::hard_link(
+                    &stage_path,
+                    stage_path.with_file_name("extra-stage-link.partial"),
+                )
+                .unwrap(),
+                _ => unreachable!(),
+            }
+            let copy =
+                Journal::create(&fixture.run.path().join("prepared-copy.sqlite"), &plan).unwrap();
+            let cancel = AtomicBool::new(false);
+            let validate = || fixture.scope().map(|_| ());
+            let context = super::super::CopyContext {
+                plan: &plan,
+                journal: &copy,
+                source_root: source.leaf(),
+                destination: &prepared.directories[0].handle,
+                io: &fixture.io,
+                cancel: &cancel,
+                validate_scope: &validate,
+            };
+            assert!(
+                context.execute(None).is_err(),
+                "Changed prepared stage was accepted: {change}"
+            );
+            assert!(
+                super::super::inspect_item(
+                    item,
+                    0,
+                    &copy,
+                    source.leaf(),
+                    &prepared.directories[0].handle,
+                    &fixture.io,
+                    &cancel
+                )
+                .is_err()
+            );
+            assert!(
+                native::lookup(parent, &stage.original_leaf)
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(fixture.sources_preserved().unwrap());
+            if change == "nonempty" {
+                assert_eq!(
+                    std::fs::read(&stage_path).unwrap(),
+                    b"unapproved stage data"
+                );
+            }
+            if change == "missing" {
+                assert!(!stage_path.exists());
+                assert!(stage_path.with_file_name("retained-stage.partial").exists());
+            }
+            if change == "hardlink" {
+                assert!(
+                    stage_path
+                        .with_file_name("extra-stage-link.partial")
+                        .exists()
+                );
+            }
+        }
+    }
     struct ResetFault;
     impl Drop for ResetFault {
         fn drop(&mut self) {
