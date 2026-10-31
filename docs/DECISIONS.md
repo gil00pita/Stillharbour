@@ -231,3 +231,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Native source planning before future targets - 2026-10-31
 
 [ADR-0037](decisions/ADR-0037-native-source-snapshots.md) separates native source snapshots from executable plans and v2 namespace facts. Future target folders remain absent during preview; actual preparation supplies their identities. Freeze a backend-derived visible output prefix for later explicit review, preserve source/destination scope checks and retain older disposable evidence without granting approval. Production preparation/session approval/jobs remain open.
+
+## Session-bound action approvals - 2026-10-31
+
+[ADR-0038](decisions/ADR-0038-session-bound-action-approvals.md) introduces bounded monotonic, one-attempt backend tickets and nonserializable proofs bound to exact action/review/native selection. Preparation/copy wrappers recompute evidence scope and enforce current managed-root permissions before native effects/publication. Actual user approval/job integration remains open; fixture grants never become persisted authority.

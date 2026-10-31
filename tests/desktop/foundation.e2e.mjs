@@ -392,6 +392,11 @@ describe('native read-only library', () => {
     assert.equal(receipt.catalogJournal.namespacePreparation.replayBlocked, true);
     assert.equal(receipt.catalogJournal.namespacePreparation.sourceAndNeighborPreserved, true);
     assert.equal(receipt.catalogJournal.namespacePreparation.executionApproval, false);
+    assert.deepEqual(receipt.catalogJournal.namespacePreparation.sessionApprovalFixture, {
+      foreignSelectionRejectedBeforeWrites: true,
+      preparationReplayBlocked: true,
+      copyReplayBlocked: true,
+    });
     assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.journalEvents, 13);
     assert.equal(
       receipt.catalogJournal.namespacePreparation.preparedCopy.samePreparedObjectsPublished,

@@ -127,6 +127,31 @@ struct NamespaceJournal {
     state: Mutex<State>,
 }
 impl NamespaceJournal {
+    fn preparation_review(&self, selection: &str) -> Result<crate::executor::approval::Review> {
+        crate::executor::approval::Review::new(
+            crate::executor::approval::Action::PrepareNames,
+            self.scope.token.clone(),
+            blake3::hash(self.encoded.as_bytes()).to_hex().to_string(),
+            selection.into(),
+        )
+    }
+    fn prepare_approved(
+        &self,
+        parent: &std::fs::File,
+        cancel: &AtomicBool,
+        selection: &str,
+        proof: crate::executor::approval::Proof,
+    ) -> Result<preparation::Preparation> {
+        proof.authorize(&self.preparation_review(selection)?)?;
+        preparation::prepare_namespace(
+            parent,
+            &self.scope.targets,
+            self,
+            cancel,
+            &self.scope.token,
+            &self.scope.namespace,
+        )
+    }
     #[cfg(test)]
     fn bind(fixture: &Fixture, token: String) -> Result<Self> {
         Self::bind_kind(fixture, token, false)
@@ -378,18 +403,48 @@ fn fixture_case_for(
     use crate::jobs::operation_locks::{Access, Registry, Scope as NativeScope};
     let token = uuid::Uuid::new_v4().to_string();
     let journal = NamespaceJournal::bind_kind(&fixture, token.clone(), true)?;
+    use crate::executor::approval::{Action, Approvals, Review};
+    let approvals = Approvals::new();
+    let selection = uuid::Uuid::new_v4().to_string();
+    let preparation_review = journal.preparation_review(&selection)?;
+    let foreign = Review::new(
+        Action::PrepareNames,
+        token.clone(),
+        blake3::hash(journal.encoded.as_bytes())
+            .to_hex()
+            .to_string(),
+        uuid::Uuid::new_v4().to_string(),
+    )?;
+    let wrong_selection = approvals.issue(preparation_review.clone())?;
+    if approvals.consume(&wrong_selection, &foreign).is_ok() {
+        return Err(failed(
+            "Foreign destination selection consumed preparation approval.",
+        ));
+    }
     let (source, destination) = fixture.scope()?;
     let _lease = Registry::shared().try_acquire(vec![
         NativeScope::new(source, Access::Read),
         NativeScope::new(destination, Access::Write),
     ])?;
-    let prepared = preparation::prepare_namespace(
+    if crate::executor::native::lookup(_lease.directory(1).leaf(), &journal.scope.namespace)?
+        .is_some()
+        || journal
+            .state
+            .lock()
+            .map_err(|_| failed("Namespace history is unavailable."))?
+            .count
+            != 0
+    {
+        return Err(failed(
+            "Rejected preparation approval created an output or journal fact.",
+        ));
+    }
+    let prepare_ticket = approvals.issue(preparation_review.clone())?;
+    let prepared = journal.prepare_approved(
         _lease.directory(1).leaf(),
-        &journal.scope.targets,
-        &journal,
         &AtomicBool::new(false),
-        &token,
-        &journal.scope.namespace,
+        &selection,
+        approvals.consume(&prepare_ticket, &preparation_review)?,
     )?;
     let report = serde_json::to_value(&prepared.report)
         .map_err(|error| failed("Could not encode namespace receipt.").caused_by(error))?;
@@ -455,6 +510,8 @@ fn fixture_case_for(
         plan.clone(),
         Some(reference.clone()),
     )?;
+    let copy_review = copy.copy_review(&selection)?;
+    let copy_ticket = approvals.issue(copy_review.clone())?;
     let root = crate::executor::output_chain(
         &fixture.destination.join(
             report["temporaryNamespace"]
@@ -504,16 +561,19 @@ fn fixture_case_for(
             "Prepared catalog copy did not start with identified empty stages.",
         ));
     }
-    let context = crate::executor::CopyContext {
-        plan: &plan,
-        journal: &copy,
+    let inputs = crate::executor::CopyInputs {
         source_root: _lease.directory(0).leaf(),
         destination: root.leaf(),
         io: &io,
         cancel: &cancel,
         validate_scope: &validate,
     };
-    let outcome = context.execute(fault)?;
+    let outcome = copy.execute_approved(
+        inputs,
+        &selection,
+        approvals.consume(&copy_ticket, &copy_review)?,
+        fault,
+    )?;
     drop(copy);
     let copy = CatalogJournal::bind_with_namespace(
         fixture.library.catalog.clone(),
@@ -604,14 +664,52 @@ fn fixture_case_for(
     if !duplicate_blocked {
         return Err(failed("Prepared namespace admitted another copy stream."));
     }
+    let preparation_replay_blocked = approvals
+        .consume(&prepare_ticket, &preparation_review)
+        .is_err();
+    let copy_approval_replay_blocked = approvals.consume(&copy_ticket, &copy_review).is_err();
+    if !preparation_replay_blocked || !copy_approval_replay_blocked {
+        return Err(failed("A session approval was reused."));
+    }
     Ok(
-        serde_json::json!({"report":report,"retainedFacts":count,"reopenedCompleted":true,"replayBlocked":true,"sourceAndNeighborPreserved":true,"executionApproval":false,"preparedCopy":{"outcome":outcome,"before":before,"after":after,"journalEvents":copy.history_count()?,"secondStreamBlocked":duplicate_blocked,"samePreparedObjectsPublished":same_objects,"replayBlocked":replay_blocked}}),
+        serde_json::json!({"report":report,"retainedFacts":count,"reopenedCompleted":true,"replayBlocked":true,"sourceAndNeighborPreserved":true,"executionApproval":false,"sessionApprovalFixture":{"foreignSelectionRejectedBeforeWrites":true,"preparationReplayBlocked":preparation_replay_blocked,"copyReplayBlocked":copy_approval_replay_blocked},"preparedCopy":{"outcome":outcome,"before":before,"after":after,"journalEvents":copy.history_count()?,"secondStreamBlocked":duplicate_blocked,"samePreparedObjectsPublished":same_objects,"replayBlocked":replay_blocked}}),
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn preparation_action_rejects_a_valid_proof_for_another_scope_before_writes() {
+        use crate::executor::approval::{Action, Approvals, Review};
+        let fixture = Fixture::with_nested(true).unwrap();
+        let journal =
+            NamespaceJournal::bind_kind(&fixture, uuid::Uuid::new_v4().to_string(), true).unwrap();
+        let selection = uuid::Uuid::new_v4().to_string();
+        let approvals = Approvals::new();
+        let (_, output) = fixture.scope().unwrap();
+        for action in [Action::PrepareNames, Action::CopyFiles] {
+            let foreign = Review::new(
+                action,
+                uuid::Uuid::new_v4().to_string(),
+                blake3::hash(journal.encoded.as_bytes())
+                    .to_hex()
+                    .to_string(),
+                selection.clone(),
+            )
+            .unwrap();
+            let ticket = approvals.issue(foreign.clone()).unwrap();
+            let proof = approvals.consume(&ticket, &foreign).unwrap();
+            assert!(
+                journal
+                    .prepare_approved(output.leaf(), &AtomicBool::new(false), &selection, proof)
+                    .is_err()
+            );
+            assert!(!fixture.destination.join(&journal.scope.namespace).exists());
+            assert_eq!(journal.state.lock().unwrap().count, 0);
+            assert!(fixture.preserved().unwrap());
+        }
+    }
     #[test]
     fn native_source_planning_copies_future_target_parents_without_creating_them_during_preview() {
         use crate::operations::{

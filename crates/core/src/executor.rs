@@ -1,5 +1,6 @@
 //! Central source-retaining copy engine under disposable-fixture capability.
 //! No renderer requests or arbitrary user paths can construct this scope yet.
+mod approval;
 mod catalog_journal;
 mod locations;
 mod native;
@@ -478,6 +479,13 @@ static CRASH_ON_FAULT: AtomicBool = AtomicBool::new(false);
 struct CopyContext<'a> {
     plan: &'a CopyPlan,
     journal: &'a dyn CopyJournal,
+    source_root: &'a File,
+    destination: &'a File,
+    io: &'a PacedIo,
+    cancel: &'a AtomicBool,
+    validate_scope: &'a dyn Fn() -> Result<()>,
+}
+struct CopyInputs<'a> {
     source_root: &'a File,
     destination: &'a File,
     io: &'a PacedIo,

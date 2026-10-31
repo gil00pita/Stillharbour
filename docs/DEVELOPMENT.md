@@ -441,3 +441,7 @@ ADR-0036 adds optional private namespace references to catalog copy bindings, pr
 ## Native source snapshots and future folders - 2026-10-31
 
 ADR-0037 adds executor::sources. Namespace preparation now uses source-only snapshots and v2 anchor/fact phases; no pre-created destination parent proof is required. Run namespace_ (including native_source_planning and source_snapshot_refuses) and executor:: Rust cases, then full/native checks. Current generated namespace diagnostics use the frozen visible Stillharbour organized UUID folder; generic name-preparation diagnostics retain their pending name. Reopening retained snapshots does not reacquire a conflicting read lease under a live preparation writer. No production command or user-catalog migration is added; v1 disposable diagnostic facts are not upgraded into approval.
+
+## One-use session action approvals - 2026-10-31
+
+ADR-0038 adds executor::approval and exact preparation/copy admission wrappers. Run executor::approval, preparation_action_rejects and approved_copy_rechecks Rust regressions plus executor::, full checks and native suites. The diagnostic receipt adds namespacePreparation.sessionApprovalFixture with foreign-selection rejection before writes and ticket replay refusal. Tickets/proofs remain private in memory and never enter receipts/catalogs. Root grants are rechecked at admission and each scope boundary. Production native selection ownership, approval UI/IPC, job/audit states and controls still need integration.

@@ -279,6 +279,56 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
     Ok(())
 }
 impl CatalogJournal {
+    fn copy_review(&self, selection: &str) -> Result<super::approval::Review> {
+        super::approval::Review::new(
+            super::approval::Action::CopyFiles,
+            self.binding.plan.id.clone(),
+            blake3::hash(self.encoded.as_bytes()).to_hex().to_string(),
+            selection.into(),
+        )
+    }
+    fn execute_approved(
+        &self,
+        inputs: super::CopyInputs<'_>,
+        selection: &str,
+        proof: super::approval::Proof,
+        fault: Option<super::CopyFault>,
+    ) -> Result<super::CopyOutcome> {
+        proof.authorize(&self.copy_review(selection)?)?;
+        let binding = self.binding.clone();
+        let root = self.catalog.call(move |db| {
+            validate_binding(db, &binding)?;
+            Ok(
+                copy_manifest::load(db, &binding.owner_id, &binding.manifest_id)?.files[0]
+                    .view
+                    .root_id
+                    .clone(),
+            )
+        })?;
+        let validate = || {
+            (inputs.validate_scope)()?;
+            let root = root.clone();
+            let object = self.binding.plan.source.clone();
+            let expected_volume = self.binding.plan.source_volume.clone();
+            self.catalog.call(move|db| {
+                let (device,inode,volume,mode):(String,String,String,String)=db.query_row("SELECT device,inode,volume,mode FROM roots WHERE id=?",[root],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)))?;
+                if device!=object.volume.to_string() || inode!=object.file.to_string() || volume!=expected_volume || mode!="managed" {
+                    return Err(failed("The source root managed grant changed. Retain current outputs and review again."));
+                }
+                Ok(())
+            })
+        };
+        super::CopyContext {
+            plan: &self.binding.plan,
+            journal: self,
+            source_root: inputs.source_root,
+            destination: inputs.destination,
+            io: inputs.io,
+            cancel: inputs.cancel,
+            validate_scope: &validate,
+        }
+        .execute(fault)
+    }
     pub(super) fn bind(
         catalog: Arc<Catalog>,
         owner_id: String,
@@ -758,6 +808,78 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn approved_copy_rechecks_revoked_root_grant_at_admission_and_before_publication() {
+        use crate::executor::approval::Approvals;
+        use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+        for during_copy in [false, true] {
+            let fixture = Fixture::new().unwrap();
+            let journal = fixture.journal().unwrap();
+            let selection = uuid::Uuid::new_v4().to_string();
+            let review = journal.copy_review(&selection).unwrap();
+            let approvals = Approvals::new();
+            let ticket = approvals.issue(review.clone()).unwrap();
+            let proof = approvals.consume(&ticket, &review).unwrap();
+            let revoke = || {
+                fixture.library.catalog.call(|db| {
+                    db.execute("UPDATE roots SET mode='referenced'", [])?;
+                    Ok(())
+                })
+            };
+            if !during_copy {
+                revoke().unwrap();
+            }
+            let (source, output) = fixture.scope().unwrap();
+            let count = AtomicUsize::new(0);
+            let validate = || {
+                fixture.scope()?;
+                if during_copy && count.fetch_add(1, Ordering::Relaxed) == 1 {
+                    revoke()?;
+                }
+                Ok(())
+            };
+            let io = crate::jobs::paced_io::PacedIo::shared();
+            let cancel = AtomicBool::new(false);
+            let error = journal
+                .execute_approved(
+                    crate::executor::CopyInputs {
+                        source_root: source.leaf(),
+                        destination: output.leaf(),
+                        io: &io,
+                        cancel: &cancel,
+                        validate_scope: &validate,
+                    },
+                    &selection,
+                    proof,
+                    None,
+                )
+                .err()
+                .unwrap();
+            assert_eq!(error.code, ErrorCode::Conflict);
+            assert!(error.message.contains("managed"));
+            assert_eq!(
+                journal.history_count().unwrap(),
+                if during_copy { 4 } else { 0 }
+            );
+            assert!(
+                fixture
+                    .plan
+                    .files
+                    .iter()
+                    .all(|file| !fixture.destination.join(&file.target).exists())
+            );
+            if during_copy {
+                assert_eq!(
+                    fixture.inspect(&journal).unwrap(),
+                    vec![
+                        crate::executor::RecoveredItem::StagedVerified,
+                        crate::executor::RecoveredItem::NotStarted
+                    ]
+                );
+            }
+            assert!(fixture.preserved().unwrap());
+        }
+    }
     fn crash_boundaries() -> [super::super::CopyFault; 9] {
         use super::super::CopyFault::*;
         [
