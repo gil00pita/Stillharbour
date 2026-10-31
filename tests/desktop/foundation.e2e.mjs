@@ -1216,6 +1216,14 @@ describe('native read-only library', () => {
           if (copyAttempted) assert.equal(destinationVerification.neighborUnchanged, true);
           else assert.equal(destinationVerification.unchanged, true);
         }
+        const sourceSelection = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'fixture_reselect', rows: null }),
+        );
+        assert.equal(typeof sourceSelection.id, 'string');
+        const sourceLocation = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'fixture_location', rows: null }),
+        );
+        assert.equal(sourceLocation.selectionId, sourceSelection.id);
         await browser.setWindowSize(1180, 780);
       }
     },

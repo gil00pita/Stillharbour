@@ -957,6 +957,38 @@ async fn test_performance(
             state.library.start_monitoring()?;
             Ok(serde_json::json!({"started":true}))
         }
+        "fixture_reselect" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Owned source selection accepts no supplied scope.",
+                ));
+            }
+            let fixture = state
+                .fixture
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Fixture unavailable."))?;
+            let fixture = fixture
+                .as_ref()
+                .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "Generate fixture first."))?;
+            fixture.verify_unchanged()?;
+            let path = fixture.path().to_owned();
+            let file = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&file)?;
+            let volume = stillharbour_core::library::native::volume_token(&file)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state.selection.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Fixture selection unavailable.")
+            })? = Some(NativeSelection {
+                id: id.clone(),
+                path,
+                identity: Some(identity),
+                volume: Some(volume),
+            });
+            Ok(
+                serde_json::json!({"id":id,"displayPath":"Generated source fixture","identityAvailable":true}),
+            )
+        }
         "fixture_location" => {
             let fixture = state
                 .fixture

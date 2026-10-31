@@ -62,9 +62,10 @@ const filter = {
         await browser.tauri.execute(async ({ core }) =>
           core.invoke('test_library_fixture', { verify: true }),
         );
-        const existing = await monitor('fixture_location');
-        assert.equal(typeof existing.selectionId, 'string');
-        selection = { id: existing.selectionId };
+        // A preceding organization workflow legitimately leaves its destination
+        // selected. Obtain a fresh source grant from the same owned constructor.
+        selection = await monitor('fixture_reselect');
+        assert.equal(typeof selection.id, 'string');
       }
       assert.equal(
         (await native({ kind: 'status' })).data.roots.length,
