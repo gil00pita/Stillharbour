@@ -392,6 +392,30 @@ describe('native read-only library', () => {
     assert.equal(receipt.catalogJournal.namespacePreparation.replayBlocked, true);
     assert.equal(receipt.catalogJournal.namespacePreparation.sourceAndNeighborPreserved, true);
     assert.equal(receipt.catalogJournal.namespacePreparation.executionApproval, false);
+    assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.journalEvents, 13);
+    assert.equal(
+      receipt.catalogJournal.namespacePreparation.preparedCopy.samePreparedObjectsPublished,
+      2,
+    );
+    assert.equal(
+      receipt.catalogJournal.namespacePreparation.preparedCopy.secondStreamBlocked,
+      true,
+    );
+    assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.replayBlocked, true);
+    assert.deepEqual(
+      receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy.after,
+      ['published_verified', 'prepared_empty_stage'],
+    );
+    assert.equal(
+      receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy
+        .journalEvents,
+      5,
+    );
+    assert.equal(
+      receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy
+        .samePreparedObjectsPublished,
+      1,
+    );
     const preparation = await browser.tauri.execute(async ({ core }) =>
       core.invoke('test_performance', {
         action: 'organization_name_preparation_fixture',

@@ -30,6 +30,8 @@ struct Binding {
     manifest_id: String,
     manifest_digest: String,
     plan: CopyPlan,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    namespace: Option<namespace_journal::Reference>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -199,6 +201,9 @@ pub(super) struct CatalogJournal {
     history: Mutex<History>,
 }
 fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
+    if binding.namespace.is_some() {
+        return namespace_journal::validate_copy_binding(db, binding);
+    }
     crate::operations::validate_id(&binding.owner_id)?;
     crate::operations::validate_id(&binding.manifest_id)?;
     crate::operations::validate_id(&binding.plan.id)?;
@@ -237,11 +242,11 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
         ));
     }
     for (index, (expected, file)) in manifest.files.iter().zip(&plan.files).enumerate() {
-        // The catalog adapter does not yet accept prepared namespaces without
-        // their separate reviewed catalog evidence and ready-plan authority.
+        // A prepared stage must enter through the separately bound namespace
+        // projection, never through this direct-destination compatibility path.
         if file.prepared_stage.is_some() {
             return Err(failed(
-                "Catalog prepared-stage authority is not integrated yet.",
+                "Prepared stages require a matching retained namespace reference.",
             ));
         }
         let native_source = if let Some(location) = &file.source_location {
@@ -280,6 +285,15 @@ impl CatalogJournal {
         manifest_id: String,
         plan: CopyPlan,
     ) -> Result<Self> {
+        Self::bind_with_namespace(catalog, owner_id, manifest_id, plan, None)
+    }
+    fn bind_with_namespace(
+        catalog: Arc<Catalog>,
+        owner_id: String,
+        manifest_id: String,
+        plan: CopyPlan,
+        namespace: Option<namespace_journal::Reference>,
+    ) -> Result<Self> {
         let supplied = plan.clone();
         let owner = owner_id.clone();
         let manifest = manifest_id.clone();
@@ -287,8 +301,9 @@ impl CatalogJournal {
             let tx=db.transaction()?;
             let draft=operation_store::load(&tx,&owner)?;
             let scope=copy_manifest::load(&tx,&owner,&manifest)?;
-            let binding=Binding{policy:"catalog-copy-stream-v1".into(),catalog_id:draft.catalog_id,owner_id:owner,owner_digest:draft.view.digest,manifest_id:manifest,manifest_digest:scope.view.digest,plan:supplied};
+            let binding=Binding{policy:"catalog-copy-stream-v1".into(),catalog_id:draft.catalog_id,owner_id:owner,owner_digest:draft.view.digest,manifest_id:manifest,manifest_digest:scope.view.digest,plan:supplied,namespace};
             validate_binding(&tx,&binding)?;
+            namespace_journal::check_copy_stream_admission(&tx,&binding)?;
             let encoded=serde_json::to_string(&binding).map_err(|error|failed("Could not retain copy stream.").caused_by(error))?;
             if encoded.len()>MAX_RECORD {return Err(failed("Copy stream exceeds its 64-KiB retained record bound."));}
             let previous={
@@ -1169,7 +1184,8 @@ mod tests {
         )
         .err()
         .expect("Unbound prepared-stage authority was accepted");
-        assert!(error.message.contains("Catalog prepared-stage authority"));
+        assert_eq!(error.code, ErrorCode::Conflict);
+        assert!(error.message.contains("retained namespace reference"));
         let mut wrong = fixture.plan.clone();
         wrong.files[0].target = "different.JPG".into();
         wrong.digest = wrong.digest().unwrap();

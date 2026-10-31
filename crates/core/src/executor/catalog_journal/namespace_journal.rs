@@ -10,6 +10,13 @@ const MAX_FACT: usize = crate::operations::MAX_PLAN_BYTES;
 const MAX_FACT_BYTES: usize = 32 * 1024 * 1024;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+pub(super) struct Reference {
+    token: String,
+    scope_digest: String,
+    fingerprint: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Scope {
     binding: Binding,
     token: String,
@@ -129,7 +136,7 @@ impl NamespaceJournal {
             let manifest = copy_manifest::load(&tx, &owner, &manifest)?;
             let scope = Scope {
                 targets: manifest.files.iter().map(|file| Target { id: file.view.id.clone(), path: file.view.target_relative_path.clone() }).collect(),
-                binding: Binding { policy: "catalog-copy-stream-v1".into(), catalog_id: draft.catalog_id, owner_id: owner, owner_digest: draft.view.digest, manifest_id: manifest.view.id, manifest_digest: manifest.view.digest, plan },
+                binding: Binding { policy: "catalog-copy-stream-v1".into(), catalog_id: draft.catalog_id, owner_id: owner, owner_digest: draft.view.digest, manifest_id: manifest.view.id, manifest_digest: manifest.view.digest, plan, namespace: None },
                 token,
             };
             validate_binding(&tx, &scope.binding)?;
@@ -206,7 +213,146 @@ impl EventJournal for NamespaceJournal {
         Ok(())
     }
 }
+fn load_preparation(
+    db: &Connection,
+    owner: &str,
+    reference: &Reference,
+) -> Result<(Scope, serde_json::Value)> {
+    crate::operations::validate_id(&reference.token)?;
+    if !hex(&reference.scope_digest) || !hex(&reference.fingerprint) {
+        return Err(failed("Invalid prepared namespace reference."));
+    }
+    let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT 2")?;
+    let mut rows = query.query(params![owner, reference.token, ANCHOR_PHASE])?;
+    let text: Option<String> = rows
+        .next()?
+        .ok_or_else(|| failed("Prepared namespace anchor is missing."))?
+        .get(0)?;
+    let text = text.ok_or_else(|| failed("Prepared namespace anchor exceeds 64 KiB."))?;
+    if rows.next()?.is_some()
+        || blake3::hash(text.as_bytes()).to_hex().as_str() != reference.scope_digest
+    {
+        return Err(failed(
+            "Prepared namespace anchor changed or is duplicated.",
+        ));
+    }
+    let scope: Scope = decode(&text, MAX_RECORD)?;
+    if scope.token != reference.token
+        || scope.binding.owner_id != owner
+        || scope.binding.namespace.is_some()
+    {
+        return Err(failed("Foreign or recursive prepared namespace binding."));
+    }
+    validate_binding(db, &scope.binding)?;
+    let manifest = copy_manifest::load(db, owner, &scope.binding.manifest_id)?;
+    let targets: Vec<Target> = manifest
+        .files
+        .iter()
+        .map(|file| Target {
+            id: file.view.id.clone(),
+            path: file.view.target_relative_path.clone(),
+        })
+        .collect();
+    if scope.targets != targets {
+        return Err(failed(
+            "Namespace target IDs/paths differ from the retained manifest.",
+        ));
+    }
+    let mut state = State::default();
+    let mut completion = None;
+    let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=8388608 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT ?4")?;
+    let mut rows = query.query(params![
+        owner,
+        reference.token,
+        FACT_PHASE,
+        (scope.targets.len() * 6 + 1024 * 2 + 4) as i64
+    ])?;
+    while let Some(row) = rows.next()? {
+        let text: Option<String> = row.get(0)?;
+        let text = text.ok_or_else(|| failed("Prepared namespace fact exceeds 8 MiB."))?;
+        let fact: Fact = decode(&text, MAX_FACT)?;
+        state.apply(&fact, &text, &scope)?;
+        if fact.phase == "namespace_prepared" {
+            completion = Some(fact.evidence);
+        }
+    }
+    let completion = completion
+        .filter(|_| state.completed)
+        .ok_or_else(|| failed("Namespace preparation is incomplete. Inspect retained objects."))?;
+    if completion["report"]["fingerprint"] != reference.fingerprint {
+        return Err(failed("Prepared namespace fingerprint changed."));
+    }
+    Ok((scope, completion))
+}
+pub(super) fn validate_copy_binding(db: &Connection, binding: &Binding) -> Result<()> {
+    let reference = binding
+        .namespace
+        .as_ref()
+        .ok_or_else(|| failed("Missing prepared namespace reference."))?;
+    let (scope, completion) = load_preparation(db, &binding.owner_id, reference)?;
+    let base = &scope.binding;
+    if binding.policy != base.policy
+        || binding.catalog_id != base.catalog_id
+        || binding.owner_id != base.owner_id
+        || binding.owner_digest != base.owner_digest
+        || binding.manifest_id != base.manifest_id
+        || binding.manifest_digest != base.manifest_digest
+    {
+        return Err(failed(
+            "Prepared copy scope differs from its catalog/manifest binding.",
+        ));
+    }
+    let namespace = format!(".stillharbour-preparing-{}.partial", reference.token);
+    let expected = preparation::project_copy_plan(
+        &completion,
+        &base.plan,
+        &namespace,
+        &scope.targets,
+        &binding.plan.id,
+    )?;
+    if serde_json::to_value(expected).ok() != serde_json::to_value(&binding.plan).ok() {
+        return Err(failed(
+            "Prepared copy differs from its exact retained stage/parent/source evidence.",
+        ));
+    }
+    Ok(())
+}
+pub(super) fn check_copy_stream_admission(db: &Connection, binding: &Binding) -> Result<()> {
+    let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND phase=?2 ORDER BY sequence LIMIT 65")?;
+    let mut rows = query.query(params![binding.owner_id, PLAN_PHASE])?;
+    let mut count = 0;
+    let mut existing = false;
+    while let Some(row) = rows.next()? {
+        count += 1;
+        let text: Option<String> = row.get(0)?;
+        let previous: Binding = decode(
+            &text.ok_or_else(|| failed("Retained copy anchor exceeds 64 KiB."))?,
+            MAX_RECORD,
+        )?;
+        existing |= previous.plan.id == binding.plan.id;
+        if let (Some(left), Some(right)) = (&binding.namespace, &previous.namespace)
+            && left.token == right.token
+            && previous.plan.id != binding.plan.id
+        {
+            return Err(failed(
+                "This prepared namespace already belongs to another copy stream. Open its recovery inspection.",
+            ));
+        }
+    }
+    if count > 64 || (count == 64 && !existing) {
+        return Err(failed(
+            "This draft has reached its 64 retained copy-stream limit.",
+        ));
+    }
+    Ok(())
+}
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
+    let mut receipt = fixture_case(None)?;
+    receipt["interruptedAfterPublish"] =
+        fixture_case(Some(crate::executor::CopyFault::AfterPublish))?;
+    Ok(receipt)
+}
+fn fixture_case(fault: Option<crate::executor::CopyFault>) -> Result<serde_json::Value> {
     use crate::jobs::operation_locks::{Access, Registry, Scope as NativeScope};
     let fixture = Fixture::with_nested(true)?;
     let (source, destination) = fixture.scope()?;
@@ -256,8 +402,187 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     {
         return Err(failed("Completed namespace preparation was replayed."));
     }
+    let reference = Reference {
+        token: reopened.scope.token.clone(),
+        scope_digest: blake3::hash(reopened.encoded.as_bytes())
+            .to_hex()
+            .to_string(),
+        fingerprint: report["fingerprint"]
+            .as_str()
+            .ok_or_else(|| failed("Missing namespace fingerprint."))?
+            .into(),
+    };
+    let owner = fixture.owner.clone();
+    let supplied = reference.clone();
+    let stream = uuid::Uuid::new_v4().to_string();
+    let plan = fixture.library.catalog.call(move |db| {
+        let (scope, completion) = load_preparation(db, &owner, &supplied)?;
+        preparation::project_copy_plan(
+            &completion,
+            &scope.binding.plan,
+            &format!(".stillharbour-preparing-{}.partial", supplied.token),
+            &scope.targets,
+            &stream,
+        )
+    })?;
+    let copy = CatalogJournal::bind_with_namespace(
+        fixture.library.catalog.clone(),
+        fixture.owner.clone(),
+        fixture.manifest.clone(),
+        plan.clone(),
+        Some(reference.clone()),
+    )?;
+    let root = crate::executor::output_chain(
+        &fixture.destination.join(
+            report["temporaryNamespace"]
+                .as_str()
+                .ok_or_else(|| failed("Missing namespace name."))?,
+        ),
+    )?;
+    let validate = || {
+        fixture.scope()?;
+        let entry = crate::executor::native::lookup(
+            _lease.directory(1).leaf(),
+            report["temporaryNamespace"]
+                .as_str()
+                .ok_or_else(|| failed("Missing namespace name."))?,
+        )?
+        .ok_or_else(|| failed("Prepared namespace disappeared."))?;
+        if entry.object != plan.destination
+            || entry.kind != crate::executor::native::EntryKind::Directory
+        {
+            return Err(failed("Prepared namespace changed membership."));
+        }
+        Ok(())
+    };
+    let cancel = AtomicBool::new(false);
+    let io = crate::jobs::paced_io::PacedIo::shared();
+    let before = plan
+        .files
+        .iter()
+        .enumerate()
+        .map(|(index, file)| {
+            crate::executor::inspect_item(
+                file,
+                index,
+                &copy,
+                _lease.directory(0).leaf(),
+                root.leaf(),
+                &io,
+                &cancel,
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if before
+        .iter()
+        .any(|state| *state != crate::executor::RecoveredItem::PreparedEmptyStage)
+    {
+        return Err(failed(
+            "Prepared catalog copy did not start with identified empty stages.",
+        ));
+    }
+    let context = crate::executor::CopyContext {
+        plan: &plan,
+        journal: &copy,
+        source_root: _lease.directory(0).leaf(),
+        destination: root.leaf(),
+        io: &io,
+        cancel: &cancel,
+        validate_scope: &validate,
+    };
+    let outcome = context.execute(fault)?;
+    drop(copy);
+    let copy = CatalogJournal::bind_with_namespace(
+        fixture.library.catalog.clone(),
+        fixture.owner.clone(),
+        fixture.manifest.clone(),
+        plan.clone(),
+        Some(reference.clone()),
+    )?;
+    let after = plan
+        .files
+        .iter()
+        .enumerate()
+        .map(|(index, file)| {
+            crate::executor::inspect_item(
+                file,
+                index,
+                &copy,
+                _lease.directory(0).leaf(),
+                root.leaf(),
+                &io,
+                &cancel,
+            )
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let published = if fault.is_none() { plan.files.len() } else { 1 };
+    let expected_outcome = if fault.is_none() {
+        crate::executor::CopyOutcome::CompletedVerified
+    } else {
+        crate::executor::CopyOutcome::Interrupted
+    };
+    if outcome != expected_outcome
+        || after.iter().enumerate().any(|(index, state)| {
+            *state
+                != if index < published {
+                    crate::executor::RecoveredItem::PublishedVerified
+                } else {
+                    crate::executor::RecoveredItem::PreparedEmptyStage
+                }
+        })
+        || !fixture.preserved()?
+    {
+        return Err(failed(
+            "Prepared catalog copy failed complete publication/readback.",
+        ));
+    }
+    let mut same_objects = 0;
+    for file in plan.files.iter().take(published) {
+        let parent = crate::executor::destination_parent(root.leaf(), file)?;
+        let output = crate::executor::native::read(&parent, &file.target)?;
+        if !file
+            .prepared_stage
+            .as_ref()
+            .ok_or_else(|| failed("Missing prepared stage identity."))?
+            .object
+            .matches(&output)?
+        {
+            return Err(failed(
+                "Published output replaced its prepared object identity.",
+            ));
+        }
+        same_objects += 1;
+    }
+    let replay_blocked = crate::executor::CopyContext {
+        plan: &plan,
+        journal: &copy,
+        source_root: _lease.directory(0).leaf(),
+        destination: root.leaf(),
+        io: &io,
+        cancel: &cancel,
+        validate_scope: &validate,
+    }
+    .execute(None)
+    .is_err_and(|error| error.code == ErrorCode::Conflict);
+    if !replay_blocked {
+        return Err(failed("Prepared catalog copy allowed blind replay."));
+    }
+    let mut second = plan.clone();
+    second.id = uuid::Uuid::new_v4().to_string();
+    second.digest = second.digest()?;
+    let duplicate_blocked = CatalogJournal::bind_with_namespace(
+        fixture.library.catalog.clone(),
+        fixture.owner.clone(),
+        fixture.manifest.clone(),
+        second,
+        Some(reference),
+    )
+    .is_err();
+    if !duplicate_blocked {
+        return Err(failed("Prepared namespace admitted another copy stream."));
+    }
     Ok(
-        serde_json::json!({"report":report,"retainedFacts":count,"reopenedCompleted":true,"replayBlocked":true,"sourceAndNeighborPreserved":true,"executionApproval":false}),
+        serde_json::json!({"report":report,"retainedFacts":count,"reopenedCompleted":true,"replayBlocked":true,"sourceAndNeighborPreserved":true,"executionApproval":false,"preparedCopy":{"outcome":outcome,"before":before,"after":after,"journalEvents":copy.history_count()?,"secondStreamBlocked":duplicate_blocked,"samePreparedObjectsPublished":same_objects,"replayBlocked":replay_blocked}}),
     )
 }
 
@@ -270,6 +595,136 @@ mod tests {
         assert_eq!(receipt["retainedFacts"], 13);
         assert_eq!(receipt["reopenedCompleted"], true);
         assert_eq!(receipt["executionApproval"], false);
+        assert_eq!(receipt["preparedCopy"]["journalEvents"], 13);
+        assert_eq!(receipt["preparedCopy"]["samePreparedObjectsPublished"], 2);
+        assert_eq!(receipt["preparedCopy"]["secondStreamBlocked"], true);
+        assert_eq!(
+            receipt["interruptedAfterPublish"]["preparedCopy"]["journalEvents"],
+            5
+        );
+        assert_eq!(
+            receipt["interruptedAfterPublish"]["preparedCopy"]["samePreparedObjectsPublished"],
+            1
+        );
+        assert_eq!(
+            receipt["interruptedAfterPublish"]["preparedCopy"]["after"],
+            serde_json::json!(["published_verified", "prepared_empty_stage"])
+        );
+    }
+
+    #[test]
+    fn prepared_catalog_binding_rejects_changed_evidence_before_copy_history() {
+        let fixture = Fixture::with_nested(true).unwrap();
+        let journal = NamespaceJournal::bind(&fixture, uuid::Uuid::new_v4().to_string()).unwrap();
+        let (_, output) = fixture.scope().unwrap();
+        let prepared = preparation::prepare_named(
+            output.leaf(),
+            &journal.scope.targets,
+            &journal,
+            &AtomicBool::new(false),
+            &journal.scope.token,
+        )
+        .unwrap();
+        let report = serde_json::to_value(&prepared.report).unwrap();
+        let reference = Reference {
+            token: journal.scope.token.clone(),
+            scope_digest: blake3::hash(journal.encoded.as_bytes())
+                .to_hex()
+                .to_string(),
+            fingerprint: report["fingerprint"].as_str().unwrap().into(),
+        };
+        let owner = fixture.owner.clone();
+        let supplied = reference.clone();
+        let plan = fixture
+            .library
+            .catalog
+            .call(move |db| {
+                let (scope, completion) = load_preparation(db, &owner, &supplied)?;
+                preparation::project_copy_plan(
+                    &completion,
+                    &scope.binding.plan,
+                    &format!(".stillharbour-preparing-{}.partial", supplied.token),
+                    &scope.targets,
+                    &uuid::Uuid::new_v4().to_string(),
+                )
+            })
+            .unwrap();
+        for variant in 0..12 {
+            let mut changed = plan.clone();
+            let mut supplied = reference.clone();
+            match variant {
+                0 => changed.files[0].stage = ".stillharbour-foreign.partial".into(),
+                1 => changed.files[0].target = "unexpected.JPG".into(),
+                2 => changed.files[0].revision = "a".repeat(64),
+                3 => changed.destination.file += 1,
+                4 => {
+                    changed.files[0]
+                        .prepared_stage
+                        .as_mut()
+                        .unwrap()
+                        .object
+                        .file += 1
+                }
+                5 => {
+                    changed.files[0]
+                        .destination_location
+                        .as_mut()
+                        .unwrap()
+                        .parents[0]
+                        .file += 1
+                }
+                6 => changed.files[0].source_location.as_mut().unwrap().parents[0].file += 1,
+                7 => supplied.scope_digest = "0".repeat(64),
+                8 => supplied.fingerprint = "0".repeat(64),
+                9 => supplied.token = uuid::Uuid::new_v4().to_string(),
+                10 => changed.files[0].prepared_stage = None,
+                _ => changed.files.swap(0, 1),
+            }
+            changed.digest = changed.digest().unwrap();
+            assert!(
+                CatalogJournal::bind_with_namespace(
+                    fixture.library.catalog.clone(),
+                    fixture.owner.clone(),
+                    fixture.manifest.clone(),
+                    changed,
+                    Some(supplied)
+                )
+                .is_err(),
+                "variant {variant}"
+            );
+            assert!(fixture.preserved().unwrap());
+        }
+        let owner = fixture.owner.clone();
+        let count=fixture.library.catalog.call(move|db| Ok(db.query_row("SELECT count(*) FROM operation_journal WHERE plan_id=? AND phase='copy_execution_plan_v1'",[owner],|row|row.get::<_,i64>(0))?)).unwrap();
+        assert_eq!(count, 0);
+        let valid = CatalogJournal::bind_with_namespace(
+            fixture.library.catalog.clone(),
+            fixture.owner.clone(),
+            fixture.manifest.clone(),
+            plan.clone(),
+            Some(reference.clone()),
+        )
+        .unwrap();
+        assert_eq!(valid.history_count().unwrap(), 0);
+        fixture
+            .library
+            .catalog
+            .call(|db| {
+                db.execute("UPDATE roots SET mode='referenced'", [])?;
+                Ok(())
+            })
+            .unwrap();
+        assert!(
+            CatalogJournal::bind_with_namespace(
+                fixture.library.catalog.clone(),
+                fixture.owner.clone(),
+                fixture.manifest.clone(),
+                plan,
+                Some(reference)
+            )
+            .is_err()
+        );
+        assert!(fixture.preserved().unwrap());
     }
 
     #[test]

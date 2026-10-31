@@ -101,14 +101,22 @@ pub(super) fn validate_record(
     namespace: &str,
     targets: &[Target],
 ) -> Result<()> {
-    type Evidence = (
-        String,
-        Object,
-        String,
-        Vec<Row>,
-        Vec<Stage>,
-        Vec<(Vec<String>, Object)>,
-    );
+    checked_record(value, parent, namespace, targets).map(|_| ())
+}
+type Evidence = (
+    String,
+    Object,
+    String,
+    Vec<Row>,
+    Vec<Stage>,
+    Vec<(Vec<String>, Object)>,
+);
+fn checked_record(
+    value: &serde_json::Value,
+    parent: &Object,
+    namespace: &str,
+    targets: &[Target],
+) -> Result<Evidence> {
     let evidence: Evidence = serde_json::from_value(value["evidence"].clone())
         .map_err(|error| failed("Invalid retained namespace evidence.").caused_by(error))?;
     let report: Report = serde_json::from_value(value["report"].clone())
@@ -144,6 +152,7 @@ pub(super) fn validate_record(
     let mut objects = BTreeSet::new();
     for (path, object) in &evidence.5 {
         if object.volume != parent.volume
+            || object == parent
             || !paths.insert(path.clone())
             || !objects.insert((object.volume, object.file))
         {
@@ -152,9 +161,10 @@ pub(super) fn validate_record(
     }
     let mut staged = BTreeSet::new();
     for stage in &evidence.4 {
-        let target = targets
+        let (target_index, target) = targets
             .iter()
-            .find(|target| target.id == stage.target_id)
+            .enumerate()
+            .find(|(_, target)| target.id == stage.target_id)
             .ok_or_else(|| failed("Unknown retained stage target."))?;
         let (directory, object) = evidence
             .5
@@ -171,13 +181,97 @@ pub(super) fn validate_record(
             || stage.revision.len() != 64
             || !stage.revision.bytes().all(|byte| byte.is_ascii_hexdigit())
             || !crate::organization::portable_filename(&stage.stage_leaf)
+            || stage.stage_leaf
+                != format!(
+                    ".stillharbour-stage-{}-{target_index}.partial",
+                    namespace
+                        .strip_prefix(".stillharbour-preparing-")
+                        .and_then(|name| name.strip_suffix(".partial"))
+                        .ok_or_else(|| failed("Invalid retained namespace name."))?
+                )
             || !staged.insert(&stage.target_id)
             || !objects.insert((stage.object.volume, stage.object.file))
         {
             return Err(failed("Invalid retained stage mapping or identity."));
         }
     }
-    Ok(())
+    Ok(evidence)
+}
+/// Project only a completely conflict-free retained preparation. Fresh native
+/// validation is performed by the executor; this projection grants no approval.
+pub(super) fn project_copy_plan(
+    value: &serde_json::Value,
+    base: &super::CopyPlan,
+    namespace: &str,
+    targets: &[Target],
+    stream: &str,
+) -> Result<super::CopyPlan> {
+    crate::operations::validate_id(stream)?;
+    let evidence = checked_record(value, &base.destination, namespace, targets)?;
+    if targets.len() != base.files.len()
+        || evidence.4.len() != targets.len()
+        || evidence.3.iter().any(|row| row.state != State::Prepared)
+    {
+        return Err(failed(
+            "Only complete conflict-free preparation can enter a copy plan.",
+        ));
+    }
+    let directories: BTreeMap<_, _> = evidence
+        .5
+        .iter()
+        .map(|(path, object)| (path.clone(), object.clone()))
+        .collect();
+    let stages: BTreeMap<_, _> = evidence
+        .4
+        .iter()
+        .map(|stage| (stage.target_id.as_str(), stage))
+        .collect();
+    let mut files = Vec::new();
+    for (source, target) in base.files.iter().zip(targets) {
+        let stage = stages
+            .get(target.id.as_str())
+            .ok_or_else(|| failed("Missing prepared stage."))?;
+        let path = &evidence.5[stage.parent].0;
+        let mut file = source.clone();
+        file.target = stage.original_leaf.clone();
+        file.stage = stage.stage_leaf.clone();
+        file.destination_location = if path.is_empty() {
+            None
+        } else {
+            let mut parents = Vec::new();
+            for count in 1..=path.len() {
+                parents.push(
+                    directories
+                        .get(&path[..count])
+                        .cloned()
+                        .ok_or_else(|| failed("Missing prepared parent chain."))?,
+                );
+            }
+            let location = super::locations::Destination {
+                policy: "native-parent-location-v1".into(),
+                relative_parent: path.join("/"),
+                parents,
+            };
+            location.validate()?;
+            Some(location)
+        };
+        file.prepared_stage = Some(super::PreparedStage {
+            object: stage.object.clone(),
+            revision: stage.revision.clone(),
+        });
+        files.push(file);
+    }
+    let mut plan = super::CopyPlan {
+        id: stream.into(),
+        digest: String::new(),
+        source: base.source.clone(),
+        destination: evidence.5[0].1.clone(),
+        source_volume: base.source_volume.clone(),
+        destination_volume: base.destination_volume.clone(),
+        files,
+    };
+    plan.digest = plan.digest()?;
+    Ok(plan)
 }
 fn validate_members(
     parent: &File,

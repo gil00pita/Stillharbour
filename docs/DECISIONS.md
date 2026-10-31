@@ -223,3 +223,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Catalog namespace preparation facts - 2026-10-31
 
 [ADR-0035](decisions/ADR-0035-catalog-namespace-preparation-facts.md) separates event append from copy inspection and binds frozen namespace identity/exact manifest targets to bounded append-only catalog facts. Scope validation, atomic anchor/count checks, hash-chain/recomputed typed fingerprint checks and terminal replay refusal preserve interrupted evidence without granting copy approval. Production prepared-stage ready plans and approvals remain open.
+
+## Prepared catalog copy projection - 2026-10-31
+
+[ADR-0036](decisions/ADR-0036-prepared-catalog-copy-projection.md) binds exact completed namespace facts to private fixture copy streams and derives every source/stage/target/parent mapping without overrides. Enforce one stream per namespace and 64 per draft; reopen current bytes without replay. Complete/interrupted native diagnostics preserve prepared IDs. Production ready-plan/session approval/jobs remain open.

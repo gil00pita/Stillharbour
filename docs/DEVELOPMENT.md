@@ -433,3 +433,7 @@ Platform correction for ADR-0033: the macos-15 fixture filesystem returns EILSEQ
 ## Catalog-bound native preparation facts - 2026-10-31
 
 ADR-0035 adds executor::catalog_journal::namespace_journal under existing fixture capability. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --lib namespace_`, then full checks and isolated native suites. The scope-free owned executor receipt includes catalogJournal.namespacePreparation: thirteen retained facts, reopened completion, replay refusal and source/neighbor preservation. Facts and copy events have distinct anchors/phases; limits are 64-KiB anchors, 8-MiB facts, 32-MiB aggregate facts and bounded count. Completed preparation remains execution-disabled. No schema migration or production endpoint is added.
+
+## Prepared namespace catalog copy projection - 2026-10-31
+
+ADR-0036 adds optional private namespace references to catalog copy bindings, preserving omitted legacy encoding. Run namespace_ and executor:: Rust tests, full checks and isolated native suites. The existing namespacePreparation receipt now includes preparedCopy and interruptedAfterPublish.preparedCopy: exact before/after states, thirteen/five events, two/one identical prepared objects and replay/second-stream refusal. Only the constructor-owned fixture can invoke this path. Production ready-plan/session approvals/jobs remain unavailable. Do not treat preparation completion or imported history as approval.
