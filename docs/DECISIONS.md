@@ -211,3 +211,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Catalog-backed copy streams — 2026-10-31
 
 [ADR-0032](decisions/ADR-0032-catalog-copy-streams.md) advances the catalog to schema 4 with indexed append-only journal scope/unique copy-stream anchors, preserving independently openable prior-version snapshots and identities. The fixture-only central engine can use the actual catalog actor with validated retained draft/manifest bindings, bounded ordered events and transactionally checked writes. This is a flat single-root adapter prerequisite, not ready-plan approval or production copying.
+
+## Native copy parent locations — 2026-10-31
+
+[ADR-0033](decisions/ADR-0033-native-copy-parent-locations.md) extends the fixture-only engine/catalog adapter to exact single-root nested mappings. Native source bytes and intermediate object identities drive reads; portable target parents carry native identity proofs. Fresh parent/member checks reject substituted directories. Legacy omitted fields preserve flat stream digests. No production ready-plan/approval or multi-root copy authority is added.

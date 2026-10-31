@@ -236,19 +236,30 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
         ));
     }
     for (index, (expected, file)) in manifest.files.iter().zip(&plan.files).enumerate() {
+        let native_source = if let Some(location) = &file.source_location {
+            location.validate()?;
+            location.relative_native.clone()
+        } else {
+            crate::library::native::encode_path(Path::new(&file.source))
+        };
+        let target = if let Some(location) = &file.destination_location {
+            location.validate()?;
+            format!("{}/{}", location.relative_parent, file.target)
+        } else {
+            file.target.clone()
+        };
         if &expected.view.root_id != root_id
-            || !portable_filename(&file.source)
+            || (file.source_location.is_none() && !portable_filename(&file.source))
             || !portable_filename(&file.target)
-            || expected.relative_native
-                != crate::library::native::encode_path(Path::new(&file.source))
-            || expected.view.target_relative_path != file.target
+            || expected.relative_native != native_source
+            || expected.view.target_relative_path != target
             || expected.view.bytes != file.bytes.to_string()
             || expected.view.source_revision != file.revision
             || expected.identity != (file.object.volume, file.object.file)
             || file.stage != format!(".stillharbour-{}-{index}.partial", plan.id)
         {
             return Err(failed(
-                "This copy stream requires an exact single-root, direct-file manifest mapping. Nested or different scopes remain unavailable.",
+                "This copy stream requires exact single-root native source and destination mappings.",
             ));
         }
     }
@@ -388,7 +399,11 @@ struct Fixture {
     baseline: Vec<(String, Vec<u8>)>,
 }
 impl Fixture {
+    #[cfg(test)]
     fn new() -> Result<Self> {
+        Self::with_nested(false)
+    }
+    fn with_nested(nested: bool) -> Result<Self> {
         use crate::library::{
             Library, LibraryOptions, WorkerPaths,
             model::{RootMode, ScanFilter},
@@ -408,12 +423,30 @@ impl Fixture {
         for path in [&source, &data, &destination] {
             std::fs::create_dir(path)?;
         }
-        std::fs::write(source.join("Photo.JPG"), generated_photo_bytes()?)?;
-        std::fs::write(source.join("Photo.xmp"), COMPANION_BYTES)?;
+        let source_folder = if nested {
+            source.join("source-folder")
+        } else {
+            source.clone()
+        };
+        if nested {
+            std::fs::create_dir(&source_folder)?;
+            std::fs::create_dir(destination.join("organized"))?;
+        }
+        std::fs::write(source_folder.join("Photo.JPG"), generated_photo_bytes()?)?;
+        std::fs::write(source_folder.join("Photo.xmp"), COMPANION_BYTES)?;
         std::fs::write(destination.join("destination-only.bin"), NEIGHBOR_BYTES)?;
         let baseline = ["Photo.JPG", "Photo.xmp"]
             .into_iter()
-            .map(|name| Ok((name.to_owned(), std::fs::read(source.join(name))?)))
+            .map(|name| {
+                Ok((
+                    if nested {
+                        format!("source-folder/{name}")
+                    } else {
+                        name.to_owned()
+                    },
+                    std::fs::read(source_folder.join(name))?,
+                ))
+            })
             .collect::<Result<Vec<_>>>()?;
         let catalog = Arc::new(Catalog::open(data.join("Fixture.stillharbour"))?);
         let library = Library::new(
@@ -440,7 +473,12 @@ impl Fixture {
             RootMode::Managed,
             ScanFilter::default(),
         )?;
-        let file = native::open_asset(&source, &identity, &source_volume, Path::new("Photo.JPG"))?;
+        let relative = if nested {
+            "source-folder/Photo.JPG"
+        } else {
+            "Photo.JPG"
+        };
+        let file = native::open_asset(&source, &identity, &source_volume, Path::new(relative))?;
         let revision = native::revision(&file)?;
         let file_id = filesystem::identity(&file)?;
         let bytes = file.metadata()?.len();
@@ -451,11 +489,16 @@ impl Fixture {
         // Fixture-only catalog inventory, just as the existing generated metadata
         // tests use. This does not claim a scan/decoder/user-flow acceptance.
         catalog.call(move |db| {
-            db.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,presence,is_media,seen_scan) VALUES(?1,?2,?3,'Photo.JPG',?4,'','Photo.JPG','Photo','jpg',?5,?6,?7,'now','2026-10-31T00:00:00','filesystem_modified','ready','pending','present',1,'owned-fixture')",params![inserted,root_id,native::encode_path(Path::new("Photo.JPG")),native::encode_path(Path::new("")),format!("{}:{}",file_id.volume,file_id.file),bytes as i64,inserted_revision])?;
+            db.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,presence,is_media,seen_scan) VALUES(?1,?2,?3,?8,?4,?9,'Photo.JPG','Photo','jpg',?5,?6,?7,'now','2026-10-31T00:00:00','filesystem_modified','ready','pending','present',1,'owned-fixture')",params![inserted,root_id,native::encode_path(Path::new(relative)),native::encode_path(Path::new(if nested {"source-folder"} else {""})),format!("{}:{}",file_id.volume,file_id.file),bytes as i64,inserted_revision,relative,if nested {"source-folder"}else{""}])?;
             db.execute("UPDATE library_state SET revision=revision+1",[])?;Ok(())
         })?;
         let template = OrganizationTemplate {
-            pattern: "{original_stem}.{ext}".into(),
+            pattern: if nested {
+                "organized/{original_stem}.{ext}"
+            } else {
+                "{original_stem}.{ext}"
+            }
+            .into(),
             event: String::new(),
             missing_date: MissingDatePolicy::Block,
         };
@@ -493,15 +536,47 @@ impl Fixture {
         })?;
         let stream = uuid::Uuid::new_v4().to_string();
         let mut files = Vec::new();
-        for (index, item) in manifest.files.iter().enumerate() {
-            let file = super::native::read(&root, &item.source_name)?;
+        let owner = draft.plan.id.clone();
+        let selected = manifest.id.clone();
+        let private = catalog.call(move |db| copy_manifest::load(db, &owner, &selected))?;
+        for (index, (item, native_file)) in manifest.files.iter().zip(&private.files).enumerate() {
+            let source_location = if nested {
+                Some(super::locations::Source::capture(
+                    &root,
+                    &native::decode_path(&native_file.relative_native)?,
+                )?)
+            } else {
+                None
+            };
+            let file = if let Some(location) = &source_location {
+                location.open(&root)?
+            } else {
+                super::native::read(&root, &item.source_name)?
+            };
             files.push(super::CopyFile {
                 source: item.source_name.clone(),
-                target: item.target_relative_path.clone(),
+                target: if nested {
+                    Path::new(&item.target_relative_path)
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .ok_or_else(|| failed("Invalid fixture target."))?
+                        .into()
+                } else {
+                    item.target_relative_path.clone()
+                },
                 stage: format!(".stillharbour-{stream}-{index}.partial"),
                 object: Object::of(&file)?,
                 revision: native::revision(&file)?,
                 bytes: file.metadata()?.len(),
+                source_location,
+                destination_location: if nested {
+                    Some(super::locations::Destination::capture(
+                        &target,
+                        "organized",
+                    )?)
+                } else {
+                    None
+                },
             });
         }
         let mut plan = CopyPlan {
@@ -615,8 +690,12 @@ impl Fixture {
 }
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     let mut cases = Vec::new();
-    for fault in [None, Some(super::CopyFault::AfterPublish)] {
-        let fixture = Fixture::new()?;
+    for (nested, fault) in [
+        (false, None),
+        (false, Some(super::CopyFault::AfterPublish)),
+        (true, None),
+    ] {
+        let fixture = Fixture::with_nested(nested)?;
         let journal = fixture.journal()?;
         let outcome = fixture.execute(&journal, fault)?;
         drop(journal);
@@ -646,7 +725,7 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
         cases.push(serde_json::json!({"outcome":outcome,"publishedVerified":verified,"sourceAndNeighborPreserved":preserved,"replayBlocked":rejected,"journalEvents":reopened.history_count()?}));
     }
     Ok(
-        serde_json::json!({"scope":"generated-temporary-only","catalogSchema":crate::catalog::SCHEMA_VERSION,"completed":cases[0],"interruptedAfterPublish":cases[1]}),
+        serde_json::json!({"scope":"generated-temporary-only","catalogSchema":crate::catalog::SCHEMA_VERSION,"completed":cases[0],"interruptedAfterPublish":cases[1],"nested":cases[2]}),
     )
 }
 
@@ -916,6 +995,62 @@ mod tests {
         let receipt = fixture_probe().unwrap();
         assert_eq!(receipt["completed"]["publishedVerified"], 2);
         assert_eq!(receipt["interruptedAfterPublish"]["publishedVerified"], 1);
+        assert_eq!(receipt["nested"]["publishedVerified"], 2);
+    }
+    #[test]
+    fn nested_parent_substitution_never_adopts_new_source_or_destination_directories() {
+        for source_swap in [true, false] {
+            let fixture = Fixture::with_nested(true).unwrap();
+            let journal = fixture.journal().unwrap();
+            if source_swap {
+                std::fs::rename(
+                    fixture.source.join("source-folder"),
+                    fixture.source.join("retained-source-folder"),
+                )
+                .unwrap();
+                std::fs::create_dir(fixture.source.join("source-folder")).unwrap();
+                std::fs::write(
+                    fixture.source.join("source-folder/Photo.JPG"),
+                    generated_photo_bytes().unwrap(),
+                )
+                .unwrap();
+                std::fs::write(
+                    fixture.source.join("source-folder/Photo.xmp"),
+                    COMPANION_BYTES,
+                )
+                .unwrap();
+            } else {
+                std::fs::rename(
+                    fixture.destination.join("organized"),
+                    fixture.destination.join("retained-output-folder"),
+                )
+                .unwrap();
+                std::fs::create_dir(fixture.destination.join("organized")).unwrap();
+                std::fs::write(
+                    fixture.destination.join("organized/untouched.bin"),
+                    b"new destination occupant",
+                )
+                .unwrap();
+            }
+            assert!(fixture.execute(&journal, None).is_err());
+            assert_eq!(journal.history_count().unwrap(), 0);
+            assert!(fixture.preserved().unwrap());
+            if source_swap {
+                assert_eq!(
+                    std::fs::read(fixture.source.join("retained-source-folder/Photo.JPG")).unwrap(),
+                    generated_photo_bytes().unwrap()
+                );
+                assert_eq!(
+                    std::fs::read(fixture.source.join("retained-source-folder/Photo.xmp")).unwrap(),
+                    COMPANION_BYTES
+                );
+            } else {
+                assert_eq!(
+                    std::fs::read(fixture.destination.join("organized/untouched.bin")).unwrap(),
+                    b"new destination occupant"
+                );
+            }
+        }
     }
     #[test]
     fn bounded_unknown_retained_events_fail_before_execution_and_consistent_snapshots_reopen() {

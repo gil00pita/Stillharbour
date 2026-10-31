@@ -1,6 +1,7 @@
 //! Central source-retaining copy engine under disposable-fixture capability.
 //! No renderer requests or arbitrary user paths can construct this scope yet.
 mod catalog_journal;
+mod locations;
 mod native;
 mod preparation;
 use crate::{
@@ -162,6 +163,10 @@ struct CopyFile {
     object: Object,
     revision: String,
     bytes: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    source_location: Option<locations::Source>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    destination_location: Option<locations::Destination>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -305,7 +310,25 @@ fn revision(file: &File, plan: &CopyFile) -> Result<()> {
     Ok(())
 }
 fn source_member(root: &File, plan: &CopyFile) -> Result<()> {
-    revision(&native::read(root, &plan.source)?, plan)
+    revision(&read_source(root, plan)?, plan)
+}
+fn read_source(root: &File, plan: &CopyFile) -> Result<File> {
+    match &plan.source_location {
+        Some(location) => location.open(root),
+        None => native::read(root, &plan.source),
+    }
+}
+fn destination_parent(root: &File, plan: &CopyFile) -> Result<File> {
+    match &plan.destination_location {
+        Some(location) => location.open(root),
+        None => Ok(root.try_clone()?),
+    }
+}
+fn destination_member(root: &File, plan: &CopyFile, parent: &File) -> Result<()> {
+    if Object::of(&destination_parent(root, plan)?)? != Object::of(parent)? {
+        return Err(failed("A destination parent changed membership."));
+    }
+    Ok(())
 }
 struct VerifiedBytes {
     digest: String,
@@ -456,7 +479,10 @@ impl CopyContext<'_> {
             if cancel.load(Ordering::Acquire) {
                 return Ok(CopyOutcome::CanceledWithPartialCopies);
             }
-            let mut source = native::read(source_root, &item.source)?;
+            let destination_handle = destination_parent(destination, item)?;
+            let destination_root = *destination;
+            let destination = &destination_handle;
+            let mut source = read_source(source_root, item)?;
             revision(&source, item)?;
             journal.append(Some(index),"item_intent",serde_json::json!({"stage":item.stage,"target":item.target,"sourceRevision":item.revision}))?;
             if stop(fault, CopyFault::AfterIntent) {
@@ -537,6 +563,7 @@ impl CopyContext<'_> {
             validate_scope()?;
             revision(&source, item)?;
             source_member(source_root, item)?;
+            destination_member(destination_root, item, destination)?;
             witness.revalidate(destination, &item.stage, &verified)?;
             if cancel.load(Ordering::Acquire) {
                 return Ok(CopyOutcome::CanceledWithPartialCopies);
@@ -569,6 +596,7 @@ impl CopyContext<'_> {
             }
             validate_scope()?;
             source_member(source_root, item)?;
+            destination_member(destination_root, item, destination)?;
             final_witness.revalidate(destination, &item.target, &published)?;
             journal.append(
                 Some(index),
@@ -583,6 +611,8 @@ impl CopyContext<'_> {
         validate_scope()?;
         for (item, witness) in plan.files.iter().zip(&completed) {
             source_member(source_root, item)?;
+            let destination_handle = destination_parent(destination, item)?;
+            let destination = &destination_handle;
             witness.revalidate(
                 destination,
                 &item.target,
@@ -610,7 +640,10 @@ fn inspect_item(
     io: &PacedIo,
     cancel: &AtomicBool,
 ) -> Result<RecoveredItem> {
-    let mut source = native::read(source_root, &plan.source)?;
+    let destination_handle = destination_parent(destination, plan)?;
+    let destination_root = destination;
+    let destination = &destination_handle;
+    let mut source = read_source(source_root, plan)?;
     revision(&source, plan)?;
     let published = native::maybe_read(destination, &plan.target)?;
     let stage = native::maybe_read(destination, &plan.stage)?;
@@ -621,6 +654,7 @@ fn inspect_item(
             match compare(io, &mut source, &mut file, plan, cancel)? {
                 IoStep::Completed(witness) => {
                     source_member(source_root, plan)?;
+                    destination_member(destination_root, plan, destination)?;
                     witness.revalidate(destination, &plan.target, &file)?;
                     Ok(RecoveredItem::PublishedVerified)
                 }
@@ -637,11 +671,13 @@ fn inspect_item(
                     ));
                 }
                 source_member(source_root, plan)?;
+                destination_member(destination_root, plan, destination)?;
                 return Ok(RecoveredItem::RetainedPartialStage);
             }
             match compare(io, &mut source, &mut file, plan, cancel)? {
                 IoStep::Completed(witness) => {
                     source_member(source_root, plan)?;
+                    destination_member(destination_root, plan, destination)?;
                     witness.revalidate(destination, &plan.stage, &file)?;
                     Ok(RecoveredItem::StagedVerified)
                 }
@@ -696,6 +732,8 @@ impl CopyFixture {
                 object: Object::of(&file)?,
                 revision: source_native::revision(&file)?,
                 bytes: file.metadata()?.len(),
+                source_location: None,
+                destination_location: None,
             });
         }
         let mut plan = CopyPlan {
