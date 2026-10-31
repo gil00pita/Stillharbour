@@ -31,6 +31,8 @@ Companion continuation, 2026-10-31: ADR-0026 implements bounded live direct-fold
 
 Compiled-scope continuation, 2026-10-31: ADR-0027 reconciles exactly one explicit companion decision per selected photo into an immutable, idempotent copy manifest. Live inventories are revalidated; overlaps combine only identical mappings, conflicts remain blocked. This is the manifest prerequisite for ready-plan/destination/content/approval checks, not execution acceptance.
 
+Owned executor continuation, 2026-10-31: ADR-0028 implements the central source-retaining copy sequence, shared byte pacing and recovery inspection under a constructor-owned temporary fixture capability. Actual process exits and journal write-denial regressions run against that scope. Production catalog/job/approval/manifest integration, full native target/capacity/fidelity, root/path lock registry, import and reverse-plan undo remain open. This is not M2/M3 acceptance or authorization for real-library mutations.
+
 ## Work
 
 Implement a pure template parser/resolver with predefined and user-saved templates, token validation, explicit missing metadata/date policy and deterministic collision/sequence assignments. Add shared immutable plan records, revision/digest binding, typed conflicts and backend approval.

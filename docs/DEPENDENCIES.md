@@ -83,3 +83,7 @@ M1 advisory rerun: zero Rust vulnerability entries at the recorded RustSec datab
 ## Live notifications — 2026-10-29
 
 Add exact notify 8.2.1 (MIT OR Apache-2.0), with default macOS FSEvents support and follow-symlinks disabled where the backend supports that option. Its new locked adapters are notify-types 2.2.0, objc2-core-services 0.3.2, inotify 0.11.5/inotify-sys 0.1.8 and kqueue 1.2.1/kqueue-sys 1.1.2. Registry SHA256 checksums and platform selection remain in Cargo.lock. These bind native OS facilities; no helper executable or decoder is downloaded. Existing package versions/checksums and the npm lock remain unchanged; this is an additive notification dependency, not an upgrade of the existing stack. Version/feature selection follows the [primary documentation](https://docs.rs/notify/8.2.1/notify/). New dependency metadata does not replace the historical advisory/distribution audit above.
+
+## Owned copy primitive feature — 2026-10-31
+
+ADR-0028 enables Wdk_Foundation on the existing exact windows-sys 0.61.2 dependency for reviewed OBJECT_ATTRIBUTES/NtCreateFile declarations. Other Windows features, package version/license/checksums and Cargo.lock stay unchanged; there is no new helper binary or framework. The new executor is compiled for tests/fixture-probes only. It uses OS ntdll facilities on Windows and existing rustix/libc on macOS. Its byte budget does not meter physical disk, metadata, flushes or opaque helper activity. No new format, transport, metadata-fidelity or production mutation capability is advertised.

@@ -3,6 +3,8 @@ pub mod backup;
 pub mod catalog;
 pub mod contract;
 pub mod domain;
+#[cfg(any(test, feature = "fixture-probes"))]
+pub mod executor;
 pub mod filesystem;
 pub mod jobs;
 pub mod library;
