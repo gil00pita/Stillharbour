@@ -168,7 +168,7 @@ fn validate_ids(ids: &[String]) -> Result<()> {
     Ok(())
 }
 
-fn snapshot(
+pub(super) fn snapshot(
     db: &mut rusqlite::Connection,
     ids: Vec<String>,
 ) -> Result<(String, Vec<PreviewSource>)> {

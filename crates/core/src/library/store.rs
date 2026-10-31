@@ -30,8 +30,10 @@ pub fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
+    let current: u32 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     let tx = db.transaction()?;
-    tx.execute_batch(r#"
+    if current < 2 {
+        tx.execute_batch(r#"
     CREATE TABLE roots (
       id TEXT PRIMARY KEY, label TEXT NOT NULL, native_path BLOB NOT NULL, display_path TEXT NOT NULL,
       mode TEXT NOT NULL CHECK(mode IN ('referenced','managed')), is_base INTEGER NOT NULL,
@@ -87,6 +89,13 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
       edge INTEGER NOT NULL,bytes INTEGER NOT NULL,last_used TEXT NOT NULL);
     PRAGMA user_version=2;
     "#)?;
+    }
+    if current < 3 {
+        super::operation_store::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 3)?;
+    }
+    #[cfg(test)]
+    crate::catalog::migration_test_exit("before_commit");
     tx.commit()?;
     Ok(())
 }

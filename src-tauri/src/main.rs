@@ -30,6 +30,8 @@ struct Foundation {
     _test_data: tempfile::TempDir,
     #[cfg(feature = "desktop-test")]
     fixture: Mutex<Option<stillharbour_core::library_fixture::LibraryFixture>>,
+    #[cfg(feature = "desktop-test")]
+    destination_fixture: Mutex<Option<tempfile::TempDir>>,
     _catalog: Arc<Catalog>,
     preferences: Arc<stillharbour_core::preferences::PreferencesStore>,
     library: Arc<Library>,
@@ -193,12 +195,64 @@ async fn library_request(
     }
     let selection = match &request {
         LibraryRequest::SaveAndScan { selection_id, .. }
+        | LibraryRequest::OrganizationPlanCreate { selection_id, .. }
+        | LibraryRequest::OrganizationDestination { selection_id, .. }
         | LibraryRequest::Relink { selection_id, .. } => Some(selected(&state, selection_id)?),
         _ => None,
     };
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationTemplates {} => {
+                LibraryResponse::OrganizationTemplates(library.organization_templates()?)
+            }
+            LibraryRequest::OrganizationTemplateSave { save } => {
+                LibraryResponse::OrganizationTemplate(library.organization_template_save(save)?)
+            }
+            LibraryRequest::OrganizationPlans { before } => {
+                LibraryResponse::OrganizationPlans(library.organization_plans(before)?)
+            }
+            LibraryRequest::OrganizationPlan { plan_id } => {
+                LibraryResponse::OrganizationPlan(Box::new(library.organization_plan(plan_id)?))
+            }
+            LibraryRequest::OrganizationPlanExport { plan_id, format } => {
+                LibraryResponse::OrganizationPlanExport(
+                    library.organization_plan_export(plan_id, format)?,
+                )
+            }
+            LibraryRequest::OrganizationPlanCreate { draft, .. } => {
+                let selection = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose a destination folder again.",
+                    )
+                })?;
+                LibraryResponse::OrganizationPlan(Box::new(library.organization_plan_create(
+                    draft,
+                    selection.path.clone(),
+                    selected_identity(selection)?,
+                )?))
+            }
+            LibraryRequest::OrganizationDestination {
+                asset_ids,
+                template,
+                preview_fingerprint,
+                ..
+            } => {
+                let selection = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose a destination folder again.",
+                    )
+                })?;
+                LibraryResponse::OrganizationDestination(library.organization_destination(
+                    asset_ids,
+                    template,
+                    preview_fingerprint,
+                    selection.path.clone(),
+                    selected_identity(selection)?,
+                )?)
+            }
             LibraryRequest::OrganizationCompanions { asset_id } => {
                 LibraryResponse::OrganizationCompanions(library.organization_companions(asset_id)?)
             }
@@ -430,6 +484,75 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "organization_destination_fixture" => {
+            if state
+                .fixture
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Fixture unavailable."))?
+                .is_none()
+            {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate an owned library fixture first.",
+                ));
+            }
+            let mut owned = state.destination_fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
+            })?;
+            if owned.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Destination fixture already exists.",
+                ));
+            }
+            let directory = tempfile::Builder::new()
+                .prefix("stillharbour-destination-test-")
+                .tempdir()?;
+            std::fs::write(
+                directory.path().join("destination-only.txt"),
+                b"retained destination",
+            )?;
+            let path = directory.path().to_owned();
+            let handle = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&handle)?;
+            let volume = stillharbour_core::library::native::volume_token(&handle)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state
+                .selection
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Selection unavailable."))? =
+                Some(NativeSelection {
+                    id: id.clone(),
+                    path,
+                    identity: Some(identity),
+                    volume: Some(volume),
+                });
+            *owned = Some(directory);
+            Ok(
+                serde_json::json!({"id":id, "displayPath":"Generated destination fixture", "identityAvailable":true}),
+            )
+        }
+        "organization_destination_verify" => {
+            let owned = state.destination_fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
+            })?;
+            let directory = owned.as_ref().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate a destination fixture first.",
+                )
+            })?;
+            let unchanged = std::fs::read(directory.path().join("destination-only.txt"))?
+                == b"retained destination"
+                && std::fs::read_dir(directory.path())?.count() == 1;
+            if !unchanged {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated destination changed.",
+                ));
+            }
+            Ok(serde_json::json!({"unchanged":true, "entries":1}))
+        }
         "initial_previews_hold" | "initial_previews_release" => {
             let fixture = state
                 .fixture
@@ -755,6 +878,8 @@ fn main() {
                 _test_data: test_data,
                 #[cfg(feature = "desktop-test")]
                 fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                destination_fixture: Mutex::new(None),
                 _catalog: catalog,
                 preferences: Arc::new(stillharbour_core::preferences::PreferencesStore::new(
                     &data,

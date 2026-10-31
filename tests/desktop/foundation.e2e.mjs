@@ -12,6 +12,81 @@ async function native(request) {
     request,
   );
 }
+async function reviewRemovalStopsJobs(receipt) {
+  const before = (await native({ kind: 'status' })).data;
+  const root = before.roots[0];
+  assert.ok(
+    before.jobs.some(
+      (job) =>
+        job.rootId === root.id && ['queued', 'running', 'cancel_requested'].includes(job.state),
+    ),
+  );
+  await $('button[aria-label="Settings"]').click();
+  await $(`button[aria-label="Remove library ${root.label}"]`).click();
+  await $('button=Remove library and its previews').waitForEnabled({ timeout: 35000 });
+  const after = (await native({ kind: 'status' })).data;
+  assert.ok(after.roots.some((value) => value.id === root.id));
+  assert.ok(
+    after.jobs
+      .filter((job) => job.rootId === root.id)
+      .every((job) => !['queued', 'running', 'cancel_requested'].includes(job.state)),
+  );
+  assert.ok(after.jobs.some((job) => job.rootId === root.id && job.state === 'canceled'));
+  assert.ok(
+    (await $('.maintenance-review').getText()).includes('Canceling removal does not restart them'),
+  );
+  await writeFile(
+    receipt,
+    JSON.stringify({ rootId: root.id, before: before.jobs, after: after.jobs, retained: true }),
+  );
+  await browser.saveScreenshot(
+    `.context/screenshots/remove-library-stopped-${process.platform}.png`,
+  );
+  await $('button=Cancel').click();
+  assert.ok((await native({ kind: 'status' })).data.roots.some((value) => value.id === root.id));
+  await $('button[aria-label="Photos"]').click();
+  await browser.waitUntil(async () =>
+    browser.execute(() =>
+      document
+        .querySelector('.preparation-banner')
+        ?.textContent.includes('Preview preparation paused'),
+    ),
+  );
+}
+async function preparationLayout() {
+  return browser.execute(() => {
+    const banner = document.querySelector('.preparation-banner');
+    const content = document.querySelector('.library-content');
+    const body = document.querySelector('.library-content-body');
+    const box = banner.getBoundingClientRect();
+    const contentBox = content.getBoundingClientRect();
+    const button = banner.querySelector('button').getBoundingClientRect();
+    const progress = banner.querySelector('[role="progressbar"]').getBoundingClientRect();
+    const style = getComputedStyle(content);
+    return {
+      fits:
+        box.right <= innerWidth + 1 &&
+        box.left >= 0 &&
+        button.right <= box.right + 1 &&
+        banner.scrollWidth <= banner.clientWidth,
+      compact: box.height <= 54,
+      inline: Math.abs(progress.top + progress.height / 2 - (button.top + button.height / 2)) <= 1,
+      hasPhotos: Boolean(document.querySelector('.collection-main [data-asset-id]')),
+      edgeToEdge:
+        Math.abs(box.left - contentBox.left) <= 1 &&
+        Math.abs(box.right - contentBox.right) <= 1 &&
+        Math.abs(box.top - contentBox.top) <= 1,
+      contentUnpadded: [
+        style.paddingTop,
+        style.paddingRight,
+        style.paddingBottom,
+        style.paddingLeft,
+      ].every((value) => value === '0px'),
+      bodyPadding: getComputedStyle(body).paddingLeft,
+      summary: banner.querySelector('.preparation-summary').textContent,
+    };
+  });
+}
 async function assertFormControlsAligned(selector) {
   const controls = await browser.execute((selector) => {
     const root = document.querySelector(selector);
@@ -185,7 +260,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 2);
+    assert.equal(status.data.catalogSchema, 3);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -279,6 +354,7 @@ describe('native read-only library', () => {
       );
       assert.equal(selection.identityAvailable, true);
       const picker = await browser.tauri.mock('foundation_request');
+      let destinationCreated = false;
       try {
         await picker.mockReturnValue({ kind: 'directory', data: selection });
         await $('button.primary').click();
@@ -286,7 +362,52 @@ describe('native read-only library', () => {
         assert.equal((await $$('.root-setup [role="alert"]')).length, 0);
         assert.equal(await $('.folder-actions button.primary').isEnabled(), true);
         await $('.root-setup input[required]').setValue('Generated Windows library');
+        await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'initial_previews_hold', rows: null }),
+        );
         await $('.folder-actions button.primary').click();
+        try {
+          await browser.waitUntil(
+            async () =>
+              browser.execute(
+                () =>
+                  document
+                    .querySelector('.preparation-banner [role="progressbar"]')
+                    ?.getAttribute('aria-valuenow') === '0' &&
+                  document.querySelector('.preparation-summary')?.textContent ===
+                    '0 previews processed' &&
+                  document.querySelectorAll('.collection-main [data-asset-id]').length === 0,
+              ),
+            { timeout: 15000, timeoutMsg: 'Held preparation banner did not settle' },
+          );
+          for (const [name, width, height] of [
+            ['desktop', 1180, 780],
+            ['minimum', 660, 560],
+          ]) {
+            await browser.setWindowSize(width, height);
+            const layout = await preparationLayout();
+            assert.deepEqual(layout, {
+              fits: true,
+              compact: true,
+              inline: true,
+              hasPhotos: false,
+              edgeToEdge: true,
+              contentUnpadded: true,
+              bodyPadding: width <= 760 ? '16px' : '24px',
+              summary: '0 previews processed',
+            });
+            await writeFile(`${evidence}/windows-banner-${name}.json`, JSON.stringify(layout));
+            await browser.saveScreenshot(`.context/screenshots/windows-banner-${name}.png`);
+          }
+          await reviewRemovalStopsJobs(`${evidence}/windows-removal-stopped-jobs.json`);
+        } finally {
+          await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', { action: 'initial_previews_release', rows: null }),
+          );
+          await browser.setWindowSize(1180, 780);
+        }
+        const retainedRoot = (await native({ kind: 'status' })).data.roots[0];
+        await native({ kind: 'generate_thumbnails', root_id: retainedRoot.id });
         await browser.waitUntil(
           async () => {
             const status = (await native({ kind: 'status' })).data;
@@ -337,6 +458,186 @@ describe('native read-only library', () => {
           await browser.setWindowSize(width, height);
           await browser.saveScreenshot(`.context/screenshots/windows-library-${name}.png`);
         }
+        await browser.setWindowSize(1180, 780);
+        const tile = (await $$('.asset'))[0];
+        await tile.moveTo();
+        await tile.$('.asset-check').click();
+        await $('button=Preview organization').click();
+        const destination = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', {
+            action: 'organization_destination_fixture',
+            rows: null,
+          }),
+        );
+        destinationCreated = true;
+        await picker.mockReturnValue({ kind: 'directory', data: destination });
+        let destinationState;
+        // Gallery rendition publication can legitimately invalidate a preview.
+        // Exercise the required explicit rebuild once; never bypass its guard.
+        await $('button=Load saved templates').scrollIntoView();
+        await $('button=Load saved templates').click();
+        const templateName = await $(
+          'section[aria-label="Saved templates"] input[maxlength="128"]',
+        );
+        await templateName.waitForDisplayed();
+        await templateName.setValue('Generated native template');
+        await $('button=Save template').click();
+        await $('button=Use retained version').waitForDisplayed();
+        await $('button=Use retained version').click();
+        for (let attempt = 0; attempt < 2; attempt++) {
+          await $('button=Build preview').click();
+          await $('.organization-table tbody tr:first-child').waitForDisplayed();
+          await $('button=Choose destination').scrollIntoView();
+          if (await $('button=Choose destination').isEnabled())
+            await $('button=Choose destination').click();
+          await browser.waitUntil(
+            async () => {
+              destinationState = await browser.execute(() => {
+                const section = document.querySelector(
+                  'section[aria-label="Organization destination"]',
+                );
+                return {
+                  text: section?.textContent,
+                  alerts: [...section.querySelectorAll('[role="alert"]')].map(
+                    (node) => node.textContent,
+                  ),
+                  status: section.querySelector('[role="status"]')?.textContent,
+                  busy: section.getAttribute('aria-busy'),
+                };
+              });
+              await writeFile(
+                `${evidence}/windows-destination-ui-${attempt}.json`,
+                JSON.stringify(destinationState),
+              );
+              return Boolean(destinationState.status || destinationState.alerts.length);
+            },
+            { timeout: 10000, timeoutMsg: 'Destination check did not settle' },
+          );
+          if (
+            attempt === 0 &&
+            destinationState.alerts.includes(
+              'The catalog changed. Build a fresh preview before checking a destination.',
+            )
+          ) {
+            assert.equal(await $('button=Choose destination').isEnabled(), false);
+            continue;
+          }
+          assert.deepEqual(destinationState.alerts, [], JSON.stringify(destinationState));
+          break;
+        }
+        const destinationStatus = await $(
+          'section[aria-label="Organization destination"] [role="status"]',
+        );
+        await destinationStatus.scrollIntoView();
+        await destinationStatus.waitForDisplayed();
+        assert.equal(
+          await destinationStatus.getText(),
+          'Destination identity and indexed-root overlap checked.',
+        );
+        assert.equal(await $('button=Create organized copy').isEnabled(), false);
+        const selectedIds = await browser.execute(() =>
+          [...document.querySelectorAll('.asset-check:checked')].map(
+            (input) => input.closest('[data-asset-id]').dataset.assetId,
+          ),
+        );
+        const template = {
+          pattern: '{capture:%Y}/{capture:%Y-%m-%d}/{original_stem}.{ext}',
+          event: '',
+          missingDate: 'undated',
+        };
+        const preview = await native({
+          kind: 'organization_preview',
+          asset_ids: selectedIds,
+          template,
+        });
+        const destinationReview = await native({
+          kind: 'organization_destination',
+          selection_id: destination.id,
+          asset_ids: selectedIds,
+          template,
+          preview_fingerprint: preview.data.fingerprint,
+        });
+        assert.equal(destinationReview.data.executionAvailable, false);
+        assert.equal(destinationReview.data.persisted, false);
+        assert.equal(
+          await $('section[aria-label="Organization destination"] bdi').getText(),
+          destinationReview.data.destinationPath,
+        );
+        await writeFile(
+          `${evidence}/windows-destination-review.json`,
+          JSON.stringify(destinationReview.data),
+        );
+        for (const [name, width, height] of [
+          ['desktop', 1180, 780],
+          ['minimum', 660, 560],
+        ]) {
+          await browser.setWindowSize(width, height);
+          await destinationStatus.scrollIntoView();
+          assert.equal(
+            await browser.execute(() => {
+              const section = document.querySelector(
+                'section[aria-label="Organization destination"]',
+              );
+              return section.scrollWidth <= section.clientWidth + 1;
+            }),
+            true,
+          );
+          await browser.saveScreenshot(`.context/screenshots/m2-destination-${name}.png`);
+        }
+        await $('button=Save plan draft').scrollIntoView();
+        await $('button=Save plan draft').click();
+        await browser.waitUntil(
+          async () =>
+            (await $('section[aria-label="Organization destination"]').getText()).includes(
+              'Plan draft saved.',
+            ),
+          { timeout: 10000 },
+        );
+        const savedPlans = await native({ kind: 'organization_plans', before: null });
+        assert.equal(savedPlans.data.plans.length, 1);
+        const plan = await native({
+          kind: 'organization_plan',
+          plan_id: savedPlans.data.plans[0].id,
+        });
+        assert.equal(plan.data.plan.state, 'draft');
+        assert.equal(plan.data.plan.templateReference.version, 1);
+        assert.equal(plan.data.plan.executionAvailable, false);
+        assert.equal(plan.data.plan.preview.fingerprint, preview.data.fingerprint);
+        await writeFile(`${evidence}/windows-saved-plan.json`, JSON.stringify(plan.data));
+        await $('button[aria-label="Close organization preview"]').click();
+        await $('button=Saved plans').click();
+        await $('button=Refresh plans').waitForDisplayed();
+        await $('.organization-preview li button').click();
+        await $('section[aria-label="Saved plan detail"]').waitForDisplayed();
+        const afterTree = await $('.organization-trees > details:last-child > summary');
+        await afterTree.scrollIntoView();
+        await afterTree.click();
+        const treeEvidence = await browser.execute(() => {
+          const trees = document.querySelector('.organization-trees');
+          const after = trees.querySelector(':scope > details:last-child');
+          return {
+            before: trees.querySelector(':scope > details:first-of-type > summary').textContent,
+            after: after.querySelector(':scope > summary').textContent,
+            expanded: after.open,
+            files: after.querySelectorAll('li > bdi').length,
+          };
+        });
+        assert.equal(
+          treeEvidence.before,
+          `Before · ${plan.data.plan.preview.rows.length} selected paths`,
+        );
+        assert.equal(treeEvidence.expanded, true);
+        assert.equal(treeEvidence.files, plan.data.plan.preview.rows.length);
+        await writeFile(`${evidence}/windows-plan-trees.json`, JSON.stringify(treeEvidence));
+        await browser.saveScreenshot('.context/screenshots/m2-plan-trees.png');
+        await $('button=View JSON export').scrollIntoView();
+        await $('button=View JSON export').click();
+        await $('.organization-preview textarea').waitForDisplayed();
+        const exported = JSON.parse(await $('.organization-preview textarea').getValue());
+        assert.equal(exported.digest, plan.data.plan.digest);
+        assert.equal(exported.destination_native, undefined);
+        await browser.saveScreenshot('.context/screenshots/m2-saved-plan.png');
+        await $('button=Close saved plans').click();
       } finally {
         await picker.mockRestore();
         const verification = await browser.tauri.execute(async ({ core }) =>
@@ -347,6 +648,19 @@ describe('native read-only library', () => {
           JSON.stringify(verification),
         );
         assert.ok(verification.verifiedFiles > 20);
+        if (destinationCreated) {
+          const destinationVerification = await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', {
+              action: 'organization_destination_verify',
+              rows: null,
+            }),
+          );
+          await writeFile(
+            `${evidence}/windows-destination-verification.json`,
+            JSON.stringify(destinationVerification),
+          );
+          assert.equal(destinationVerification.unchanged, true);
+        }
         await browser.setWindowSize(1180, 780);
       }
     },
@@ -535,7 +849,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             const bar = document.querySelector('.preparation-banner [role="progressbar"]');
             return (
               bar?.getAttribute('aria-valuenow') === '0' &&
-              document.querySelector('.preparation-banner')?.textContent.includes('remaining')
+              document
+                .querySelector('.preparation-banner')
+                ?.textContent.includes('0 previews processed')
             );
           }),
         {
@@ -588,24 +904,17 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         ['minimum', 660, 560],
       ]) {
         await browser.setWindowSize(width, height);
-        const layout = await browser.execute(() => {
-          const banner = document.querySelector('.preparation-banner');
-          const box = banner.getBoundingClientRect();
-          const button = banner.querySelector('button').getBoundingClientRect();
-          const progress = banner.querySelector('[role="progressbar"]').getBoundingClientRect();
-          return {
-            fits:
-              box.right <= innerWidth + 1 &&
-              box.left >= 0 &&
-              button.right <= box.right + 1 &&
-              banner.scrollWidth <= banner.clientWidth,
-            compact: box.height <= 54,
-            inline:
-              Math.abs(progress.top + progress.height / 2 - (button.top + button.height / 2)) <= 1,
-            hasPhotos: Boolean(document.querySelector('.collection-main [data-asset-id]')),
-          };
+        const layout = await preparationLayout();
+        assert.deepEqual(layout, {
+          fits: true,
+          compact: true,
+          inline: true,
+          hasPhotos: false,
+          edgeToEdge: true,
+          contentUnpadded: true,
+          bodyPadding: width <= 760 ? '16px' : '24px',
+          summary: '0 previews processed',
         });
-        assert.deepEqual(layout, { fits: true, compact: true, inline: true, hasPhotos: false });
         await browser.saveScreenshot(`.context/screenshots/initial-previews-${name}.png`);
       }
       await $('.preparation-banner button').click();
@@ -616,6 +925,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       );
       assert.equal(await $('.preparation-banner button').getText(), 'Resume previews');
       await browser.saveScreenshot('.context/screenshots/initial-previews-paused.png');
+      await native({ kind: 'generate_thumbnails', root_id: root.id });
+      await reviewRemovalStopsJobs(`${evidence}/removal-stopped-jobs.json`);
       observations.initialPreparation = {
         total: thumbnail.discovered,
         processed: 0,
@@ -1424,7 +1735,16 @@ describeMac('macOS M1 library — generated native fixtures', () => {
   });
   it('puts query and display controls in a keyboard-accessible side panel', async () => {
     assert.equal((await $$('.filter-bar')).length, 0);
-    assert.equal((await $$('.photo-toolbar button')).length, 3);
+    assert.deepEqual(
+      await browser.execute(() =>
+        [...document.querySelectorAll('.photo-toolbar button')].map((button) =>
+          button.getAttribute('aria-controls') === 'library-filter-panel'
+            ? 'Filter'
+            : (button.getAttribute('aria-label') ?? button.textContent.trim()),
+        ),
+      ),
+      ['Collapse navigation', 'Filter', 'Jobs', 'Saved plans'],
+    );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
     await browser.setWindowSize(1180, 780);
@@ -2866,7 +3186,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     );
     await browser.saveScreenshot('.context/screenshots/remove-library-review-minimum-actions.png');
     await $('button=Remove library and its previews').click();
-    await $('.maintenance-review [role="status"]').waitForDisplayed();
+    await browser.waitUntil(async () =>
+      (await $('.maintenance-review [role="status"]').getText()).includes('Library removed.'),
+    );
     assert.equal((await native({ kind: 'status' })).data.roots.length, 0);
     const preferences = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'get_preferences' } }),

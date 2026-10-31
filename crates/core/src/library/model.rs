@@ -471,6 +471,30 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    OrganizationTemplates {},
+    OrganizationTemplateSave {
+        save: crate::operations::TemplateSave,
+    },
+    OrganizationPlans {
+        before: Option<String>,
+    },
+    OrganizationPlan {
+        plan_id: String,
+    },
+    OrganizationPlanCreate {
+        selection_id: String,
+        draft: crate::operations::PlanDraftInput,
+    },
+    OrganizationPlanExport {
+        plan_id: String,
+        format: crate::operations::PlanExportFormat,
+    },
+    OrganizationDestination {
+        selection_id: String,
+        asset_ids: Vec<String>,
+        template: crate::organization::OrganizationTemplate,
+        preview_fingerprint: String,
+    },
     OrganizationCompanions {
         asset_id: String,
     },
@@ -585,6 +609,12 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    OrganizationTemplates(Vec<crate::operations::SavedTemplate>),
+    OrganizationTemplate(crate::operations::SavedTemplate),
+    OrganizationPlans(crate::operations::OrganizationPlanPage),
+    OrganizationPlan(Box<crate::operations::OrganizationPlanDetail>),
+    OrganizationPlanExport(crate::operations::PlanExport),
+    OrganizationDestination(crate::organization::OrganizationDestinationReview),
     OrganizationCompanions(crate::organization::OrganizationCompanionReview),
     OrganizationPreview(crate::organization::OrganizationPreview),
     Changes(LibraryChangePage),

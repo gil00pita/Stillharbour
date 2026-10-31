@@ -35,6 +35,18 @@ pub struct OrganizationCompanionReview {
     pub execution_available: bool,
 }
 
+/// Read-only observation, never an approval or a persisted execution plan.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationDestinationReview {
+    pub preview_fingerprint: String,
+    pub catalog_revision: String,
+    pub destination_path: String,
+    pub fingerprint: String,
+    pub execution_available: bool,
+    pub persisted: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MissingDatePolicy {
@@ -94,7 +106,7 @@ pub struct OrganizationPreview {
 
 /// Private native locators and identities participate in the fingerprint but
 /// never become renderer execution inputs. All values come from one DB snapshot.
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct PreviewSource {
     pub id: String,
     pub root_id: String,
@@ -436,6 +448,14 @@ pub(crate) fn preview(
         selected_bytes: total.to_string(),
         execution_available: false,
     })
+}
+
+pub(crate) fn validate_template(template: &OrganizationTemplate) -> Result<()> {
+    if template.event.len() > 512 {
+        return Err(invalid("Use an event of at most 512 bytes."));
+    }
+    parse(&template.pattern)?;
+    Ok(())
 }
 
 #[cfg(test)]

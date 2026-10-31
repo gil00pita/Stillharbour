@@ -12,6 +12,17 @@ Next-phase continuation, 2026-10-30: on-demand indexed companion detail review i
 
 ## Prerequisites and references
 
+Owner continuation, 2026-10-31: continue M2 planning, then finish M2 if unfinished. ADR-0022's bounded destination preflight retains picker-session authority and stale-preview checks. ADR-0023 subsequently verifies scoped Windows retained migration snapshots and introduces schema-3 immutable template versions/drafts with restart review and JSON/CSV text. M2 is still in progress; this does not implement or authorize the executor.
+
+Current checklist:
+
+Conditional M3 request, 2026-10-31: M2 is unfinished, so do not start M3. Continue M2. Selected-path Before/After views now group source labels by library and proposed folders by DSL separators; full native source-folder hierarchy remains open alongside the requirements below. All executor/preservation gates remain unchanged.
+
+- Implemented: pure bounded DSL/relative previews; indexed companion review; native destination identity/overlap; retained migration snapshot and schema-3 transaction; saved template version/CAS; immutable fingerprint-bound drafts/history/staleness and JSON/CSV review text.
+- Open planning: native target/case/Unicode checks; complete confirmed companion bundles; capacity/fidelity; template samples/policy validation; full native source-folder hierarchy; native export-file save; executable-plan approval/preconditions. Selected-path Before/After review is implemented as described above.
+- Open execution: central locks/journal state transitions, staging/no-replace verified copy, cancellation/recovery/fault injection, reverse-plan undo, fixture folder import/duplicate skipping/idempotency and target-platform native acceptance.
+- Production gate: exact-version independent recovery and native failure gates still required. No real-library mutation enablement.
+
 M0-M1; docs/CODEX_SPEC.md sections 5, 9, 10, 12; acceptance AC-023 through AC-039, AC-081, AC-082, AC-084.
 
 ## Work

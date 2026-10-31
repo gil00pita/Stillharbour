@@ -6,6 +6,11 @@ use std::{
     path::Path,
 };
 
+mod directory;
+pub(crate) use directory::DirectoryChain;
+#[cfg(windows)]
+pub(crate) mod catalog_snapshot;
+
 #[cfg(windows)]
 pub(crate) mod windows;
 

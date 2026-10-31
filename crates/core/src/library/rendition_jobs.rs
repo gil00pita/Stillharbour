@@ -14,6 +14,7 @@ impl Library {
     pub fn generate_thumbnails(self: &Arc<Self>, root_id: String) -> Result<ScanJob> {
         // Serialize admission with destructive catalog/cache maintenance and scans.
         let _admission = self.scan_gate.try_start()?;
+        self.ensure_work_admission()?;
         self.enqueue_thumbnails(root_id, true)
     }
     pub(super) fn enqueue_thumbnails(
@@ -22,7 +23,7 @@ impl Library {
         explicit: bool,
     ) -> Result<ScanJob> {
         let _cache = self.cache_gate.read().map_err(|_| lock_error())?;
-        if self.maintenance.load(Ordering::Acquire) {
+        if self.maintenance_pending.load(Ordering::Acquire) {
             return Err(AppError::new(
                 ErrorCode::Busy,
                 "Cache maintenance is running.",

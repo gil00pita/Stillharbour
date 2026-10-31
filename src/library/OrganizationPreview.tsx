@@ -4,9 +4,13 @@ import type {
   OrganizationPreview as Preview,
   OrganizationTemplate,
   LibraryRoot,
+  TemplateRef,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { OrganizationCompanions } from './OrganizationCompanions';
+import { OrganizationDestination } from './OrganizationDestination';
+import { OrganizationTemplates } from './OrganizationTemplates';
+import { OrganizationTrees } from './OrganizationTrees';
 
 const defaultPreset = {
   name: 'Year / date / original name',
@@ -53,6 +57,7 @@ export function OrganizationPreview({
     missingDate: 'undated',
   });
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [templateReference, setTemplateReference] = useState<TemplateRef | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -73,6 +78,7 @@ export function OrganizationPreview({
     };
   }, []);
   function update(patch: Partial<OrganizationTemplate>) {
+    setTemplateReference(null);
     setTemplate((value) => ({ ...value, ...patch }));
     setPreview(null);
     setError(null);
@@ -96,7 +102,6 @@ export function OrganizationPreview({
       if (requestId.current === id) setBusy(false);
     }
   }
-  const stale = preview !== null && preview.catalogRevision !== revision;
   const rows = preview?.rows.filter((row) =>
     `${row.sourcePath} ${row.targetRelativePath ?? ''}`
       .toLocaleLowerCase()
@@ -190,6 +195,17 @@ export function OrganizationPreview({
             </button>
           </fieldset>
         </form>
+        <OrganizationTemplates
+          template={template}
+          onLoad={(value, reference) => {
+            requestId.current += 1;
+            setBusy(false);
+            setTemplate(value);
+            setTemplateReference(reference);
+            setPreview(null);
+            setError(null);
+          }}
+        />
         {error && (
           <p role="alert" className="error">
             {error}
@@ -197,11 +213,6 @@ export function OrganizationPreview({
         )}
         {preview && (
           <section aria-label="Proposed organization">
-            {stale && (
-              <p role="alert">
-                The catalog changed. Build a fresh preview before reviewing these paths.
-              </p>
-            )}
             <p role="status">
               {preview.proposed} proposed · {preview.blocked} blocked ·{' '}
               {BigInt(preview.selectedBytes).toLocaleString()} selected file bytes
@@ -211,6 +222,12 @@ export function OrganizationPreview({
               metadata fidelity and free space still need review. Sequence numbers follow library ID
               and native source path order.
             </p>
+            <OrganizationDestination
+              key={preview.fingerprint}
+              preview={preview}
+              revision={revision}
+              templateReference={templateReference}
+            />
             <label>
               Find a path
               <input
@@ -219,6 +236,7 @@ export function OrganizationPreview({
                 onChange={(event) => setSearch(event.target.value)}
               />
             </label>
+            <OrganizationTrees rows={preview.rows} roots={roots} />
             <div className="organization-table">
               <table>
                 <caption ref={resultsCaption} tabIndex={-1}>

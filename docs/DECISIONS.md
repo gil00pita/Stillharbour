@@ -172,6 +172,14 @@ The owner explicitly chooses local P4 work before M2. [ADR-0019](decisions/ADR-0
 The owner continued to M2 and selected organization templates/previews as the priority. [ADR-0020](decisions/ADR-0020-organization-template-previews.md) separates bounded pure template rendering from catalog snapshots and future executable plans. [M2 preview status](M2_ORGANIZATION_PREVIEWS.md) records current relative proposals, deterministic fingerprints and explicit missing/collision issues. No destination/approval/executor is enabled; P4-06 and exact-version recovery/native preservation gates remain open. Persistent destination-aware planning and companion review are next.
 
 
+## M2 destination planning prerequisite — 2026-10-31
+
+[ADR-0022](decisions/ADR-0022-organization-destination-review.md) adds temporary native destination identity/overlap preflight, bound to picker sessions and exact catalog previews. At that slice, schema 2 remained required pending retained Windows migration snapshots. Native target checks, complete companions and execution remain pending. The prior scan performance changes remain intact.
+
+## Retained M2 planning — 2026-10-31
+
+[ADR-0023](decisions/ADR-0023-retained-organization-drafts.md) supplies scoped Windows application-snapshot publication, transactional schema-3 migration, immutable template versions, fingerprint-bound draft records and append-only draft journal evidence. UI review/history and JSON/CSV text carry no execution authority. All original-file guards remain closed; M2 is in progress with native targets, complete companions, capacity/fidelity, executor/import/undo and recovery acceptance still open.
+
 ## Owner-approved Windows NTFS read adapter — 2026-10-30
 
 [ADR-0021](decisions/ADR-0021-windows-ntfs-scanning.md) records the explicit Windows-backend continuation. Use local NTFS volume GUID/file identities, bounded held-handle enumeration and file-ID opens with native name/membership checks. Baseline worker dimensions/previews preserve filesystem date provenance; unsupported roots show the blocking alert. Generic original publication/durability, non-NTFS/network support, full Windows metadata/format packaging and release/preservation gates remain separate. No persisted identity/schema migration.

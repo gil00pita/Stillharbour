@@ -47,8 +47,10 @@ beforeEach(() => {
 });
 
 it('keeps discovery indeterminate even when every found file is indexed', () => {
-  render(<PreparationBanner status={status} rootId={null} onRefresh={refresh} />);
-  expect(screen.getByText('Remaining unknown')).toBeVisible();
+  const { rerender } = render(
+    <PreparationBanner status={status} rootId={null} onRefresh={refresh} />,
+  );
+  expect(screen.getByText('20 files scanned')).toBeVisible();
   expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
   expect(screen.getByRole('progressbar')).toHaveAccessibleDescription(
     'Scanning · total files not yet known',
@@ -56,9 +58,18 @@ it('keeps discovery indeterminate even when every found file is indexed', () => 
   expect(screen.getByText('Scanning · total files not yet known')).not.toBeVisible();
   expect(screen.queryByText('Generated photos')).not.toBeInTheDocument();
   expect(screen.queryByText(/0 remaining/)).not.toBeInTheDocument();
+  rerender(
+    <PreparationBanner
+      status={{ ...status, jobs: [{ ...scan, discovered: 27 }] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  expect(screen.getByText('27 files scanned')).toBeVisible();
+  expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
 });
 
-it('shows a real remaining count after inventory, including errors as processed', () => {
+it('shows actual processed previews after inventory, including unavailable outcomes', () => {
   const job = {
     ...scan,
     kind: 'thumbnails' as const,
@@ -71,7 +82,7 @@ it('shows a real remaining count after inventory, including errors as processed'
     <PreparationBanner status={{ ...status, jobs: [job] }} rootId={null} onRefresh={refresh} />,
   );
   expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
-  expect(screen.getByText('60 remaining')).toBeVisible();
+  expect(screen.getByText('40 previews processed')).toBeVisible();
   expect(screen.getByText('5 previews unavailable · Details in Jobs')).toBeVisible();
   expect(screen.getByRole('progressbar')).toHaveAccessibleDescription(
     'Preparing thumbnails · 40 of 100',
@@ -85,7 +96,7 @@ it('shows a real remaining count after inventory, including errors as processed'
   );
   expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
   expect(screen.queryByText(/0 remaining/)).not.toBeInTheDocument();
-  expect(screen.getByText('Remaining unknown')).toBeVisible();
+  expect(screen.getByText('0 previews processed')).toBeVisible();
 });
 
 it('keeps queued inventory indeterminate and stop requests disabled until confirmed', () => {
@@ -93,7 +104,7 @@ it('keeps queued inventory indeterminate and stop requests disabled until confir
   const { rerender } = render(
     <PreparationBanner status={{ ...status, jobs: [job] }} rootId={null} onRefresh={refresh} />,
   );
-  expect(screen.getByText('Remaining unknown')).toBeVisible();
+  expect(screen.getByText('20 previews processed')).toBeVisible();
   expect(screen.getByRole('progressbar')).not.toHaveAttribute('aria-valuenow');
   rerender(
     <PreparationBanner

@@ -94,9 +94,9 @@ function PreparationStatus({
         <span className="preparation-summary">
           {!job
             ? 'Preview preparation paused'
-            : thumbnails?.percentage !== undefined
-              ? `${thumbnails.remaining.toLocaleString()} remaining`
-              : 'Remaining unknown'}
+            : thumbnails
+              ? `${thumbnails.processed.toLocaleString()} previews processed`
+              : `${job.discovered.toLocaleString()} files scanned`}
         </span>
         {job ? <ScanJobProgress job={job} label={root.label} compact /> : <span />}
         <button disabled={busy || stopping} onClick={() => void act()}>

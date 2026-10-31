@@ -8,8 +8,10 @@ import { LibraryHeader } from './LibraryHeader';
 import { PhotoViewer } from './PhotoViewer';
 import { ComparisonViewer } from './ComparisonViewer';
 import { OrganizationPreview } from './OrganizationPreview';
+import { SavedOrganizationPlans } from './SavedOrganizationPlans';
 import { BatchToolbar } from './BatchToolbar';
 import { TextListControls } from './TextList';
+import { PreparationBanner } from './PreparationBanner';
 import { DEFAULT_TEXT_COLUMNS } from './textColumns';
 import { photoOrigin, type PhotoOrigin } from './viewerMotion';
 import { restoreAssetFocus } from './focus';
@@ -67,6 +69,7 @@ export function LibraryScreen({
   const [viewerInitial, setViewerInitial] = useState<AssetSummary | null>(null);
   const [comparison, setComparison] = useState<AssetSummary[] | null>(null);
   const [organizationIds, setOrganizationIds] = useState<string[] | null>(null);
+  const [plansOpen, setPlansOpen] = useState(false);
   function filter(patch: Partial<AssetQuery>) {
     c.filter(patch);
     if (!batchBusy) setViewerInitial(null);
@@ -83,6 +86,7 @@ export function LibraryScreen({
       value={query.name}
       onSearch={(name) => filter({ name })}
       busy={batchBusy}
+      onPlans={() => setPlansOpen(true)}
       onFilter={() => setFilterOpen(true)}
       filterOpen={filterOpen}
       activeCount={
@@ -101,59 +105,63 @@ export function LibraryScreen({
       >
         {header}
         <div className="library-content">
-          {selectionCount > 0 && (
-            <BatchToolbar
-              loading={loading}
-              total={page?.total ?? 0}
-              count={selectionCount}
-              busy={batchBusy}
-              frozen={frozen}
-              canCompare={!frozen && selected.size >= 2 && selected.size <= 4}
-              onCompare={() => void openComparison()}
-              onOrganization={() => setOrganizationIds([...selected])}
-              onTags={c.addTags}
-              onFreeze={() => void c.freeze()}
-              onFavorite={() =>
-                void c.annotate({ favorite: true, rating: null, tags: null }).catch(onError)
-              }
-              onClear={c.clear}
-            />
-          )}
-          {mode === 'list' && (
-            <TextListControls
-              columns={columns}
-              onColumns={setColumns}
-              sort={query.sort}
-              onSort={(sort) => filter({ sort })}
-              busy={loading || batchBusy}
-            />
-          )}
-          {queryError ? (
-            <QueryFailure message={queryError} loading={loading} onRetry={c.retry} />
-          ) : (
-            <PhotoCollection
-              onRefresh={onRefresh}
-              columns={columns}
-              display={display}
-              viewportHandle={viewportHandle}
-              controller={c}
-              status={status}
-              mode={mode}
-              viewerOpen={Boolean(viewerInitial || comparison || filterOpen || organizationIds)}
-              onOpen={(id, opener) => {
-                const asset = page?.assets.find((asset) => asset.id === id);
-                if (asset && !loading) {
-                  returnPosition.current = opener.closest('.asset-viewport')?.scrollTop ?? 0;
-                  returnFocus.current = opener;
-                  setOrigin(photoOrigin(opener));
-                  setViewerInitial(asset);
+          <PreparationBanner status={status} rootId={query.rootId} onRefresh={onRefresh} />
+          <div className="library-content-body">
+            {selectionCount > 0 && (
+              <BatchToolbar
+                loading={loading}
+                total={page?.total ?? 0}
+                count={selectionCount}
+                busy={batchBusy}
+                frozen={frozen}
+                canCompare={!frozen && selected.size >= 2 && selected.size <= 4}
+                onCompare={() => void openComparison()}
+                onOrganization={() => setOrganizationIds([...selected])}
+                onTags={c.addTags}
+                onFreeze={() => void c.freeze()}
+                onFavorite={() =>
+                  void c.annotate({ favorite: true, rating: null, tags: null }).catch(onError)
                 }
-              }}
-            />
-          )}
-          <p className="screen-reader-status" role="status">
-            {notice}
-          </p>
+                onClear={c.clear}
+              />
+            )}
+            {mode === 'list' && (
+              <TextListControls
+                columns={columns}
+                onColumns={setColumns}
+                sort={query.sort}
+                onSort={(sort) => filter({ sort })}
+                busy={loading || batchBusy}
+              />
+            )}
+            {queryError ? (
+              <QueryFailure message={queryError} loading={loading} onRetry={c.retry} />
+            ) : (
+              <PhotoCollection
+                columns={columns}
+                display={display}
+                viewportHandle={viewportHandle}
+                controller={c}
+                status={status}
+                mode={mode}
+                viewerOpen={Boolean(
+                  viewerInitial || comparison || filterOpen || organizationIds || plansOpen,
+                )}
+                onOpen={(id, opener) => {
+                  const asset = page?.assets.find((asset) => asset.id === id);
+                  if (asset && !loading) {
+                    returnPosition.current = opener.closest('.asset-viewport')?.scrollTop ?? 0;
+                    returnFocus.current = opener;
+                    setOrigin(photoOrigin(opener));
+                    setViewerInitial(asset);
+                  }
+                }}
+              />
+            )}
+            <p className="screen-reader-status" role="status">
+              {notice}
+            </p>
+          </div>
         </div>
       </div>
       {filterOpen && (
@@ -206,6 +214,7 @@ export function LibraryScreen({
           onClose={() => setOrganizationIds(null)}
         />
       )}
+      {plansOpen && <SavedOrganizationPlans onClose={() => setPlansOpen(false)} />}
     </div>
   );
 }

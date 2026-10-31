@@ -25,3 +25,5 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 
 - [ADR-0020: Catalog-only organization template previews](ADR-0020-organization-template-previews.md).
 - [ADR-0021: Windows local NTFS read-only scanning](ADR-0021-windows-ntfs-scanning.md).
+- [ADR-0022: Read-only organization destination preflight](ADR-0022-organization-destination-review.md).
+- [ADR-0023: Retained organization drafts and template versions](ADR-0023-retained-organization-drafts.md).

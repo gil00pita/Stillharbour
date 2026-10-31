@@ -6,7 +6,6 @@ import { AssetBrowser, type PhotoViewportHandle } from './AssetBrowser';
 import type { GalleryDisplay } from './FilterPanel';
 import type { TextColumn } from './textColumns';
 import { DateTimeline } from './DateTimeline';
-import { PreparationBanner } from './PreparationBanner';
 export function PhotoCollection({
   display,
   viewportHandle,
@@ -16,11 +15,9 @@ export function PhotoCollection({
   viewerOpen,
   onOpen,
   columns,
-  onRefresh,
 }: {
   display: GalleryDisplay;
   columns: readonly TextColumn[];
-  onRefresh: () => Promise<void>;
   viewportHandle: RefObject<PhotoViewportHandle | null>;
   controller: LibraryController;
   status: LibraryStatus;
@@ -44,7 +41,6 @@ export function PhotoCollection({
   return (
     <div className="collection-layout">
       <div className="collection-main" data-feed-count={page?.assets.length ?? 0}>
-        <PreparationBanner status={status} rootId={query.rootId} onRefresh={onRefresh} />
         {page?.assets.length ? (
           <AssetBrowser
             display={display}
