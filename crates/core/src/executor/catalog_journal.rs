@@ -8,7 +8,7 @@ use crate::{
     library::{copy_manifest, operation_store},
     organization::portable_filename,
 };
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::{
     path::Path,
@@ -272,7 +272,13 @@ impl CatalogJournal {
             validate_binding(&tx,&binding)?;
             let encoded=serde_json::to_string(&binding).map_err(|error|failed("Could not retain copy stream.").caused_by(error))?;
             if encoded.len()>MAX_RECORD {return Err(failed("Copy stream exceeds its 64-KiB retained record bound."));}
-            let previous:Option<(i64,Option<String>)>=tx.query_row("SELECT sequence,CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND phase=?2 AND item_id=?3",params![binding.owner_id,PLAN_PHASE,binding.plan.id],|row|Ok((row.get(0)?,row.get(1)?))).optional()?;
+            let previous={
+                let mut query=tx.prepare("SELECT sequence,CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND phase=?2 AND item_id=?3 ORDER BY sequence LIMIT 2")?;
+                let mut rows=query.query(params![binding.owner_id,PLAN_PHASE,binding.plan.id])?;
+                let previous=if let Some(row)=rows.next()? {Some((row.get::<_,i64>(0)?,row.get::<_,Option<String>>(1)?))} else {None};
+                if rows.next()?.is_some() {return Err(failed("Multiple immutable copy-stream anchors require review."));}
+                previous
+            };
             let anchor=if let Some((sequence,previous))=previous {
                 if previous.as_ref()!=Some(&encoded) {return Err(failed("The immutable copy stream changed or exceeds its bound."));} sequence
             } else {
@@ -362,6 +368,15 @@ impl CopyJournal for CatalogJournal {
     }
 }
 
+fn generated_photo_bytes() -> Result<Vec<u8>> {
+    let mut bytes = std::io::Cursor::new(Vec::new());
+    image::RgbImage::from_pixel(16, 8, image::Rgb([19, 43, 67]))
+        .write_to(&mut bytes, image::ImageFormat::Jpeg)
+        .map_err(|error| failed("Could not generate owned journal media.").caused_by(error))?;
+    Ok(bytes.into_inner())
+}
+const COMPANION_BYTES: &[u8] = b"<x:xmpmeta>generated owned companion</x:xmpmeta>";
+const NEIGHBOR_BYTES: &[u8] = b"retained unrelated destination";
 struct Fixture {
     library: Arc<crate::library::Library>,
     _run: tempfile::TempDir,
@@ -393,17 +408,9 @@ impl Fixture {
         for path in [&source, &data, &destination] {
             std::fs::create_dir(path)?;
         }
-        image::RgbImage::from_pixel(16, 8, image::Rgb([19, 43, 67]))
-            .save(source.join("Photo.JPG"))
-            .map_err(|error| failed("Could not generate owned journal media.").caused_by(error))?;
-        std::fs::write(
-            source.join("Photo.xmp"),
-            b"<x:xmpmeta>generated owned companion</x:xmpmeta>",
-        )?;
-        std::fs::write(
-            destination.join("destination-only.bin"),
-            b"retained unrelated destination",
-        )?;
+        std::fs::write(source.join("Photo.JPG"), generated_photo_bytes()?)?;
+        std::fs::write(source.join("Photo.xmp"), COMPANION_BYTES)?;
+        std::fs::write(destination.join("destination-only.bin"), NEIGHBOR_BYTES)?;
         let baseline = ["Photo.JPG", "Photo.xmp"]
             .into_iter()
             .map(|name| Ok((name.to_owned(), std::fs::read(source.join(name))?)))
@@ -646,6 +653,264 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn crash_boundaries() -> [super::super::CopyFault; 9] {
+        use super::super::CopyFault::*;
+        [
+            AfterIntent,
+            AfterStageCreation,
+            AfterCopyChunk,
+            AfterFlush,
+            AfterVerification,
+            BeforePublish,
+            AfterPublish,
+            AfterItemCommit,
+            AfterPlanCommit,
+        ]
+    }
+    #[test]
+    fn catalog_crash_fixture_child() {
+        use std::io::Read;
+        let Some(root) = std::env::var_os("STILLHARBOUR_M2_CATALOG_CHILD_ROOT") else {
+            return;
+        };
+        let root = std::path::PathBuf::from(root).canonicalize().unwrap();
+        let token = std::env::var("STILLHARBOUR_M2_CATALOG_CHILD_TOKEN").unwrap();
+        uuid::Uuid::parse_str(&token).unwrap();
+        assert!(root.starts_with(std::env::temp_dir().canonicalize().unwrap()));
+        assert!(
+            root.file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("stillharbour-catalog-copy-")
+        );
+        let run_scope = crate::filesystem::DirectoryChain::open(&root).unwrap();
+        let marker = super::super::native::read(run_scope.leaf(), "fixture-owner").unwrap();
+        assert_eq!(marker.metadata().unwrap().len(), token.len() as u64);
+        assert_eq!(filesystem::identity(&marker).unwrap().links, 1);
+        let mut owner = Vec::new();
+        marker
+            .take(token.len() as u64 + 1)
+            .read_to_end(&mut owner)
+            .unwrap();
+        assert_eq!(owner, token.as_bytes());
+        let source = crate::filesystem::DirectoryChain::open(&root.join("source")).unwrap();
+        let output = super::super::output_chain(&root.join("output")).unwrap();
+        let _data = crate::filesystem::DirectoryChain::open(&root.join("data")).unwrap();
+        // Validate the fixed constructor-owned source bytes through held native
+        // parents, with fixed-size buffers; never adopt supplied library paths.
+        for (parent, name, expected) in [
+            (source.leaf(), "Photo.JPG", generated_photo_bytes().unwrap()),
+            (source.leaf(), "Photo.xmp", COMPANION_BYTES.to_vec()),
+            (
+                output.leaf(),
+                "destination-only.bin",
+                NEIGHBOR_BYTES.to_vec(),
+            ),
+        ] {
+            let file = super::super::native::read(parent, name).unwrap();
+            assert_eq!(file.metadata().unwrap().len(), expected.len() as u64);
+            assert_eq!(filesystem::identity(&file).unwrap().links, 1);
+            let mut bytes = Vec::new();
+            file.take(expected.len() as u64 + 1)
+                .read_to_end(&mut bytes)
+                .unwrap();
+            assert_eq!(bytes, expected);
+        }
+        let database = root.join("data/Fixture.stillharbour");
+        let proof = crate::filesystem::open_readonly(&database).unwrap();
+        assert!(proof.metadata().unwrap().is_file());
+        assert_eq!(filesystem::identity(&proof).unwrap().links, 1);
+        assert!(proof.metadata().unwrap().len() <= 8 * 1024 * 1024);
+        drop(proof);
+        let catalog = Arc::new(Catalog::open(database).unwrap());
+        assert_eq!(
+            catalog.summary().unwrap().schema,
+            crate::catalog::SCHEMA_VERSION
+        );
+        let selected = token.clone();
+        let expected_source = crate::library::native::encode_path(&root.join("source"));
+        let binding=catalog.call(move|db| {
+            let text:Option<String>=db.query_row("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE phase=?1 AND item_id=?2",params![PLAN_PHASE,selected],|row|row.get(0))?;
+            let binding:Binding=decode(text.as_deref().unwrap(),MAX_RECORD)?;
+            let paths:Vec<Vec<u8>>=db.prepare("SELECT native_path FROM roots")?.query_map([],|row|row.get(0))?.collect::<rusqlite::Result<_>>()?;
+            assert_eq!(paths,vec![expected_source]);
+            Ok(binding)
+        }).unwrap();
+        assert_eq!(binding.plan.id, token);
+        assert_eq!(binding.plan.files.len(), 2);
+        assert_eq!(
+            binding
+                .plan
+                .files
+                .iter()
+                .map(|file| file.source.as_str())
+                .collect::<Vec<_>>(),
+            ["Photo.JPG", "Photo.xmp"]
+        );
+        assert_eq!(
+            binding
+                .plan
+                .files
+                .iter()
+                .map(|file| file.target.as_str())
+                .collect::<Vec<_>>(),
+            ["Photo.JPG", "Photo.xmp"]
+        );
+        assert!(binding.plan.source.matches(source.leaf()).unwrap());
+        assert!(binding.plan.destination.matches(output.leaf()).unwrap());
+        let journal = CatalogJournal::bind(
+            catalog,
+            binding.owner_id,
+            binding.manifest_id,
+            binding.plan.clone(),
+        )
+        .unwrap();
+        assert_eq!(journal.history_count().unwrap(), 0);
+        let point = std::env::var("STILLHARBOUR_M2_CATALOG_CHILD_FAULT").unwrap();
+        let fault = crash_boundaries()
+            .into_iter()
+            .find(|fault| format!("{fault:?}") == point)
+            .unwrap();
+        let validate = || {
+            let source = crate::filesystem::DirectoryChain::open(&root.join("source"))?;
+            let output = super::super::output_chain(&root.join("output"))?;
+            if !binding.plan.source.matches(source.leaf())?
+                || !binding.plan.destination.matches(output.leaf())?
+            {
+                return Err(failed("Owned catalog crash-fixture roots changed."));
+            }
+            Ok(())
+        };
+        use crate::jobs::operation_locks::{Access, Registry, Scope};
+        let lease = Registry::shared()
+            .try_acquire(vec![
+                Scope::new(source, Access::Read),
+                Scope::new(output, Access::Write),
+            ])
+            .unwrap();
+        let io = crate::jobs::paced_io::PacedIo::shared();
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        super::super::CRASH_ON_FAULT.store(true, std::sync::atomic::Ordering::Release);
+        let _ = super::super::CopyContext {
+            plan: &binding.plan,
+            journal: &journal,
+            source_root: lease.directory(0).leaf(),
+            destination: lease.directory(1).leaf(),
+            io: &io,
+            cancel: &cancel,
+            validate_scope: &validate,
+        }
+        .execute(Some(fault));
+        panic!("Owned catalog process-exit boundary was not reached");
+    }
+    #[test]
+    fn catalog_actor_process_exit_matrix_reopens_real_state_without_replay_or_source_loss() {
+        for fault in crash_boundaries() {
+            let fixture = Fixture::new().unwrap();
+            drop(fixture.journal().unwrap());
+            let Fixture {
+                library,
+                _run,
+                source,
+                destination,
+                owner,
+                manifest,
+                plan,
+                baseline,
+            } = fixture;
+            let root = _run.path().canonicalize().unwrap();
+            std::fs::write(root.join("fixture-owner"), plan.id.as_bytes()).unwrap();
+            drop(library);
+            let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+            command
+                .args([
+                    "--exact",
+                    "executor::catalog_journal::tests::catalog_crash_fixture_child",
+                    "--nocapture",
+                ])
+                .env("STILLHARBOUR_M2_CATALOG_CHILD_ROOT", &root)
+                .env("STILLHARBOUR_M2_CATALOG_CHILD_TOKEN", &plan.id)
+                .env("STILLHARBOUR_M2_CATALOG_CHILD_FAULT", format!("{fault:?}"));
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW; owned noninteractive child.
+            }
+            let mut child = command.spawn().unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let status = loop {
+                if let Some(status) = child.try_wait().unwrap() {
+                    break status;
+                }
+                if std::time::Instant::now() >= deadline {
+                    child.kill().unwrap();
+                    let _ = child.wait();
+                    panic!("Owned catalog crash child timed out");
+                }
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            };
+            assert_eq!(
+                status.code(),
+                Some(77),
+                "Catalog child did not reach {fault:?}"
+            );
+            let catalog = Arc::new(Catalog::open(root.join("data/Fixture.stillharbour")).unwrap());
+            let library = crate::library::Library::new(
+                catalog,
+                crate::library::LibraryOptions {
+                    data_directory: root.join("data"),
+                    workers: crate::library::WorkerPaths {
+                        executable: std::env::current_exe().unwrap(),
+                        exiftool: None,
+                        working_directory: root.join("data/worker"),
+                    },
+                },
+            )
+            .unwrap();
+            let fixture = Fixture {
+                library,
+                _run,
+                source,
+                destination,
+                owner,
+                manifest,
+                plan,
+                baseline,
+            };
+            let journal = fixture.journal().unwrap();
+            let before = journal.history_count().unwrap();
+            let states = fixture.inspect(&journal).unwrap();
+            assert_eq!(fixture.inspect(&journal).unwrap(), states);
+            use super::super::{CopyFault, RecoveredItem};
+            let expected = match fault {
+                CopyFault::AfterIntent => RecoveredItem::NotStarted,
+                CopyFault::AfterStageCreation => RecoveredItem::RetainedPartialStage,
+                CopyFault::AfterCopyChunk
+                | CopyFault::AfterFlush
+                | CopyFault::AfterVerification
+                | CopyFault::BeforePublish => RecoveredItem::StagedVerified,
+                CopyFault::AfterPublish
+                | CopyFault::AfterItemCommit
+                | CopyFault::AfterPlanCommit => RecoveredItem::PublishedVerified,
+                _ => unreachable!(),
+            };
+            assert_eq!(
+                states[0], expected,
+                "Unexpected recovery state at {fault:?}"
+            );
+            assert_eq!(
+                states[1],
+                if fault == CopyFault::AfterPlanCommit {
+                    RecoveredItem::PublishedVerified
+                } else {
+                    RecoveredItem::NotStarted
+                }
+            );
+            assert!(fixture.execute(&journal, None).is_err());
+            assert_eq!(journal.history_count().unwrap(), before);
+            assert!(fixture.preserved().unwrap());
+        }
+    }
     #[test]
     fn catalog_stream_uses_actual_retained_scope_and_reopens_completed_and_interrupted_evidence() {
         let receipt = fixture_probe().unwrap();
@@ -777,5 +1042,20 @@ mod tests {
             })
             .unwrap();
         assert!(fixture.journal().is_err());
+        let duplicate = Fixture::new().unwrap();
+        drop(duplicate.journal().unwrap());
+        duplicate.library.catalog.call(|db| {
+            db.execute_batch("DROP INDEX operation_copy_stream;INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) SELECT plan_id,item_id,phase,evidence,created_at FROM operation_journal WHERE phase='copy_execution_plan_v1';")?;Ok(())
+        }).unwrap();
+        let error = duplicate
+            .journal()
+            .err()
+            .expect("Duplicate stream anchors were adopted");
+        assert!(
+            error
+                .message
+                .contains("Multiple immutable copy-stream anchors")
+        );
+        assert!(duplicate.preserved().unwrap());
     }
 }

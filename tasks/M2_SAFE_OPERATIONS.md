@@ -64,3 +64,5 @@ Shared-lock continuation, 2026-10-31: ADR-0031 adds process-wide atomic native r
 ## Catalog-backed executor continuation — 2026-10-31
 
 ADR-0032 moves current catalog schema to 4 by adding journal scope/unique stream indexes after retained consistent snapshots. Under fixture capability, actual catalog actor streams bind retained draft/companion manifests and exact flat single-root copy plans, validate bounded ordered events and recover through fresh native byte inspection. No imported approval or automatic replay. Multi-root/nested ready plans, session approvals, jobs/controls, complete capacity/fidelity, import/idempotency, undo and the catalog adapter's own process-exit/native gates still precede M2 acceptance/M3.
+
+Catalog exit continuation, 2026-10-31: ADR-0032 now implements the catalog actor's own nine-boundary process-exit matrix against validated generated scope, with parent actor close/reopen, actual file inspection and no replay/journal growth. Local Windows passes; target-platform CI remains pending for this continuation. The remaining production ready-plan/jobs/approval/capacity/fidelity/import/undo gates still precede M2/M3 acceptance.
