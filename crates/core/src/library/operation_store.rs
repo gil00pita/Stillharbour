@@ -326,7 +326,7 @@ fn insert_plan(db: &mut Connection, plan: &StoredPlan, revision: &str) -> Result
     tx.commit()?;
     Ok(())
 }
-pub(crate) fn load(db: &mut Connection, id: &str) -> Result<StoredPlan> {
+pub(crate) fn load(db: &Connection, id: &str) -> Result<StoredPlan> {
     let (catalog,digest,payload):(String,String,String)=db.query_row("SELECT catalog_id,digest,payload FROM organization_plans WHERE id=? AND length(payload)<=8388608",[id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?.ok_or_else(||invalid("The saved plan was not found or exceeds its supported size."))?;
     let current: String = db.query_row(
         "SELECT uuid FROM catalog_identity WHERE singleton=1",
@@ -443,7 +443,7 @@ mod tests {
         );
         insert_plan(&mut db, &record, "1").unwrap();
         assert_eq!(
-            load(&mut db, &record.view.id).unwrap().view.digest,
+            load(&db, &record.view.id).unwrap().view.digest,
             record.view.digest
         );
         assert!(
@@ -458,7 +458,7 @@ mod tests {
         );
         db.execute("UPDATE catalog_identity SET uuid='other-catalog'", [])
             .unwrap();
-        assert!(load(&mut db, &record.view.id).is_err());
+        assert!(load(&db, &record.view.id).is_err());
         db.execute("UPDATE catalog_identity SET uuid='fixture-catalog'", [])
             .unwrap();
         // Simulate a damaged/imported catalog only inside this in-memory fixture.
@@ -470,7 +470,7 @@ mod tests {
             [encode(&record).unwrap()],
         )
         .unwrap();
-        assert!(load(&mut db, &record.view.id).is_err());
+        assert!(load(&db, &record.view.id).is_err());
     }
     #[test]
     fn template_versions_compare_and_swap_and_cannot_be_rewritten() {

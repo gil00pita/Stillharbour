@@ -1,5 +1,6 @@
 //! Central source-retaining copy engine under disposable-fixture capability.
 //! No renderer requests or arbitrary user paths can construct this scope yet.
+mod catalog_journal;
 mod native;
 mod preparation;
 use crate::{
@@ -82,7 +83,7 @@ pub fn run_fixture_probe() -> Result<serde_json::Value> {
     }
     Ok(
         serde_json::json!({"scope":"generated-temporary-only","nativeOs":std::env::consts::OS,"policy":"m2-owned-copy-fixture-v1","configuredAggregateBytesPerSecond":PacedIo::shared().bytes_per_second()?,"chunkBytes":CHUNK_BYTES,"burstBytes":crate::jobs::paced_io::ISSUED_BURST_BYTES,
-        "completed":case(None)?,"interruptedAfterPublish":case(Some(CopyFault::AfterPublish))?,"scopeLocks":scope_lock_fixture_probe()?}),
+        "completed":case(None)?,"interruptedAfterPublish":case(Some(CopyFault::AfterPublish))?,"scopeLocks":scope_lock_fixture_probe()?,"catalogJournal":catalog_journal::fixture_probe()?}),
     )
 }
 fn scope_lock_fixture_probe() -> Result<serde_json::Value> {
@@ -190,6 +191,35 @@ fn failed(message: &str) -> AppError {
 }
 
 struct Journal(Connection);
+trait CopyJournal {
+    fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()>;
+    fn history_count(&self) -> Result<u64>;
+    fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>>;
+    fn deny_writes_for_fixture_fault(&self) -> Result<()> {
+        Err(AppError::new(
+            ErrorCode::Unsupported,
+            "This journal does not expose fixture write-denial control.",
+        ))
+    }
+}
+impl CopyJournal for Journal {
+    fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()> {
+        Journal::append(self, item, phase, evidence)
+    }
+    fn history_count(&self) -> Result<u64> {
+        let count: i64 = self
+            .0
+            .query_row("SELECT count(*) FROM events", [], |row| row.get(0))?;
+        u64::try_from(count).map_err(|_| failed("Invalid journal event count."))
+    }
+    fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>> {
+        Journal::stage_identity(self, item)
+    }
+    fn deny_writes_for_fixture_fault(&self) -> Result<()> {
+        self.0.pragma_update(None, "query_only", true)?;
+        Ok(())
+    }
+}
 impl Journal {
     fn create(path: &Path, plan: &CopyPlan) -> Result<Self> {
         let journal = Self(Connection::open(path)?);
@@ -388,7 +418,7 @@ static CRASH_ON_FAULT: AtomicBool = AtomicBool::new(false);
 
 struct CopyContext<'a> {
     plan: &'a CopyPlan,
-    journal: &'a Journal,
+    journal: &'a dyn CopyJournal,
     source_root: &'a File,
     destination: &'a File,
     io: &'a PacedIo,
@@ -414,9 +444,7 @@ impl CopyContext<'_> {
         {
             return Err(failed("The immutable copy scope changed."));
         }
-        let count: i64 = journal
-            .0
-            .query_row("SELECT count(*) FROM events", [], |row| row.get(0))?;
+        let count = journal.history_count()?;
         if count != 0 {
             return Err(failed(
                 "This copy has journal history. Inspect recovery before any retry.",
@@ -527,7 +555,7 @@ impl CopyContext<'_> {
                 return Ok(CopyOutcome::Interrupted);
             }
             if fault == Some(CopyFault::ReadOnlyJournalAfterPublish) {
-                journal.0.pragma_update(None, "query_only", true)?;
+                journal.deny_writes_for_fixture_fault()?;
             }
             let IoStep::Completed(final_witness) =
                 compare(io, &mut source, &mut published, item, cancel)?
@@ -576,7 +604,7 @@ impl CopyContext<'_> {
 fn inspect_item(
     plan: &CopyFile,
     index: usize,
-    journal: &Journal,
+    journal: &dyn CopyJournal,
     source_root: &File,
     destination: &File,
     io: &PacedIo,

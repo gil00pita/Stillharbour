@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
@@ -519,13 +519,13 @@ mod tests {
     }
     #[test]
     #[cfg(any(windows, target_os = "macos"))]
-    fn schema_three_migration_retains_v2_and_rolls_back_failure() {
+    fn planning_migration_retains_v2_and_rolls_back_failure() {
         let owned = tempfile::tempdir().unwrap();
         let path = owned.path().join("legacy.stillharbour");
         let id = legacy_fixture(&path);
         let current = Catalog::open(path.clone()).unwrap();
         assert_eq!(current.summary().unwrap().id, id);
-        assert_eq!(current.summary().unwrap().schema, 3);
+        assert_eq!(current.summary().unwrap().schema, SCHEMA_VERSION);
         assert_eq!(
             current
                 .call(|db| Ok(db.query_row(
@@ -588,6 +588,82 @@ mod tests {
         );
     }
     #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn schema_four_indices_retain_v3_history_and_roll_back_both_indices_on_collision() {
+        let run = tempfile::tempdir().unwrap();
+        for collision in [false, true] {
+            let path = run.path().join(if collision {
+                "collision.stillharbour"
+            } else {
+                "indexed.stillharbour"
+            });
+            let id = legacy_three_fixture(&path);
+            if collision {
+                let db = Connection::open(&path).unwrap();
+                db.execute_batch("CREATE TABLE operation_copy_stream(private_value TEXT);INSERT INTO operation_copy_stream VALUES('retained collision');").unwrap();
+                assert!(Catalog::open(path.clone()).is_err());
+                assert_eq!(summary(&db).unwrap().schema, 3);
+                assert_eq!(
+                    db.query_row(
+                        "SELECT private_value FROM operation_copy_stream",
+                        [],
+                        |row| row.get::<_, String>(0)
+                    )
+                    .unwrap(),
+                    "retained collision"
+                );
+                assert_eq!(
+                    db.query_row(
+                        "SELECT count(*) FROM sqlite_schema WHERE name='operation_journal_scope'",
+                        [],
+                        |row| row.get::<_, u32>(0)
+                    )
+                    .unwrap(),
+                    0
+                );
+            } else {
+                let catalog = Catalog::open(path.clone()).unwrap();
+                assert_eq!(catalog.summary().unwrap().schema, 4);
+                catalog.call(|db| {let count:u32=db.query_row("SELECT count(*) FROM sqlite_schema WHERE type='index' AND name IN ('operation_journal_scope','operation_copy_stream')",[],|row|row.get(0))?;assert_eq!(count,2);Ok(())}).unwrap();
+            }
+            let snapshot = std::fs::read_dir(run.path())
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .filter(|path| {
+                    path.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("pre-migration-v3-")
+                })
+                .find(|path| {
+                    let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                        .unwrap();
+                    summary(&db).unwrap().id == id
+                })
+                .unwrap();
+            let db =
+                Connection::open_with_flags(snapshot, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            validate(&db).unwrap();
+            assert_eq!(summary(&db).unwrap().schema, 3);
+            assert_eq!(
+                db.query_row("SELECT state FROM job_events WHERE sequence=1", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap(),
+                "retained user data"
+            );
+        }
+    }
+    fn legacy_three_fixture(path: &Path) -> String {
+        let catalog = Catalog::open(path.to_owned()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        catalog.call(|db| {
+            db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_journal_scope;DROP INDEX operation_copy_stream;PRAGMA user_version=3;")?;Ok(())
+        }).unwrap();
+        drop(catalog);
+        id
+    }
+    #[test]
     fn migration_process_fixture_child() {
         let Ok(path) = std::env::var("STILLHARBOUR_M2_MIGRATION_FILE") else {
             return;
@@ -613,7 +689,9 @@ mod tests {
     #[test]
     #[cfg(any(windows, target_os = "macos"))]
     fn process_exit_during_migration_retains_a_consistent_catalog_and_backup() {
-        for stage in ["after_snapshot", "before_commit", "after_commit"] {
+        for (version, stage) in [2, 3].into_iter().flat_map(|version| {
+            ["after_snapshot", "before_commit", "after_commit"].map(|stage| (version, stage))
+        }) {
             let owned = tempfile::Builder::new()
                 .prefix("stillharbour-m2-migration-")
                 .tempdir()
@@ -621,7 +699,11 @@ mod tests {
             let token = uuid::Uuid::new_v4().to_string();
             std::fs::write(owned.path().join("owned-fixture-token"), &token).unwrap();
             let path = owned.path().join("catalog.stillharbour");
-            let id = legacy_fixture(&path);
+            let id = if version == 2 {
+                legacy_fixture(&path)
+            } else {
+                legacy_three_fixture(&path)
+            };
             let mut child = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([
                     "--exact",
@@ -653,7 +735,11 @@ mod tests {
             assert_eq!(summary(&db).unwrap().id, id);
             assert_eq!(
                 summary(&db).unwrap().schema,
-                if stage == "after_commit" { 3 } else { 2 }
+                if stage == "after_commit" {
+                    SCHEMA_VERSION
+                } else {
+                    version
+                }
             );
             assert_eq!(
                 db.query_row("SELECT state FROM job_events WHERE sequence=1", [], |r| {
@@ -669,13 +755,13 @@ mod tests {
                     p.file_name()
                         .unwrap()
                         .to_string_lossy()
-                        .starts_with("pre-migration-v2-")
+                        .starts_with(&format!("pre-migration-v{version}-"))
                 })
                 .unwrap();
             let backup =
                 Connection::open_with_flags(retained, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
             validate(&backup).unwrap();
-            assert_eq!(summary(&backup).unwrap().schema, 2);
+            assert_eq!(summary(&backup).unwrap().schema, version);
             assert_eq!(summary(&backup).unwrap().id, id);
         }
     }

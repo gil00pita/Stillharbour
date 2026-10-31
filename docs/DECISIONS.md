@@ -207,3 +207,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Shared operation scopes — 2026-10-31
 
 [ADR-0031](decisions/ADR-0031-shared-native-operation-scopes.md) supplies bounded process-wide all-or-none native directory read/write admission. Scans acquire shared root leases before catalog job creation; constructor-owned copy/preparation fixtures take source-read/output-write scopes and recovery takes read scopes. Native identities/ancestry, not text prefixes, determine overlap. Other read/write adapters and cross-process coordination remain outside this partial integration; no production mutation or full AC-081 acceptance follows.
+
+## Catalog-backed copy streams — 2026-10-31
+
+[ADR-0032](decisions/ADR-0032-catalog-copy-streams.md) advances the catalog to schema 4 with indexed append-only journal scope/unique copy-stream anchors, preserving independently openable prior-version snapshots and identities. The fixture-only central engine can use the actual catalog actor with validated retained draft/manifest bindings, bounded ordered events and transactionally checked writes. This is a flat single-root adapter prerequisite, not ready-plan approval or production copying.

@@ -14,7 +14,7 @@ use std::collections::BTreeSet;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct StoredCopyManifest {
+pub(crate) struct StoredCopyManifest {
     pub policy: String,
     pub scope_key: String,
     pub view: CopyManifest,
@@ -333,8 +333,8 @@ impl Library {
     }
 }
 
-pub(super) fn load(
-    db: &mut rusqlite::Connection,
+pub(crate) fn load(
+    db: &rusqlite::Connection,
     plan_id: &str,
     manifest_id: &str,
 ) -> Result<StoredCopyManifest> {

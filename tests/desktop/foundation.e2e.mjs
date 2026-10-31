@@ -304,7 +304,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 3);
+    assert.equal(status.data.catalogSchema, 4);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -374,6 +374,15 @@ describe('native read-only library', () => {
       completedAfterRelease: true,
       sourcesPreserved: true,
     });
+    assert.equal(receipt.catalogJournal.catalogSchema, 4);
+    assert.equal(receipt.catalogJournal.completed.publishedVerified, 2);
+    assert.equal(receipt.catalogJournal.completed.journalEvents, 13);
+    assert.equal(receipt.catalogJournal.completed.sourceAndNeighborPreserved, true);
+    assert.equal(receipt.catalogJournal.completed.replayBlocked, true);
+    assert.equal(receipt.catalogJournal.interruptedAfterPublish.publishedVerified, 1);
+    assert.equal(receipt.catalogJournal.interruptedAfterPublish.journalEvents, 5);
+    assert.equal(receipt.catalogJournal.interruptedAfterPublish.sourceAndNeighborPreserved, true);
+    assert.equal(receipt.catalogJournal.interruptedAfterPublish.replayBlocked, true);
     const preparation = await browser.tauri.execute(async ({ core }) =>
       core.invoke('test_performance', {
         action: 'organization_name_preparation_fixture',
@@ -563,6 +572,10 @@ describe('native read-only library', () => {
         const tile = (await $$('.asset'))[0];
         await tile.moveTo();
         await tile.$('.asset-check').click();
+        // Stop new viewport rendition work while reviewing immutable snapshots.
+        // Keep the selected asset; stale plans must stay disabled if inputs do
+        // change. Text list has the existing no-image-demand contract.
+        await galleryView('Text list');
         await $('button=Preview organization').click();
         const destination = await browser.tauri.execute(async ({ core }) =>
           core.invoke('test_performance', {
@@ -747,6 +760,19 @@ describe('native read-only library', () => {
         await $('button=Refresh plans').waitForDisplayed();
         await $('.organization-preview li button').click();
         await $('section[aria-label="Saved plan detail"]').waitForDisplayed();
+        const reopenedPlan = await native({
+          kind: 'organization_plan',
+          plan_id: plan.data.plan.id,
+        });
+        await writeFile(
+          `${evidence}/windows-reopened-plan.json`,
+          JSON.stringify(reopenedPlan.data),
+        );
+        assert.equal(
+          reopenedPlan.data.stale,
+          false,
+          'Generated planning inputs changed after saving; do not bypass the stale guard',
+        );
         const afterTree = await $('.organization-trees > details:last-child > summary');
         await afterTree.scrollIntoView();
         await afterTree.click();
@@ -905,6 +931,9 @@ describe('native read-only library', () => {
           viewport: { width: innerWidth, height: innerHeight },
           inventoryPresent: Boolean(
             document.querySelector('section[aria-label="Complete companion inventory"]'),
+          ),
+          alerts: [...document.querySelectorAll('.organization-preview [role="alert"]')].map(
+            (alert) => alert.textContent,
           ),
           reviewButtons: [...document.querySelectorAll('button')]
             .filter((button) => button.textContent === 'Review all companion filenames')
