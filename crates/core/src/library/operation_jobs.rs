@@ -259,3 +259,16 @@ pub(crate) fn recover(catalog: &Catalog) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(any(test, feature = "copy-workflow"))]
+pub(crate) fn latest_namespace(
+    catalog: &Catalog,
+    owner: String,
+    token: String,
+) -> Result<Option<CopyWorkflowJob>> {
+    catalog.call(move|db| {
+        let mut query=db.prepare(&format!("SELECT {COLUMNS} FROM operation_jobs WHERE plan_id=?1 AND (review_id=?2 OR review_id IN (SELECT item_id FROM operation_journal WHERE plan_id=?1 AND phase='copy_execution_plan_v1' AND json_extract(evidence,'$.namespace.token')=?2)) ORDER BY CASE kind WHEN 'copy_files' THEN 0 ELSE 1 END,updated_at DESC,id DESC LIMIT 1"))?;
+        let mut rows=query.query(rusqlite::params![owner,token])?;
+        rows.next()?.map(decode_row).transpose()
+    })
+}

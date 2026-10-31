@@ -114,6 +114,14 @@ it('requires separate exact approvals and starts, then loads the prepared review
     switch (request.kind) {
       case 'organization_copy_capabilities':
         return { available: true, reason: 'Sources retained' };
+      case 'organization_copy_effect_match':
+        return {
+          planId: 'plan',
+          manifestId: 'manifest',
+          digest: 'a'.repeat(64),
+          existing: [],
+          canReuseReview: true,
+        };
       case 'organization_copy_review_create':
         return preparation;
       case 'organization_copy_review':
@@ -193,4 +201,90 @@ it('rejects a foreign review before exposing any approval or start control', asy
   expect(
     screen.queryByRole('button', { name: 'Approve output preparation' }),
   ).not.toBeInTheDocument();
+});
+
+it('shows retained output history and freshly inspects it without allocating another folder', async () => {
+  const priorJob = { ...job('copy_files', true), planId: 'original-plan' };
+  vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) => {
+    switch (request.kind) {
+      case 'organization_copy_capabilities':
+        return { available: true, reason: 'Sources retained' };
+      case 'organization_copy_effect_match':
+        return {
+          planId: 'plan',
+          manifestId: 'manifest',
+          digest: 'a'.repeat(64),
+          canReuseReview: false,
+          existing: [
+            {
+              planId: 'original-plan',
+              manifestId: 'original-manifest',
+              reviewId: 'original-preparation',
+              outputFolder: 'Stillharbour organized original',
+              preparationRecorded: true,
+              job: priorJob,
+            },
+          ],
+        };
+      case 'organization_copy_recovery_inspect':
+        return {
+          jobId: 'copy-job',
+          sourceRootId: 'root',
+          destinationDisplayPath: 'Chosen destination',
+          outputFolder: 'Stillharbour organized original',
+          files: copy.files.map((file) => ({
+            ...file,
+            targetPath: `Stillharbour organized original/after/photo.JPG`,
+          })),
+          issues: [],
+          inspection: {
+            reviewId: 'copy',
+            states: ['published_verified'],
+            allPublishedBytesVerified: true,
+          },
+        };
+      default:
+        throw new Error(`Unexpected request ${request.kind}`);
+    }
+  });
+  render(<VerifiedCopyWorkflow manifest={manifest} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose destination and review preparation' }),
+  );
+  await screen.findByRole('heading', { name: 'Existing output for this mapping' });
+  expect(
+    screen.queryByRole('button', { name: 'Approve output preparation' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Choose original destination and inspect' }));
+  await screen.findByText('Every selected output was freshly compared with its source.');
+  expect(
+    vi
+      .mocked(libraryData)
+      .mock.calls.some(
+        ([request]) =>
+          request.kind === 'organization_copy_review_create' ||
+          request.kind === 'organization_copy_start',
+      ),
+  ).toBe(false);
+});
+it('rejects foreign effect history before requesting a copy review', async () => {
+  vi.mocked(libraryData)
+    .mockResolvedValueOnce({ available: true, reason: 'test' })
+    .mockResolvedValueOnce({
+      planId: 'foreign',
+      manifestId: 'manifest',
+      digest: 'a'.repeat(64),
+      existing: [],
+      canReuseReview: true,
+    });
+  render(<VerifiedCopyWorkflow manifest={manifest} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose destination and review preparation' }),
+  );
+  await screen.findByRole('alert');
+  expect(
+    vi
+      .mocked(libraryData)
+      .mock.calls.some(([request]) => request.kind === 'organization_copy_review_create'),
+  ).toBe(false);
 });

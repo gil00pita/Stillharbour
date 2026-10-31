@@ -2,6 +2,7 @@
 //! No renderer requests or arbitrary user paths can construct this scope yet.
 mod approval;
 mod catalog_journal;
+mod effects;
 mod locations;
 mod native;
 mod preparation;

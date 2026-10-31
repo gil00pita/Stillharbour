@@ -12,6 +12,104 @@ async function native(request) {
     request,
   );
 }
+async function reviewEquivalentDraft(original, destination, evidence, audit) {
+  // Recreate the user's selected mapping through real ID-only IPC. Draft UUIDs
+  // and approvals differ; output effect identity must remain the same.
+  const assetIds = original.preview.rows.map((row) => row.assetId);
+  const template = original.preview.template;
+  const preview = await native({ kind: 'organization_preview', asset_ids: assetIds, template });
+  const saved = await native({
+    kind: 'organization_plan_create',
+    selection_id: destination.id,
+    draft: {
+      assetIds,
+      template,
+      previewFingerprint: preview.data.fingerprint,
+      templateReference: null,
+    },
+  });
+  assert.notEqual(saved.data.plan.id, original.id);
+  for (const selector of ['button[aria-label="Close jobs"]', 'button=Close saved plans']) {
+    const buttons = await $$(selector);
+    if (buttons.length) await buttons[0].click();
+  }
+  await $('button=Saved plans').click();
+  const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
+  const index = plans.findIndex((plan) => plan.id === saved.data.plan.id);
+  assert.ok(index >= 0);
+  await browser.waitUntil(
+    async () => (await $$('.organization-preview li button')).length === plans.length,
+  );
+  await (await $$('.organization-preview li button'))[index].click();
+  await $('button=Review all companion filenames').scrollIntoView();
+  await $('button=Review all companion filenames').click();
+  await $('button=Read all filenames').waitForDisplayed();
+  await $('button=Read all filenames').click();
+  await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+  await $('label*=I reviewed all filenames').scrollIntoView();
+  await $('label*=I reviewed all filenames').click();
+  await $('button=Save companion review').click();
+  await $('section[aria-label="Retained companion decision"] [role="status"]').waitForDisplayed();
+  await $('button=Close companion inventory').click();
+  await $('button=Compile copy review').scrollIntoView();
+  await $('button=Compile copy review').click();
+  await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+  const decisions = (
+    await native({
+      kind: 'organization_bundle_reviews',
+      plan_id: saved.data.plan.id,
+      asset_id: assetIds[0],
+    })
+  ).data;
+  const compiled = (
+    await native({
+      kind: 'organization_copy_manifest',
+      input: { planId: saved.data.plan.id, bundleConfirmationIds: [decisions[0].id] },
+    })
+  ).data;
+  const matched = (
+    await native({
+      kind: 'organization_copy_effect_match',
+      plan_id: saved.data.plan.id,
+      manifest_id: compiled.id,
+      selection_id: destination.id,
+    })
+  ).data;
+  assert.equal(matched.existing.length, 1);
+  assert.equal(matched.existing[0].planId, original.id);
+  assert.equal(matched.canReuseReview, false);
+  await $('button=Choose destination and review preparation').scrollIntoView();
+  await $('button=Choose destination and review preparation').click();
+  await $('h4=Existing output for this mapping').waitForDisplayed();
+  assert.equal((await $$('button=Approve output preparation')).length, 0);
+  const inspect = await $('button=Choose original destination and inspect');
+  await inspect.scrollIntoView();
+  await inspect.click();
+  await browser.waitUntil(async () =>
+    (await $('section[aria-label="Existing copy output history"]').getText()).includes(
+      'Every selected output was freshly compared with its source.',
+    ),
+  );
+  const after = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', {
+      action: 'organization_destination_audit',
+      rows: null,
+    }),
+  );
+  assert.deepEqual(after, audit);
+  await writeFile(
+    `${evidence}/equivalent-draft-${process.platform}.json`,
+    JSON.stringify({
+      originalPlanId: original.id,
+      newPlanId: saved.data.plan.id,
+      unchangedOutputAudit: after,
+      verifiedExistingBytes: true,
+      effectMatch: matched,
+    }),
+  );
+  await browser.saveScreenshot(`.context/screenshots/m2-equivalent-draft-${process.platform}.png`);
+  await $('button=Close saved plans').click();
+}
 async function reviewRemovalStopsJobs(receipt) {
   const before = (await native({ kind: 'status' })).data;
   const root = before.roots[0];
@@ -304,7 +402,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 5);
+    assert.equal(status.data.catalogSchema, 6);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -374,7 +472,7 @@ describe('native read-only library', () => {
       completedAfterRelease: true,
       sourcesPreserved: true,
     });
-    assert.equal(receipt.catalogJournal.catalogSchema, 5);
+    assert.equal(receipt.catalogJournal.catalogSchema, 6);
     assert.equal(receipt.catalogJournal.completed.publishedVerified, 2);
     assert.equal(receipt.catalogJournal.completed.journalEvents, 13);
     assert.equal(receipt.catalogJournal.completed.sourceAndNeighborPreserved, true);
@@ -1159,6 +1257,7 @@ describe('native read-only library', () => {
         );
         await browser.saveScreenshot('.context/screenshots/m2-reviewed-continuation.png');
         await $('button[aria-label="Close jobs"]').click();
+        await reviewEquivalentDraft(plan.data.plan, copySelection, evidence, outputAudit);
       } catch (error) {
         await browser.saveScreenshot('.context/screenshots/windows-library-failure.png');
         const diagnostics = await browser.execute(() => ({
@@ -2776,6 +2875,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       );
       await browser.saveScreenshot('.context/screenshots/macos-m2-reviewed-continuation.png');
       await $('button[aria-label="Close jobs"]').click();
+      await reviewEquivalentDraft(saved.data.plan, destination, evidence, audit);
     } catch (error) {
       await browser.saveScreenshot('.context/screenshots/macos-m2-workflow-failure.png');
       await writeFile(

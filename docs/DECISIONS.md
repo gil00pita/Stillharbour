@@ -251,3 +251,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Application continuation - 2026-10-31
 
 [ADR-0042](decisions/ADR-0042-application-copy-continuation.md) integrates retained continuation review/approval/start and digest-linked durable jobs behind copy-workflow. A bounded held-directory inventory seal rejects unknown/foreign/missing objects; fresh comparisons drive progress. Historical recorded phases remain distinct from current verification. Default copying/original mutation gates remain unchanged; full/native validation is pending.
+
+## Copy effect identity and schema 6 - 2026-10-31
+
+[ADR-0043](decisions/ADR-0043-copy-effect-history.md) binds exact native source/template/target mappings to retained output history independently of new draft/session UUIDs. Atomic catalog admission refuses another namespace for that mapping. Existing output must be freshly byte-inspected; history never restores approval. Schema 6 adds immutable journal indexes after retained v5 snapshots. Experimental/default preservation gates remain unchanged.

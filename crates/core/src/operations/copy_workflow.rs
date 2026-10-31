@@ -172,3 +172,23 @@ pub struct CopyContinuationReview {
     pub sources_retained: bool,
     pub independent_backup: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ExistingCopyEffect {
+    pub plan_id: String,
+    pub manifest_id: String,
+    pub review_id: String,
+    pub output_folder: String,
+    pub preparation_recorded: bool,
+    pub job: Option<CopyWorkflowJob>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyEffectMatch {
+    pub plan_id: String,
+    pub manifest_id: String,
+    pub digest: String,
+    pub existing: Vec<ExistingCopyEffect>,
+    pub can_reuse_review: bool,
+}

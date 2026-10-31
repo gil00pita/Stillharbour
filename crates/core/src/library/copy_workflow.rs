@@ -14,6 +14,25 @@ fn unavailable() -> AppError {
     )
 }
 impl Library {
+    pub fn organization_copy_effect_match(
+        &self,
+        _plan: String,
+        _manifest: String,
+        _selection: String,
+        _path: PathBuf,
+        _identity: (FileIdentity, String),
+    ) -> Result<CopyEffectMatch> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow
+                .effect_match(self, _plan, _manifest, _selection, _path, _identity)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+
     pub fn organization_copy_continuation_review(
         &self,
         _job: String,

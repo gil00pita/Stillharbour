@@ -33,6 +33,10 @@ pub(crate) fn migrate(db: &Connection) -> Result<()> {
     "#)?;
     Ok(())
 }
+pub(crate) fn migrate_effects(db: &Connection) -> Result<()> {
+    db.execute_batch("CREATE UNIQUE INDEX operation_copy_effect_group ON operation_journal(item_id) WHERE phase='copy_effect_group_v1'; CREATE UNIQUE INDEX operation_copy_effect_candidate ON operation_journal(plan_id,item_id) WHERE phase='copy_effect_candidate_v1'; CREATE INDEX operation_copy_effect_lookup ON operation_journal(json_extract(evidence,'$.effect_digest'),sequence) WHERE phase='copy_effect_candidate_v1';")?;
+    Ok(())
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

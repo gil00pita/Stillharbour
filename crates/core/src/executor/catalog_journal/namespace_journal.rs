@@ -23,6 +23,78 @@ struct Scope {
     namespace: String,
     targets: Vec<Target>,
 }
+pub(in crate::executor) struct EffectSeed {
+    pub sources: crate::executor::sources::Snapshot,
+    pub token: String,
+    pub namespace: String,
+    pub digest: String,
+}
+pub(in crate::executor) fn legacy_effect_seeds(
+    db: &Connection,
+    current: &crate::executor::sources::Snapshot,
+) -> Result<Vec<EffectSeed>> {
+    let mut query=db.prepare("SELECT n.plan_id,n.item_id,CASE WHEN length(CAST(n.evidence AS BLOB))<=65536 THEN n.evidence END FROM operation_journal n WHERE n.phase='namespace_preparation_plan_v2' AND json_extract(n.evidence,'$.namespace')=('Stillharbour organized '||n.item_id) AND json_extract(n.evidence,'$.sources.root_id')=?1 AND json_extract(n.evidence,'$.sources.destination_volume')=?2 AND NOT EXISTS(SELECT 1 FROM operation_journal e WHERE e.plan_id=n.plan_id AND e.item_id=n.item_id AND e.phase='copy_effect_candidate_v1') ORDER BY n.sequence LIMIT 65")?;
+    let mut rows = query.query(params![current.root_id, current.destination_volume])?;
+    let mut seeds = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    while let Some(row) = rows.next()? {
+        let text: Option<String> = row.get(2)?;
+        let text = text.ok_or_else(|| failed("Legacy namespace scope exceeds 64 KiB."))?;
+        let scope: Scope = decode(&text, MAX_RECORD)?;
+        if scope.sources.owner_id != row.get::<_, String>(0)?
+            || scope.token != row.get::<_, String>(1)?
+            || !seen.insert((scope.sources.owner_id.clone(), scope.token.clone()))
+        {
+            return Err(failed("Duplicate or foreign legacy namespace scope."));
+        }
+        preparation::validate_namespace(&scope.token, &scope.namespace)?;
+        if scope.namespace != format!("Stillharbour organized {}", scope.token) {
+            continue;
+        }
+        scope.sources.validate(db)?;
+        seeds.push(EffectSeed {
+            sources: scope.sources,
+            token: scope.token,
+            namespace: scope.namespace,
+            digest: blake3::hash(text.as_bytes()).to_hex().to_string(),
+        });
+        if seeds.len() > 64 {
+            return Err(failed(
+                "More than 64 legacy namespaces need explicit history reconciliation. No output folder was allocated.",
+            ));
+        }
+    }
+    Ok(seeds)
+}
+pub(in crate::executor) fn effect_seed(
+    db: &Connection,
+    owner: &str,
+    token: &str,
+    digest: &str,
+) -> Result<EffectSeed> {
+    let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase='namespace_preparation_plan_v2' ORDER BY sequence LIMIT 2")?;
+    let mut rows = query.query(params![owner, token])?;
+    let text: Option<String> = rows
+        .next()?
+        .ok_or_else(|| failed("Effect namespace scope is missing."))?
+        .get(0)?;
+    let text = text.ok_or_else(|| failed("Effect namespace scope exceeds 64 KiB."))?;
+    if rows.next()?.is_some() || blake3::hash(text.as_bytes()).to_hex().as_str() != digest {
+        return Err(failed("Effect namespace anchor changed or is ambiguous."));
+    }
+    let scope: Scope = decode(&text, MAX_RECORD)?;
+    if scope.sources.owner_id != owner || scope.token != token {
+        return Err(failed("Effect namespace belongs to another owner."));
+    }
+    preparation::validate_namespace(token, &scope.namespace)?;
+    scope.sources.validate(db)?;
+    Ok(EffectSeed {
+        sources: scope.sources,
+        token: scope.token,
+        namespace: scope.namespace,
+        digest: digest.into(),
+    })
+}
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Fact {
@@ -242,11 +314,21 @@ impl NamespaceJournal {
             organized_output,
         )
     }
+    #[cfg(any(test, feature = "fixture-probes"))]
     pub(in crate::executor) fn bind_snapshot(
         catalog: Arc<Catalog>,
         sources: crate::executor::sources::Snapshot,
         token: String,
         organized_output: bool,
+    ) -> Result<Self> {
+        Self::bind_effect(catalog, sources, token, organized_output, None)
+    }
+    pub(in crate::executor) fn bind_effect(
+        catalog: Arc<Catalog>,
+        sources: crate::executor::sources::Snapshot,
+        token: String,
+        organized_output: bool,
+        effect: Option<crate::executor::effects::Effect>,
     ) -> Result<Self> {
         crate::operations::validate_id(&token)?;
         let (scope, encoded, anchor, state) = catalog.call(move |db| {
@@ -260,6 +342,10 @@ impl NamespaceJournal {
             scope.sources.validate(&tx)?;
             let encoded = serde_json::to_string(&scope).map_err(|error| failed("Could not encode namespace scope.").caused_by(error))?;
             if encoded.len() > MAX_RECORD { return Err(failed("Namespace scope exceeds 64 KiB. Use a smaller selection.")); }
+            if let Some(effect)=&effect {
+                let actual=crate::executor::effects::Effect::capture(&tx,&scope.sources)?;
+                if actual.digest!=effect.digest {return Err(failed("Copy effect changed before namespace reservation."));}
+            }
             let previous = {
                 let mut query = tx.prepare("SELECT sequence,CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT 2")?;
                 let mut rows = query.query(params![scope.sources.owner_id,scope.token,ANCHOR_PHASE])?;
@@ -284,6 +370,7 @@ impl NamespaceJournal {
                     state.apply(&decode(&text,MAX_FACT)?,&text,&scope)?;
                 }
             }
+            if let Some(effect)=&effect {effect.register(&tx,&scope.sources,&scope.token,&scope.namespace,blake3::hash(encoded.as_bytes()).to_hex().as_str())?;}
             tx.commit()?;
             Ok((scope,encoded,anchor,state))
         })?;

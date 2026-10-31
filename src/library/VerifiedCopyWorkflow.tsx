@@ -6,10 +6,13 @@ import type {
   CopyWorkflowJob,
   DirectorySelection,
   CopyInspection,
+  CopyEffectMatch,
+  ExistingCopyEffect,
 } from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
 import { copyJobActive } from './copyJobs';
+import { RetainedCopyInspection } from './RetainedCopyInspection';
 
 function validateReview(value: CopyActionReview, plan: string, manifest: string) {
   if (
@@ -27,6 +30,7 @@ function validateReview(value: CopyActionReview, plan: string, manifest: string)
 }
 export function VerifiedCopyWorkflow({ manifest }: { manifest: CopyManifest }) {
   const [selection, setSelection] = useState<DirectorySelection | null>(null);
+  const [existing, setExisting] = useState<CopyEffectMatch | null>(null);
   const [review, setReview] = useState<CopyActionReview | null>(null);
   const [approval, setApproval] = useState<CopyActionApproval | null>(null);
   const [job, setJob] = useState<CopyWorkflowJob | null>(null);
@@ -134,6 +138,45 @@ export function VerifiedCopyWorkflow({ manifest }: { manifest: CopyManifest }) {
         throw new Error(
           'The selected folder identity cannot be verified. Choose a supported local destination.',
         );
+      const matched = await libraryData(
+        {
+          kind: 'organization_copy_effect_match',
+          plan_id: manifest.planId,
+          manifest_id: manifest.id,
+          selection_id: chosen.id,
+        },
+        'organization_copy_effect_match',
+      );
+      if (epoch.current !== token) return;
+      if (
+        matched.planId !== manifest.planId ||
+        matched.manifestId !== manifest.id ||
+        !/^[a-f0-9]{64}$/.test(matched.digest) ||
+        matched.existing.length > 64 ||
+        matched.existing.some(
+          (entry) =>
+            !entry.outputFolder.startsWith('Stillharbour organized ') ||
+            (entry.job && entry.job.planId !== entry.planId),
+        )
+      )
+        throw new Error('Existing copy history does not match this saved scope.');
+      if (!matched.canReuseReview) {
+        if (!matched.existing.length)
+          throw new Error('Existing output history is incomplete. Reopen the saved plan.');
+        setExisting(matched);
+        setSelection(chosen);
+        return;
+      }
+      if (
+        matched.existing.length &&
+        (matched.existing.length !== 1 ||
+          matched.existing[0]!.planId !== manifest.planId ||
+          matched.existing[0]!.manifestId !== manifest.id ||
+          matched.existing[0]!.preparationRecorded ||
+          matched.existing[0]!.job)
+      )
+        throw new Error('Existing preparation must be inspected before continuing.');
+      setExisting(null);
       const value = await libraryData(
         {
           kind: 'organization_copy_review_create',
@@ -264,6 +307,19 @@ export function VerifiedCopyWorkflow({ manifest }: { manifest: CopyManifest }) {
         </button>
       )}
       {unavailable && <p role="status">{unavailable}</p>}
+      {existing && (
+        <section aria-label="Existing copy output history">
+          <h4>Existing output for this mapping</h4>
+          <p>
+            This source, template and target mapping already has retained output history. Inspect
+            its current bytes before deciding whether it is complete. A new draft will reuse this
+            history.
+          </p>
+          {existing.existing.map((entry) => (
+            <ExistingEffect key={entry.reviewId} entry={entry} />
+          ))}
+        </section>
+      )}
       {prepared && review?.action === 'prepare_names' && (
         <button type="button" onClick={() => setReadyRetry(readyRetry + 1)}>
           Reload prepared copy review
@@ -396,5 +452,63 @@ export function VerifiedCopyWorkflow({ manifest }: { manifest: CopyManifest }) {
         </p>
       )}
     </section>
+  );
+}
+
+function ExistingEffect({ entry }: { entry: ExistingCopyEffect }) {
+  const [original, setOriginal] = useState<CopyManifest | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const epoch = useRef(0);
+  useEffect(
+    () => () => {
+      epoch.current += 1;
+    },
+    [],
+  );
+  async function open() {
+    const token = ++epoch.current;
+    setBusy(true);
+    setError(null);
+    try {
+      const value = await libraryData(
+        {
+          kind: 'organization_copy_manifest_open',
+          plan_id: entry.planId,
+          manifest_id: entry.manifestId,
+        },
+        'organization_copy_manifest',
+      );
+      if (epoch.current !== token) return;
+      if (value.planId !== entry.planId || value.id !== entry.manifestId)
+        throw new Error('The saved mapping belongs to another operation.');
+      setOriginal(value);
+    } catch (error) {
+      if (epoch.current === token) setError(errorMessage(error));
+    } finally {
+      if (epoch.current === token) setBusy(false);
+    }
+  }
+  return (
+    <article>
+      <p>
+        Retained output folder: <bdi>{entry.outputFolder}</bdi>
+      </p>
+      {entry.job ? (
+        <RetainedCopyInspection job={entry.job} />
+      ) : entry.preparationRecorded ? (
+        <p>
+          Preparation evidence exists without a linked job. Preserve the retained folder and review
+          its journal; automatic replay is unavailable.
+        </p>
+      ) : original ? (
+        <VerifiedCopyWorkflow manifest={original} />
+      ) : (
+        <button type="button" disabled={busy} onClick={() => void open()}>
+          Review original saved mapping
+        </button>
+      )}
+      {error && <p role="alert">{error}</p>}
+    </article>
   );
 }

@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: u32 = 5;
+pub const SCHEMA_VERSION: u32 = 6;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
@@ -514,7 +514,7 @@ mod tests {
             .unwrap();
         drop(catalog);
         let db = Connection::open(path).unwrap();
-        db.execute_batch("DROP TABLE operation_jobs; DROP TABLE operation_journal; DROP TABLE organization_plans; DROP TABLE organization_templates; PRAGMA user_version=2;").unwrap();
+        db.execute_batch("DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;DROP TABLE operation_jobs; DROP TABLE operation_journal; DROP TABLE organization_plans; DROP TABLE organization_templates; PRAGMA user_version=2;").unwrap();
         id
     }
     #[test]
@@ -658,7 +658,7 @@ mod tests {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
         catalog.call(|db| {
-            db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_journal_scope;DROP INDEX operation_copy_stream;DROP TABLE operation_jobs;PRAGMA user_version=3;")?;Ok(())
+            db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;DROP INDEX operation_journal_scope;DROP INDEX operation_copy_stream;DROP TABLE operation_jobs;PRAGMA user_version=3;")?;Ok(())
         }).unwrap();
         drop(catalog);
         id
@@ -666,7 +666,14 @@ mod tests {
     fn legacy_four_fixture(path: &Path) -> String {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
-        catalog.call(|db|{db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP TABLE operation_jobs;PRAGMA user_version=4;")?;Ok(())}).unwrap();
+        catalog.call(|db|{db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;DROP TABLE operation_jobs;PRAGMA user_version=4;")?;Ok(())}).unwrap();
+        drop(catalog);
+        id
+    }
+    fn legacy_five_fixture(path: &Path) -> String {
+        let catalog = Catalog::open(path.to_owned()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        catalog.call(|db|{db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;PRAGMA user_version=5;")?;Ok(())}).unwrap();
         drop(catalog);
         id
     }
@@ -708,7 +715,7 @@ mod tests {
                 );
             } else {
                 let catalog = Catalog::open(path.clone()).unwrap();
-                assert_eq!(catalog.summary().unwrap().schema, 5);
+                assert_eq!(catalog.summary().unwrap().schema, SCHEMA_VERSION);
                 assert_eq!(catalog.summary().unwrap().id, id);
             }
             let retained = std::fs::read_dir(run.path())
@@ -733,6 +740,67 @@ mod tests {
             assert_eq!(
                 db.query_row("SELECT state FROM job_events WHERE sequence=1", [], |row| {
                     row.get::<_, String>(0)
+                })
+                .unwrap(),
+                "retained user data"
+            );
+        }
+    }
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn effect_indexes_retain_v5_snapshot_and_roll_back_on_collision() {
+        let run = tempfile::tempdir().unwrap();
+        for collision in [false, true] {
+            let path = run.path().join(if collision {
+                "collision.stillharbour"
+            } else {
+                "effects.stillharbour"
+            });
+            let id = legacy_five_fixture(&path);
+            if collision {
+                let db = Connection::open(&path).unwrap();
+                db.execute_batch("CREATE TABLE operation_copy_effect_candidate(private_value TEXT);INSERT INTO operation_copy_effect_candidate VALUES('keep');").unwrap();
+                drop(db);
+                assert!(Catalog::open(path.clone()).is_err());
+                let db = Connection::open(&path).unwrap();
+                assert_eq!(summary(&db).unwrap().schema, 5);
+                assert_eq!(db.query_row("SELECT count(*) FROM sqlite_schema WHERE name='operation_copy_effect_group'",[],|r|r.get::<_,u32>(0)).unwrap(),0);
+                assert_eq!(
+                    db.query_row(
+                        "SELECT private_value FROM operation_copy_effect_candidate",
+                        [],
+                        |r| r.get::<_, String>(0)
+                    )
+                    .unwrap(),
+                    "keep"
+                );
+            } else {
+                let catalog = Catalog::open(path.clone()).unwrap();
+                assert_eq!(catalog.summary().unwrap().id, id);
+                assert_eq!(catalog.summary().unwrap().schema, SCHEMA_VERSION);
+            }
+            let retained = std::fs::read_dir(run.path())
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .filter(|p| {
+                    p.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("pre-migration-v5-")
+                })
+                .find(|p| {
+                    let db =
+                        Connection::open_with_flags(p, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+                    summary(&db).unwrap().id == id
+                })
+                .unwrap();
+            let db =
+                Connection::open_with_flags(retained, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            assert_eq!(summary(&db).unwrap().schema, 5);
+            assert_eq!(summary(&db).unwrap().id, id);
+            assert_eq!(
+                db.query_row("SELECT state FROM job_events WHERE sequence=1", [], |r| {
+                    r.get::<_, String>(0)
                 })
                 .unwrap(),
                 "retained user data"
@@ -765,7 +833,7 @@ mod tests {
     #[test]
     #[cfg(any(windows, target_os = "macos"))]
     fn process_exit_during_migration_retains_a_consistent_catalog_and_backup() {
-        for (version, stage) in [2, 3, 4].into_iter().flat_map(|version| {
+        for (version, stage) in [2, 3, 4, 5].into_iter().flat_map(|version| {
             ["after_snapshot", "before_commit", "after_commit"].map(|stage| (version, stage))
         }) {
             let owned = tempfile::Builder::new()
@@ -779,8 +847,10 @@ mod tests {
                 legacy_fixture(&path)
             } else if version == 3 {
                 legacy_three_fixture(&path)
-            } else {
+            } else if version == 4 {
                 legacy_four_fixture(&path)
+            } else {
+                legacy_five_fixture(&path)
             };
             let mut child = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([

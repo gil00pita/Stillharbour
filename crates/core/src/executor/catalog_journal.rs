@@ -1175,6 +1175,284 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
+    fn equivalent_manifest(
+        fixture: &Fixture,
+        changed_template: bool,
+    ) -> crate::operations::CopyManifest {
+        use crate::operations::{
+            BundleConfirmationInput, BundleRelation, CopyManifestInput, PlanDraftInput,
+        };
+        let owner = fixture.owner.clone();
+        let draft = fixture
+            .library
+            .catalog
+            .call(move |db| crate::library::operation_store::load(db, &owner))
+            .unwrap();
+        let ids = draft
+            .sources
+            .iter()
+            .map(|source| source.id.clone())
+            .collect::<Vec<_>>();
+        let source = &draft.sources[0];
+        let mut template = draft.view.preview.template;
+        if changed_template {
+            template.pattern = "changed/{original_stem}.{ext}".into();
+        }
+        let preview = fixture
+            .library
+            .organization_preview(ids.clone(), template.clone())
+            .unwrap();
+        let target = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&target).unwrap();
+        let volume = crate::library::native::volume_token(&target).unwrap();
+        drop(target);
+        let next = fixture
+            .library
+            .organization_plan_create(
+                PlanDraftInput {
+                    asset_ids: ids,
+                    template,
+                    preview_fingerprint: preview.fingerprint,
+                    template_reference: None,
+                },
+                fixture.destination.clone(),
+                (identity, volume),
+            )
+            .unwrap();
+        let inventory = fixture
+            .library
+            .organization_bundle_inventory(source.id.clone(), source.revision.clone())
+            .unwrap();
+        let confirmation = fixture
+            .library
+            .organization_bundle_confirm(BundleConfirmationInput {
+                plan_id: next.plan.id.clone(),
+                asset_id: source.id.clone(),
+                source_revision: source.revision.clone(),
+                inventory_fingerprint: inventory.fingerprint,
+                companion_ids: inventory
+                    .entries
+                    .iter()
+                    .filter(|entry| {
+                        entry.selectable && entry.relation != BundleRelation::Additional
+                    })
+                    .map(|entry| entry.id.clone())
+                    .collect(),
+                reviewed_all_entries: true,
+            })
+            .unwrap();
+        fixture
+            .library
+            .organization_copy_manifest(CopyManifestInput {
+                plan_id: next.plan.id,
+                bundle_confirmation_ids: vec![confirmation.id],
+            })
+            .unwrap()
+    }
+    #[test]
+    fn effect_binding_reuses_unstarted_review_and_blocks_cross_draft_duplicates() {
+        let fixture = Fixture::with_nested(true).unwrap();
+        let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&selected).unwrap();
+        let volume = crate::library::native::volume_token(&selected).unwrap();
+        drop(selected);
+        let selection = uuid::Uuid::new_v4().to_string();
+        let review = fixture
+            .library
+            .organization_copy_review_create(
+                fixture.owner.clone(),
+                fixture.manifest.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        let again = fixture
+            .library
+            .organization_copy_review_create(
+                fixture.owner.clone(),
+                fixture.manifest.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        assert_eq!(again.id, review.id);
+        assert_eq!(again.digest, review.digest);
+        fixture
+            .library
+            .catalog
+            .call(|db| {
+                db.execute("UPDATE library_state SET revision=revision+1", [])?;
+                Ok(())
+            })
+            .unwrap();
+        let next = equivalent_manifest(&fixture, false);
+        assert_ne!(next.plan_id, fixture.owner);
+        let matched = fixture
+            .library
+            .organization_copy_effect_match(
+                next.plan_id.clone(),
+                next.id.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        assert_eq!(matched.existing.len(), 1);
+        assert_eq!(matched.existing[0].review_id, review.id);
+        assert!(!matched.can_reuse_review);
+        assert!(
+            fixture
+                .library
+                .organization_copy_review_create(
+                    next.plan_id,
+                    next.id,
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone())
+                )
+                .is_err()
+        );
+        assert!(!fixture.destination.join(&review.output_folder).exists());
+        let changed = equivalent_manifest(&fixture, true);
+        let different = fixture
+            .library
+            .organization_copy_effect_match(
+                changed.plan_id,
+                changed.id,
+                selection,
+                fixture.destination.clone(),
+                (identity, volume),
+            )
+            .unwrap();
+        assert!(different.existing.is_empty());
+        assert!(different.can_reuse_review);
+        fixture.library.catalog.call(|db|{let count:u32=db.query_row("SELECT count(*) FROM operation_journal WHERE phase='namespace_preparation_plan_v2'",[],|r|r.get(0))?;assert_eq!(count,1);Ok(())}).unwrap();
+    }
+    #[test]
+    fn concurrent_equivalent_drafts_reserve_only_one_namespace() {
+        let fixture = Fixture::with_nested(true).unwrap();
+        let next = equivalent_manifest(&fixture, false);
+        let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&selected).unwrap();
+        let volume = crate::library::native::volume_token(&selected).unwrap();
+        drop(selected);
+        let barrier = std::sync::Barrier::new(2);
+        let results = std::thread::scope(|scope| {
+            let handles = [
+                (fixture.owner.clone(), fixture.manifest.clone()),
+                (next.plan_id, next.id),
+            ]
+            .into_iter()
+            .map(|(owner, manifest)| {
+                let barrier = &barrier;
+                let library = &fixture.library;
+                let destination = &fixture.destination;
+                let identity = &identity;
+                let volume = &volume;
+                scope.spawn(move || {
+                    barrier.wait();
+                    library.organization_copy_review_create(
+                        owner,
+                        manifest,
+                        uuid::Uuid::new_v4().to_string(),
+                        destination.clone(),
+                        (identity.clone(), volume.clone()),
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+            handles
+                .into_iter()
+                .map(|handle| handle.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        let winner = results.into_iter().find_map(|result| result.ok()).unwrap();
+        assert!(!fixture.destination.join(winner.output_folder).exists());
+        fixture
+            .library
+            .catalog
+            .call(|db| {
+                for phase in [
+                    "namespace_preparation_plan_v2",
+                    "copy_effect_group_v1",
+                    "copy_effect_candidate_v1",
+                ] {
+                    let count: u32 = db.query_row(
+                        "SELECT count(*) FROM operation_journal WHERE phase=?",
+                        [phase],
+                        |r| r.get(0),
+                    )?;
+                    assert_eq!(count, 1);
+                }
+                Ok(())
+            })
+            .unwrap();
+    }
+    #[test]
+    fn effect_candidate_denial_rolls_back_namespace_and_retry_uses_no_filesystem_effects() {
+        let fixture = Fixture::with_nested(true).unwrap();
+        let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&selected).unwrap();
+        let volume = crate::library::native::volume_token(&selected).unwrap();
+        drop(selected);
+        fixture.library.catalog.call(|db|{db.execute_batch("CREATE TRIGGER deny_effect BEFORE INSERT ON operation_journal WHEN NEW.phase='copy_effect_candidate_v1' BEGIN SELECT RAISE(ABORT,'fixture effect denial'); END;")?;Ok(())}).unwrap();
+        let selection = uuid::Uuid::new_v4().to_string();
+        assert!(
+            fixture
+                .library
+                .organization_copy_review_create(
+                    fixture.owner.clone(),
+                    fixture.manifest.clone(),
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone())
+                )
+                .is_err()
+        );
+        fixture.library.catalog.call(|db|{let count:u32=db.query_row("SELECT count(*) FROM operation_journal WHERE phase IN ('namespace_preparation_plan_v2','copy_effect_group_v1','copy_effect_candidate_v1')",[],|r|r.get(0))?;assert_eq!(count,0);db.execute_batch("DROP TRIGGER deny_effect")?;Ok(())}).unwrap();
+        let review = fixture
+            .library
+            .organization_copy_review_create(
+                fixture.owner.clone(),
+                fixture.manifest.clone(),
+                selection,
+                fixture.destination.clone(),
+                (identity, volume),
+            )
+            .unwrap();
+        assert!(!fixture.destination.join(&review.output_folder).exists());
+    }
+    #[test]
+    fn effect_lookup_indexes_legacy_organized_namespace_without_execution_authority() {
+        let fixture = Fixture::with_nested(true).unwrap();
+        let snapshot = super::super::sources::Snapshot::build(
+            &fixture.library.catalog,
+            fixture.owner.clone(),
+            fixture.manifest.clone(),
+        )
+        .unwrap();
+        let token = uuid::Uuid::new_v4().to_string();
+        let legacy = namespace_journal::NamespaceJournal::bind_snapshot(
+            fixture.library.catalog.clone(),
+            snapshot.clone(),
+            token.clone(),
+            true,
+        )
+        .unwrap();
+        let (effect, existing) =
+            super::super::effects::Effect::lookup(&fixture.library.catalog, &snapshot).unwrap();
+        assert_eq!(existing.len(), 1);
+        assert_eq!(existing[0].token, token);
+        let (again, existing) =
+            super::super::effects::Effect::lookup(&fixture.library.catalog, &snapshot).unwrap();
+        assert_eq!(again.digest, effect.digest);
+        assert_eq!(existing.len(), 1);
+        assert!(!fixture.destination.join(legacy.namespace()).exists());
+    }
+
     use super::*;
     fn wait_operation(
         load: impl Fn() -> Result<crate::operations::CopyWorkflowJob>,
@@ -1905,9 +2183,9 @@ mod tests {
             .library
             .organization_copy_inspect(
                 review.id,
-                selection,
+                selection.clone(),
                 fixture.destination.clone(),
-                (identity, volume),
+                (identity.clone(), volume.clone()),
             )
             .unwrap();
         assert!(inspection.all_published_bytes_verified);
@@ -1949,6 +2227,65 @@ mod tests {
             .find(|job| job.action == CopyAction::CopyFiles)
             .unwrap()
             .clone();
+        let next = equivalent_manifest(&fixture, false);
+        let matched = fixture
+            .library
+            .organization_copy_effect_match(
+                next.plan_id.clone(),
+                next.id.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        assert_eq!(matched.existing.len(), 1);
+        assert_eq!(
+            matched.existing[0].job.as_ref().unwrap().id,
+            original_job.id
+        );
+        assert!(!matched.can_reuse_review);
+        assert!(
+            fixture
+                .library
+                .organization_copy_review_create(
+                    next.plan_id,
+                    next.id,
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone())
+                )
+                .is_err()
+        );
+        let fresh = super::super::workflow::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let before: i64 = fixture
+            .library
+            .catalog
+            .call(
+                |db| Ok(db.query_row("SELECT count(*) FROM operation_journal", [], |r| r.get(0))?),
+            )
+            .unwrap();
+        let inspected = fresh
+            .inspect_retained(
+                original_job.id.clone(),
+                fixture.destination.clone(),
+                identity.clone(),
+                volume.clone(),
+            )
+            .unwrap();
+        assert!(inspected.inspection.all_published_bytes_verified);
+        let after: i64 = fixture
+            .library
+            .catalog
+            .call(
+                |db| Ok(db.query_row("SELECT count(*) FROM operation_journal", [], |r| r.get(0))?),
+            )
+            .unwrap();
+        assert_eq!(before, after);
+
         let chosen = crate::library::native::open_root(&fixture.destination, None).unwrap();
         let identity = crate::filesystem::identity(&chosen).unwrap();
         let volume = crate::library::native::volume_token(&chosen).unwrap();

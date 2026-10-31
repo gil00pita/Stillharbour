@@ -478,6 +478,82 @@ impl CopyWorkflow {
             independent_backup: false,
         })
     }
+    fn match_effect(
+        &self,
+        library: &Library,
+        owner: String,
+        manifest: String,
+        selection: &str,
+        identity: &FileIdentity,
+        volume: &str,
+    ) -> Result<(
+        CopyAssessment,
+        Snapshot,
+        super::effects::Effect,
+        Vec<super::effects::Candidate>,
+    )> {
+        crate::operations::validate_id(selection)?;
+        let assessment = library.organization_copy_assessment(owner.clone(), manifest.clone())?;
+        let sources = Snapshot::build(&self.catalog, owner, manifest)?;
+        if identity.volume != sources.destination.volume
+            || identity.file != sources.destination.file
+            || volume != sources.destination_volume
+        {
+            return Err(failed(
+                "Select the saved draft's actual destination folder.",
+            ));
+        }
+        let (effect, previous) = super::effects::Effect::lookup(&self.catalog, &sources)?;
+        Ok((assessment, sources, effect, previous))
+    }
+    pub(crate) fn effect_match(
+        &self,
+        library: &Library,
+        owner: String,
+        manifest: String,
+        selection: String,
+        _path: PathBuf,
+        identity: (FileIdentity, String),
+    ) -> Result<CopyEffectMatch> {
+        let (_, sources, effect, previous) = self.match_effect(
+            library,
+            owner,
+            manifest,
+            &selection,
+            &identity.0,
+            &identity.1,
+        )?;
+        let mut existing = Vec::new();
+        for candidate in previous {
+            let preparation_recorded = candidate.preparation_recorded(&self.catalog)?;
+            let job = operation_jobs::latest_namespace(
+                &self.catalog,
+                candidate.owner_id.clone(),
+                candidate.token.clone(),
+            )?;
+            existing.push(ExistingCopyEffect {
+                plan_id: candidate.owner_id,
+                manifest_id: candidate.manifest_id,
+                review_id: candidate.token,
+                output_folder: candidate.namespace,
+                preparation_recorded,
+                job,
+            });
+        }
+        let can_reuse_review = existing.is_empty()
+            || existing.len() == 1
+                && existing[0].plan_id == sources.owner_id
+                && existing[0].manifest_id == sources.manifest_id
+                && !existing[0].preparation_recorded
+                && existing[0].job.is_none();
+        Ok(CopyEffectMatch {
+            plan_id: sources.owner_id,
+            manifest_id: sources.manifest_id,
+            digest: effect.digest,
+            existing,
+            can_reuse_review,
+        })
+    }
     pub(crate) fn create_review(
         &self,
         library: &Library,
@@ -489,7 +565,27 @@ impl CopyWorkflow {
     ) -> Result<CopyActionReview> {
         let (identity, volume) = selected_identity;
         crate::operations::validate_id(&selection)?;
-        let token = uuid::Uuid::new_v4().to_string();
+        let (assessment, sources, effect, previous) =
+            self.match_effect(library, owner, manifest, &selection, &identity, &volume)?;
+        let token = if previous.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else if previous.len() == 1
+            && previous[0].owner_id == sources.owner_id
+            && previous[0].manifest_id == sources.manifest_id
+            && !previous[0].preparation_recorded(&self.catalog)?
+            && operation_jobs::latest_namespace(
+                &self.catalog,
+                previous[0].owner_id.clone(),
+                previous[0].token.clone(),
+            )?
+            .is_none()
+        {
+            previous[0].token.clone()
+        } else {
+            return Err(failed(
+                "This exact source/template mapping already has a retained output folder. Review existing output history and freshly verify its bytes; a new draft cannot allocate another folder.",
+            ));
+        };
         {
             let mut entries = self
                 .sessions
@@ -504,22 +600,12 @@ impl CopyWorkflow {
             entries.insert(token.clone(), None);
         }
         let result = (|| {
-            let assessment =
-                library.organization_copy_assessment(owner.clone(), manifest.clone())?;
-            let sources = Snapshot::build(&self.catalog, owner, manifest)?;
-            if identity.volume != sources.destination.volume
-                || identity.file != sources.destination.file
-                || volume != sources.destination_volume
-            {
-                return Err(failed(
-                    "Select the saved draft's actual destination folder.",
-                ));
-            }
-            let namespace = Arc::new(NamespaceJournal::bind_snapshot(
+            let namespace = Arc::new(NamespaceJournal::bind_effect(
                 self.catalog.clone(),
                 sources,
                 token.clone(),
                 true,
+                Some(effect),
             )?);
             let session = Arc::new(Session {
                 namespace,
