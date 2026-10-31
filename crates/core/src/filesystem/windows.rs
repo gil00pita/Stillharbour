@@ -174,12 +174,24 @@ fn by_id(parent: &File, id: u64, directory: bool) -> Result<File> {
 }
 
 fn by_id_shared(parent: &File, id: u64, directory: bool, sharing: u32) -> Result<File> {
+    by_id_access(parent, id, directory, sharing, false)
+}
+
+fn by_id_access(
+    parent: &File,
+    id: u64,
+    directory: bool,
+    sharing: u32,
+    attributes_only: bool,
+) -> Result<File> {
     let descriptor = FILE_ID_DESCRIPTOR {
         dwSize: size_of::<FILE_ID_DESCRIPTOR>() as u32,
         Type: FileIdType,
         Anonymous: FILE_ID_DESCRIPTOR_0 { FileId: id as i64 },
     };
-    let access = if directory {
+    let access = if attributes_only {
+        FILE_READ_ATTRIBUTES | SYNCHRONIZE
+    } else if directory {
         FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES | SYNCHRONIZE
     } else {
         FILE_GENERIC_READ
@@ -364,6 +376,19 @@ pub fn child(parent: &File, name: &OsStr, directory: bool) -> Result<File> {
     Ok(file)
 }
 
+pub(crate) fn metadata_child(parent: &File, name: &OsStr) -> Result<File> {
+    validate_component(name)?;
+    let id = entry_id(parent, name)?;
+    let file = by_id_access(parent, id, false, FILE_SHARE_READ, true)?;
+    if entry_id(parent, name)? != id {
+        return Err(AppError::new(
+            ErrorCode::Conflict,
+            "Entry membership changed during metadata review.",
+        ));
+    }
+    Ok(file)
+}
+
 // Only an app-owned publication namespace may admit directory writers. Keep
 // delete sharing refused so the directory/ancestor bindings cannot be renamed.
 pub(crate) fn owned_directory_child(parent: &File, name: &OsStr) -> Result<File> {
@@ -516,6 +541,23 @@ impl Directory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn metadata_only_children_cannot_read_source_contents() {
+        use std::io::Read;
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(fixture.path().join("Photo.xmp"), b"preserved metadata").unwrap();
+        let root = open_root(fixture.path()).unwrap();
+        let mut file = metadata_child(&root, OsStr::new("Photo.xmp")).unwrap();
+        assert_eq!(file.metadata().unwrap().len(), 18);
+        assert!(file.read(&mut [0u8; 1]).is_err());
+        assert!(metadata_child(&root, OsStr::new("PHOTO.XMP")).is_err());
+        drop(file);
+        assert_eq!(
+            std::fs::read(fixture.path().join("Photo.xmp")).unwrap(),
+            b"preserved metadata"
+        );
+    }
+
     #[test]
     fn exact_lookup_is_fresh_literal_and_preserves_locked_sources() {
         let fixture = tempfile::tempdir().unwrap();

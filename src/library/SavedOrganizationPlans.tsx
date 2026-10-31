@@ -5,9 +5,11 @@ import type {
   PlanExport,
   PlanExportFormat,
   PlanExportSaved,
+  OrganizationRow,
 } from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import { OrganizationTrees } from './OrganizationTrees';
+import { BundleInventoryReview } from './BundleInventoryReview';
 
 export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -16,6 +18,8 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
   const [detail, setDetail] = useState<OrganizationPlanDetail | null>(null);
   const [exported, setExported] = useState<PlanExport | null>(null);
   const [savedExport, setSavedExport] = useState<PlanExportSaved | null>(null);
+  const [companionRow, setCompanionRow] = useState<OrganizationRow | null>(null);
+  const companionOpener = useRef<HTMLButtonElement | null>(null);
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState<string | null>(null);
   async function list(before: string | null = null) {
@@ -66,6 +70,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
     setDetail(null);
     setExported(null);
     setSavedExport(null);
+    setCompanionRow(null);
     try {
       const result = await libraryData(
         { kind: 'organization_plan', plan_id: id },
@@ -208,6 +213,16 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                     <tr key={row.assetId}>
                       <td>
                         <bdi>{row.sourcePath}</bdi>
+                        <button
+                          type="button"
+                          disabled={busy || detail.stale || row.issues.length > 0}
+                          onClick={(event) => {
+                            companionOpener.current = event.currentTarget;
+                            setCompanionRow(row);
+                          }}
+                        >
+                          Review all companion filenames
+                        </button>
                       </td>
                       <td>
                         <bdi>{row.targetRelativePath ?? 'Blocked'}</bdi>
@@ -217,6 +232,19 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                 </tbody>
               </table>
             </div>
+            {companionRow && (
+              <BundleInventoryReview
+                key={`${detail.plan.id}:${companionRow.assetId}`}
+                planId={detail.plan.id}
+                row={companionRow}
+                catalogRevision={detail.plan.preview.catalogRevision}
+                stale={detail.stale}
+                onClose={() => {
+                  setCompanionRow(null);
+                  if (companionOpener.current?.isConnected) companionOpener.current.focus();
+                }}
+              />
+            )}
             <p className="help">
               Native target names, complete companion inventory, capacity, metadata fidelity and
               execution recovery checks remain pending.

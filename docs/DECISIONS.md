@@ -183,3 +183,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Owner-approved Windows NTFS read adapter — 2026-10-30
 
 [ADR-0021](decisions/ADR-0021-windows-ntfs-scanning.md) records the explicit Windows-backend continuation. Use local NTFS volume GUID/file identities, bounded held-handle enumeration and file-ID opens with native name/membership checks. Baseline worker dimensions/previews preserve filesystem date provenance; unsupported roots show the blocking alert. Generic original publication/durability, non-NTFS/network support, full Windows metadata/format packaging and release/preservation gates remain separate. No persisted identity/schema migration.
+
+## Complete direct-folder companion review — 2026-10-31
+
+[ADR-0026](decisions/ADR-0026-confirmed-companion-review.md) adds metadata-only live folder-name inventory and append-only decisions bound to retained drafts. Full reviewed public inventory, selected exact native locators, acknowledgement and targets are retained without changing original draft digests. Limits and incomplete observations are explicit. Future executable manifests must bind explicit decision IDs and revalidate; no original mutation or execution approval is introduced.

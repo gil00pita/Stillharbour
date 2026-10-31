@@ -1,3 +1,5 @@
+pub(crate) mod bundle_confirmation;
+pub(crate) mod bundle_inventory;
 mod cache_cleanup;
 mod changes;
 mod destination;

@@ -267,6 +267,46 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
     assert_eq!(draft.plan.state, PlanState::Draft);
     assert!(!draft.plan.execution_available && !draft.stale);
     assert_eq!(draft.plan.blockers.len(), 4);
+    let companion_source = draft
+        .plan
+        .preview
+        .rows
+        .iter()
+        .find(|row| row.source_path.ends_with("one.png"))
+        .unwrap();
+    let companion_inventory = library
+        .organization_bundle_inventory(
+            companion_source.asset_id.clone(),
+            companion_source.source_revision.clone(),
+        )
+        .unwrap();
+    assert!(companion_inventory.inventory_complete);
+    assert!(
+        companion_inventory
+            .entries
+            .iter()
+            .any(|entry| entry.name == "one.xmp")
+    );
+    let companion_decision = library
+        .organization_bundle_confirm(stillharbour_core::operations::BundleConfirmationInput {
+            plan_id: draft.plan.id.clone(),
+            asset_id: companion_source.asset_id.clone(),
+            source_revision: companion_source.source_revision.clone(),
+            inventory_fingerprint: companion_inventory.fingerprint,
+            companion_ids: companion_inventory
+                .entries
+                .iter()
+                .filter(|entry| {
+                    entry.selectable
+                        && entry.relation
+                            != stillharbour_core::operations::BundleRelation::Additional
+                })
+                .map(|entry| entry.id.clone())
+                .collect(),
+            reviewed_all_entries: true,
+        })
+        .unwrap();
+    assert_eq!(companion_decision.files.len(), 2);
     let next = library
         .organization_template_save(TemplateSave {
             samples: vec![stillharbour_core::organization::TemplateSample {
@@ -386,6 +426,13 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
     drop(catalog);
     let (catalog, library) = open(data.path());
     let reopened = library.organization_plan(draft.plan.id.clone()).unwrap();
+    let reopened_companions = library
+        .organization_bundle_reviews(draft.plan.id.clone(), companion_decision.asset_id.clone())
+        .unwrap();
+    assert_eq!(
+        reopened_companions[0].fingerprint,
+        companion_decision.fingerprint
+    );
     let retained_templates = library.organization_templates().unwrap();
     assert_eq!(retained_templates[0].reference.version, 2);
     assert_eq!(

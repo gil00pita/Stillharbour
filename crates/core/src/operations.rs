@@ -10,6 +10,91 @@ pub const PLAN_POLICY: &str = "organization-plan-v1";
 pub const MAX_TEMPLATES: usize = 100;
 pub const MAX_TEMPLATE_VERSIONS: u32 = 100;
 pub const MAX_PLAN_BYTES: usize = 8 * 1024 * 1024;
+pub const MAX_BUNDLE_DIRECTORY_ENTRIES: usize = 4096;
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BundleEntryKind {
+    File,
+    Directory,
+    LinkOrSpecial,
+    Placeholder,
+    Unreadable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BundleRelation {
+    Primary,
+    SameStem,
+    FilenameSidecar,
+    AppleDouble,
+    Additional,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleInventoryEntry {
+    pub id: String,
+    pub name: String,
+    pub kind: BundleEntryKind,
+    pub relation: BundleRelation,
+    pub bytes: Option<String>,
+    pub catalog_asset_id: Option<String>,
+    pub catalog_presence: Option<String>,
+    pub name_representable: bool,
+    pub selectable: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleInventory {
+    pub asset_id: String,
+    pub source_revision: String,
+    pub catalog_revision: String,
+    pub fingerprint: String,
+    pub entries: Vec<BundleInventoryEntry>,
+    pub inventory_complete: bool,
+    pub truncated: bool,
+    pub indexed_limit_exceeded: bool,
+    pub unobserved_candidates: Vec<String>,
+    pub execution_available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct BundleConfirmationInput {
+    pub plan_id: String,
+    pub asset_id: String,
+    pub source_revision: String,
+    pub inventory_fingerprint: String,
+    pub companion_ids: Vec<String>,
+    pub reviewed_all_entries: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmedBundleFile {
+    pub entry_id: String,
+    pub source_name: String,
+    pub target_relative_path: String,
+    pub relation: BundleRelation,
+    pub bytes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct BundleConfirmation {
+    pub id: String,
+    pub plan_id: String,
+    pub asset_id: String,
+    pub inventory_fingerprint: String,
+    pub fingerprint: String,
+    pub files: Vec<ConfirmedBundleFile>,
+    pub total_bytes: String,
+    pub execution_available: bool,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]

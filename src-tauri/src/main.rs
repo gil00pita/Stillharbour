@@ -209,11 +209,27 @@ async fn library_request(
             LibraryRequest::OrganizationTemplates {} => {
                 LibraryResponse::OrganizationTemplates(library.organization_templates()?)
             }
+            LibraryRequest::OrganizationBundleInventory {
+                asset_id,
+                source_revision,
+            } => LibraryResponse::OrganizationBundleInventory(
+                library.organization_bundle_inventory(asset_id, source_revision)?,
+            ),
             LibraryRequest::OrganizationTemplateSave { save } => {
                 LibraryResponse::OrganizationTemplate(library.organization_template_save(save)?)
             }
+            LibraryRequest::OrganizationBundleConfirm { input } => {
+                LibraryResponse::OrganizationBundleConfirmation(
+                    library.organization_bundle_confirm(input)?,
+                )
+            }
             LibraryRequest::OrganizationPlans { before } => {
                 LibraryResponse::OrganizationPlans(library.organization_plans(before)?)
+            }
+            LibraryRequest::OrganizationBundleReviews { plan_id, asset_id } => {
+                LibraryResponse::OrganizationBundleReviews(
+                    library.organization_bundle_reviews(plan_id, asset_id)?,
+                )
             }
             LibraryRequest::OrganizationPlan { plan_id } => {
                 LibraryResponse::OrganizationPlan(Box::new(library.organization_plan(plan_id)?))

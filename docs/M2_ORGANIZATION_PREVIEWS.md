@@ -65,6 +65,14 @@ Create organized copy stays disabled with a visible explanation. No approval/sta
 
 Real-library in-place mutation also needs exact-version independent recovery evidence and native Windows/macOS preservation gates. M4 may provide recovery later. Do not waive these gates or claim AC-023–AC-039 complete after this slice. The immediate next gate is executable-plan preconditions and confirmed companion inventory, still without production execution.
 
+## Complete folder-name and companion confirmation continuation — 2026-10-31
+
+Saved rows offer **Review all companion filenames**, then explicit **Read all filenames**. This observes the direct folder including hidden/unindexed entries. Pages show 64 entries, native-bound IDs, kinds and hints. Acknowledge reviewing all pages before confirmation. Every possible hinted companion must be included; unsupported hints/incomplete observations block confirmation. Additional regular portable files can be selected. No content is read or original written.
+
+[ADR-0026](decisions/ADR-0026-confirmed-companion-review.md) defines native/indexed limits of 4,096, private locator limit 8 MiB, selection limit 64 and freshness checks. Confirmation retains reviewed inventory, exact selected native locators and proposed targets, separately from the draft. Identical retries are idempotent; at most 16 different decisions per photo/draft are retained. History is explicitly unrevalidated. Stale/late responses never rebase a draft.
+
+The remaining gate now requires explicit companion decision IDs integrated into executable plans, overlapping-bundle reconciliation and all target/capacity/fidelity/executor/recovery requirements above. Draft exports still cover primary rows. Filename completeness does not establish content integrity, provider relationships or recoverability. M2/M3 remain unfinished.
+
 ## Validation
 
 Focused Rust coverage tests the token allowlist, hostile values, missing-date/value policies, extension retention, sequence/fingerprint determinism and invalidation, collisions, offline/non-Unicode sources, selection bounds and exact byte totals. Catalog tests use in-memory SQLite only. Component tests cover native request shape, literal rendering, failure/retry, draft invalidation, pending-request revision changes, conflicts and focus return. The native regression uses only the existing generated library, real Rust IPC, desktop/minimum layouts and independent before/after source manifests. Actual final command outcomes are recorded in [the implementation log](IMPLEMENTATION_LOG.md); unrun target-platform and executor scenarios remain open.

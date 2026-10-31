@@ -355,6 +355,14 @@ fn valid_component(value: &str) -> bool {
         && !device
 }
 
+pub(crate) fn portable_relative_target(value: &str) -> bool {
+    value.len() <= 1024 && value.split('/').count() <= 32 && value.split('/').all(valid_component)
+}
+
+pub(crate) fn portable_filename(value: &str) -> bool {
+    valid_component(value)
+}
+
 fn resolve(
     components: &[Vec<Piece>],
     template: &OrganizationTemplate,

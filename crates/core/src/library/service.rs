@@ -144,6 +144,14 @@ fn publish_cache_noreplace(staged: &Path, destination: &Path) -> Result<()> {
 }
 
 impl Library {
+    pub(super) fn reserve_inventory(&self, volume: u64) -> Result<crate::jobs::resources::Lease> {
+        self.resources.acquire(
+            volume,
+            Class::Interactive,
+            Work::Metadata,
+            &AtomicBool::new(false),
+        )
+    }
     pub(super) fn scan_idle(&self) -> bool {
         self.active.lock().is_ok_and(|active| active.is_none())
     }

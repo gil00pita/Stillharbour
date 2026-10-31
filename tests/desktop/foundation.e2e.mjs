@@ -676,6 +676,40 @@ describe('native read-only library', () => {
         );
         await writeFile(`${evidence}/windows-plan-trees.json`, JSON.stringify(treeEvidence));
         await browser.saveScreenshot('.context/screenshots/m2-plan-trees.png');
+        await $('button=Review all companion filenames').scrollIntoView();
+        await $('button=Review all companion filenames').click();
+        await $('button=Read all filenames').click();
+        await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+        const inventory = await native({
+          kind: 'organization_bundle_inventory',
+          asset_id: plan.data.plan.preview.rows[0].assetId,
+          source_revision: plan.data.plan.preview.rows[0].sourceRevision,
+        });
+        assert.equal(inventory.data.inventoryComplete, true);
+        assert.equal(
+          (await $$('section[aria-label="Complete companion inventory"] tbody tr')).length,
+          Math.min(64, inventory.data.entries.length),
+        );
+        await $('label*=I reviewed all filenames').scrollIntoView();
+        await $('label*=I reviewed all filenames').click();
+        await $('button=Save companion review').click();
+        await $(
+          'section[aria-label="Retained companion decision"] [role="status"]',
+        ).waitForDisplayed();
+        const companionReviews = await native({
+          kind: 'organization_bundle_reviews',
+          plan_id: plan.data.plan.id,
+          asset_id: plan.data.plan.preview.rows[0].assetId,
+        });
+        assert.equal(companionReviews.data.length, 1);
+        assert.equal(companionReviews.data[0].inventoryFingerprint, inventory.data.fingerprint);
+        assert.equal(companionReviews.data[0].executionAvailable, false);
+        await writeFile(
+          `${evidence}/windows-complete-companions.json`,
+          JSON.stringify({ inventory: inventory.data, confirmation: companionReviews.data[0] }),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-complete-companions.png');
+        await $('button=Close companion inventory').click();
         await $('button=View JSON export').scrollIntoView();
         await $('button=View JSON export').click();
         await $('.organization-preview textarea').waitForDisplayed();

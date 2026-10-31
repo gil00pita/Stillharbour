@@ -503,6 +503,17 @@ pub enum LibraryRequest {
     OrganizationCompanions {
         asset_id: String,
     },
+    OrganizationBundleInventory {
+        asset_id: String,
+        source_revision: String,
+    },
+    OrganizationBundleConfirm {
+        input: crate::operations::BundleConfirmationInput,
+    },
+    OrganizationBundleReviews {
+        plan_id: String,
+        asset_id: String,
+    },
     OrganizationPreview {
         asset_ids: Vec<String>,
         template: crate::organization::OrganizationTemplate,
@@ -620,6 +631,9 @@ pub enum LibraryResponse {
     OrganizationPlan(Box<crate::operations::OrganizationPlanDetail>),
     OrganizationPlanExport(crate::operations::PlanExport),
     OrganizationPlanExportSaved(crate::operations::PlanExportSaved),
+    OrganizationBundleInventory(crate::operations::BundleInventory),
+    OrganizationBundleConfirmation(crate::operations::BundleConfirmation),
+    OrganizationBundleReviews(Vec<crate::operations::BundleConfirmation>),
     OrganizationDestination(crate::organization::OrganizationDestinationReview),
     OrganizationCompanions(crate::organization::OrganizationCompanionReview),
     OrganizationPreview(crate::organization::OrganizationPreview),
