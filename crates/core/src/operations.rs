@@ -8,12 +8,18 @@ use ts_rs::TS;
 
 pub(crate) mod copy_assessment;
 pub(crate) mod copy_manifest;
+pub(crate) mod copy_workflow;
 pub use copy_assessment::{
     CopyAssessment, CopyCapacityEstimate, CopyCapacityStatus, CopyFidelityAspect, CopyFidelityItem,
     CopyFidelityStatus,
 };
 pub use copy_manifest::{
     CopyManifest, CopyManifestFile, CopyManifestInput, CopyManifestIssue, CopyManifestIssueKind,
+};
+pub use copy_workflow::{
+    CopyAction, CopyActionApproval, CopyActionReview, CopyApprovalInput, CopyInspection,
+    CopyInspectionState, CopyIoStatus, CopyJobState, CopyReviewFile, CopyStartInput,
+    CopyWorkflowCapabilities, CopyWorkflowJob,
 };
 
 pub const PLAN_POLICY: &str = "organization-plan-v1";

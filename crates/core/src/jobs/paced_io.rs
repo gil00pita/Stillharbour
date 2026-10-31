@@ -152,6 +152,9 @@ impl PacedIo {
     pub fn bytes_per_second(&self) -> Result<u64> {
         Ok(self.0.state.lock().map_err(|_| failed())?.bucket.rate)
     }
+    pub fn is_paused(&self) -> Result<bool> {
+        Ok(self.0.state.lock().map_err(|_| failed())?.paused)
+    }
     /// Does not interrupt an admitted syscall. Resume occurs at a byte boundary.
     pub fn set_paused(&self, paused: bool) -> Result<()> {
         let mut state = self.0.state.lock().map_err(|_| failed())?;

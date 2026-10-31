@@ -8,6 +8,7 @@ license.workspace = true
 [features]
 default = []
 fixture-probes = []
+copy-workflow = []
 
 [[example]]
 name = "foundation_probe"

@@ -119,7 +119,7 @@ impl State {
         Ok(())
     }
 }
-struct NamespaceJournal {
+pub(in crate::executor) struct NamespaceJournal {
     catalog: Arc<Catalog>,
     scope: Scope,
     encoded: String,
@@ -127,15 +127,75 @@ struct NamespaceJournal {
     state: Mutex<State>,
 }
 impl NamespaceJournal {
-    fn preparation_review(&self, selection: &str) -> Result<crate::executor::approval::Review> {
+    pub(in crate::executor) fn validate_native(&self, parent: &std::fs::File) -> Result<()> {
+        let owner = self.scope.sources.owner_id.clone();
+        let token = self.scope.token.clone();
+        let digest = self.digest();
+        let (scope,completion)=self.catalog.call(move|db| {
+            let last:Option<String>=db.query_row("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=8388608 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence DESC LIMIT 1",params![owner,token,FACT_PHASE],|row|row.get(0))?;
+            let fact:Fact=decode(&last.ok_or_else(||failed("Preparation fact exceeds its bound."))?,MAX_FACT)?;
+            let reference=Reference{token,scope_digest:digest,fingerprint:fact.evidence["report"]["fingerprint"].as_str().ok_or_else(||failed("Preparation is incomplete."))?.into()};
+            load_preparation(db,&owner,&reference)
+        })?;
+        preparation::validate_retained(parent, &completion, &scope.namespace, &scope.targets)
+    }
+    pub(in crate::executor) fn ready_journal(&self) -> Result<CatalogJournal> {
+        let owner = self.scope.sources.owner_id.clone();
+        let token = self.scope.token.clone();
+        let digest = self.digest();
+        let (plan,reference)=self.catalog.call(move|db| {
+            let last:Option<String>=db.query_row("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=8388608 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence DESC LIMIT 1",params![owner,token,FACT_PHASE],|row|row.get(0))?;
+            let last:Fact=decode(&last.ok_or_else(||failed("Preparation completion exceeds its bound."))?,MAX_FACT)?;
+            if last.phase!="namespace_prepared" {return Err(failed("Namespace preparation is incomplete. Inspect retained objects."));}
+            let reference=Reference{token:token.clone(),scope_digest:digest,fingerprint:last.evidence["report"]["fingerprint"].as_str().ok_or_else(||failed("Missing preparation fingerprint."))?.into()};
+            let (scope,completion)=load_preparation(db,&owner,&reference)?;
+            let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND phase=?2 ORDER BY sequence LIMIT 65")?;
+            let mut rows=query.query(params![owner,PLAN_PHASE])?;
+            let mut previous=None;
+            while let Some(row)=rows.next()? {
+                let text:Option<String>=row.get(0)?;
+                let binding:Binding=decode(&text.ok_or_else(||failed("Copy binding exceeds 64 KiB."))?,MAX_RECORD)?;
+                if binding.namespace.as_ref().is_some_and(|known|known.token==token) {
+                    if previous.is_some() {return Err(failed("Multiple copy streams claim this namespace."));}
+                    validate_binding(db,&binding)?;
+                    previous=Some(binding.plan);
+                }
+            }
+            let plan=if let Some(previous)=previous {previous} else {preparation::project_copy_plan(&completion,&scope.sources,&scope.namespace,&scope.targets,&uuid::Uuid::new_v4().to_string())?};
+            Ok((plan,reference))
+        })?;
+        CatalogJournal::bind_with_namespace(
+            self.catalog.clone(),
+            self.scope.sources.owner_id.clone(),
+            self.scope.sources.manifest_id.clone(),
+            plan,
+            Some(reference),
+        )
+    }
+    pub(in crate::executor) fn sources(&self) -> &crate::executor::sources::Snapshot {
+        &self.scope.sources
+    }
+    pub(in crate::executor) fn id(&self) -> &str {
+        &self.scope.token
+    }
+    pub(in crate::executor) fn namespace(&self) -> &str {
+        &self.scope.namespace
+    }
+    pub(in crate::executor) fn digest(&self) -> String {
+        blake3::hash(self.encoded.as_bytes()).to_hex().to_string()
+    }
+    pub(in crate::executor) fn preparation_review(
+        &self,
+        selection: &str,
+    ) -> Result<crate::executor::approval::Review> {
         crate::executor::approval::Review::new(
             crate::executor::approval::Action::PrepareNames,
-            self.scope.token.clone(),
-            blake3::hash(self.encoded.as_bytes()).to_hex().to_string(),
+            self.id().into(),
+            self.digest(),
             selection.into(),
         )
     }
-    fn prepare_approved(
+    pub(in crate::executor) fn prepare_approved(
         &self,
         parent: &std::fs::File,
         cancel: &AtomicBool,
@@ -149,13 +209,14 @@ impl NamespaceJournal {
             self,
             cancel,
             &self.scope.token,
-            &self.scope.namespace,
+            self.namespace(),
         )
     }
     #[cfg(test)]
     fn bind(fixture: &Fixture, token: String) -> Result<Self> {
         Self::bind_kind(fixture, token, false)
     }
+    #[cfg(any(test, feature = "fixture-probes"))]
     fn bind_kind(fixture: &Fixture, token: String, organized_output: bool) -> Result<Self> {
         crate::operations::validate_id(&token)?;
         let owner = fixture.owner.clone();
@@ -174,7 +235,21 @@ impl NamespaceJournal {
                 fixture.manifest.clone(),
             )?
         };
-        let (scope, encoded, anchor, state) = fixture.library.catalog.call(move |db| {
+        Self::bind_snapshot(
+            fixture.library.catalog.clone(),
+            sources,
+            token,
+            organized_output,
+        )
+    }
+    pub(in crate::executor) fn bind_snapshot(
+        catalog: Arc<Catalog>,
+        sources: crate::executor::sources::Snapshot,
+        token: String,
+        organized_output: bool,
+    ) -> Result<Self> {
+        crate::operations::validate_id(&token)?;
+        let (scope, encoded, anchor, state) = catalog.call(move |db| {
             let tx = db.transaction()?;
             let scope = Scope {
                 targets: sources.files.iter().map(|file| Target { id: file.id.clone(), path: file.target.clone() }).collect(),
@@ -213,7 +288,7 @@ impl NamespaceJournal {
             Ok((scope,encoded,anchor,state))
         })?;
         Ok(Self {
-            catalog: fixture.library.catalog.clone(),
+            catalog,
             scope,
             encoded,
             anchor,
@@ -387,20 +462,23 @@ pub(super) fn check_copy_stream_admission(db: &Connection, binding: &Binding) ->
     }
     Ok(())
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     let mut receipt = fixture_case(None)?;
     receipt["interruptedAfterPublish"] =
         fixture_case(Some(crate::executor::CopyFault::AfterPublish))?;
     Ok(receipt)
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 fn fixture_case(fault: Option<crate::executor::CopyFault>) -> Result<serde_json::Value> {
     fixture_case_for(Fixture::with_nested(true)?, fault)
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 fn fixture_case_for(
     fixture: Fixture,
     fault: Option<crate::executor::CopyFault>,
 ) -> Result<serde_json::Value> {
-    use crate::jobs::operation_locks::{Access, Registry, Scope as NativeScope};
+    use crate::jobs::operation_locks::Access;
     let token = uuid::Uuid::new_v4().to_string();
     let journal = NamespaceJournal::bind_kind(&fixture, token.clone(), true)?;
     use crate::executor::approval::{Action, Approvals, Review};
@@ -421,11 +499,9 @@ fn fixture_case_for(
             "Foreign destination selection consumed preparation approval.",
         ));
     }
-    let (source, destination) = fixture.scope()?;
-    let _lease = Registry::shared().try_acquire(vec![
-        NativeScope::new(source, Access::Read),
-        NativeScope::new(destination, Access::Write),
-    ])?;
+    let _lease = journal
+        .sources()
+        .open_scope(&fixture.library.catalog, Access::Write)?;
     if crate::executor::native::lookup(_lease.directory(1).leaf(), &journal.scope.namespace)?
         .is_some()
         || journal
@@ -573,6 +649,7 @@ fn fixture_case_for(
         &selection,
         approvals.consume(&copy_ticket, &copy_review)?,
         fault,
+        None,
     )?;
     drop(copy);
     let copy = CatalogJournal::bind_with_namespace(
@@ -679,6 +756,48 @@ fn fixture_case_for(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn retained_namespace_validation_reopens_real_objects_and_retains_unknown_entries() {
+        for directory in [false, true] {
+            let fixture = Fixture::with_nested(true).unwrap();
+            let journal =
+                NamespaceJournal::bind_kind(&fixture, uuid::Uuid::new_v4().to_string(), true)
+                    .unwrap();
+            let (_, output) = fixture.scope().unwrap();
+            let prepared = preparation::prepare_namespace(
+                output.leaf(),
+                &journal.scope.targets,
+                &journal,
+                &AtomicBool::new(false),
+                journal.id(),
+                journal.namespace(),
+            )
+            .unwrap();
+            drop(prepared);
+            journal.validate_native(output.leaf()).unwrap();
+            let unknown = fixture
+                .destination
+                .join(journal.namespace())
+                .join("unknown-entry");
+            if directory {
+                std::fs::create_dir(&unknown).unwrap();
+                std::fs::write(unknown.join("retained.bin"), b"unowned bytes").unwrap();
+            } else {
+                std::fs::write(&unknown, b"unowned bytes").unwrap();
+            }
+            assert!(journal.validate_native(output.leaf()).is_err());
+            assert_eq!(
+                std::fs::read(if directory {
+                    unknown.join("retained.bin")
+                } else {
+                    unknown
+                })
+                .unwrap(),
+                b"unowned bytes"
+            );
+            assert!(fixture.preserved().unwrap());
+        }
+    }
     #[test]
     fn preparation_action_rejects_a_valid_proof_for_another_scope_before_writes() {
         use crate::executor::approval::{Action, Approvals, Review};

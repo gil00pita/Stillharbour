@@ -1,6 +1,8 @@
 //! Native future-name evidence in a newly owned pending output namespace.
 //! No normalization/lowercasing is used to authorize distinct target names.
-use super::{CopyFixture, EventJournal, Journal, Object, failed, native};
+#[cfg(any(test, feature = "fixture-probes"))]
+use super::{CopyFixture, Journal};
+use super::{EventJournal, Object, failed, native};
 use crate::{
     domain::{AppError, ErrorCode, Result},
     filesystem,
@@ -115,6 +117,16 @@ pub(super) struct Preparation {
     directories: Vec<Directory>,
     stages: Vec<Stage>,
 }
+impl Preparation {
+    pub(super) fn validate_parent(&self, parent: &File) -> Result<()> {
+        validate_members(
+            parent,
+            &self.report.temporary_namespace,
+            &self.directories,
+            &self.stages,
+        )
+    }
+}
 /// Decode recorded facts defensively. This checks internal consistency only;
 /// callers still need fresh native inspection and separate execution approval.
 pub(super) fn validate_record(
@@ -124,6 +136,40 @@ pub(super) fn validate_record(
     targets: &[Target],
 ) -> Result<()> {
     checked_record(value, parent, namespace, targets).map(|_| ())
+}
+pub(super) fn validate_retained(
+    parent: &File,
+    value: &serde_json::Value,
+    namespace: &str,
+    targets: &[Target],
+) -> Result<()> {
+    let evidence = checked_record(value, &Object::of(parent)?, namespace, targets)?;
+    let mut directories: Vec<Directory> = Vec::new();
+    for (path, object) in evidence.5 {
+        let handle = if path.is_empty() {
+            native::read_directory(parent, namespace)?
+        } else {
+            let prefix = &path[..path.len() - 1];
+            let owner = directories
+                .iter()
+                .find(|node| node.path == prefix)
+                .ok_or_else(|| failed("Missing retained native directory parent."))?;
+            native::read_directory(
+                &owner.handle,
+                path.last()
+                    .ok_or_else(|| failed("Missing retained native directory name."))?,
+            )?
+        };
+        if !object.matches(&handle)? {
+            return Err(failed("A prepared namespace directory changed identity."));
+        }
+        directories.push(Directory {
+            path,
+            object,
+            handle,
+        });
+    }
+    validate_members(parent, namespace, &directories, &evidence.4)
 }
 type Evidence = (
     String,
@@ -367,6 +413,7 @@ fn canceled(cancel: &AtomicBool) -> Result<()> {
     Ok(())
 }
 
+#[cfg(any(test, feature = "fixture-probes"))]
 fn prepare(
     parent: &File,
     targets: &[Target],
@@ -381,6 +428,7 @@ fn prepare(
         &uuid::Uuid::new_v4().to_string(),
     )
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 pub(super) fn prepare_named(
     parent: &File,
     targets: &[Target],
@@ -698,6 +746,7 @@ pub(super) fn prepare_namespace(
     })
 }
 
+#[cfg(any(test, feature = "fixture-probes"))]
 fn targets(paths: &[&str]) -> Vec<Target> {
     paths
         .iter()
@@ -710,6 +759,7 @@ fn targets(paths: &[&str]) -> Vec<Target> {
         })
         .collect()
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 fn prepared_copy_plan(fixture: &CopyFixture, prepared: &Preparation) -> Result<super::CopyPlan> {
     let mut files = Vec::new();
     for source in &fixture.plan.files {
@@ -756,6 +806,7 @@ fn prepared_copy_plan(fixture: &CopyFixture, prepared: &Preparation) -> Result<s
     Ok(plan)
 }
 
+#[cfg(any(test, feature = "fixture-probes"))]
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     let fixture = CopyFixture::new()?;
     let (source, output) = fixture.scope()?;

@@ -1,14 +1,16 @@
 //! Catalog-actor adapter for the central engine. Currently constructor-owned
 //! fixture capability only; retained records are never execution approvals.
-mod namespace_journal;
+pub(in crate::executor) mod namespace_journal;
 use super::{CopyJournal, CopyPlan, EventJournal, Object, failed};
 use crate::{
     catalog::Catalog,
-    domain::{ErrorCode, Result},
-    filesystem::{self, FileIdentity},
+    domain::Result,
+    filesystem::FileIdentity,
     library::{copy_manifest, operation_store},
     organization::portable_filename,
 };
+#[cfg(any(test, feature = "fixture-probes"))]
+use crate::{domain::ErrorCode, filesystem};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -200,6 +202,29 @@ pub(super) struct CatalogJournal {
     anchor: i64,
     history: Mutex<History>,
 }
+struct ObservedJournal<'a> {
+    inner: &'a CatalogJournal,
+    progress: Option<&'a dyn Fn(u32) -> Result<()>>,
+}
+impl EventJournal for ObservedJournal<'_> {
+    fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()> {
+        self.inner.append(item, phase, evidence)?;
+        if phase == "item_completed_verified"
+            && let Some(progress) = self.progress
+        {
+            progress(self.inner.verified_files()?)?;
+        }
+        Ok(())
+    }
+}
+impl CopyJournal for ObservedJournal<'_> {
+    fn history_count(&self) -> Result<u64> {
+        self.inner.history_count()
+    }
+    fn stage_identity(&self, item: usize) -> Result<Option<FileIdentity>> {
+        self.inner.stage_identity(item)
+    }
+}
 fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
     if binding.namespace.is_some() {
         return namespace_journal::validate_copy_binding(db, binding);
@@ -279,20 +304,66 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
     Ok(())
 }
 impl CatalogJournal {
-    fn copy_review(&self, selection: &str) -> Result<super::approval::Review> {
+    pub(in crate::executor) fn inspect(
+        &self,
+        inputs: super::CopyInputs<'_>,
+    ) -> Result<Vec<super::RecoveredItem>> {
+        (inputs.validate_scope)()?;
+        let states = self
+            .binding
+            .plan
+            .files
+            .iter()
+            .enumerate()
+            .map(|(index, file)| {
+                super::inspect_item(
+                    file,
+                    index,
+                    self,
+                    inputs.source_root,
+                    inputs.destination,
+                    inputs.io,
+                    inputs.cancel,
+                )
+            })
+            .collect::<Result<Vec<_>>>()?;
+        (inputs.validate_scope)()?;
+        Ok(states)
+    }
+    pub(in crate::executor) fn plan(&self) -> &CopyPlan {
+        &self.binding.plan
+    }
+    pub(in crate::executor) fn digest(&self) -> String {
+        blake3::hash(self.encoded.as_bytes()).to_hex().to_string()
+    }
+    pub(in crate::executor) fn verified_files(&self) -> Result<u32> {
+        Ok(self
+            .history
+            .lock()
+            .map_err(|_| failed("Copy history is unavailable."))?
+            .items
+            .iter()
+            .filter(|item| item.phase == 6)
+            .count() as u32)
+    }
+    pub(in crate::executor) fn copy_review(
+        &self,
+        selection: &str,
+    ) -> Result<super::approval::Review> {
         super::approval::Review::new(
             super::approval::Action::CopyFiles,
             self.binding.plan.id.clone(),
-            blake3::hash(self.encoded.as_bytes()).to_hex().to_string(),
+            self.digest(),
             selection.into(),
         )
     }
-    fn execute_approved(
+    pub(in crate::executor) fn execute_approved(
         &self,
         inputs: super::CopyInputs<'_>,
         selection: &str,
         proof: super::approval::Proof,
         fault: Option<super::CopyFault>,
+        progress: Option<&dyn Fn(u32) -> Result<()>>,
     ) -> Result<super::CopyOutcome> {
         proof.authorize(&self.copy_review(selection)?)?;
         let binding = self.binding.clone();
@@ -318,9 +389,13 @@ impl CatalogJournal {
                 Ok(())
             })
         };
+        let journal = ObservedJournal {
+            inner: self,
+            progress,
+        };
         super::CopyContext {
             plan: &self.binding.plan,
-            journal: self,
+            journal: &journal,
             source_root: inputs.source_root,
             destination: inputs.destination,
             io: inputs.io,
@@ -329,6 +404,7 @@ impl CatalogJournal {
         }
         .execute(fault)
     }
+    #[cfg(any(test, feature = "fixture-probes"))]
     pub(super) fn bind(
         catalog: Arc<Catalog>,
         owner_id: String,
@@ -454,6 +530,7 @@ impl CopyJournal for CatalogJournal {
     }
 }
 
+#[cfg(any(test, feature = "fixture-probes"))]
 fn generated_photo_bytes() -> Result<Vec<u8>> {
     let mut bytes = std::io::Cursor::new(Vec::new());
     image::RgbImage::from_pixel(16, 8, image::Rgb([19, 43, 67]))
@@ -461,8 +538,11 @@ fn generated_photo_bytes() -> Result<Vec<u8>> {
         .map_err(|error| failed("Could not generate owned journal media.").caused_by(error))?;
     Ok(bytes.into_inner())
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 const COMPANION_BYTES: &[u8] = b"<x:xmpmeta>generated owned companion</x:xmpmeta>";
+#[cfg(any(test, feature = "fixture-probes"))]
 const NEIGHBOR_BYTES: &[u8] = b"retained unrelated destination";
+#[cfg(any(test, feature = "fixture-probes"))]
 struct Fixture {
     library: Arc<crate::library::Library>,
     _run: tempfile::TempDir,
@@ -473,6 +553,7 @@ struct Fixture {
     plan: CopyPlan,
     baseline: Vec<(String, Vec<u8>)>,
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 impl Fixture {
     #[cfg(test)]
     fn new() -> Result<Self> {
@@ -764,6 +845,7 @@ impl Fixture {
             .collect()
     }
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     let mut cases = Vec::new();
     for (nested, fault) in [
@@ -809,6 +891,310 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
 mod tests {
     use super::*;
     #[test]
+    fn durable_operation_job_transitions_are_atomic_monotonic_and_recover_without_io() {
+        use crate::library::operation_jobs;
+        use crate::operations::{CopyAction, CopyJobState, CopyWorkflowJob};
+        let fixture = Fixture::new().unwrap();
+        let owner = fixture.owner.clone();
+        let manifest = fixture.manifest.clone();
+        let root = fixture
+            .library
+            .catalog
+            .call(move |db| {
+                Ok(copy_manifest::load(db, &owner, &manifest)?.files[0]
+                    .view
+                    .root_id
+                    .clone())
+            })
+            .unwrap();
+        let job = CopyWorkflowJob {
+            id: uuid::Uuid::new_v4().to_string(),
+            plan_id: fixture.owner.clone(),
+            review_id: uuid::Uuid::new_v4().to_string(),
+            source_root_id: root,
+            action: CopyAction::CopyFiles,
+            state: CopyJobState::Queued,
+            total_files: 2,
+            verified_files: 0,
+            ready_review_id: None,
+            message: "Metadata transition fixture; no copy executed".into(),
+            error: None,
+            started_at: "now".into(),
+            updated_at: "now".into(),
+        };
+        operation_jobs::create(&fixture.library.catalog, job.clone(), "a".repeat(64)).unwrap();
+        let mut invalid = job.clone();
+        invalid.state = CopyJobState::CompletedVerified;
+        invalid.verified_files = 2;
+        assert!(
+            operation_jobs::transition(&fixture.library.catalog, invalid, CopyJobState::Queued)
+                .is_err()
+        );
+        fixture.library.catalog.call(|db|{db.execute_batch("CREATE TRIGGER reject_job_transition BEFORE INSERT ON operation_journal WHEN NEW.phase='operation_job_state_v1' AND json_extract(NEW.evidence,'$.state')='running' BEGIN SELECT RAISE(ABORT,'owned job journal denial'); END;")?;Ok(())}).unwrap();
+        let mut running = job.clone();
+        running.state = CopyJobState::Running;
+        assert!(
+            operation_jobs::transition(
+                &fixture.library.catalog,
+                running.clone(),
+                CopyJobState::Queued
+            )
+            .is_err()
+        );
+        assert_eq!(
+            operation_jobs::load(&fixture.library.catalog, job.id.clone())
+                .unwrap()
+                .state,
+            CopyJobState::Queued
+        );
+        fixture
+            .library
+            .catalog
+            .call(|db| {
+                db.execute_batch("DROP TRIGGER reject_job_transition;")?;
+                Ok(())
+            })
+            .unwrap();
+        operation_jobs::transition(
+            &fixture.library.catalog,
+            running.clone(),
+            CopyJobState::Queued,
+        )
+        .unwrap();
+        running.verified_files = 1;
+        operation_jobs::transition(
+            &fixture.library.catalog,
+            running.clone(),
+            CopyJobState::Running,
+        )
+        .unwrap();
+        running.verified_files = 0;
+        assert!(
+            operation_jobs::transition(&fixture.library.catalog, running, CopyJobState::Running)
+                .is_err()
+        );
+        operation_jobs::recover(&fixture.library.catalog).unwrap();
+        operation_jobs::recover(&fixture.library.catalog).unwrap();
+        let recovered = operation_jobs::load(&fixture.library.catalog, job.id).unwrap();
+        assert_eq!(recovered.state, CopyJobState::NeedsRecovery);
+        assert_eq!(recovered.verified_files, 1);
+        assert!(
+            operation_jobs::transition(
+                &fixture.library.catalog,
+                recovered,
+                CopyJobState::NeedsRecovery
+            )
+            .is_err()
+        );
+        assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 1);
+        assert!(fixture.preserved().unwrap());
+    }
+    #[test]
+    fn application_copy_api_prepares_and_copies_only_after_two_exact_session_approvals() {
+        use crate::operations::{CopyAction, CopyApprovalInput, CopyJobState, CopyStartInput};
+        let fixture = Fixture::with_nested(true).unwrap();
+        // A picker may return a valid Windows spelling that differs in case
+        // from enumeration. Native publication must use the held base handle,
+        // without treating display/path spelling as an exact child locator.
+        #[cfg(windows)]
+        let fixture = {
+            let mut fixture = fixture;
+            let name = fixture.destination.file_name().unwrap().to_str().unwrap();
+            fixture.destination = fixture.destination.with_file_name(name.to_uppercase());
+            fixture
+        };
+        let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&selected).unwrap();
+        let volume = crate::library::native::volume_token(&selected).unwrap();
+        drop(selected);
+        let selection = uuid::Uuid::new_v4().to_string();
+        let mut review = fixture
+            .library
+            .organization_copy_review_create(
+                fixture.owner.clone(),
+                fixture.manifest.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        assert_eq!(review.action, CopyAction::PrepareNames);
+        assert!(!fixture.destination.join(&review.output_folder).exists());
+        assert!(
+            review
+                .files
+                .iter()
+                .all(|file| file.target_path.starts_with(&review.output_folder))
+        );
+        for action in [CopyAction::PrepareNames, CopyAction::CopyFiles] {
+            assert_eq!(review.action, action);
+            if action == CopyAction::CopyFiles {
+                assert!(
+                    fixture
+                        .library
+                        .organization_copy_approve(
+                            CopyApprovalInput {
+                                review_id: review.id.clone(),
+                                digest: review.digest.clone(),
+                                action,
+                                fidelity_limits_acknowledged: false
+                            },
+                            selection.clone(),
+                            fixture.destination.clone(),
+                            (identity.clone(), volume.clone())
+                        )
+                        .is_err()
+                );
+            }
+            let mut wrong = review.digest.clone();
+            wrong.replace_range(..1, if wrong.starts_with('0') { "1" } else { "0" });
+            assert!(
+                fixture
+                    .library
+                    .organization_copy_approve(
+                        CopyApprovalInput {
+                            review_id: review.id.clone(),
+                            digest: wrong,
+                            action,
+                            fidelity_limits_acknowledged: true
+                        },
+                        selection.clone(),
+                        fixture.destination.clone(),
+                        (identity.clone(), volume.clone())
+                    )
+                    .is_err()
+            );
+            let approval = fixture
+                .library
+                .organization_copy_approve(
+                    CopyApprovalInput {
+                        review_id: review.id.clone(),
+                        digest: review.digest.clone(),
+                        action,
+                        fidelity_limits_acknowledged: true,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            let input = CopyStartInput {
+                review_id: review.id.clone(),
+                digest: review.digest.clone(),
+                approval_id: approval.id,
+            };
+            let job = fixture
+                .library
+                .organization_copy_start(
+                    input.clone(),
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let finished = loop {
+                let current = fixture
+                    .library
+                    .organization_copy_job(job.id.clone())
+                    .unwrap();
+                if !matches!(
+                    current.state,
+                    CopyJobState::Queued
+                        | CopyJobState::Running
+                        | CopyJobState::PauseRequested
+                        | CopyJobState::CancelRequested
+                ) {
+                    break current;
+                }
+                assert!(
+                    std::time::Instant::now() < until,
+                    "Organization job did not finish"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            };
+            assert_eq!(
+                finished.state,
+                if action == CopyAction::PrepareNames {
+                    CopyJobState::Prepared
+                } else {
+                    CopyJobState::CompletedVerified
+                },
+                "{:?}",
+                finished.error
+            );
+            assert_eq!(
+                finished.verified_files,
+                if action == CopyAction::CopyFiles {
+                    2
+                } else {
+                    0
+                }
+            );
+            assert!(fixture.preserved().unwrap());
+            assert!(
+                fixture
+                    .library
+                    .organization_copy_start(
+                        input,
+                        selection.clone(),
+                        fixture.destination.clone(),
+                        (identity.clone(), volume.clone())
+                    )
+                    .is_err()
+            );
+            review = fixture
+                .library
+                .organization_copy_review(
+                    review.id,
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+        }
+        let inspection = fixture
+            .library
+            .organization_copy_inspect(
+                review.id,
+                selection,
+                fixture.destination.clone(),
+                (identity, volume),
+            )
+            .unwrap();
+        assert!(inspection.all_published_bytes_verified);
+        assert_eq!(
+            inspection.states,
+            vec![crate::operations::CopyInspectionState::PublishedVerified; 2]
+        );
+        assert_eq!(
+            crate::library::operation_jobs::list(&fixture.library.catalog)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            std::fs::read(
+                fixture
+                    .destination
+                    .join(&review.output_folder)
+                    .join("organized/Photo.JPG")
+            )
+            .unwrap(),
+            generated_photo_bytes().unwrap()
+        );
+        assert_eq!(
+            std::fs::read(
+                fixture
+                    .destination
+                    .join(&review.output_folder)
+                    .join("organized/Photo.xmp")
+            )
+            .unwrap(),
+            COMPANION_BYTES
+        );
+    }
+    #[test]
     fn approved_copy_rechecks_revoked_root_grant_at_admission_and_before_publication() {
         use crate::executor::approval::Approvals;
         use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -851,6 +1237,7 @@ mod tests {
                     },
                     &selection,
                     proof,
+                    None,
                     None,
                 )
                 .err()

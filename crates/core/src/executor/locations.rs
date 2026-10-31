@@ -150,6 +150,7 @@ impl Source {
     }
 }
 impl Destination {
+    #[cfg(any(test, feature = "fixture-probes"))]
     pub(super) fn capture(root: &File, relative_parent: &str) -> Result<Self> {
         let mut value = Self {
             policy: POLICY.into(),

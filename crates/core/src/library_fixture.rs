@@ -228,6 +228,92 @@ impl LibraryFixture {
         }
         Ok(self.baseline.len() as u32)
     }
+    /// Test-host caller supplies only its own constructor-created destination.
+    /// This independent byte audit accepts partial stages without claiming they
+    /// are completed copies. It never modifies or cleans an output object.
+    pub fn audit_generated_outputs(&self, destination: &Path) -> Result<serde_json::Value> {
+        let verified = self.verify_unchanged()?;
+        if std::fs::read(destination.join("destination-only.txt"))? != b"retained destination" {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "Generated destination-only bytes changed.",
+            ));
+        }
+        fn visit(
+            fixture: &LibraryFixture,
+            root: &Path,
+            path: &Path,
+            depth: usize,
+            files: &mut Vec<serde_json::Value>,
+            count: &mut usize,
+        ) -> Result<()> {
+            if depth > 32 {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated output audit exceeded depth bound.",
+                ));
+            }
+            for entry in std::fs::read_dir(path)? {
+                let entry = entry?;
+                *count += 1;
+                if *count > 4096 {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Generated output audit exceeded entry bound.",
+                    ));
+                }
+                let relative = entry
+                    .path()
+                    .strip_prefix(root)
+                    .map_err(|_| {
+                        AppError::new(
+                            ErrorCode::Conflict,
+                            "Generated output escaped its boundary.",
+                        )
+                    })?
+                    .to_owned();
+                if relative == Path::new("destination-only.txt") {
+                    continue;
+                }
+                let kind = entry.file_type()?;
+                if kind.is_symlink() {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Unexpected link in generated output.",
+                    ));
+                }
+                if kind.is_dir() {
+                    visit(fixture, root, &entry.path(), depth + 1, files, count)?;
+                } else if kind.is_file() && entry.metadata()?.len() <= 16 * 1024 * 1024 {
+                    let bytes = std::fs::read(entry.path())?;
+                    let digest = blake3::hash(&bytes).to_hex().to_string();
+                    let mut matches = false;
+                    for (source, baseline) in &fixture.baseline {
+                        if baseline.split(':').next() == Some(digest.as_str())
+                            && std::fs::symlink_metadata(fixture.path().join(source))?.is_file()
+                            && std::fs::read(fixture.path().join(source))? == bytes
+                        {
+                            matches = true;
+                            break;
+                        }
+                    }
+                    files.push(serde_json::json!({"relativePath":relative.to_string_lossy(),"bytes":bytes.len().to_string(),"digest":digest,"matchesGeneratedSourceBytes":matches}));
+                } else {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Unexpected generated output type or size.",
+                    ));
+                }
+            }
+            Ok(())
+        }
+        let mut files = Vec::new();
+        let mut count = 0;
+        visit(self, destination, destination, 0, &mut files, &mut count)?;
+        Ok(
+            serde_json::json!({"sourceVerifiedFiles":verified,"neighborUnchanged":true,"files":files,"auditedEntries":count,"writesPerformed":false}),
+        )
+    }
 }
 fn manifest(root: &Path) -> Result<BTreeMap<PathBuf, String>> {
     fn visit(root: &Path, path: &Path, out: &mut BTreeMap<PathBuf, String>) -> Result<()> {

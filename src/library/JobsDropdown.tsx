@@ -4,6 +4,8 @@ import type { JobDetail, LibraryStatus, ScanJob } from '../bindings';
 import { errorMessage, library, libraryData } from '../ipc';
 import { ScanJobProgress } from './ScanJobProgress';
 import { LibraryChanges } from './LibraryChanges';
+import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
+import { copyJobActive } from './copyJobs';
 
 export function JobsDropdown({
   status,
@@ -27,6 +29,9 @@ export function JobsDropdown({
       (job) =>
         job.state !== 'queued' && job.state !== 'running' && job.state !== 'cancel_requested',
     ) ?? [];
+  const copyJobs = status?.copyJobs ?? [];
+  const activeCopies = copyJobs.filter(copyJobActive);
+  const activeCount = active.length + activeCopies.length;
   useLayoutEffect(() => {
     if (!open) return;
     function place() {
@@ -105,15 +110,15 @@ export function JobsDropdown({
             strokeLinejoin="round"
           />
         </svg>
-        {active.length > 0 && (
+        {activeCount > 0 && (
           <span className="jobs-count" aria-hidden="true">
-            {active.length}
+            {activeCount}
           </span>
         )}
       </button>
       <span id={`${id}-status`} className="screen-reader-status" role="status">
         {status
-          ? `${active.length} running ${active.length === 1 ? 'job' : 'jobs'}`
+          ? `${activeCount} running ${activeCount === 1 ? 'job' : 'jobs'}`
           : 'Connecting to jobs'}
       </span>
       {open &&
@@ -148,12 +153,21 @@ export function JobsDropdown({
             ) : (
               <>
                 <p className="help">
-                  {active.length
-                    ? `${active.length} running ${active.length === 1 ? 'job' : 'jobs'}`
+                  {activeCount
+                    ? `${activeCount} running ${activeCount === 1 ? 'job' : 'jobs'}`
                     : 'No running jobs.'}
                 </p>
                 <ThumbnailJobAction status={status} onRefresh={onRefresh} />
                 {entries(active)}
+                {activeCopies.map((job) => (
+                  <CopyJobProgress key={job.id} job={job} onRefresh={onRefresh} />
+                ))}
+                {activeCopies.some((job) => job.action === 'copy_files') && <CopyIoControls />}
+                {copyJobs
+                  .filter((job) => !copyJobActive(job))
+                  .map((job) => (
+                    <CopyJobProgress key={job.id} job={job} onRefresh={onRefresh} />
+                  ))}
                 <LibraryChanges status={status} />
                 {recent.length > 0 && (
                   <details className="recent-jobs">

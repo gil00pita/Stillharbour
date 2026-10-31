@@ -200,12 +200,120 @@ async fn library_request(
         | LibraryRequest::OrganizationPlanSaveExport { selection_id, .. }
         | LibraryRequest::OrganizationPlanCreate { selection_id, .. }
         | LibraryRequest::OrganizationDestination { selection_id, .. }
+        | LibraryRequest::OrganizationCopyReviewCreate { selection_id, .. }
+        | LibraryRequest::OrganizationCopyReview { selection_id, .. }
+        | LibraryRequest::OrganizationCopyApprove { selection_id, .. }
+        | LibraryRequest::OrganizationCopyStart { selection_id, .. }
+        | LibraryRequest::OrganizationCopyInspect { selection_id, .. }
         | LibraryRequest::Relink { selection_id, .. } => Some(selected(&state, selection_id)?),
         _ => None,
     };
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationCopyCapabilities {} => {
+                LibraryResponse::OrganizationCopyCapabilities(
+                    library.organization_copy_capabilities(),
+                )
+            }
+            LibraryRequest::OrganizationCopyReviewCreate {
+                plan_id,
+                manifest_id,
+                ..
+            } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyReview(Box::new(
+                    library.organization_copy_review_create(
+                        plan_id,
+                        manifest_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationCopyReview { review_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyReview(Box::new(
+                    library.organization_copy_review(
+                        review_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationCopyApprove { input, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyApproval(library.organization_copy_approve(
+                    input,
+                    chosen.id.clone(),
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
+            LibraryRequest::OrganizationCopyStart { input, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyJob(library.organization_copy_start(
+                    input,
+                    chosen.id.clone(),
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
+            LibraryRequest::OrganizationCopyJob { job_id } => {
+                LibraryResponse::OrganizationCopyJob(library.organization_copy_job(job_id)?)
+            }
+            LibraryRequest::OrganizationCopyCancel { job_id } => {
+                LibraryResponse::OrganizationCopyJob(library.organization_copy_cancel(job_id)?)
+            }
+            LibraryRequest::OrganizationCopyIo {} => {
+                LibraryResponse::OrganizationCopyIo(library.organization_copy_io()?)
+            }
+            LibraryRequest::OrganizationCopySetIo {
+                aggregate_bytes_per_second,
+                byte_io_paused,
+            } => LibraryResponse::OrganizationCopyIo(
+                library.organization_copy_set_io(aggregate_bytes_per_second, byte_io_paused)?,
+            ),
+            LibraryRequest::OrganizationCopyDiscard { review_id } => {
+                library.organization_copy_discard(review_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationCopyInspect { review_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyInspection(library.organization_copy_inspect(
+                    review_id,
+                    chosen.id.clone(),
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
             LibraryRequest::OrganizationTemplates {} => {
                 LibraryResponse::OrganizationTemplates(library.organization_templates()?)
             }
@@ -535,6 +643,73 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "organization_destination_reselect" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Owned destination selection accepts no supplied scope.",
+                ));
+            }
+            let owned = state.destination_fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
+            })?;
+            let directory = owned.as_ref().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate a destination fixture first.",
+                )
+            })?;
+            let path = directory.path().to_owned();
+            let file = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&file)?;
+            let volume = stillharbour_core::library::native::volume_token(&file)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state
+                .selection
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Selection unavailable."))? =
+                Some(NativeSelection {
+                    id: id.clone(),
+                    path,
+                    identity: Some(identity),
+                    volume: Some(volume),
+                });
+            Ok(
+                serde_json::json!({"id":id,"displayPath":"Generated destination fixture","identityAvailable":true}),
+            )
+        }
+        "organization_destination_audit" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Owned destination audit accepts no supplied scope.",
+                ));
+            }
+            let fixture = state
+                .fixture
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Fixture unavailable."))?;
+            let fixture = fixture.as_ref().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate an owned source fixture first.",
+                )
+            })?;
+            let destination = state.destination_fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
+            })?;
+            fixture.audit_generated_outputs(
+                destination
+                    .as_ref()
+                    .ok_or_else(|| {
+                        AppError::new(
+                            ErrorCode::InvalidInput,
+                            "Generate an owned destination fixture first.",
+                        )
+                    })?
+                    .path(),
+            )
+        }
         "organization_name_preparation_fixture" => {
             if rows.is_some() {
                 return Err(AppError::new(

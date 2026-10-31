@@ -99,6 +99,22 @@ impl Library {
         plan_id: String,
         manifest_id: String,
     ) -> Result<crate::operations::CopyAssessment> {
+        self.assess_copy_scope(plan_id, manifest_id, true)
+    }
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(crate) fn organization_copy_prepared_assessment(
+        &self,
+        plan_id: String,
+        manifest_id: String,
+    ) -> Result<crate::operations::CopyAssessment> {
+        self.assess_copy_scope(plan_id, manifest_id, false)
+    }
+    fn assess_copy_scope(
+        &self,
+        plan_id: String,
+        manifest_id: String,
+        original_targets: bool,
+    ) -> Result<crate::operations::CopyAssessment> {
         validate_id(&plan_id)?;
         validate_id(&manifest_id)?;
         let retained_plan = plan_id.clone();
@@ -134,7 +150,12 @@ impl Library {
             path.clone(),
             (expected.clone(), draft.destination_volume.clone()),
         )?;
-        if observed.fingerprint != draft.view.destination_fingerprint {
+        // A prepared action has a different, explicitly reviewed namespace
+        // prefix and exact native stage/parent proofs. Its own name creation
+        // changes base-directory revisions; the old relative-target observation
+        // is historical, never its write authority. Keep all fresh source,
+        // root identity/volume/overlap and capacity checks in either mode.
+        if original_targets && observed.fingerprint != draft.view.destination_fingerprint {
             return Err(changed());
         }
         // One native stats response supplies allocation units and observed free

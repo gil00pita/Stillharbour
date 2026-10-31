@@ -60,6 +60,20 @@ fn root(db: &Connection, id: &str) -> Result<(Vec<u8>, Object, String)> {
     ))
 }
 impl Snapshot {
+    pub(super) fn validate_roots(&self, catalog: &Arc<Catalog>) -> Result<()> {
+        let id = self.root_id.clone();
+        let (path, object, volume) = catalog.call(move |db| root(db, &id))?;
+        if object != self.source || volume != self.source_volume {
+            return Err(failed("Source root identity/volume grant changed."));
+        }
+        let file = native::open_root(&native::decode_path(&path)?, None)?;
+        if !self.source.matches(&file)? || native::volume_token(&file)? != self.source_volume {
+            return Err(failed(
+                "The reviewed source root is unavailable or changed identity.",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn build(catalog: &Arc<Catalog>, owner: String, manifest: String) -> Result<Self> {
         crate::operations::validate_id(&owner)?;
         crate::operations::validate_id(&manifest)?;
@@ -110,6 +124,8 @@ impl Snapshot {
         let destination_chain = DirectoryChain::open(&destination_path.canonicalize()?)?;
         if !source.matches(source_chain.leaf())?
             || !destination.matches(destination_chain.leaf())?
+            || native::volume_token(source_chain.leaf())? != source_volume
+            || native::volume_token(destination_chain.leaf())? != draft.destination_volume
             || source_chain
                 .identities()
                 .iter()
@@ -185,6 +201,62 @@ impl Snapshot {
             }
         }
         Ok(snapshot)
+    }
+    pub(super) fn open_scope(
+        &self,
+        catalog: &Arc<Catalog>,
+        destination_access: Access,
+    ) -> Result<crate::jobs::operation_locks::Lease> {
+        let snapshot = self.clone();
+        let (source_path, destination_path) = catalog.call(move |db| {
+            snapshot.validate(db)?;
+            let (source, _, _) = root(db, &snapshot.root_id)?;
+            Ok((
+                source,
+                operation_store::load(db, &snapshot.owner_id)?.destination_native,
+            ))
+        })?;
+        let source_path = native::decode_path(&source_path)?;
+        let destination_path = native::decode_path(&destination_path)?;
+        let source = native::open_root(&source_path, None)?;
+        let destination = native::open_root(&destination_path, None)?;
+        if !self.source.matches(&source)?
+            || !self.destination.matches(&destination)?
+            || native::volume_token(&source)? != self.source_volume
+            || native::volume_token(&destination)? != self.destination_volume
+        {
+            return Err(failed(
+                "The reviewed source/destination identity changed before job admission.",
+            ));
+        }
+        drop((source, destination));
+        let source = DirectoryChain::open(&source_path.canonicalize()?)?;
+        let destination = if destination_access == Access::Write {
+            super::output_chain(&destination_path.canonicalize()?)?
+        } else {
+            DirectoryChain::open(&destination_path.canonicalize()?)?
+        };
+        if !self.source.matches(source.leaf())?
+            || !self.destination.matches(destination.leaf())?
+            || native::volume_token(source.leaf())? != self.source_volume
+            || native::volume_token(destination.leaf())? != self.destination_volume
+            || source
+                .identities()
+                .iter()
+                .any(|id| id.volume == self.destination.volume && id.file == self.destination.file)
+            || destination
+                .identities()
+                .iter()
+                .any(|id| id.volume == self.source.volume && id.file == self.source.file)
+        {
+            return Err(failed(
+                "The reviewed roots overlap or changed native scope.",
+            ));
+        }
+        Registry::shared().try_acquire(vec![
+            Scope::new(source, Access::Read),
+            Scope::new(destination, destination_access),
+        ])
     }
     pub(super) fn validate(&self, db: &Connection) -> Result<()> {
         let draft = operation_store::load(db, &self.owner_id)?;

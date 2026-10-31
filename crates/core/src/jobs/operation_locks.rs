@@ -118,7 +118,7 @@ impl Registry {
     }
 }
 impl Lease {
-    #[cfg(any(test, feature = "fixture-probes"))]
+    #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
     pub(crate) fn directory(&self, index: usize) -> &DirectoryChain {
         &self
             ._scopes

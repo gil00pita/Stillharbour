@@ -280,6 +280,26 @@ pub(super) fn create_directory(parent: &File, leaf: &str) -> Result<File> {
         ))
     }
 }
+pub(super) fn read_directory(parent: &File, leaf: &str) -> Result<File> {
+    name(leaf)?;
+    #[cfg(windows)]
+    {
+        open(parent, leaf, true, false)
+    }
+    #[cfg(unix)]
+    {
+        use rustix::fs::{Mode, OFlags, openat};
+        Ok(File::from(
+            openat(
+                parent,
+                leaf,
+                OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+                Mode::empty(),
+            )
+            .map_err(std::io::Error::from)?,
+        ))
+    }
+}
 pub(super) fn create_file(parent: &File, leaf: &str) -> Result<File> {
     name(leaf)?;
     #[cfg(windows)]

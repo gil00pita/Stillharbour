@@ -304,7 +304,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 4);
+    assert.equal(status.data.catalogSchema, 5);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -374,7 +374,7 @@ describe('native read-only library', () => {
       completedAfterRelease: true,
       sourcesPreserved: true,
     });
-    assert.equal(receipt.catalogJournal.catalogSchema, 4);
+    assert.equal(receipt.catalogJournal.catalogSchema, 5);
     assert.equal(receipt.catalogJournal.completed.publishedVerified, 2);
     assert.equal(receipt.catalogJournal.completed.journalEvents, 13);
     assert.equal(receipt.catalogJournal.completed.sourceAndNeighborPreserved, true);
@@ -511,6 +511,7 @@ describe('native read-only library', () => {
       const picker = await browser.tauri.mock('foundation_request');
       let destinationCreated = false;
       let exportCreated = false;
+      let copyAttempted = false;
       try {
         await picker.mockReturnValue({ kind: 'directory', data: selection });
         await $('button.primary').click();
@@ -971,6 +972,85 @@ describe('native read-only library', () => {
           JSON.stringify(exportedFiles),
         );
         await browser.saveScreenshot('.context/screenshots/m2-export-files.png');
+        const beforeCopy = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', {
+            action: 'organization_destination_verify',
+            rows: null,
+          }),
+        );
+        assert.equal(beforeCopy.unchanged, true);
+        const copySelection = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', {
+            action: 'organization_destination_reselect',
+            rows: null,
+          }),
+        );
+        await picker.mockReturnValue({ kind: 'directory', data: copySelection });
+        await $('button=Choose destination and review preparation').scrollIntoView();
+        await $('button=Choose destination and review preparation').click();
+        await $('h4=Output preparation review').waitForDisplayed();
+        await $('button=Approve output preparation').scrollIntoView();
+        await $('button=Approve output preparation').click();
+        await $('button=Start output preparation').waitForEnabled();
+        assert.equal(
+          (
+            await browser.tauri.execute(async ({ core }) =>
+              core.invoke('test_performance', {
+                action: 'organization_destination_verify',
+                rows: null,
+              }),
+            )
+          ).unchanged,
+          true,
+        );
+        copyAttempted = true;
+        await $('button=Start output preparation').click();
+        await $('h4=Prepared copy review').waitForDisplayed({ timeout: 15000 });
+        assert.equal(await $('button=Approve byte-verified copy').isEnabled(), false);
+        const fidelityAck = await $(
+          'section[aria-label="Verified organization copy"] input[type="checkbox"]',
+        );
+        await fidelityAck.scrollIntoView();
+        await fidelityAck.click();
+        await $('button=Approve byte-verified copy').click();
+        await $('button=Start verified copy').waitForEnabled();
+        await $('button=Start verified copy').scrollIntoView();
+        await $('button=Start verified copy').click();
+        await $('h3=File bytes copied and verified').waitForDisplayed({ timeout: 15000 });
+        await $('button=Inspect actual output bytes').scrollIntoView();
+        await $('button=Inspect actual output bytes').click();
+        await browser.waitUntil(
+          async () =>
+            (await $('section[aria-label="Verified organization copy"]').getText()).includes(
+              'Every selected output was freshly compared with its source.',
+            ),
+          { timeout: 15000 },
+        );
+        const copyJobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+          (job) => job.planId === plan.data.plan.id,
+        );
+        assert.equal(copyJobs.filter((job) => job.state === 'prepared').length, 1);
+        assert.equal(copyJobs.filter((job) => job.state === 'completed_verified').length, 1);
+        assert.equal(
+          copyJobs.find((job) => job.state === 'completed_verified').verifiedFiles,
+          compiledManifest.data.files.length,
+        );
+        const outputAudit = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+        );
+        assert.equal(outputAudit.neighborUnchanged, true);
+        assert.equal(outputAudit.files.length, compiledManifest.data.files.length);
+        assert(
+          outputAudit.files.every(
+            (file) => file.matchesGeneratedSourceBytes && !file.relativePath.endsWith('.partial'),
+          ),
+        );
+        await writeFile(`${evidence}/windows-verified-copy-jobs.json`, JSON.stringify(copyJobs));
+        await writeFile(
+          `${evidence}/windows-verified-copy-output-audit.json`,
+          JSON.stringify(outputAudit),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-verified-copy-complete.png');
         await $('button=Close saved plans').click();
       } catch (error) {
         await browser.saveScreenshot('.context/screenshots/windows-library-failure.png');
@@ -1012,17 +1092,22 @@ describe('native read-only library', () => {
         );
         assert.ok(verification.verifiedFiles > 20);
         if (destinationCreated) {
-          const destinationVerification = await browser.tauri.execute(async ({ core }) =>
-            core.invoke('test_performance', {
-              action: 'organization_destination_verify',
-              rows: null,
-            }),
+          const destinationVerification = await browser.tauri.execute(
+            async ({ core }, copyAttempted) =>
+              core.invoke('test_performance', {
+                action: copyAttempted
+                  ? 'organization_destination_audit'
+                  : 'organization_destination_verify',
+                rows: null,
+              }),
+            copyAttempted,
           );
           await writeFile(
             `${evidence}/windows-destination-verification.json`,
             JSON.stringify(destinationVerification),
           );
-          assert.equal(destinationVerification.unchanged, true);
+          if (copyAttempted) assert.equal(destinationVerification.neighborUnchanged, true);
+          else assert.equal(destinationVerification.unchanged, true);
         }
         await browser.setWindowSize(1180, 780);
       }

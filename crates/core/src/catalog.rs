@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
@@ -514,7 +514,7 @@ mod tests {
             .unwrap();
         drop(catalog);
         let db = Connection::open(path).unwrap();
-        db.execute_batch("DROP TABLE operation_journal; DROP TABLE organization_plans; DROP TABLE organization_templates; PRAGMA user_version=2;").unwrap();
+        db.execute_batch("DROP TABLE operation_jobs; DROP TABLE operation_journal; DROP TABLE organization_plans; DROP TABLE organization_templates; PRAGMA user_version=2;").unwrap();
         id
     }
     #[test]
@@ -623,7 +623,7 @@ mod tests {
                 );
             } else {
                 let catalog = Catalog::open(path.clone()).unwrap();
-                assert_eq!(catalog.summary().unwrap().schema, 4);
+                assert_eq!(catalog.summary().unwrap().schema, SCHEMA_VERSION);
                 catalog.call(|db| {let count:u32=db.query_row("SELECT count(*) FROM sqlite_schema WHERE type='index' AND name IN ('operation_journal_scope','operation_copy_stream')",[],|row|row.get(0))?;assert_eq!(count,2);Ok(())}).unwrap();
             }
             let snapshot = std::fs::read_dir(run.path())
@@ -658,10 +658,86 @@ mod tests {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
         catalog.call(|db| {
-            db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_journal_scope;DROP INDEX operation_copy_stream;PRAGMA user_version=3;")?;Ok(())
+            db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_journal_scope;DROP INDEX operation_copy_stream;DROP TABLE operation_jobs;PRAGMA user_version=3;")?;Ok(())
         }).unwrap();
         drop(catalog);
         id
+    }
+    fn legacy_four_fixture(path: &Path) -> String {
+        let catalog = Catalog::open(path.to_owned()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        catalog.call(|db|{db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP TABLE operation_jobs;PRAGMA user_version=4;")?;Ok(())}).unwrap();
+        drop(catalog);
+        id
+    }
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn operation_job_migration_retains_v4_and_rolls_back_table_on_index_collision() {
+        let run = tempfile::tempdir().unwrap();
+        for collision in [false, true] {
+            let path = run.path().join(if collision {
+                "collision.stillharbour"
+            } else {
+                "jobs.stillharbour"
+            });
+            let id = legacy_four_fixture(&path);
+            if collision {
+                let db = Connection::open(&path).unwrap();
+                db.execute_batch("CREATE TABLE operation_jobs_recent(private_value TEXT);INSERT INTO operation_jobs_recent VALUES('retain collision');").unwrap();
+                drop(db);
+                assert!(Catalog::open(path.clone()).is_err());
+                let db = Connection::open(&path).unwrap();
+                assert_eq!(summary(&db).unwrap().schema, 4);
+                assert_eq!(
+                    db.query_row(
+                        "SELECT count(*) FROM sqlite_schema WHERE name='operation_jobs'",
+                        [],
+                        |row| row.get::<_, u32>(0)
+                    )
+                    .unwrap(),
+                    0
+                );
+                assert_eq!(
+                    db.query_row(
+                        "SELECT private_value FROM operation_jobs_recent",
+                        [],
+                        |row| row.get::<_, String>(0)
+                    )
+                    .unwrap(),
+                    "retain collision"
+                );
+            } else {
+                let catalog = Catalog::open(path.clone()).unwrap();
+                assert_eq!(catalog.summary().unwrap().schema, 5);
+                assert_eq!(catalog.summary().unwrap().id, id);
+            }
+            let retained = std::fs::read_dir(run.path())
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .filter(|path| {
+                    path.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("pre-migration-v4-")
+                })
+                .find(|path| {
+                    let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                        .unwrap();
+                    summary(&db).unwrap().id == id
+                })
+                .unwrap();
+            let db =
+                Connection::open_with_flags(retained, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            assert_eq!(summary(&db).unwrap().schema, 4);
+            assert_eq!(summary(&db).unwrap().id, id);
+            assert_eq!(
+                db.query_row("SELECT state FROM job_events WHERE sequence=1", [], |row| {
+                    row.get::<_, String>(0)
+                })
+                .unwrap(),
+                "retained user data"
+            );
+        }
     }
     #[test]
     fn migration_process_fixture_child() {
@@ -689,7 +765,7 @@ mod tests {
     #[test]
     #[cfg(any(windows, target_os = "macos"))]
     fn process_exit_during_migration_retains_a_consistent_catalog_and_backup() {
-        for (version, stage) in [2, 3].into_iter().flat_map(|version| {
+        for (version, stage) in [2, 3, 4].into_iter().flat_map(|version| {
             ["after_snapshot", "before_commit", "after_commit"].map(|stage| (version, stage))
         }) {
             let owned = tempfile::Builder::new()
@@ -701,8 +777,10 @@ mod tests {
             let path = owned.path().join("catalog.stillharbour");
             let id = if version == 2 {
                 legacy_fixture(&path)
-            } else {
+            } else if version == 3 {
                 legacy_three_fixture(&path)
+            } else {
+                legacy_four_fixture(&path)
             };
             let mut child = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([

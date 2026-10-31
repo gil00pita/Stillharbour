@@ -93,6 +93,8 @@ pub struct Library {
     pub(crate) catalog: Arc<Catalog>,
     pub(super) options: LibraryOptions,
     pub(super) destination_gate: Mutex<()>,
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(super) copy_workflow: Arc<crate::executor::CopyWorkflow>,
     active: Mutex<Option<ActiveScan>>,
     thumbnail_jobs: Mutex<Vec<rendition_jobs::ThumbnailJob>>,
     thumbnail_job_gate: JobScheduler,
@@ -232,6 +234,8 @@ impl Library {
         }
     }
     fn stop_library_jobs(&self, root_id: &str) -> Result<()> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        self.copy_workflow.cancel_root(root_id)?;
         if let Some(active) = self.active.lock().map_err(|_| lock_error())?.as_ref()
             && active.root_id == root_id
             && !active.cancel.swap(true, Ordering::Relaxed)
@@ -268,6 +272,17 @@ impl Library {
         let permit = loop {
             if let Some(root_id) = removing {
                 self.stop_library_jobs(root_id)?;
+                #[cfg(any(test, feature = "copy-workflow"))]
+                if self.copy_workflow.has_active_root(root_id)? {
+                    if Instant::now() >= deadline {
+                        return Err(AppError::new(
+                            ErrorCode::Busy,
+                            "Organization work is still stopping. The library is retained; try removal again.",
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                    continue;
+                }
             }
             match self.scan_gate.try_start() {
                 Ok(permit) => break permit,
@@ -414,7 +429,13 @@ impl Library {
         fs::create_dir_all(options.data_directory.join("thumbnails"))?;
         fs::create_dir_all(&options.workers.working_directory)?;
         let recovery = store::recover_jobs(&catalog)?;
+        super::operation_jobs::recover(&catalog)?;
         let library = Arc::new(Self {
+            #[cfg(any(test, feature = "copy-workflow"))]
+            copy_workflow: crate::executor::CopyWorkflow::new(
+                catalog.clone(),
+                options.data_directory.clone(),
+            )?,
             monitor: Mutex::new(None),
             cache_cleanup: super::cache_cleanup::CacheCleanup::open(&options.data_directory)?,
             cache_gate: RwLock::new(()),
@@ -914,6 +935,7 @@ impl Library {
             })
             .transpose()?;
         Ok(LibraryStatus {
+            copy_jobs: Some(super::operation_jobs::list(&self.catalog)?),
             monitoring,
             roots: store::roots(&self.catalog)?
                 .into_iter()

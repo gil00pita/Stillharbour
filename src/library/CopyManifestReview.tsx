@@ -7,6 +7,7 @@ import type {
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { CopyAssessmentReview } from './CopyAssessmentReview';
+import { VerifiedCopyWorkflow } from './VerifiedCopyWorkflow';
 
 const issues: Record<CopyManifestIssueKind, string> = {
   source_has_multiple_targets: 'A source has different proposed destinations across bundles',
@@ -122,8 +123,8 @@ export function CopyManifestReview({
             are counted once.
           </p>
           <p>
-            Native target equivalence, capacity, metadata fidelity, content verification and
-            executor recovery remain pending. This retained manifest does not approve copying.
+            Copying requires separate native preparation and byte-verification reviews. This
+            retained manifest does not approve copying. Recovery and metadata fidelity limits apply.
           </p>
           {manifest.issues.length > 0 && (
             <p role="alert">
@@ -184,6 +185,9 @@ export function CopyManifestReview({
           </button>
           <p className="help">Manifest fingerprint: {manifest.digest}</p>
           {!changed && <CopyAssessmentReview key={manifest.digest} manifest={manifest} />}
+          {!changed && manifest.issues.length === 0 && (
+            <VerifiedCopyWorkflow key={`copy-${manifest.digest}`} manifest={manifest} />
+          )}
         </>
       )}
     </section>

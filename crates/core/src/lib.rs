@@ -3,7 +3,7 @@ pub mod backup;
 pub mod catalog;
 pub mod contract;
 pub mod domain;
-#[cfg(any(test, feature = "fixture-probes"))]
+#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
 pub mod executor;
 pub mod filesystem;
 pub mod jobs;

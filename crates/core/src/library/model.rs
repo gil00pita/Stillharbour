@@ -138,6 +138,9 @@ pub struct LibraryChangePage {
 pub struct LibraryStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub copy_jobs: Option<Vec<crate::operations::CopyWorkflowJob>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub monitoring: Option<Vec<RootMonitor>>,
     pub roots: Vec<LibraryRoot>,
     pub jobs: Vec<ScanJob>,
@@ -521,6 +524,42 @@ pub enum LibraryRequest {
         plan_id: String,
         manifest_id: String,
     },
+    OrganizationCopyCapabilities {},
+    OrganizationCopyReviewCreate {
+        plan_id: String,
+        manifest_id: String,
+        selection_id: String,
+    },
+    OrganizationCopyReview {
+        review_id: String,
+        selection_id: String,
+    },
+    OrganizationCopyApprove {
+        input: crate::operations::CopyApprovalInput,
+        selection_id: String,
+    },
+    OrganizationCopyStart {
+        input: crate::operations::CopyStartInput,
+        selection_id: String,
+    },
+    OrganizationCopyJob {
+        job_id: String,
+    },
+    OrganizationCopyCancel {
+        job_id: String,
+    },
+    OrganizationCopyIo {},
+    OrganizationCopySetIo {
+        aggregate_bytes_per_second: Option<String>,
+        byte_io_paused: Option<bool>,
+    },
+    OrganizationCopyDiscard {
+        review_id: String,
+    },
+    OrganizationCopyInspect {
+        review_id: String,
+        selection_id: String,
+    },
     OrganizationBundleReviews {
         plan_id: String,
         asset_id: String,
@@ -636,6 +675,12 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),
+    OrganizationCopyReview(Box<crate::operations::CopyActionReview>),
+    OrganizationCopyApproval(crate::operations::CopyActionApproval),
+    OrganizationCopyJob(crate::operations::CopyWorkflowJob),
+    OrganizationCopyIo(crate::operations::CopyIoStatus),
+    OrganizationCopyInspection(crate::operations::CopyInspection),
     OrganizationTemplates(Vec<crate::operations::SavedTemplate>),
     OrganizationTemplate(crate::operations::SavedTemplate),
     OrganizationPlans(crate::operations::OrganizationPlanPage),

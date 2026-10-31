@@ -98,6 +98,10 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
         tx.execute_batch("CREATE INDEX operation_journal_scope ON operation_journal(plan_id,phase,item_id,sequence); CREATE UNIQUE INDEX operation_copy_stream ON operation_journal(plan_id,item_id) WHERE phase='copy_execution_plan_v1';")?;
         tx.pragma_update(None, "user_version", 4)?;
     }
+    if current < 5 {
+        super::operation_jobs::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 5)?;
+    }
     #[cfg(test)]
     crate::catalog::migration_test_exit("before_commit");
     tx.commit()?;

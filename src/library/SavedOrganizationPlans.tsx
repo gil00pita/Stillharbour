@@ -264,8 +264,8 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
             )}
             <CopyManifestReview key={detail.plan.id} detail={detail} choices={companionChoices} />
             <p className="help">
-              Native target names, complete companion inventory, capacity, metadata fidelity and
-              execution recovery checks remain pending.
+              Copying requires fresh companion, destination and capacity checks, separate native
+              preparation and explicit approval. Recovery and metadata fidelity limits apply.
             </p>
             <p className="help">Fingerprint: {detail.plan.digest}</p>
             <button disabled={busy} onClick={() => void exportText('json')}>

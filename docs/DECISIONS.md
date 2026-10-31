@@ -235,3 +235,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Session-bound action approvals - 2026-10-31
 
 [ADR-0038](decisions/ADR-0038-session-bound-action-approvals.md) introduces bounded monotonic, one-attempt backend tickets and nonserializable proofs bound to exact action/review/native selection. Preparation/copy wrappers recompute evidence scope and enforce current managed-root permissions before native effects/publication. Actual user approval/job integration remains open; fixture grants never become persisted authority.
+
+## Application organization workflow and jobs - 2026-10-31
+
+[ADR-0039](decisions/ADR-0039-organization-workflow-jobs.md) connects exact native scope and ephemeral approvals to typed application review/start/control/inspection requests and bounded worker jobs. Schema 5 adds immutable-scope durable job records, expected-state transitions, journaled progress and restart needs_recovery without replay. The experimental copy-workflow feature is enabled for native test builds; normal builds remain unavailable until their workflow gates pass. Original mutation permissions are unchanged.
