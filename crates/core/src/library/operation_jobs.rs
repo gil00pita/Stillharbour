@@ -96,6 +96,34 @@ pub(crate) fn list(catalog: &Catalog) -> Result<Vec<CopyWorkflowJob>> {
 }
 #[cfg(any(test, feature = "copy-workflow"))]
 pub(crate) fn create(catalog: &Catalog, job: CopyWorkflowJob, digest: String) -> Result<()> {
+    create_initial(catalog, job, digest, None)
+}
+#[cfg(any(test, feature = "copy-workflow"))]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ContinuationRecord {
+    pub policy: String,
+    pub prior_job_id: String,
+    pub stream_id: String,
+    pub binding_digest: String,
+    pub review: serde_json::Value,
+}
+#[cfg(any(test, feature = "copy-workflow"))]
+pub(crate) fn create_continuation(
+    catalog: &Catalog,
+    job: CopyWorkflowJob,
+    digest: String,
+    record: ContinuationRecord,
+) -> Result<()> {
+    create_initial(catalog, job, digest, Some(record))
+}
+#[cfg(any(test, feature = "copy-workflow"))]
+fn create_initial(
+    catalog: &Catalog,
+    job: CopyWorkflowJob,
+    digest: String,
+    record: Option<ContinuationRecord>,
+) -> Result<()> {
     let payload = encode(&job)?;
     if payload.len() > 65536
         || job.message.len() > 2048
@@ -110,12 +138,59 @@ pub(crate) fn create(catalog: &Catalog, job: CopyWorkflowJob, digest: String) ->
     crate::operations::validate_id(&job.id)?;
     crate::operations::validate_id(&job.review_id)?;
     crate::operations::validate_id(&job.plan_id)?;
+    if let Some(record) = &record {
+        crate::operations::validate_id(&record.prior_job_id)?;
+        crate::operations::validate_id(&record.stream_id)?;
+        if record.policy != "application-copy-continuation-v1"
+            || record.stream_id != job.review_id
+            || job.action != CopyAction::CopyFiles
+            || record.binding_digest.len() != 64
+            || !record.binding_digest.bytes().all(|b| b.is_ascii_hexdigit())
+            || record.review["digest"] != digest
+            || encode(record)?.len() > 65536
+        {
+            return Err(failed("Invalid continuation job scope record."));
+        }
+    }
     catalog.call(move|db| {
         let tx=db.transaction()?;
+        if let Some(record)=&record {
+            let prior={
+                let mut query=tx.prepare(&format!("SELECT {COLUMNS} FROM operation_jobs WHERE id=?"))?;
+                let mut rows=query.query([&record.prior_job_id])?;
+                decode_row(rows.next()?.ok_or_else(||failed("The prior continuation job is missing."))?)?
+            };
+            let stream=match prior.action {CopyAction::CopyFiles=>Some(prior.review_id.as_str()),CopyAction::PrepareNames=>prior.ready_review_id.as_deref()};
+            if active(prior.state) || prior.plan_id!=job.plan_id || prior.source_root_id!=job.source_root_id || stream!=Some(job.review_id.as_str()) {
+                return Err(failed("Continuation must match the stopped prior job's exact stream/root."));
+            }
+            let count:i64=tx.query_row("SELECT count(*) FROM operation_journal WHERE plan_id=?1 AND phase='copy_continuation_review_v1' AND json_extract(evidence,'$.streamId')=?2",params![job.plan_id,job.review_id],|row|row.get(0))?;
+            if count>=64 {return Err(failed("This stream has reached its 64 continuation-job limit. Retain its history for review."));}
+            let exists:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM operation_journal WHERE plan_id=?1 AND phase='copy_continuation_review_v1' AND item_id=?2)",params![job.plan_id,job.id],|row|row.get(0))?;
+            if exists {return Err(failed("A continuation scope already uses this job identity."));}
+            tx.execute("INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) VALUES(?1,?2,'copy_continuation_review_v1',?3,?4)",params![job.plan_id,job.id,encode(record)?,job.started_at])?;
+        }
         tx.execute("INSERT INTO operation_jobs(id,plan_id,root_id,review_id,scope_digest,kind,state,total_files,verified_files,payload,started_at,updated_at) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,0,?9,?10,?11)",params![job.id,job.plan_id,job.source_root_id,job.review_id,digest,encode(&job.action)?.trim_matches('"'),state_name(job.state)?,job.total_files,payload,job.started_at,job.updated_at])?;
         tx.execute("INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) VALUES(?1,?2,'operation_job_state_v1',?3,?4)",params![job.plan_id,job.id,encode(&serde_json::json!({"scopeDigest":digest,"job":job}))?,job.updated_at])?;
         tx.commit()?;
         Ok(())
+    })
+}
+#[cfg(any(test, feature = "copy-workflow"))]
+pub(crate) fn continuation_record(
+    catalog: &Catalog,
+    owner: String,
+    job: String,
+) -> Result<ContinuationRecord> {
+    catalog.call(move|db| {
+        let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase='copy_continuation_review_v1' ORDER BY sequence LIMIT 2")?;
+        let mut rows=query.query(params![owner,job])?;
+        let text:Option<String>=rows.next()?.ok_or_else(||failed("Continuation review record is missing."))?.get(0)?;
+        if rows.next()?.is_some() {return Err(failed("Duplicate continuation review records."));}
+        let record:ContinuationRecord=serde_json::from_str(&text.ok_or_else(||failed("Continuation scope exceeds 64 KiB."))?).map_err(|error|failed("Invalid continuation review record.").caused_by(error))?;
+        crate::operations::validate_id(&record.prior_job_id)?;crate::operations::validate_id(&record.stream_id)?;
+        if record.policy!="application-copy-continuation-v1" {return Err(failed("Unknown continuation review policy."));}
+        Ok(record)
     })
 }
 fn active(state: CopyJobState) -> bool {

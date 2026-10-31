@@ -351,7 +351,7 @@ pub(super) fn reopen_stage(parent: &File, leaf: &str, expected: &FileIdentity) -
     }
     Ok(file)
 }
-#[cfg(any(test, feature = "fixture-probes"))]
+#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
 pub(super) fn reopen_append_stage(
     parent: &File,
     leaf: &str,
@@ -420,6 +420,25 @@ pub(super) fn maybe_read(parent: &File, leaf: &str) -> Result<Option<File>> {
         }
     }
     read(parent, leaf).map(Some)
+}
+pub(super) fn maybe_metadata(parent: &File, leaf: &str) -> Result<Option<File>> {
+    name(leaf)?;
+    let Some(entry) = lookup(parent, leaf)? else {
+        return Ok(None);
+    };
+    if entry.kind != EntryKind::File {
+        return Err(conflict("Owned output has an unsupported entry type."));
+    }
+    #[cfg(windows)]
+    let file = filesystem::windows::owned_metadata_child(parent, std::ffi::OsStr::new(leaf))?;
+    #[cfg(unix)]
+    let file = read(parent, leaf)?;
+    if !entry.object.matches(&file)? {
+        return Err(conflict(
+            "Owned metadata observation changed native identity.",
+        ));
+    }
+    Ok(Some(file))
 }
 
 pub(super) fn entry_matches(parent: &File, leaf: &str, expected: &FileIdentity) -> Result<bool> {

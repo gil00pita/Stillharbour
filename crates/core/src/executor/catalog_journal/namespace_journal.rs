@@ -411,6 +411,17 @@ fn load_preparation_for(
 pub(super) fn validate_copy_binding(db: &Connection, binding: &Binding) -> Result<()> {
     validate_copy_binding_for(db, binding, true).map(|_| ())
 }
+pub(super) fn recovery_inventory_record(
+    db: &Connection,
+    binding: &Binding,
+) -> Result<(String, Vec<Target>, serde_json::Value)> {
+    let reference = binding
+        .namespace
+        .as_ref()
+        .ok_or_else(|| failed("Recovery requires a retained preparation namespace."))?;
+    let (scope, completion) = load_preparation(db, &binding.owner_id, reference)?;
+    Ok((scope.namespace, scope.targets, completion))
+}
 #[cfg(any(test, feature = "copy-workflow"))]
 pub(super) fn inspection_scope(
     db: &Connection,
@@ -688,12 +699,17 @@ fn fixture_case_for(
         Some(reference.clone()),
     )?;
     if continue_reviewed {
+        let inventory = copy.recovery_inventory(_lease.directory(1).leaf())?;
+        let validate_recovery = || {
+            validate()?;
+            inventory.validate()
+        };
         let inputs = crate::executor::CopyInputs {
             source_root: _lease.directory(0).leaf(),
             destination: root.leaf(),
             io: &io,
             cancel: &cancel,
-            validate_scope: &validate,
+            validate_scope: &validate_recovery,
         };
         let review = copy.recovery_review(&inputs)?;
         let expected = review.approval(&plan, &selection)?;
@@ -703,6 +719,7 @@ fn fixture_case_for(
             &selection,
             review,
             approvals.consume(&ticket, &expected)?,
+            None,
             None,
         )?;
     }

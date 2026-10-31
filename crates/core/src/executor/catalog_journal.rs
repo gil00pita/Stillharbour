@@ -304,8 +304,20 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
     Ok(())
 }
 impl CatalogJournal {
-    #[cfg(any(test, feature = "fixture-probes"))]
-    fn recovery_history(&self) -> Result<(Vec<super::resume::Cursor>, String, bool)> {
+    pub(in crate::executor) fn recovery_inventory(
+        &self,
+        parent: &std::fs::File,
+    ) -> Result<super::preparation::RecoveryInventory> {
+        let binding = self.binding.clone();
+        let (namespace, targets, completion) = self
+            .catalog
+            .call(move |db| namespace_journal::recovery_inventory_record(db, &binding))?;
+        super::preparation::recovery_inventory(parent, &completion, &namespace, &targets)
+    }
+    #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+    pub(in crate::executor) fn recovery_history(
+        &self,
+    ) -> Result<(Vec<super::resume::Cursor>, String, bool)> {
         let binding = self.binding.clone();
         let encoded = self.encoded.clone();
         let anchor = self.anchor;
@@ -335,19 +347,23 @@ impl CatalogJournal {
             Ok((history.items.into_iter().map(|item|super::resume::Cursor{phase:item.phase,object:item.object,digest:item.digest}).collect(),digest,history.terminal))
         })
     }
-    #[cfg(any(test, feature = "fixture-probes"))]
-    fn recovery_review(&self, inputs: &super::CopyInputs<'_>) -> Result<super::resume::Review> {
+    #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+    pub(in crate::executor) fn recovery_review(
+        &self,
+        inputs: &super::CopyInputs<'_>,
+    ) -> Result<super::resume::Review> {
         let (cursors, digest, _) = self.recovery_history()?;
         super::resume::Review::capture(&self.binding.plan, &cursors, digest, inputs)
     }
-    #[cfg(any(test, feature = "fixture-probes"))]
-    fn resume_approved(
+    #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+    pub(in crate::executor) fn resume_approved(
         &self,
         inputs: super::CopyInputs<'_>,
         selection: &str,
         review: super::resume::Review,
         proof: super::approval::Proof,
         fault: Option<super::CopyFault>,
+        progress: Option<&dyn Fn(u32) -> Result<()>>,
     ) -> Result<super::CopyOutcome> {
         proof.authorize(&review.approval(&self.binding.plan, selection)?)?;
         let (cursors, digest, terminal) = self.recovery_history()?;
@@ -380,6 +396,7 @@ impl CatalogJournal {
             history_digest: digest,
             inputs: &scoped_inputs,
             fault,
+            progress,
         }
         .execute()
     }
@@ -406,18 +423,36 @@ impl CatalogJournal {
             .namespace
             .as_ref()
             .ok_or_else(|| failed("Recovery needs a bound namespace."))?;
-        Ok(job.plan_id == self.binding.owner_id
-            && job.total_files as usize == self.binding.plan.files.len()
-            && match job.action {
-                crate::operations::CopyAction::CopyFiles => {
-                    job.review_id == self.binding.plan.id && digest == self.digest()
+        if job.plan_id != self.binding.owner_id
+            || job.total_files as usize != self.binding.plan.files.len()
+        {
+            return Ok(false);
+        }
+        match job.action {
+            crate::operations::CopyAction::CopyFiles => {
+                if job.review_id != self.binding.plan.id {
+                    return Ok(false);
                 }
-                crate::operations::CopyAction::PrepareNames => {
-                    job.review_id == scope.token
-                        && digest == scope.scope_digest
-                        && job.ready_review_id.as_deref() == Some(self.binding.plan.id.as_str())
+                if digest == self.digest() {
+                    return Ok(true);
                 }
-            })
+                let record = crate::library::operation_jobs::continuation_record(
+                    &self.catalog,
+                    job.plan_id.clone(),
+                    job.id.clone(),
+                )?;
+                if record.stream_id != self.binding.plan.id
+                    || record.binding_digest != self.digest()
+                {
+                    return Ok(false);
+                }
+                super::resume::validate_record(record.review, &self.binding.plan, digest)?;
+                Ok(true)
+            }
+            crate::operations::CopyAction::PrepareNames => Ok(job.review_id == scope.token
+                && digest == scope.scope_digest
+                && job.ready_review_id.as_deref() == Some(self.binding.plan.id.as_str())),
+        }
     }
     /// Open existing facts only. Unlike bind, this cannot create an anchor or
     /// a new stream. Readable registered roots need no managed write grant.
@@ -1012,7 +1047,7 @@ impl Fixture {
         let approvals = super::approval::Approvals::new();
         let ticket = approvals.issue(expected.clone())?;
         let proof = approvals.consume(&ticket, &expected)?;
-        journal.resume_approved(inputs, &selection, review, proof, fault)
+        journal.resume_approved(inputs, &selection, review, proof, fault, None)
     }
     fn inspect(&self, journal: &CatalogJournal) -> Result<Vec<super::RecoveredItem>> {
         use crate::jobs::operation_locks::{Access, Registry, Scope};
@@ -1141,6 +1176,205 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn wait_operation(
+        load: impl Fn() -> Result<crate::operations::CopyWorkflowJob>,
+    ) -> crate::operations::CopyWorkflowJob {
+        use crate::operations::CopyJobState;
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            let current = load().unwrap();
+            if !matches!(
+                current.state,
+                CopyJobState::Queued
+                    | CopyJobState::Running
+                    | CopyJobState::PauseRequested
+                    | CopyJobState::CancelRequested
+            ) {
+                return current;
+            }
+            assert!(
+                std::time::Instant::now() < until,
+                "Operation worker did not stop"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    #[test]
+    fn application_continuation_reopens_failed_copy_without_cached_sessions_and_preserves_stage_objects()
+     {
+        use crate::operations::{CopyAction, CopyApprovalInput, CopyJobState, CopyStartInput};
+        let fixture = Fixture::with_nested(true).unwrap();
+        let chosen = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = filesystem::identity(&chosen).unwrap();
+        let volume = crate::library::native::volume_token(&chosen).unwrap();
+        drop(chosen);
+        let selection = uuid::Uuid::new_v4().to_string();
+        let mut view = fixture
+            .library
+            .organization_copy_review_create(
+                fixture.owner.clone(),
+                fixture.manifest.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        let mut failed = None;
+        for action in [CopyAction::PrepareNames, CopyAction::CopyFiles] {
+            if action == CopyAction::CopyFiles {
+                fixture.library.catalog.call(|db|{db.execute_batch("CREATE TRIGGER deny_application_flush BEFORE INSERT ON operation_journal WHEN NEW.phase='copy_execution_event_v1' AND json_extract(NEW.evidence,'$.phase')='stage_flushed' BEGIN SELECT RAISE(ABORT,'fixture flush record denied'); END;")?;Ok(())}).unwrap();
+            }
+            let approved = fixture
+                .library
+                .organization_copy_approve(
+                    CopyApprovalInput {
+                        review_id: view.id.clone(),
+                        digest: view.digest.clone(),
+                        action,
+                        fidelity_limits_acknowledged: true,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            let job = fixture
+                .library
+                .organization_copy_start(
+                    CopyStartInput {
+                        review_id: view.id.clone(),
+                        digest: view.digest.clone(),
+                        approval_id: approved.id,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone()),
+                )
+                .unwrap();
+            let stopped = wait_operation(|| fixture.library.organization_copy_job(job.id.clone()));
+            if action == CopyAction::PrepareNames {
+                assert_eq!(stopped.state, CopyJobState::Prepared);
+                view = fixture
+                    .library
+                    .organization_copy_review(
+                        view.id,
+                        selection.clone(),
+                        fixture.destination.clone(),
+                        (identity.clone(), volume.clone()),
+                    )
+                    .unwrap();
+            } else {
+                assert_eq!(stopped.state, CopyJobState::NeedsAttention);
+                assert_eq!(stopped.verified_files, 0);
+                failed = Some(stopped);
+            }
+        }
+        let failed = failed.unwrap();
+        fixture
+            .library
+            .catalog
+            .call(|db| {
+                db.execute_batch("DROP TRIGGER deny_application_flush")?;
+                Ok(())
+            })
+            .unwrap();
+        let (before, _, _) = CatalogJournal::open_inspection(
+            fixture.library.catalog.clone(),
+            fixture.owner.clone(),
+            failed.review_id.clone(),
+        )
+        .unwrap();
+        assert_eq!(before.history_count().unwrap(), 2);
+        let original_objects = before
+            .plan()
+            .files
+            .iter()
+            .map(|file| file.prepared_stage.as_ref().unwrap().object.clone())
+            .collect::<Vec<_>>();
+        drop(before);
+        let fresh = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let continuation = fresh
+            .create_continuation_review(
+                &fixture.library,
+                failed.id.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        assert!(!continuation.recorded_complete);
+        assert_eq!(
+            continuation.files[0].retained_stage_bytes,
+            Some(fixture.baseline[0].1.len().to_string())
+        );
+        let approved = fresh
+            .approve_continuation(
+                &fixture.library,
+                CopyApprovalInput {
+                    review_id: continuation.id.clone(),
+                    digest: continuation.digest.clone(),
+                    action: CopyAction::CopyFiles,
+                    fidelity_limits_acknowledged: true,
+                },
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        let queued = fresh
+            .start_continuation(
+                fixture.library.clone(),
+                CopyStartInput {
+                    review_id: continuation.id,
+                    digest: continuation.digest,
+                    approval_id: approved.id,
+                },
+                selection,
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        let completed = wait_operation(|| fresh.job(queued.id.clone()));
+        assert_eq!(
+            completed.state,
+            CopyJobState::CompletedVerified,
+            "{:?}",
+            completed.error
+        );
+        assert_eq!(completed.verified_files, 2);
+        let inspection = fresh
+            .inspect_retained(
+                completed.id.clone(),
+                fixture.destination.clone(),
+                identity,
+                volume,
+            )
+            .unwrap();
+        assert!(inspection.inspection.all_published_bytes_verified);
+        let (after, _, _) = CatalogJournal::open_inspection(
+            fixture.library.catalog.clone(),
+            fixture.owner.clone(),
+            completed.review_id,
+        )
+        .unwrap();
+        assert_eq!(after.history_count().unwrap(), 13);
+        let output =
+            super::super::output_chain(&fixture.destination.join(inspection.output_folder))
+                .unwrap();
+        for (file, expected) in after.plan().files.iter().zip(original_objects) {
+            let parent = super::super::destination_parent(output.leaf(), file).unwrap();
+            assert!(
+                expected
+                    .matches(&super::super::native::read(&parent, &file.target).unwrap())
+                    .unwrap()
+            );
+        }
+        assert!(fixture.preserved().unwrap());
+    }
     #[test]
     fn reviewed_continuation_reconciles_every_retained_phase_without_duplicate_streams() {
         use crate::executor::{CopyFault, CopyOutcome};
@@ -1302,7 +1536,7 @@ mod tests {
             let count = journal.history_count().unwrap();
             assert!(
                 journal
-                    .resume_approved(inputs, &selection, review, proof, None)
+                    .resume_approved(inputs, &selection, review, proof, None, None)
                     .is_err()
             );
             assert_eq!(std::fs::read(stage).unwrap(), before);
@@ -1364,7 +1598,7 @@ mod tests {
             }
             assert!(
                 journal
-                    .resume_approved(inputs, &selection, review, proof, None)
+                    .resume_approved(inputs, &selection, review, proof, None, None)
                     .is_err()
             );
             assert_eq!(journal.history_count().unwrap(), 4);
@@ -1709,11 +1943,249 @@ mod tests {
         );
         // A new controller has no live sessions or approvals. Inspection reads
         // only retained job/namespace/copy records, including referenced roots.
-        let jobs = crate::library::operation_jobs::list(&fixture.library.catalog).unwrap();
-        let copy_job = jobs
+        let mut jobs = crate::library::operation_jobs::list(&fixture.library.catalog).unwrap();
+        let original_job = jobs
             .iter()
             .find(|job| job.action == CopyAction::CopyFiles)
+            .unwrap()
+            .clone();
+        let chosen = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&chosen).unwrap();
+        let volume = crate::library::native::volume_token(&chosen).unwrap();
+        drop(chosen);
+        let selection = uuid::Uuid::new_v4().to_string();
+        let continuation = fixture
+            .library
+            .organization_copy_continuation_review(
+                original_job.id.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
             .unwrap();
+        assert!(continuation.recorded_complete);
+        assert_eq!(continuation.assessment.capacity.rounded_data_bytes, "0");
+        assert!(
+            fixture
+                .library
+                .organization_copy_continuation_approve(
+                    CopyApprovalInput {
+                        review_id: continuation.id.clone(),
+                        digest: continuation.digest.clone(),
+                        action: CopyAction::CopyFiles,
+                        fidelity_limits_acknowledged: false
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone())
+                )
+                .is_err()
+        );
+        let approval = fixture
+            .library
+            .organization_copy_continuation_approve(
+                CopyApprovalInput {
+                    review_id: continuation.id.clone(),
+                    digest: continuation.digest.clone(),
+                    action: CopyAction::CopyFiles,
+                    fidelity_limits_acknowledged: true,
+                },
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        let paths = ["Photo.JPG", "Photo.xmp"].map(|name| {
+            fixture
+                .destination
+                .join(&review.output_folder)
+                .join("organized")
+                .join(name)
+        });
+        let objects = paths
+            .iter()
+            .map(|path| {
+                let file = std::fs::File::open(path).unwrap();
+                (
+                    filesystem::identity(&file).unwrap(),
+                    crate::library::native::revision(&file).unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let mut input = CopyStartInput {
+            review_id: continuation.id.clone(),
+            digest: continuation.digest.clone(),
+            approval_id: approval.id,
+        };
+        fixture.library.catalog.call(|db|{db.execute_batch("CREATE TRIGGER deny_continuation_admission BEFORE INSERT ON operation_jobs WHEN NEW.kind='copy_files' BEGIN SELECT RAISE(ABORT,'fixture queued job denied'); END;")?;Ok(())}).unwrap();
+        let records_before = fixture
+            .library
+            .catalog
+            .call(|db| {
+                Ok(
+                    db.query_row("SELECT count(*) FROM operation_journal", [], |row| {
+                        row.get::<_, i64>(0)
+                    })?,
+                )
+            })
+            .unwrap();
+        assert!(
+            fixture
+                .library
+                .organization_copy_continuation_start(
+                    input.clone(),
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone())
+                )
+                .is_err()
+        );
+        assert_eq!(
+            crate::library::operation_jobs::list(&fixture.library.catalog)
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            fixture
+                .library
+                .catalog
+                .call(|db| Ok(db.query_row(
+                    "SELECT count(*) FROM operation_journal",
+                    [],
+                    |row| row.get::<_, i64>(0)
+                )?))
+                .unwrap(),
+            records_before
+        );
+        assert!(
+            fixture
+                .library
+                .organization_copy_continuation_start(
+                    input.clone(),
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone())
+                )
+                .is_err()
+        );
+        assert!(fixture.preserved().unwrap());
+        fixture
+            .library
+            .catalog
+            .call(|db| {
+                db.execute_batch("DROP TRIGGER deny_continuation_admission")?;
+                Ok(())
+            })
+            .unwrap();
+        input.approval_id = fixture
+            .library
+            .organization_copy_continuation_approve(
+                CopyApprovalInput {
+                    review_id: continuation.id.clone(),
+                    digest: continuation.digest.clone(),
+                    action: CopyAction::CopyFiles,
+                    fidelity_limits_acknowledged: true,
+                },
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap()
+            .id;
+        let continued = fixture
+            .library
+            .organization_copy_continuation_start(
+                input.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let completed = loop {
+            let current = fixture
+                .library
+                .organization_copy_job(continued.id.clone())
+                .unwrap();
+            if !matches!(
+                current.state,
+                CopyJobState::Queued
+                    | CopyJobState::Running
+                    | CopyJobState::PauseRequested
+                    | CopyJobState::CancelRequested
+            ) {
+                break current;
+            }
+            assert!(std::time::Instant::now() < until);
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        };
+        assert_eq!(
+            completed.state,
+            CopyJobState::CompletedVerified,
+            "{:?}",
+            completed.error
+        );
+        assert_eq!(completed.verified_files, 2);
+        assert!(
+            fixture
+                .library
+                .organization_copy_continuation_start(
+                    input,
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone())
+                )
+                .is_err()
+        );
+        for (path, expected) in paths.iter().zip(objects) {
+            let file = std::fs::File::open(path).unwrap();
+            assert_eq!(
+                (
+                    filesystem::identity(&file).unwrap(),
+                    crate::library::native::revision(&file).unwrap()
+                ),
+                expected
+            );
+        }
+        let fresh = fixture
+            .library
+            .organization_copy_recovery_inspect(
+                completed.id.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        assert!(fresh.inspection.all_published_bytes_verified);
+        assert_eq!(
+            fresh.files[0].source_path,
+            std::path::Path::new("source-folder")
+                .join("Photo.JPG")
+                .to_string_lossy()
+        );
+        let owner = fixture.owner.clone();
+        let stream = completed.review_id.clone();
+        assert_eq!(fixture.library.catalog.call(move|db|Ok(db.query_row("SELECT count(*) FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3",params![owner,stream,EVENT_PHASE],|row|row.get::<_,i64>(0))?)).unwrap(),13);
+        let foreign = fixture
+            .destination
+            .join(&review.output_folder)
+            .join("foreign-retained.bin");
+        std::fs::write(&foreign, b"unknown object stays").unwrap();
+        assert!(
+            fixture
+                .library
+                .organization_copy_continuation_review(
+                    completed.id.clone(),
+                    selection,
+                    fixture.destination.clone(),
+                    (identity, volume)
+                )
+                .is_err()
+        );
+        assert_eq!(std::fs::read(foreign).unwrap(), b"unknown object stays");
+        jobs = crate::library::operation_jobs::list(&fixture.library.catalog).unwrap();
+        assert_eq!(jobs.len(), 3);
+        let copy_job = jobs.iter().find(|job| job.id == completed.id).unwrap();
         let restarted = crate::executor::CopyWorkflow::new(
             fixture.library.catalog.clone(),
             fixture._run.path().join("data"),
@@ -2031,7 +2503,7 @@ mod tests {
             let approvals = super::super::approval::Approvals::new();
             let ticket = approvals.issue(expected.clone()).unwrap();
             let proof = approvals.consume(&ticket, &expected).unwrap();
-            let _ = journal.resume_approved(inputs, &selection, review, proof, Some(fault));
+            let _ = journal.resume_approved(inputs, &selection, review, proof, Some(fault), None);
             panic!("Owned reviewed continuation process-exit boundary was not reached");
         }
         let _ = super::super::CopyContext {

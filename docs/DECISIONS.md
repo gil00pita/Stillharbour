@@ -247,3 +247,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Reviewed copy continuation fixture - 2026-10-31
 
 [ADR-0041](decisions/ADR-0041-reviewed-copy-continuation.md) adds an explicit ResumeFiles grant for the exact retained journal/native observations, full-prefix comparison before append, same-object no-replace publication, missing-phase reconciliation and fresh-verified completed no-op. It remains under fixture-probes/test only; no application retry authority or default-copy/original mutation gate changes.
+
+## Application continuation - 2026-10-31
+
+[ADR-0042](decisions/ADR-0042-application-copy-continuation.md) integrates retained continuation review/approval/start and digest-linked durable jobs behind copy-workflow. A bounded held-directory inventory seal rejects unknown/foreign/missing objects; fresh comparisons drive progress. Historical recorded phases remain distinct from current verification. Default copying/original mutation gates remain unchanged; full/native validation is pending.

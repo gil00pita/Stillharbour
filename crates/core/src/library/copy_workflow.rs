@@ -14,6 +14,72 @@ fn unavailable() -> AppError {
     )
 }
 impl Library {
+    pub fn organization_copy_continuation_review(
+        &self,
+        _job: String,
+        _selection: String,
+        _path: PathBuf,
+        _identity: (FileIdentity, String),
+    ) -> Result<CopyContinuationReview> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow
+                .create_continuation_review(self, _job, _selection, _path, _identity)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_copy_continuation_approve(
+        &self,
+        _input: CopyApprovalInput,
+        _selection: String,
+        _path: PathBuf,
+        _identity: (FileIdentity, String),
+    ) -> Result<CopyActionApproval> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow
+                .approve_continuation(self, _input, _selection, _path, _identity)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_copy_continuation_start(
+        self: &Arc<Self>,
+        _input: CopyStartInput,
+        _selection: String,
+        _path: PathBuf,
+        _identity: (FileIdentity, String),
+    ) -> Result<CopyWorkflowJob> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.start_continuation(
+                self.clone(),
+                _input,
+                _selection,
+                _path,
+                _identity,
+            )
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_copy_continuation_discard(&self, _review: String) -> Result<()> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.discard_continuation(&_review)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
     pub fn organization_copy_recovery_inspect(
         &self,
         _job_id: String,

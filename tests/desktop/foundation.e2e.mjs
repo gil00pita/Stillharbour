@@ -1100,6 +1100,64 @@ describe('native read-only library', () => {
             ).data,
           ),
         );
+        await $('button=Review verification and continuation').scrollIntoView();
+        await $('button=Review verification and continuation').click();
+        await $('h4=Continuation review').waitForDisplayed();
+        assert.equal(await $('button=Approve verification and continuation').isEnabled(), false);
+        const continuationAck = await $(
+          '.jobs-dropdown section[aria-label="Reviewed copy continuation"] input[type="checkbox"]',
+        );
+        await continuationAck.scrollIntoView();
+        await continuationAck.click();
+        await $('button=Approve verification and continuation').scrollIntoView();
+        await $('button=Approve verification and continuation').click();
+        await $('button=Start reviewed continuation').waitForEnabled();
+        assert.deepEqual(
+          await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', {
+              action: 'organization_destination_audit',
+              rows: null,
+            }),
+          ),
+          outputAudit,
+        );
+        await $('button=Start reviewed continuation').scrollIntoView();
+        await $('button=Start reviewed continuation').click();
+        let continuationJobs;
+        await browser.waitUntil(
+          async () => {
+            continuationJobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+              (job) => job.planId === plan.data.plan.id,
+            );
+            return (
+              continuationJobs.filter((job) => job.state === 'completed_verified').length === 2 &&
+              (
+                await $('.jobs-dropdown section[aria-label="Reviewed copy continuation"]').getText()
+              ).includes('All outputs freshly byte-verified.')
+            );
+          },
+          { timeout: 15000 },
+        );
+        assert.equal(continuationJobs.length, 3);
+        assert(
+          continuationJobs
+            .filter((job) => job.state === 'completed_verified')
+            .every((job) => job.verifiedFiles === compiledManifest.data.files.length),
+        );
+        assert.deepEqual(
+          await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', {
+              action: 'organization_destination_audit',
+              rows: null,
+            }),
+          ),
+          outputAudit,
+        );
+        await writeFile(
+          `${evidence}/windows-reviewed-continuation-jobs.json`,
+          JSON.stringify(continuationJobs),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-reviewed-continuation.png');
         await $('button[aria-label="Close jobs"]').click();
       } catch (error) {
         await browser.saveScreenshot('.context/screenshots/windows-library-failure.png');
@@ -2532,6 +2590,237 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       );
       await writeFile(`${evidence}/organization-manifest-after.json`, JSON.stringify(after));
       assert.deepEqual(after, before);
+    }
+  });
+  it('prepares, copies and freshly continues generated outputs through the native organization UI', async () => {
+    const before = JSON.parse(
+      execFileSync('python3', ['scripts/performance/manifest.py', sourceRoot, '--lossless-stat'], {
+        encoding: 'utf8',
+      }),
+    );
+    const ids = await browser.execute(() =>
+      [...document.querySelectorAll('.asset-check:checked')].map(
+        (input) => input.closest('[data-asset-id]').dataset.assetId,
+      ),
+    );
+    assert.equal(ids.length, 2);
+    await galleryView('Text list');
+    const destination = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_fixture', rows: null }),
+    );
+    const picker = await browser.tauri.mock('foundation_request');
+    await picker.mockReturnValue({ kind: 'directory', data: destination });
+    let attempted = false;
+    try {
+      const template = {
+        pattern: '{capture:%Y}/{original_stem}.{ext}',
+        event: '',
+        missingDate: 'undated',
+      };
+      const preview = await native({ kind: 'organization_preview', asset_ids: [ids[0]], template });
+      const saved = await native({
+        kind: 'organization_plan_create',
+        selection_id: destination.id,
+        draft: {
+          assetIds: [ids[0]],
+          template,
+          previewFingerprint: preview.data.fingerprint,
+          templateReference: null,
+        },
+      });
+      assert.equal(saved.data.stale, false);
+      await $('button=Saved plans').click();
+      await $('.organization-preview li button').waitForDisplayed();
+      await $('.organization-preview li button').click();
+      await $('section[aria-label="Saved plan detail"]').waitForDisplayed();
+      await $('button=Review all companion filenames').scrollIntoView();
+      await $('button=Review all companion filenames').waitForEnabled();
+      await $('button=Review all companion filenames').click();
+      await $('button=Read all filenames').waitForDisplayed();
+      await $('button=Read all filenames').click();
+      await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+      await $('label*=I reviewed all filenames').scrollIntoView();
+      await $('label*=I reviewed all filenames').click();
+      await $('button=Save companion review').click();
+      await $(
+        'section[aria-label="Retained companion decision"] [role="status"]',
+      ).waitForDisplayed();
+      await $('button=Close companion inventory').click();
+      await $('button=Compile copy review').scrollIntoView();
+      await $('button=Compile copy review').click();
+      await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+      await $('button=Choose destination and review preparation').scrollIntoView();
+      await $('button=Choose destination and review preparation').click();
+      await $('h4=Output preparation review').waitForDisplayed();
+      await $('button=Approve output preparation').scrollIntoView();
+      await $('button=Approve output preparation').click();
+      await $('button=Start output preparation').waitForEnabled();
+      assert.equal(
+        (
+          await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', {
+              action: 'organization_destination_verify',
+              rows: null,
+            }),
+          )
+        ).unchanged,
+        true,
+      );
+      attempted = true;
+      await $('button=Start output preparation').scrollIntoView();
+      await $('button=Start output preparation').click();
+      await $('h4=Prepared copy review').waitForDisplayed();
+      assert.equal(await $('button=Approve byte-verified copy').isEnabled(), false);
+      const acknowledge = await $(
+        'section[aria-label="Verified organization copy"] input[type="checkbox"]',
+      );
+      await acknowledge.scrollIntoView();
+      await acknowledge.click();
+      await $('button=Approve byte-verified copy').scrollIntoView();
+      await $('button=Approve byte-verified copy').click();
+      await $('button=Start verified copy').waitForEnabled();
+      await $('button=Start verified copy').scrollIntoView();
+      await $('button=Start verified copy').click();
+      await $('h3=File bytes copied and verified').waitForDisplayed();
+      await $('button=Inspect actual output bytes').scrollIntoView();
+      await $('button=Inspect actual output bytes').click();
+      await browser.waitUntil(async () =>
+        (await $('section[aria-label="Verified organization copy"]').getText()).includes(
+          'Every selected output was freshly compared with its source.',
+        ),
+      );
+      const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+        (job) => job.planId === saved.data.plan.id,
+      );
+      assert.equal(jobs.filter((job) => job.state === 'prepared').length, 1);
+      const completed = jobs.find((job) => job.state === 'completed_verified');
+      assert(completed);
+      assert.equal(completed.verifiedFiles, completed.totalFiles);
+      const audit = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+      );
+      assert.equal(audit.neighborUnchanged, true);
+      assert.equal(audit.files.length, completed.totalFiles);
+      assert(
+        audit.files.every(
+          (file) => file.matchesGeneratedSourceBytes && !file.relativePath.endsWith('.partial'),
+        ),
+      );
+      await browser.saveScreenshot('.context/screenshots/macos-m2-verified-copy.png');
+      await $('button=Close saved plans').click();
+      await native({ kind: 'organization_copy_discard', review_id: completed.reviewId });
+      await $('button[aria-label="Jobs"]').click();
+      await browser.waitUntil(
+        async () =>
+          (await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]')).length === 2,
+      );
+      const retained = await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]');
+      await retained[0].$('button').scrollIntoView();
+      await retained[0].$('button').click();
+      await browser.waitUntil(async () =>
+        (await retained[0].getText()).includes(
+          'Every selected output was freshly compared with its source.',
+        ),
+      );
+      await $('button=Review verification and continuation').scrollIntoView();
+      await $('button=Review verification and continuation').click();
+      await $('h4=Continuation review').waitForDisplayed();
+      assert.equal(await $('button=Approve verification and continuation').isEnabled(), false);
+      const resumeAck = await $(
+        '.jobs-dropdown section[aria-label="Reviewed copy continuation"] input[type="checkbox"]',
+      );
+      await resumeAck.scrollIntoView();
+      await resumeAck.click();
+      await $('button=Approve verification and continuation').scrollIntoView();
+      await $('button=Approve verification and continuation').click();
+      await $('button=Start reviewed continuation').waitForEnabled();
+      await $('button=Start reviewed continuation').scrollIntoView();
+      await $('button=Start reviewed continuation').click();
+      let continued;
+      await browser.waitUntil(
+        async () => {
+          continued = (await native({ kind: 'status' })).data.copyJobs.filter(
+            (job) => job.planId === saved.data.plan.id,
+          );
+          return (
+            continued.filter((job) => job.state === 'completed_verified').length === 2 &&
+            (
+              await $('.jobs-dropdown section[aria-label="Reviewed copy continuation"]').getText()
+            ).includes('All outputs freshly byte-verified.')
+          );
+        },
+        { timeout: 15000 },
+      );
+      assert.equal(continued.length, 3);
+      assert.deepEqual(
+        await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+        ),
+        audit,
+      );
+      await writeFile(
+        `${evidence}/macos-reviewed-organization-jobs.json`,
+        JSON.stringify(continued),
+      );
+      await writeFile(
+        `${evidence}/macos-reviewed-organization-output-audit.json`,
+        JSON.stringify(audit),
+      );
+      await browser.saveScreenshot('.context/screenshots/macos-m2-reviewed-continuation.png');
+      await $('button[aria-label="Close jobs"]').click();
+    } catch (error) {
+      await browser.saveScreenshot('.context/screenshots/macos-m2-workflow-failure.png');
+      await writeFile(
+        `${evidence}/macos-m2-workflow-failure.json`,
+        JSON.stringify({
+          alerts: await browser.execute(() =>
+            [...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent),
+          ),
+          status: (await native({ kind: 'status' })).data,
+        }),
+      );
+      throw error;
+    } finally {
+      await picker.mockRestore();
+      for (const selector of [
+        'button=Close companion inventory',
+        'button=Close saved plans',
+        'button[aria-label="Close jobs"]',
+      ]) {
+        const buttons = await $$(selector);
+        if (buttons.length) await buttons[0].click();
+      }
+      const sourceProof = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_library_fixture', { verify: true }),
+      );
+      assert(sourceProof.verifiedFiles > 20);
+      const destinationProof = await browser.tauri.execute(
+        async ({ core }, attempted) =>
+          core.invoke('test_performance', {
+            action: attempted
+              ? 'organization_destination_audit'
+              : 'organization_destination_verify',
+            rows: null,
+          }),
+        attempted,
+      );
+      await writeFile(
+        `${evidence}/macos-m2-destination-preservation.json`,
+        JSON.stringify(destinationProof),
+      );
+      assert.equal(
+        attempted ? destinationProof.neighborUnchanged : destinationProof.unchanged,
+        true,
+      );
+      const after = JSON.parse(
+        execFileSync(
+          'python3',
+          ['scripts/performance/manifest.py', sourceRoot, '--lossless-stat'],
+          { encoding: 'utf8' },
+        ),
+      );
+      assert.deepEqual(after, before);
+      await galleryView('Timeline');
     }
   });
   it('saves catalog annotations and shows honest unsupported states', async () => {

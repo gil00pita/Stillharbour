@@ -388,6 +388,27 @@ pub(crate) fn metadata_child(parent: &File, name: &OsStr) -> Result<File> {
     }
     Ok(file)
 }
+/// Attribute-only observation of an executor-owned output while its writer
+/// holds DELETE access for no-replace publication. No data or mutation right.
+#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+pub(crate) fn owned_metadata_child(parent: &File, name: &OsStr) -> Result<File> {
+    validate_component(name)?;
+    let id = entry_id(parent, name)?;
+    let file = by_id_access(
+        parent,
+        id,
+        false,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        true,
+    )?;
+    if entry_id(parent, name)? != id {
+        return Err(AppError::new(
+            ErrorCode::Conflict,
+            "Owned output membership changed during metadata inspection.",
+        ));
+    }
+    Ok(file)
+}
 
 // Only an app-owned publication namespace may admit directory writers. Keep
 // delete sharing refused so the directory/ancestor bindings cannot be renamed.

@@ -170,7 +170,7 @@ export function JobsDropdown({
                     <div key={job.id}>
                       <CopyJobProgress job={job} onRefresh={onRefresh} />
                       {(job.action === 'copy_files' || job.readyReviewId) && (
-                        <RetainedCopyInspection job={job} />
+                        <RetainedCopyInspection job={job} onRefresh={onRefresh} />
                       )}
                     </div>
                   ))}

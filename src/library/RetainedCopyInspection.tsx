@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CopyRecoveryInspection, CopyWorkflowJob, CopyInspectionState } from '../bindings';
+import type {
+  CopyRecoveryInspection,
+  CopyWorkflowJob,
+  CopyInspectionState,
+  DirectorySelection,
+} from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
+import { CopyContinuationWorkflow } from './CopyContinuationWorkflow';
 
 const labels: Record<CopyInspectionState, string> = {
   not_started: 'Not started',
@@ -11,11 +17,18 @@ const labels: Record<CopyInspectionState, string> = {
   needs_attention: 'Needs attention; objects retained',
 };
 
-export function RetainedCopyInspection({ job }: { job: CopyWorkflowJob }) {
+export function RetainedCopyInspection({
+  job,
+  onRefresh,
+}: {
+  job: CopyWorkflowJob;
+  onRefresh?: () => Promise<void>;
+}) {
   const [result, setResult] = useState<CopyRecoveryInspection | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [selection, setSelection] = useState<DirectorySelection | null>(null);
   const epoch = useRef(0);
   useEffect(
     () => () => {
@@ -28,6 +41,7 @@ export function RetainedCopyInspection({ job }: { job: CopyWorkflowJob }) {
     setPending(true);
     setError(null);
     setResult(null);
+    setSelection(null);
     try {
       const capability = await libraryData(
         { kind: 'organization_copy_capabilities' },
@@ -55,6 +69,7 @@ export function RetainedCopyInspection({ job }: { job: CopyWorkflowJob }) {
       }
       setPage(0);
       setResult(value);
+      setSelection(selected);
     } catch (error) {
       if (epoch.current === token) setError(errorMessage(error));
     } finally {
@@ -115,6 +130,14 @@ export function RetainedCopyInspection({ job }: { job: CopyWorkflowJob }) {
           >
             Next inspected files
           </button>
+          {selection && (
+            <CopyContinuationWorkflow
+              key={selection.id}
+              job={job}
+              selection={selection}
+              {...(onRefresh ? { onRefresh } : {})}
+            />
+          )}
         </>
       )}
     </section>

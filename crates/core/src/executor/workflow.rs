@@ -1,5 +1,6 @@
 //! Application workflow; native filesystem effects remain in the central
 //! preparation/copy engine, after a separate exact session approval.
+mod recovery;
 use super::{
     CopyInputs, CopyJournal, CopyOutcome, Object,
     approval::Approvals,
@@ -56,19 +57,25 @@ pub(crate) struct CopyWorkflow {
     data_identity: Object,
     data_volume: String,
     sessions: Mutex<BTreeMap<String, Option<Arc<Session>>>>,
+    recovery: recovery::Sessions,
     approvals: Approvals,
     gate: JobScheduler,
     active: Mutex<Option<Active>>,
 }
+struct RetainedCopy {
+    job: CopyWorkflowJob,
+    journal: CatalogJournal,
+    sources: Snapshot,
+    namespace: String,
+}
 impl CopyWorkflow {
-    pub(crate) fn inspect_retained(
+    fn retained_copy(
         &self,
         job_id: String,
-        path: PathBuf,
-        identity: FileIdentity,
-        volume: String,
-    ) -> Result<CopyRecoveryInspection> {
-        let _permit = self.gate.try_start()?;
+        path: &Path,
+        identity: &FileIdentity,
+        volume: &str,
+    ) -> Result<RetainedCopy> {
         let job = operation_jobs::load(&self.catalog, job_id.clone())?;
         if matches!(
             job.state,
@@ -94,7 +101,7 @@ impl CopyWorkflow {
         if !journal.matches_job(&job, &digest)? || job.source_root_id != sources.root_id {
             return Err(failed("Retained job does not match its exact copy scope."));
         }
-        let selected = native::open_root(&path, None)?;
+        let selected = native::open_root(path, None)?;
         if !sources.destination.matches(&selected)?
             || sources.destination_volume != volume
             || identity.volume != sources.destination.volume
@@ -105,6 +112,28 @@ impl CopyWorkflow {
                 "Select the original destination folder with its unchanged native identity.",
             ));
         }
+        Ok(RetainedCopy {
+            job,
+            journal,
+            sources,
+            namespace,
+        })
+    }
+    pub(crate) fn inspect_retained(
+        &self,
+        job_id: String,
+        path: PathBuf,
+        identity: FileIdentity,
+        volume: String,
+    ) -> Result<CopyRecoveryInspection> {
+        let _permit = self.gate.try_start()?;
+        let RetainedCopy {
+            job,
+            journal,
+            sources,
+            namespace,
+        } = self.retained_copy(job_id.clone(), &path, &identity, &volume)?;
+        let stream = journal.plan().id.clone();
         let scope = sources.open_scope(&self.catalog, Access::Read)?;
         if !sources.destination.matches(scope.directory(1).leaf())? {
             return Err(failed("Retained destination identity changed."));
@@ -146,15 +175,19 @@ impl CopyWorkflow {
         let files = sources
             .files
             .iter()
-            .map(|file| CopyReviewFile {
-                id: file.id.clone(),
-                source_path: file.display_name.clone(),
-                target_path: format!("{namespace}/{}", file.target),
-                bytes: file.bytes.to_string(),
+            .map(|file| {
+                Ok(CopyReviewFile {
+                    id: file.id.clone(),
+                    source_path: native::decode_path(&file.location.relative_native)?
+                        .to_string_lossy()
+                        .into_owned(),
+                    target_path: format!("{namespace}/{}", file.target),
+                    bytes: file.bytes.to_string(),
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         Ok(CopyRecoveryInspection {
-            job_id,
+            job_id: job.id,
             source_root_id: sources.root_id,
             destination_display_path: path.to_string_lossy().into_owned(),
             output_folder: namespace,
@@ -251,6 +284,7 @@ impl CopyWorkflow {
             data_identity: Object::of(&data)?,
             data_volume: native::volume_token(&data)?,
             sessions: Mutex::new(BTreeMap::new()),
+            recovery: Default::default(),
             approvals: Approvals::new(),
             gate: JobScheduler::new(1)?,
             active: Mutex::new(None),
@@ -310,18 +344,32 @@ impl CopyWorkflow {
         assessment: &CopyAssessment,
         initial: bool,
     ) -> Result<()> {
+        self.check_scope_space(
+            session.namespace.sources(),
+            &session.selected_path,
+            assessment,
+            initial,
+        )
+    }
+    fn check_scope_space(
+        &self,
+        sources: &Snapshot,
+        path: &Path,
+        assessment: &CopyAssessment,
+        initial: bool,
+    ) -> Result<()> {
         let data = native::open_root(&self.data_directory, None)?;
-        let output = native::open_root(&session.selected_path, None)?;
+        let output = native::open_root(path, None)?;
         if !self.data_identity.matches(&data)?
             || native::volume_token(&data)? != self.data_volume
-            || !session.namespace.sources().destination.matches(&output)?
-            || native::volume_token(&output)? != session.namespace.sources().destination_volume
+            || !sources.destination.matches(&output)?
+            || native::volume_token(&output)? != sources.destination_volume
         {
             return Err(failed(
                 "Output/application-journal storage identity changed.",
             ));
         }
-        let destination_stats = fs2::statvfs(&session.selected_path)?;
+        let destination_stats = fs2::statvfs(path)?;
         let journal_stats = fs2::statvfs(&self.data_directory)?;
         let output_required = if initial {
             assessment
@@ -337,7 +385,7 @@ impl CopyWorkflow {
         } else {
             16 * 1024 * 1024
         };
-        let shared = session.namespace.sources().destination_volume == self.data_volume;
+        let shared = sources.destination_volume == self.data_volume;
         let output_required = output_required
             + if shared {
                 journal_required.saturating_sub(if initial { 32 * 1024 * 1024 } else { 0 })
@@ -355,11 +403,9 @@ impl CopyWorkflow {
         if !self
             .data_identity
             .matches(&native::open_root(&self.data_directory, None)?)?
-            || !session
-                .namespace
-                .sources()
+            || !sources
                 .destination
-                .matches(&native::open_root(&session.selected_path, None)?)?
+                .matches(&native::open_root(path, None)?)?
         {
             return Err(failed("Storage changed during free-space observation."));
         }

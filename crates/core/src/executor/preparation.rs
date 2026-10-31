@@ -144,8 +144,16 @@ pub(super) fn validate_retained(
     targets: &[Target],
 ) -> Result<()> {
     let evidence = checked_record(value, &Object::of(parent)?, namespace, targets)?;
+    let directories = retained_directories(parent, namespace, evidence.5)?;
+    validate_members(parent, namespace, &directories, &evidence.4)
+}
+fn retained_directories(
+    parent: &File,
+    namespace: &str,
+    evidence: Vec<(Vec<String>, Object)>,
+) -> Result<Vec<Directory>> {
     let mut directories: Vec<Directory> = Vec::new();
-    for (path, object) in evidence.5 {
+    for (path, object) in evidence {
         let handle = if path.is_empty() {
             native::read_directory(parent, namespace)?
         } else {
@@ -169,7 +177,57 @@ pub(super) fn validate_retained(
             handle,
         });
     }
-    validate_members(parent, namespace, &directories, &evidence.4)
+    Ok(directories)
+}
+/// Recovery permits the exact original stage at either its staged or published
+/// name. It still rejects every unknown object and never adopts an occupant.
+pub(super) struct RecoveryInventory {
+    parent: File,
+    namespace: String,
+    directories: Vec<Directory>,
+    stages: Vec<Stage>,
+}
+pub(super) fn recovery_inventory(
+    parent: &File,
+    value: &serde_json::Value,
+    namespace: &str,
+    targets: &[Target],
+) -> Result<RecoveryInventory> {
+    let evidence = checked_record(value, &Object::of(parent)?, namespace, targets)?;
+    let directories = retained_directories(parent, namespace, evidence.5)?;
+    let inventory = RecoveryInventory {
+        parent: parent.try_clone()?,
+        namespace: namespace.into(),
+        directories,
+        stages: evidence.4,
+    };
+    inventory.validate()?;
+    Ok(inventory)
+}
+impl RecoveryInventory {
+    pub(super) fn validate(&self) -> Result<()> {
+        validate_directory_members(&self.parent, &self.namespace, &self.directories)?;
+        validate_directory_inventory(&self.directories, &self.stages)?;
+        for stage in &self.stages {
+            let parent = &self.directories[stage.parent].handle;
+            let retained = native::maybe_metadata(parent, &stage.stage_leaf)?;
+            let published = native::maybe_metadata(parent, &stage.original_leaf)?;
+            let file = match (retained, published) {
+                (Some(file), None) | (None, Some(file)) => file,
+                _ => {
+                    return Err(failed(
+                        "Recovery found missing or ambiguous stage/publication names; retain all objects.",
+                    ));
+                }
+            };
+            if !stage.object.matches(&file)? || filesystem::identity(&file)?.links != 1 {
+                return Err(failed(
+                    "Recovery found a foreign or linked namespace member.",
+                ));
+            }
+        }
+        Ok(())
+    }
 }
 type Evidence = (
     String,
@@ -352,6 +410,27 @@ fn validate_members(
     directories: &[Directory],
     stages: &[Stage],
 ) -> Result<()> {
+    validate_directory_members(parent, namespace, directories)?;
+    validate_directory_inventory(directories, stages)?;
+    for stage in stages {
+        let parent = &directories[stage.parent].handle;
+        let file = native::read(parent, &stage.stage_leaf)?;
+        if !stage.object.matches(&file)?
+            || filesystem::identity(&file)?.links != 1
+            || file.metadata()?.len() != 0
+            || crate::library::native::revision(&file)? != stage.revision
+            || native::lookup(parent, &stage.original_leaf)?.is_some()
+        {
+            return Err(failed("A prepared stage or reserved target name changed."));
+        }
+    }
+    Ok(())
+}
+fn validate_directory_members(
+    parent: &File,
+    namespace: &str,
+    directories: &[Directory],
+) -> Result<()> {
     for (index, node) in directories.iter().enumerate() {
         let (parent, leaf) = if index == 0 {
             (parent, namespace)
@@ -374,6 +453,9 @@ fn validate_members(
             ));
         }
     }
+    Ok(())
+}
+fn validate_directory_inventory(directories: &[Directory], stages: &[Stage]) -> Result<()> {
     for (index, node) in directories.iter().enumerate() {
         let mut expected = Vec::new();
         for child in directories.iter().skip(1) {
@@ -385,18 +467,6 @@ fn validate_members(
             expected.push((stage.object.clone(), native::EntryKind::File));
         }
         native::verify_entries(&node.handle, &expected)?;
-    }
-    for stage in stages {
-        let parent = &directories[stage.parent].handle;
-        let file = native::read(parent, &stage.stage_leaf)?;
-        if !stage.object.matches(&file)?
-            || filesystem::identity(&file)?.links != 1
-            || file.metadata()?.len() != 0
-            || crate::library::native::revision(&file)? != stage.revision
-            || native::lookup(parent, &stage.original_leaf)?.is_some()
-        {
-            return Err(failed("A prepared stage or reserved target name changed."));
-        }
     }
     Ok(())
 }

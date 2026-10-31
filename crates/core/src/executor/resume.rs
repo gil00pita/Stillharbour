@@ -8,7 +8,8 @@ pub(super) struct Cursor {
     pub object: Option<Object>,
     pub digest: Option<String>,
 }
-#[derive(Clone, Serialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct Observation {
     object: Object,
     revision: String,
@@ -29,17 +30,36 @@ impl Observation {
         })
     }
 }
-#[derive(Clone, Serialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct Member {
     stage: Option<Observation>,
     published: Option<Observation>,
 }
+#[derive(Clone)]
 pub(super) struct Review {
     history_digest: String,
     members: Vec<Member>,
     digest: String,
 }
 impl Review {
+    pub(super) fn digest(&self) -> &str {
+        &self.digest
+    }
+    pub(super) fn observations(&self) -> Vec<(Option<u64>, bool)> {
+        self.members
+            .iter()
+            .map(|member| {
+                (
+                    member.stage.as_ref().map(|stage| stage.bytes),
+                    member.published.is_some(),
+                )
+            })
+            .collect()
+    }
+    pub(super) fn record(&self, plan: &CopyPlan) -> serde_json::Value {
+        serde_json::json!({"policy":"reviewed-copy-continuation-v1","planDigest":plan.digest,"historyDigest":self.history_digest,"members":self.members,"digest":self.digest})
+    }
     pub(super) fn approval(&self, plan: &CopyPlan, selection: &str) -> Result<approval::Review> {
         approval::Review::new(
             approval::Action::ResumeFiles,
@@ -96,6 +116,59 @@ impl Review {
             digest,
         })
     }
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RecordedReview {
+    policy: String,
+    plan_digest: String,
+    history_digest: String,
+    members: Vec<Member>,
+    digest: String,
+}
+pub(super) fn validate_record(
+    value: serde_json::Value,
+    plan: &CopyPlan,
+    digest: &str,
+) -> Result<()> {
+    let record: RecordedReview = serde_json::from_value(value)
+        .map_err(|error| failed("Invalid retained continuation observations.").caused_by(error))?;
+    if record.policy != "reviewed-copy-continuation-v1"
+        || record.plan_digest != plan.digest
+        || record.members.len() != plan.files.len()
+        || record.history_digest.len() != 64
+        || !record.history_digest.bytes().all(|b| b.is_ascii_hexdigit())
+        || record.digest != digest
+    {
+        return Err(failed(
+            "Retained continuation scope differs from its copy plan.",
+        ));
+    }
+    for (member, file) in record.members.iter().zip(&plan.files) {
+        let observed = match (&member.stage, &member.published) {
+            (Some(stage), None) | (None, Some(stage)) => stage,
+            _ => return Err(failed("Ambiguous retained continuation observations.")),
+        };
+        let expected = file.prepared_stage.as_ref().ok_or_else(|| {
+            failed("Application continuation requires prepared stage identities.")
+        })?;
+        if observed.object != expected.object
+            || observed.bytes > file.bytes
+            || (member.published.is_some() && observed.bytes != file.bytes)
+            || observed.revision.len() != 64
+            || !observed.revision.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err(failed(
+                "Retained continuation object observations differ from the prepared plan.",
+            ));
+        }
+    }
+    let encoded=serde_json::to_vec(&serde_json::json!({"policy":record.policy,"plan":plan.digest,"history":record.history_digest,"members":record.members}))
+        .map_err(|error|failed("Could not validate retained continuation digest.").caused_by(error))?;
+    if blake3::hash(&encoded).to_hex().as_str() != digest {
+        return Err(failed("Retained continuation digest changed."));
+    }
+    Ok(())
 }
 impl Member {
     fn validate(&self, file: &CopyFile, cursor: &Cursor) -> Result<()> {
@@ -161,6 +234,7 @@ pub(super) struct Continuation<'a> {
     pub history_digest: String,
     pub inputs: &'a CopyInputs<'a>,
     pub fault: Option<CopyFault>,
+    pub progress: Option<&'a dyn Fn(u32) -> Result<()>>,
 }
 impl Continuation<'_> {
     pub(super) fn execute(self) -> Result<CopyOutcome> {
@@ -360,6 +434,9 @@ impl Continuation<'_> {
                 }
             }
             completed.push(witness);
+            if let Some(progress) = self.progress {
+                progress((index + 1) as u32)?;
+            }
         }
         (self.inputs.validate_scope)()?;
         for (file, witness) in self.plan.files.iter().zip(completed) {

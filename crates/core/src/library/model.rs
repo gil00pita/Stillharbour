@@ -564,6 +564,21 @@ pub enum LibraryRequest {
         job_id: String,
         selection_id: String,
     },
+    OrganizationCopyContinuationReview {
+        job_id: String,
+        selection_id: String,
+    },
+    OrganizationCopyContinuationApprove {
+        input: crate::operations::CopyApprovalInput,
+        selection_id: String,
+    },
+    OrganizationCopyContinuationStart {
+        input: crate::operations::CopyStartInput,
+        selection_id: String,
+    },
+    OrganizationCopyContinuationDiscard {
+        review_id: String,
+    },
     OrganizationBundleReviews {
         plan_id: String,
         asset_id: String,
@@ -686,6 +701,7 @@ pub enum LibraryResponse {
     OrganizationCopyIo(crate::operations::CopyIoStatus),
     OrganizationCopyInspection(crate::operations::CopyInspection),
     OrganizationCopyRecoveryInspection(crate::operations::CopyRecoveryInspection),
+    OrganizationCopyContinuationReview(Box<crate::operations::CopyContinuationReview>),
     OrganizationTemplates(Vec<crate::operations::SavedTemplate>),
     OrganizationTemplate(crate::operations::SavedTemplate),
     OrganizationPlans(crate::operations::OrganizationPlanPage),

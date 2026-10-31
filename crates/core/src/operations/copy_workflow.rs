@@ -135,3 +135,40 @@ pub struct CopyInspectionIssue {
     pub file_id: String,
     pub error: crate::domain::AppError,
 }
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum CopyRecordedPhase {
+    NotStarted,
+    IntentRecorded,
+    StageRecorded,
+    StageFlushed,
+    StageVerified,
+    PublicationIntent,
+    CompletedRecorded,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyContinuationFile {
+    pub file: CopyReviewFile,
+    pub recorded_phase: CopyRecordedPhase,
+    pub retained_stage_bytes: Option<String>,
+    pub output_present: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyContinuationReview {
+    pub id: String,
+    pub prior_job_id: String,
+    pub plan_id: String,
+    pub manifest_id: String,
+    pub digest: String,
+    pub source_root_id: String,
+    pub destination_display_path: String,
+    pub output_folder: String,
+    pub files: Vec<CopyContinuationFile>,
+    pub assessment: super::CopyAssessment,
+    pub recorded_complete: bool,
+    pub sources_retained: bool,
+    pub independent_backup: bool,
+}

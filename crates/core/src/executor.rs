@@ -5,7 +5,7 @@ mod catalog_journal;
 mod locations;
 mod native;
 mod preparation;
-#[cfg(any(test, feature = "fixture-probes"))]
+#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
 mod resume;
 mod sources;
 #[cfg(any(test, feature = "copy-workflow"))]

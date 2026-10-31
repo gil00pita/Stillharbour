@@ -206,6 +206,9 @@ async fn library_request(
         | LibraryRequest::OrganizationCopyStart { selection_id, .. }
         | LibraryRequest::OrganizationCopyInspect { selection_id, .. }
         | LibraryRequest::OrganizationCopyRecoveryInspect { selection_id, .. }
+        | LibraryRequest::OrganizationCopyContinuationReview { selection_id, .. }
+        | LibraryRequest::OrganizationCopyContinuationApprove { selection_id, .. }
+        | LibraryRequest::OrganizationCopyContinuationStart { selection_id, .. }
         | LibraryRequest::Relink { selection_id, .. } => Some(selected(&state, selection_id)?),
         _ => None,
     };
@@ -299,6 +302,56 @@ async fn library_request(
             ),
             LibraryRequest::OrganizationCopyDiscard { review_id } => {
                 library.organization_copy_discard(review_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationCopyContinuationReview { job_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the retained destination again.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyContinuationReview(Box::new(
+                    library.organization_copy_continuation_review(
+                        job_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationCopyContinuationApprove { input, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the retained destination again.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyApproval(
+                    library.organization_copy_continuation_approve(
+                        input,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                )
+            }
+            LibraryRequest::OrganizationCopyContinuationStart { input, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the retained destination again.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyJob(library.organization_copy_continuation_start(
+                    input,
+                    chosen.id.clone(),
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
+            LibraryRequest::OrganizationCopyContinuationDiscard { review_id } => {
+                library.organization_copy_continuation_discard(review_id)?;
                 LibraryResponse::Done
             }
             LibraryRequest::OrganizationCopyRecoveryInspect { job_id, .. } => {
