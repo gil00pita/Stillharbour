@@ -269,7 +269,8 @@ describe('native read-only library', () => {
       false,
     );
     assert.equal(status.data.originalMutationsEnabled, false);
-    assert.equal(await $('h2').getText(), 'Your library is waiting');
+    assert.equal(await $('h2').getText(), 'Start by selecting your Photo library folder.');
+    assert.equal(await $('.empty-library-art').isExisting(), false);
     for (const [command, request] of [
       ['foundation_request', { kind: 'pick_directory', path: '/not-authorised' }],
       [
@@ -3292,7 +3293,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     );
     assert.equal(verification.verifiedFiles, 32);
     await $('button=Library').click();
-    await $('button=Import photos').waitForDisplayed();
+    await $('button=Choose a folder').waitForDisplayed();
     await browser.saveScreenshot('.context/screenshots/remove-library-empty.png');
   });
 });

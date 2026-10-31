@@ -295,17 +295,19 @@ h1 {
   margin: 0 auto;
 }
 .empty-library-art {
+  --empty-art-shadow: var(--border);
+  --empty-art-frame-start: color-mix(in srgb, var(--surface) 50%, var(--muted));
+  --empty-art-frame-end: color-mix(in srgb, var(--surface) 35%, var(--muted));
+  --empty-art-paper-start: color-mix(in srgb, var(--surface) 92%, white);
+  --empty-art-paper-end: var(--surface);
   display: block;
   width: min(302px, 100%);
   height: auto;
   margin: 0 auto 24px;
 }
-.welcome-description {
-  max-width: 380px;
-  margin: 16px auto 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.6;
+.folder-mark {
+  color: var(--accent);
+  margin-bottom: 24px;
 }
 h2 {
   font-size: clamp(24px, 3vw, 31px);

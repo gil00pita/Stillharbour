@@ -1,4 +1,5 @@
 import { useCallback, useState, type RefObject } from 'react';
+import { EmptyLibraryArt } from '../EmptyLibraryArt';
 import type { LibraryStatus } from '../bindings';
 import type { LibraryController } from './useLibraryController';
 import type { ViewMode } from './model';
@@ -87,6 +88,21 @@ export function PhotoCollection({
         ) : (
           <CollectionEmpty
             loading={loading}
+            emptyLibrary={
+              page?.total === 0 &&
+              !feed.error &&
+              status.roots.length > 0 &&
+              status.roots.every(
+                (root) =>
+                  root.fileCount === 0 &&
+                  root.availability === 'online' &&
+                  root.lastScan !== null &&
+                  !root.preparingPreviews,
+              ) &&
+              !status.jobs.some((job) =>
+                ['queued', 'running', 'cancel_requested'].includes(job.state),
+              )
+            }
             preparing={status.roots.some(
               (root) => root.preparingPreviews && (!query.rootId || root.id === query.rootId),
             )}
@@ -123,29 +139,37 @@ function unavailableRoots(status: LibraryStatus) {
   );
 }
 function CollectionEmpty({
+  emptyLibrary,
   loading,
   scanning,
   preparing,
 }: {
+  emptyLibrary: boolean;
   loading: boolean;
   scanning: boolean;
   preparing: boolean;
 }) {
+  const showIllustration = emptyLibrary && !loading && !scanning && !preparing;
   return (
     <div className="empty-results">
+      {showIllustration && <EmptyLibraryArt />}
       <h2>
         {preparing
           ? 'Preparing your photos'
           : loading
             ? 'Reading your catalog…'
-            : 'No matching photos yet'}
+            : showIllustration
+              ? 'Your library is empty'
+              : 'No matching photos yet'}
       </h2>
       <p>
         {preparing
           ? 'Photos appear as their previews become ready.'
           : scanning
             ? 'Your scan is running. Photos appear as they are indexed.'
-            : 'Check your filters or select a library to rescan its folder.'}
+            : showIllustration
+              ? 'No photos or videos were found. Check your scan settings or rescan your library folder.'
+              : 'Check your filters or select a library to rescan its folder.'}
       </p>
     </div>
   );

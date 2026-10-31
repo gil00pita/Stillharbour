@@ -1,0 +1,138 @@
+// Geometry from the owner-supplied empty-library.svg; colours follow the app palette.
+export function EmptyLibraryArt() {
+  return (
+    <svg
+      className="empty-library-art"
+      aria-hidden="true"
+      focusable="false"
+      width="302"
+      height="215"
+      viewBox="0 0 302 215"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <g clipPath="url(#clip0_28_12)">
+        <path
+          opacity="0.8"
+          d="M21 195.955C53 179.955 95 170.955 149 170.955C205 170.955 249 179.955 280 195.955C242 185.955 199 180.955 150 180.955C102 180.955 59 185.955 21 195.955Z"
+          fill="var(--empty-art-shadow)"
+        />
+        <path
+          opacity="0.52"
+          d="M54 182.955C79 174.955 112 170.955 151 170.955C189 170.955 222 174.955 247 182.955C217 178.955 185 176.955 151 176.955C117 176.955 84 178.955 54 182.955Z"
+          fill="var(--empty-art-shadow)"
+        />
+        <path
+          d="M173.859 16.3171C175.971 7.16915 185.099 1.46512 194.247 3.5769L267.325 20.448C276.473 22.56 282.177 31.6885 280.065 40.8367L256.896 141.197C254.783 150.345 245.655 156.049 236.507 153.937L163.429 137.066C154.281 134.954 148.577 125.826 150.689 116.677L173.859 16.3171Z"
+          fill="url(#paint0_linear_28_12)"
+        />
+        <path
+          d="M260.728 31.241L195.445 16.1693C190.064 14.9269 184.764 17.9816 183.607 22.992L164.547 105.549C163.391 110.56 166.815 115.629 172.197 116.871L237.479 131.943C242.861 133.185 248.161 130.13 249.318 125.12L268.377 42.5628C269.534 37.5523 266.109 32.4834 260.728 31.241Z"
+          fill="url(#paint1_linear_28_12)"
+        />
+        <path
+          d="M135.754 4.35456C145.4 1.94958 155.169 7.81945 157.574 17.4653L183.46 121.287C185.865 130.933 179.995 140.702 170.349 143.107L96.6065 161.493C86.9607 163.898 77.1916 158.028 74.7866 148.382L48.901 44.5605C46.496 34.9147 52.3659 25.1456 62.0117 22.7406L135.754 4.35456Z"
+          fill="url(#paint2_linear_28_12)"
+        />
+        <path
+          d="M135.018 17.9361L69.0379 34.3868C63.6791 35.7229 60.3024 40.6862 61.4958 45.4726L82.2395 128.671C83.4329 133.458 88.7445 136.255 94.1033 134.919L160.083 118.468C165.442 117.132 168.819 112.169 167.626 107.382L146.882 24.1834C145.688 19.397 140.377 16.6 135.018 17.9361Z"
+          fill="url(#paint3_linear_28_12)"
+        />
+        <path
+          d="M103.089 76.5935C104.965 76.1259 106.106 74.2264 105.639 72.3508C105.171 70.4752 103.272 69.3338 101.396 69.8015C99.5205 70.2691 98.3791 72.1687 98.8467 74.0442C99.3144 75.9198 101.214 77.0612 103.089 76.5935Z"
+          fill="url(#paint4_linear_28_12)"
+        />
+        <path
+          d="M152.286 95.3599L92.2387 111.543C89.961 112.157 87.8985 110.023 88.5897 107.767L95.0065 86.8284C95.6766 84.6416 98.4493 83.979 100.036 85.6265L105.893 91.7094C107.496 93.3735 110.299 92.678 110.937 90.4579L118.647 63.6573C119.266 61.505 121.94 60.7654 123.577 62.2935L153.552 90.2701C155.273 91.876 154.558 94.7475 152.286 95.3599Z"
+          fill="url(#paint5_linear_28_12)"
+        />
+        <path
+          d="M198.338 86.3226L204.983 61.7842C206.016 57.968 210.86 56.8042 213.514 59.7344L229.655 77.554C232.129 80.2855 230.899 84.6641 227.364 85.7065L204.578 92.4253C200.827 93.5314 197.315 90.0972 198.338 86.3226Z"
+          fill="url(#paint6_linear_28_12)"
+        />
+      </g>
+      <defs>
+        <linearGradient
+          id="paint0_linear_28_12"
+          x1="211"
+          y1="9.45471"
+          x2="244.731"
+          y2="151.939"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="var(--empty-art-frame-start)" />
+          <stop offset="1" stopColor="var(--empty-art-frame-end)" />
+        </linearGradient>
+        <linearGradient
+          id="paint1_linear_28_12"
+          x1="117.705"
+          y1="-2.734"
+          x2="118.111"
+          y2="104.28"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="var(--empty-art-paper-start)" />
+          <stop offset="1" stopColor="var(--empty-art-paper-end)" />
+        </linearGradient>
+        <linearGradient
+          id="paint2_linear_28_12"
+          x1="88.5"
+          y1="17.9547"
+          x2="139.664"
+          y2="151.509"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="var(--empty-art-frame-start)" />
+          <stop offset="1" stopColor="var(--empty-art-frame-end)" />
+        </linearGradient>
+        <linearGradient
+          id="paint3_linear_28_12"
+          x1="87.0414"
+          y1="28.057"
+          x2="133.26"
+          y2="119.963"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="var(--empty-art-paper-start)" />
+          <stop offset="1" stopColor="var(--empty-art-paper-end)" />
+        </linearGradient>
+        <linearGradient
+          id="paint4_linear_28_12"
+          x1="100.057"
+          y1="69.8721"
+          x2="103.867"
+          y2="77.1804"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="var(--empty-art-frame-start)" />
+          <stop offset="1" stopColor="var(--empty-art-frame-end)" />
+        </linearGradient>
+        <linearGradient
+          id="paint5_linear_28_12"
+          x1="108.991"
+          y1="56.9839"
+          x2="120.656"
+          y2="120.232"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="var(--empty-art-frame-start)" />
+          <stop offset="1" stopColor="var(--empty-art-frame-end)" />
+        </linearGradient>
+        <linearGradient
+          id="paint6_linear_28_12"
+          x1="208.165"
+          y1="51.4219"
+          x2="220.524"
+          y2="99.0835"
+          gradientUnits="userSpaceOnUse"
+        >
+          <stop stopColor="var(--empty-art-frame-start)" />
+          <stop offset="1" stopColor="var(--empty-art-frame-end)" />
+        </linearGradient>
+        <clipPath id="clip0_28_12">
+          <rect width="302" height="214.955" fill="white" />
+        </clipPath>
+      </defs>
+    </svg>
+  );
+}
