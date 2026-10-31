@@ -205,6 +205,7 @@ async fn library_request(
         | LibraryRequest::OrganizationCopyApprove { selection_id, .. }
         | LibraryRequest::OrganizationCopyStart { selection_id, .. }
         | LibraryRequest::OrganizationCopyInspect { selection_id, .. }
+        | LibraryRequest::OrganizationCopyRecoveryInspect { selection_id, .. }
         | LibraryRequest::Relink { selection_id, .. } => Some(selected(&state, selection_id)?),
         _ => None,
     };
@@ -299,6 +300,21 @@ async fn library_request(
             LibraryRequest::OrganizationCopyDiscard { review_id } => {
                 library.organization_copy_discard(review_id)?;
                 LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationCopyRecoveryInspect { job_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the retained destination with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyRecoveryInspection(
+                    library.organization_copy_recovery_inspect(
+                        job_id,
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                )
             }
             LibraryRequest::OrganizationCopyInspect { review_id, .. } => {
                 let chosen = selection.as_ref().ok_or_else(|| {

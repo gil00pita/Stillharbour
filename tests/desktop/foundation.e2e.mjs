@@ -1052,6 +1052,38 @@ describe('native read-only library', () => {
         );
         await browser.saveScreenshot('.context/screenshots/m2-verified-copy-complete.png');
         await $('button=Close saved plans').click();
+        const completedCopy = copyJobs.find((job) => job.state === 'completed_verified');
+        await native({ kind: 'organization_copy_discard', review_id: completedCopy.reviewId });
+        await $('button[aria-label="Jobs"]').click();
+        await browser.waitUntil(
+          async () =>
+            (await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]')).length ===
+            2,
+        );
+        const retainedInspections = await $$(
+          '.jobs-dropdown section[aria-label="Retained copy inspection"]',
+        );
+        await retainedInspections[0].$('button').scrollIntoView();
+        await retainedInspections[0].$('button').click();
+        await browser.waitUntil(async () =>
+          (await retainedInspections[0].getText()).includes(
+            'Every selected output was freshly compared with its source.',
+          ),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-retained-copy-inspection.png');
+        await writeFile(
+          `${evidence}/windows-retained-copy-inspection.json`,
+          JSON.stringify(
+            (
+              await native({
+                kind: 'organization_copy_recovery_inspect',
+                job_id: completedCopy.id,
+                selection_id: copySelection.id,
+              })
+            ).data,
+          ),
+        );
+        await $('button[aria-label="Close jobs"]').click();
       } catch (error) {
         await browser.saveScreenshot('.context/screenshots/windows-library-failure.png');
         const diagnostics = await browser.execute(() => ({

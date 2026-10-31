@@ -239,3 +239,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Application organization workflow and jobs - 2026-10-31
 
 [ADR-0039](decisions/ADR-0039-organization-workflow-jobs.md) connects exact native scope and ephemeral approvals to typed application review/start/control/inspection requests and bounded worker jobs. Schema 5 adds immutable-scope durable job records, expected-state transitions, journaled progress and restart needs_recovery without replay. The experimental copy-workflow feature is enabled for native test builds; normal builds remain unavailable until their workflow gates pass. Original mutation permissions are unchanged.
+
+## Retained copy inspection - 2026-10-31
+
+[ADR-0040](decisions/ADR-0040-retained-copy-inspection.md) adds read-only existing-job inspection with fresh private destination selection, exact catalog/native binding and referenced-root read scopes. No anchor, session, approval or replay is created. Typed per-file errors remain visible; incomplete preparation without a ready stream remains blocked. Default copying/original mutation gates are unchanged.

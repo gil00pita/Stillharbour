@@ -14,6 +14,22 @@ fn unavailable() -> AppError {
     )
 }
 impl Library {
+    pub fn organization_copy_recovery_inspect(
+        &self,
+        _job_id: String,
+        _path: PathBuf,
+        _identity: (FileIdentity, String),
+    ) -> Result<CopyRecoveryInspection> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow
+                .inspect_retained(_job_id, _path, _identity.0, _identity.1)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
     pub fn organization_copy_inspect(
         &self,
         _id: String,

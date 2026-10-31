@@ -18,8 +18,8 @@ pub use copy_manifest::{
 };
 pub use copy_workflow::{
     CopyAction, CopyActionApproval, CopyActionReview, CopyApprovalInput, CopyInspection,
-    CopyInspectionState, CopyIoStatus, CopyJobState, CopyReviewFile, CopyStartInput,
-    CopyWorkflowCapabilities, CopyWorkflowJob,
+    CopyInspectionIssue, CopyInspectionState, CopyIoStatus, CopyJobState, CopyRecoveryInspection,
+    CopyReviewFile, CopyStartInput, CopyWorkflowCapabilities, CopyWorkflowJob,
 };
 
 pub const PLAN_POLICY: &str = "organization-plan-v1";

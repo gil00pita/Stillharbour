@@ -61,6 +61,15 @@ fn decode_row(row: &rusqlite::Row<'_>) -> Result<CopyWorkflowJob> {
     Ok(job)
 }
 const COLUMNS: &str = "id,plan_id,root_id,review_id,kind,state,total_files,verified_files,started_at,updated_at,CASE WHEN length(CAST(payload AS BLOB))<=65536 THEN payload END AS bounded_payload";
+#[cfg(any(test, feature = "copy-workflow"))]
+pub(crate) fn scope_digest(catalog: &Catalog, id: String) -> Result<String> {
+    crate::operations::validate_id(&id)?;
+    catalog.call(move |db| {
+        let digest:String=db.query_row("SELECT CASE WHEN length(scope_digest)=64 THEN scope_digest END FROM operation_jobs WHERE id=?",[id],|row|row.get(0))?;
+        if !digest.bytes().all(|b| b.is_ascii_hexdigit()) {return Err(failed("Invalid retained job scope digest."));}
+        Ok(digest)
+    })
+}
 pub(crate) fn load(catalog: &Catalog, id: String) -> Result<CopyWorkflowJob> {
     crate::operations::validate_id(&id)?;
     catalog.call(move |db| {

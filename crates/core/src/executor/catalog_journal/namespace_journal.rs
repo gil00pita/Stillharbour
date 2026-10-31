@@ -11,8 +11,8 @@ const MAX_FACT_BYTES: usize = 32 * 1024 * 1024;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Reference {
-    token: String,
-    scope_digest: String,
+    pub(super) token: String,
+    pub(super) scope_digest: String,
     fingerprint: String,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -336,6 +336,14 @@ fn load_preparation(
     owner: &str,
     reference: &Reference,
 ) -> Result<(Scope, serde_json::Value)> {
+    load_preparation_for(db, owner, reference, true)
+}
+fn load_preparation_for(
+    db: &Connection,
+    owner: &str,
+    reference: &Reference,
+    managed: bool,
+) -> Result<(Scope, serde_json::Value)> {
     crate::operations::validate_id(&reference.token)?;
     if !hex(&reference.scope_digest) || !hex(&reference.fingerprint) {
         return Err(failed("Invalid prepared namespace reference."));
@@ -359,7 +367,7 @@ fn load_preparation(
     if scope.token != reference.token || scope.sources.owner_id != owner {
         return Err(failed("Foreign or recursive prepared namespace binding."));
     }
-    scope.sources.validate(db)?;
+    scope.sources.validate_for(db, managed)?;
     let manifest = copy_manifest::load(db, owner, &scope.sources.manifest_id)?;
     let targets: Vec<Target> = manifest
         .files
@@ -401,11 +409,25 @@ fn load_preparation(
     Ok((scope, completion))
 }
 pub(super) fn validate_copy_binding(db: &Connection, binding: &Binding) -> Result<()> {
+    validate_copy_binding_for(db, binding, true).map(|_| ())
+}
+#[cfg(any(test, feature = "copy-workflow"))]
+pub(super) fn inspection_scope(
+    db: &Connection,
+    binding: &Binding,
+) -> Result<(crate::executor::sources::Snapshot, String)> {
+    validate_copy_binding_for(db, binding, false)
+}
+fn validate_copy_binding_for(
+    db: &Connection,
+    binding: &Binding,
+    managed: bool,
+) -> Result<(crate::executor::sources::Snapshot, String)> {
     let reference = binding
         .namespace
         .as_ref()
         .ok_or_else(|| failed("Missing prepared namespace reference."))?;
-    let (scope, completion) = load_preparation(db, &binding.owner_id, reference)?;
+    let (scope, completion) = load_preparation_for(db, &binding.owner_id, reference, managed)?;
     let base = &scope.sources;
     if binding.policy != "catalog-copy-stream-v1"
         || binding.catalog_id != base.catalog_id
@@ -431,7 +453,7 @@ pub(super) fn validate_copy_binding(db: &Connection, binding: &Binding) -> Resul
             "Prepared copy differs from its exact retained stage/parent/source evidence.",
         ));
     }
-    Ok(())
+    Ok((scope.sources, scope.namespace))
 }
 pub(super) fn check_copy_stream_admission(db: &Connection, binding: &Binding) -> Result<()> {
     let mut query=db.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND phase=?2 ORDER BY sequence LIMIT 65")?;

@@ -6,6 +6,7 @@ import { ScanJobProgress } from './ScanJobProgress';
 import { LibraryChanges } from './LibraryChanges';
 import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
 import { copyJobActive } from './copyJobs';
+import { RetainedCopyInspection } from './RetainedCopyInspection';
 
 export function JobsDropdown({
   status,
@@ -166,7 +167,12 @@ export function JobsDropdown({
                 {copyJobs
                   .filter((job) => !copyJobActive(job))
                   .map((job) => (
-                    <CopyJobProgress key={job.id} job={job} onRefresh={onRefresh} />
+                    <div key={job.id}>
+                      <CopyJobProgress job={job} onRefresh={onRefresh} />
+                      {(job.action === 'copy_files' || job.readyReviewId) && (
+                        <RetainedCopyInspection job={job} />
+                      )}
+                    </div>
                   ))}
                 <LibraryChanges status={status} />
                 {recent.length > 0 && (

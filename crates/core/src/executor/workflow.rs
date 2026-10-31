@@ -61,6 +61,112 @@ pub(crate) struct CopyWorkflow {
     active: Mutex<Option<Active>>,
 }
 impl CopyWorkflow {
+    pub(crate) fn inspect_retained(
+        &self,
+        job_id: String,
+        path: PathBuf,
+        identity: FileIdentity,
+        volume: String,
+    ) -> Result<CopyRecoveryInspection> {
+        let _permit = self.gate.try_start()?;
+        let job = operation_jobs::load(&self.catalog, job_id.clone())?;
+        if matches!(
+            job.state,
+            CopyJobState::Queued
+                | CopyJobState::Running
+                | CopyJobState::PauseRequested
+                | CopyJobState::CancelRequested
+        ) {
+            return Err(failed(
+                "Wait for the active operation to stop before recovery inspection.",
+            ));
+        }
+        let stream=match job.action {
+            CopyAction::CopyFiles=>job.review_id.clone(),
+            CopyAction::PrepareNames=>job.ready_review_id.clone().ok_or_else(||failed("Preparation stopped before a copy plan existed. Retain its namespace and journal for review."))?,
+        };
+        let (journal, sources, namespace) = CatalogJournal::open_inspection(
+            self.catalog.clone(),
+            job.plan_id.clone(),
+            stream.clone(),
+        )?;
+        let digest = operation_jobs::scope_digest(&self.catalog, job_id.clone())?;
+        if !journal.matches_job(&job, &digest)? || job.source_root_id != sources.root_id {
+            return Err(failed("Retained job does not match its exact copy scope."));
+        }
+        let selected = native::open_root(&path, None)?;
+        if !sources.destination.matches(&selected)?
+            || sources.destination_volume != volume
+            || identity.volume != sources.destination.volume
+            || identity.file != sources.destination.file
+            || native::volume_token(&selected)? != volume
+        {
+            return Err(failed(
+                "Select the original destination folder with its unchanged native identity.",
+            ));
+        }
+        let scope = sources.open_scope(&self.catalog, Access::Read)?;
+        if !sources.destination.matches(scope.directory(1).leaf())? {
+            return Err(failed("Retained destination identity changed."));
+        }
+        let output = super::native::read_directory(scope.directory(1).leaf(), &namespace)?;
+        if !journal.plan().destination.matches(&output)? {
+            return Err(failed("Retained output namespace identity changed."));
+        }
+        let cancel = AtomicBool::new(false);
+        let io = PacedIo::shared();
+        let validate = || sources.validate_read_roots(&self.catalog);
+        validate()?;
+        let mut states = Vec::with_capacity(sources.files.len());
+        let mut issues = Vec::new();
+        for (index, file) in journal.plan().files.iter().enumerate() {
+            match super::inspect_item(
+                file,
+                index,
+                &journal,
+                scope.directory(0).leaf(),
+                &output,
+                &io,
+                &cancel,
+            ) {
+                Ok(state) => states.push(state),
+                Err(error) => {
+                    states.push(CopyInspectionState::NeedsAttention);
+                    issues.push(CopyInspectionIssue {
+                        file_id: sources.files[index].id.clone(),
+                        error,
+                    });
+                }
+            }
+        }
+        validate()?;
+        let all = states
+            .iter()
+            .all(|state| *state == super::RecoveredItem::PublishedVerified);
+        let files = sources
+            .files
+            .iter()
+            .map(|file| CopyReviewFile {
+                id: file.id.clone(),
+                source_path: file.display_name.clone(),
+                target_path: format!("{namespace}/{}", file.target),
+                bytes: file.bytes.to_string(),
+            })
+            .collect();
+        Ok(CopyRecoveryInspection {
+            job_id,
+            source_root_id: sources.root_id,
+            destination_display_path: path.to_string_lossy().into_owned(),
+            output_folder: namespace,
+            files,
+            issues,
+            inspection: CopyInspection {
+                review_id: stream,
+                states,
+                all_published_bytes_verified: all,
+            },
+        })
+    }
     pub(crate) fn job(&self, id: String) -> Result<CopyWorkflowJob> {
         let job = operation_jobs::load(&self.catalog, id.clone())?;
         let live = self
@@ -91,6 +197,7 @@ impl CopyWorkflow {
         identity: FileIdentity,
         volume: String,
     ) -> Result<CopyInspection> {
+        let _permit = self.gate.try_start()?;
         let session = self.session(&id)?;
         Self::check_selection(&session, &selection, &path, &identity, &volume)?;
         let ready = session
@@ -114,7 +221,12 @@ impl CopyWorkflow {
         }
         let io = PacedIo::shared();
         let cancel = AtomicBool::new(false);
-        let validate = || session.namespace.sources().validate_roots(&self.catalog);
+        let validate = || {
+            session
+                .namespace
+                .sources()
+                .validate_read_roots(&self.catalog)
+        };
         let states = ready.inspect(CopyInputs {
             source_root: scope.directory(0).leaf(),
             destination: &root,

@@ -560,6 +560,10 @@ pub enum LibraryRequest {
         review_id: String,
         selection_id: String,
     },
+    OrganizationCopyRecoveryInspect {
+        job_id: String,
+        selection_id: String,
+    },
     OrganizationBundleReviews {
         plan_id: String,
         asset_id: String,
@@ -681,6 +685,7 @@ pub enum LibraryResponse {
     OrganizationCopyJob(crate::operations::CopyWorkflowJob),
     OrganizationCopyIo(crate::operations::CopyIoStatus),
     OrganizationCopyInspection(crate::operations::CopyInspection),
+    OrganizationCopyRecoveryInspection(crate::operations::CopyRecoveryInspection),
     OrganizationTemplates(Vec<crate::operations::SavedTemplate>),
     OrganizationTemplate(crate::operations::SavedTemplate),
     OrganizationPlans(crate::operations::OrganizationPlanPage),

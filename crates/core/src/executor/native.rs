@@ -284,7 +284,9 @@ pub(super) fn read_directory(parent: &File, leaf: &str) -> Result<File> {
     name(leaf)?;
     #[cfg(windows)]
     {
-        open(parent, leaf, true, false)
+        // Retained lookup needs no write-attributes right. The exact name is
+        // backend-owned; bind membership before/after opening by native ID.
+        crate::filesystem::windows::owned_directory_child(parent, std::ffi::OsStr::new(leaf))
     }
     #[cfg(unix)]
     {

@@ -68,6 +68,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         CopyIoStatus::decl(&config),
         CopyInspectionState::decl(&config),
         CopyInspection::decl(&config),
+        CopyRecoveryInspection::decl(&config),
+        CopyInspectionIssue::decl(&config),
         AppPreferences::decl(&config),
         GalleryView::decl(&config),
         ThumbnailSize::decl(&config),

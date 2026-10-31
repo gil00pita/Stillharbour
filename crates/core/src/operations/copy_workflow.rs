@@ -116,3 +116,22 @@ pub struct CopyIoStatus {
     pub byte_io_paused: bool,
     pub burst_bytes: u32,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyRecoveryInspection {
+    pub job_id: String,
+    pub source_root_id: String,
+    pub destination_display_path: String,
+    pub output_folder: String,
+    pub files: Vec<CopyReviewFile>,
+    pub inspection: CopyInspection,
+    pub issues: Vec<CopyInspectionIssue>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CopyInspectionIssue {
+    pub file_id: String,
+    pub error: crate::domain::AppError,
+}

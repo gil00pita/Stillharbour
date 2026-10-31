@@ -304,6 +304,81 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
     Ok(())
 }
 impl CatalogJournal {
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(in crate::executor) fn matches_job(
+        &self,
+        job: &crate::operations::CopyWorkflowJob,
+        digest: &str,
+    ) -> Result<bool> {
+        let scope = self
+            .binding
+            .namespace
+            .as_ref()
+            .ok_or_else(|| failed("Recovery needs a bound namespace."))?;
+        Ok(job.plan_id == self.binding.owner_id
+            && job.total_files as usize == self.binding.plan.files.len()
+            && match job.action {
+                crate::operations::CopyAction::CopyFiles => {
+                    job.review_id == self.binding.plan.id && digest == self.digest()
+                }
+                crate::operations::CopyAction::PrepareNames => {
+                    job.review_id == scope.token
+                        && digest == scope.scope_digest
+                        && job.ready_review_id.as_deref() == Some(self.binding.plan.id.as_str())
+                }
+            })
+    }
+    /// Open existing facts only. Unlike bind, this cannot create an anchor or
+    /// a new stream. Readable registered roots need no managed write grant.
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(in crate::executor) fn open_inspection(
+        catalog: Arc<Catalog>,
+        owner: String,
+        stream: String,
+    ) -> Result<(Self, super::sources::Snapshot, String)> {
+        crate::operations::validate_id(&owner)?;
+        crate::operations::validate_id(&stream)?;
+        let (binding,encoded,anchor,history,sources,namespace)=catalog.call(move|db| {
+            let tx=db.transaction()?;
+            let (anchor,encoded,binding)={
+                let mut query=tx.prepare("SELECT sequence,CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT 2")?;
+                let mut rows=query.query(params![owner,stream,PLAN_PHASE])?;
+                let row=rows.next()?.ok_or_else(||failed("No retained copy stream exists for this job."))?;
+                let anchor:i64=row.get(0)?;
+                let encoded:Option<String>=row.get(1)?;
+                let encoded=encoded.ok_or_else(||failed("Retained copy anchor exceeds 64 KiB."))?;
+                if rows.next()?.is_some() {return Err(failed("Duplicate retained copy anchors require review."));}
+                let binding:Binding=decode(&encoded,MAX_RECORD)?;
+                if binding.owner_id!=owner || binding.plan.id!=stream {return Err(failed("Retained copy anchor belongs to another job."));}
+                (anchor,encoded,binding)
+            };
+            let (sources,namespace)=namespace_journal::inspection_scope(&tx,&binding)?;
+            namespace_journal::check_copy_stream_admission(&tx,&binding)?;
+            let mut history=History::new(&binding.plan);
+            {
+                let mut query=tx.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=8192 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND phase=?2 AND item_id=?3 ORDER BY sequence LIMIT ?4")?;
+                let mut rows=query.query(params![owner,EVENT_PHASE,stream,binding.plan.files.len() as i64*6+4])?;
+                while let Some(row)=rows.next()? {
+                    let text:Option<String>=row.get(0)?;
+                    let text=text.ok_or_else(||failed("Retained copy event exceeds 8 KiB."))?;
+                    history.apply(&decode(&text,MAX_EVENT)?,&binding.plan)?;
+                }
+            }
+            tx.commit()?;
+            Ok((binding,encoded,anchor,history,sources,namespace))
+        })?;
+        Ok((
+            Self {
+                catalog,
+                binding,
+                encoded,
+                anchor,
+                history: Mutex::new(history),
+            },
+            sources,
+            namespace,
+        ))
+    }
     pub(in crate::executor) fn inspect(
         &self,
         inputs: super::CopyInputs<'_>,
@@ -1193,6 +1268,100 @@ mod tests {
             .unwrap(),
             COMPANION_BYTES
         );
+        // A new controller has no live sessions or approvals. Inspection reads
+        // only retained job/namespace/copy records, including referenced roots.
+        let jobs = crate::library::operation_jobs::list(&fixture.library.catalog).unwrap();
+        let copy_job = jobs
+            .iter()
+            .find(|job| job.action == CopyAction::CopyFiles)
+            .unwrap();
+        let restarted = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        fixture
+            .library
+            .catalog
+            .call(|db| {
+                db.execute("UPDATE roots SET mode='referenced'", [])?;
+                Ok(())
+            })
+            .unwrap();
+        let before: i64 = fixture
+            .library
+            .catalog
+            .call(|db| {
+                Ok(
+                    db.query_row("SELECT count(*) FROM operation_journal", [], |row| {
+                        row.get(0)
+                    })?,
+                )
+            })
+            .unwrap();
+        let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&selected).unwrap();
+        let volume = crate::library::native::volume_token(&selected).unwrap();
+        drop(selected);
+        let recovered = restarted
+            .inspect_retained(
+                copy_job.id.clone(),
+                fixture.destination.clone(),
+                identity.clone(),
+                volume.clone(),
+            )
+            .unwrap();
+        assert!(recovered.inspection.all_published_bytes_verified);
+        assert_eq!(recovered.files.len(), 2);
+        assert_eq!(recovered.source_root_id, copy_job.source_root_id);
+        let wrong = tempfile::tempdir().unwrap();
+        assert!(
+            restarted
+                .inspect_retained(
+                    copy_job.id.clone(),
+                    wrong.path().into(),
+                    identity.clone(),
+                    volume.clone()
+                )
+                .is_err()
+        );
+        let target = fixture
+            .destination
+            .join(&review.output_folder)
+            .join("organized/Photo.JPG");
+        std::fs::write(&target, b"new output must be retained").unwrap();
+        let changed = restarted
+            .inspect_retained(
+                copy_job.id.clone(),
+                fixture.destination.clone(),
+                identity,
+                volume,
+            )
+            .unwrap();
+        assert!(!changed.inspection.all_published_bytes_verified);
+        assert!(
+            changed
+                .inspection
+                .states
+                .contains(&crate::operations::CopyInspectionState::NeedsAttention)
+        );
+        assert_eq!(
+            std::fs::read(target).unwrap(),
+            b"new output must be retained"
+        );
+        assert_eq!(
+            before,
+            fixture
+                .library
+                .catalog
+                .call(|db| Ok(db.query_row(
+                    "SELECT count(*) FROM operation_journal",
+                    [],
+                    |row| row.get::<_, i64>(0)
+                )?))
+                .unwrap()
+        );
+        assert!(fixture.preserved().unwrap());
     }
     #[test]
     fn approved_copy_rechecks_revoked_root_grant_at_admission_and_before_publication() {

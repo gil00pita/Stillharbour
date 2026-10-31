@@ -39,11 +39,11 @@ pub(super) struct Snapshot {
     pub destination_volume: String,
     pub files: Vec<File>,
 }
-fn root(db: &Connection, id: &str) -> Result<(Vec<u8>, Object, String)> {
+fn root(db: &Connection, id: &str, managed: bool) -> Result<(Vec<u8>, Object, String)> {
     let (path,device,inode,volume,mode):(Option<Vec<u8>>,String,String,String,String)=db.query_row(
         "SELECT CASE WHEN length(native_path)<=65536 THEN native_path END,device,inode,volume,mode FROM roots WHERE id=?",
         [id],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?)))?;
-    if mode != "managed" {
+    if !matches!(mode.as_str(), "managed" | "referenced") || (managed && mode != "managed") {
         return Err(failed("The source root needs its unchanged managed grant."));
     }
     Ok((
@@ -61,8 +61,15 @@ fn root(db: &Connection, id: &str) -> Result<(Vec<u8>, Object, String)> {
 }
 impl Snapshot {
     pub(super) fn validate_roots(&self, catalog: &Arc<Catalog>) -> Result<()> {
+        self.validate_roots_for(catalog, true)
+    }
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(super) fn validate_read_roots(&self, catalog: &Arc<Catalog>) -> Result<()> {
+        self.validate_roots_for(catalog, false)
+    }
+    fn validate_roots_for(&self, catalog: &Arc<Catalog>, managed: bool) -> Result<()> {
         let id = self.root_id.clone();
-        let (path, object, volume) = catalog.call(move |db| root(db, &id))?;
+        let (path, object, volume) = catalog.call(move |db| root(db, &id, managed))?;
         if object != self.source || volume != self.source_volume {
             return Err(failed("Source root identity/volume grant changed."));
         }
@@ -97,7 +104,7 @@ impl Snapshot {
                     "Source planning currently requires one conflict-free managed root.",
                 ));
             }
-            let (path, source, volume) = root(db, &root_id)?;
+            let (path, source, volume) = root(db, &root_id, true)?;
             Ok((draft, manifest, root_id, path, source, volume))
         })?;
         let source_path = native::decode_path(&path)?;
@@ -209,8 +216,8 @@ impl Snapshot {
     ) -> Result<crate::jobs::operation_locks::Lease> {
         let snapshot = self.clone();
         let (source_path, destination_path) = catalog.call(move |db| {
-            snapshot.validate(db)?;
-            let (source, _, _) = root(db, &snapshot.root_id)?;
+            snapshot.validate_for(db, destination_access == Access::Write)?;
+            let (source, _, _) = root(db, &snapshot.root_id, destination_access == Access::Write)?;
             Ok((
                 source,
                 operation_store::load(db, &snapshot.owner_id)?.destination_native,
@@ -259,9 +266,12 @@ impl Snapshot {
         ])
     }
     pub(super) fn validate(&self, db: &Connection) -> Result<()> {
+        self.validate_for(db, true)
+    }
+    pub(super) fn validate_for(&self, db: &Connection, managed: bool) -> Result<()> {
         let draft = operation_store::load(db, &self.owner_id)?;
         let manifest = copy_manifest::load(db, &self.owner_id, &self.manifest_id)?;
-        let (_, source, volume) = root(db, &self.root_id)?;
+        let (_, source, volume) = root(db, &self.root_id, managed)?;
         if self.policy != "native-copy-source-snapshot-v1"
             || self.catalog_id != draft.catalog_id
             || self.owner_digest != draft.view.digest
