@@ -4,6 +4,7 @@ mod catalog_journal;
 mod locations;
 mod native;
 mod preparation;
+mod sources;
 use crate::{
     domain::{AppError, ErrorCode, Result},
     filesystem::{self, DirectoryChain},

@@ -227,3 +227,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Prepared catalog copy projection - 2026-10-31
 
 [ADR-0036](decisions/ADR-0036-prepared-catalog-copy-projection.md) binds exact completed namespace facts to private fixture copy streams and derives every source/stage/target/parent mapping without overrides. Enforce one stream per namespace and 64 per draft; reopen current bytes without replay. Complete/interrupted native diagnostics preserve prepared IDs. Production ready-plan/session approval/jobs remain open.
+
+## Native source planning before future targets - 2026-10-31
+
+[ADR-0037](decisions/ADR-0037-native-source-snapshots.md) separates native source snapshots from executable plans and v2 namespace facts. Future target folders remain absent during preview; actual preparation supplies their identities. Freeze a backend-derived visible output prefix for later explicit review, preserve source/destination scope checks and retain older disposable evidence without granting approval. Production preparation/session approval/jobs remain open.

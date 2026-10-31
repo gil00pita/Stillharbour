@@ -15,6 +15,28 @@ use std::{
 };
 
 const MAX_DIRECTORIES: usize = 1024;
+fn namespace_token(namespace: &str) -> Result<&str> {
+    let token = namespace
+        .strip_prefix(".stillharbour-preparing-")
+        .and_then(|name| name.strip_suffix(".partial"))
+        .or_else(|| namespace.strip_prefix("Stillharbour organized "))
+        .ok_or_else(|| input("Invalid owned namespace name."))?;
+    if uuid::Uuid::parse_str(token)
+        .ok()
+        .map(|id| id.to_string())
+        .as_deref()
+        != Some(token)
+    {
+        return Err(input("Invalid backend namespace identity."));
+    }
+    Ok(token)
+}
+pub(super) fn validate_namespace(token: &str, namespace: &str) -> Result<()> {
+    if namespace_token(namespace)? != token {
+        return Err(input("Namespace name differs from its frozen identity."));
+    }
+    Ok(())
+}
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Boundary {
     RootCreated,
@@ -184,10 +206,7 @@ fn checked_record(
             || stage.stage_leaf
                 != format!(
                     ".stillharbour-stage-{}-{target_index}.partial",
-                    namespace
-                        .strip_prefix(".stillharbour-preparing-")
-                        .and_then(|name| name.strip_suffix(".partial"))
-                        .ok_or_else(|| failed("Invalid retained namespace name."))?
+                    namespace_token(namespace)?
                 )
             || !staged.insert(&stage.target_id)
             || !objects.insert((stage.object.volume, stage.object.file))
@@ -201,7 +220,7 @@ fn checked_record(
 /// validation is performed by the executor; this projection grants no approval.
 pub(super) fn project_copy_plan(
     value: &serde_json::Value,
-    base: &super::CopyPlan,
+    base: &super::sources::Snapshot,
     namespace: &str,
     targets: &[Target],
     stream: &str,
@@ -232,9 +251,17 @@ pub(super) fn project_copy_plan(
             .get(target.id.as_str())
             .ok_or_else(|| failed("Missing prepared stage."))?;
         let path = &evidence.5[stage.parent].0;
-        let mut file = source.clone();
-        file.target = stage.original_leaf.clone();
-        file.stage = stage.stage_leaf.clone();
+        let mut file = super::CopyFile {
+            source: source.display_name.clone(),
+            target: stage.original_leaf.clone(),
+            stage: stage.stage_leaf.clone(),
+            object: source.object.clone(),
+            revision: source.revision.clone(),
+            bytes: source.bytes,
+            source_location: Some(source.location.clone()),
+            destination_location: None,
+            prepared_stage: None,
+        };
         file.destination_location = if path.is_empty() {
             None
         } else {
@@ -361,14 +388,24 @@ pub(super) fn prepare_named(
     cancel: &AtomicBool,
     token: &str,
 ) -> Result<Preparation> {
-    if uuid::Uuid::parse_str(token)
-        .ok()
-        .map(|id| id.to_string())
-        .as_deref()
-        != Some(token)
-    {
-        return Err(input("Invalid backend namespace identity."));
-    }
+    prepare_namespace(
+        parent,
+        targets,
+        journal,
+        cancel,
+        token,
+        &format!(".stillharbour-preparing-{token}.partial"),
+    )
+}
+pub(super) fn prepare_namespace(
+    parent: &File,
+    targets: &[Target],
+    journal: &dyn EventJournal,
+    cancel: &AtomicBool,
+    token: &str,
+    namespace: &str,
+) -> Result<Preparation> {
+    validate_namespace(token, namespace)?;
     if targets.is_empty() || targets.len() > 15_600 {
         return Err(input("Prepare between 1 and 15,600 proposed outputs."));
     }
@@ -392,7 +429,7 @@ pub(super) fn prepare_named(
         return Err(input("The target-name scope exceeds 8 MiB."));
     }
     canceled(cancel)?;
-    let temporary_namespace = format!(".stillharbour-preparing-{token}.partial");
+    let temporary_namespace = namespace.to_owned();
     let parent_object = Object::of(parent)?;
     journal.append(None,"namespace_prepare_intent",serde_json::json!({"policy":"native-name-preparation-v1","parent":parent_object,"temporaryNamespace":temporary_namespace,"targets":targets}))?;
     let root = native::create_directory(parent, &temporary_namespace)?;

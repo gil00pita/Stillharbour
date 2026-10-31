@@ -3,8 +3,8 @@ use super::*;
 use crate::executor::preparation::{self, Target};
 use std::sync::atomic::AtomicBool;
 
-const ANCHOR_PHASE: &str = "namespace_preparation_plan_v1";
-const FACT_PHASE: &str = "namespace_preparation_fact_v1";
+const ANCHOR_PHASE: &str = "namespace_preparation_plan_v2";
+const FACT_PHASE: &str = "namespace_preparation_fact_v2";
 const MAX_FACT: usize = crate::operations::MAX_PLAN_BYTES;
 // The anchor is deliberately smaller than the generic preparation input limit.
 const MAX_FACT_BYTES: usize = 32 * 1024 * 1024;
@@ -18,8 +18,9 @@ pub(super) struct Reference {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Scope {
-    binding: Binding,
+    sources: crate::executor::sources::Snapshot,
     token: String,
+    namespace: String,
     targets: Vec<Target>,
 }
 #[derive(Serialize, Deserialize)]
@@ -52,12 +53,13 @@ impl State {
                 "Invalid or oversized namespace preparation history.",
             ));
         }
-        let namespace = format!(".stillharbour-preparing-{}.partial", scope.token);
+        preparation::validate_namespace(&scope.token, &scope.namespace)?;
+        let namespace = scope.namespace.as_str();
         match (fact.ordinal, fact.phase.as_str()) {
             (1, "namespace_prepare_intent") => {
                 if fact.item.is_some()
                     || fact.evidence
-                        != serde_json::json!({"policy":"native-name-preparation-v1","parent":scope.binding.plan.destination,"temporaryNamespace":namespace,"targets":scope.targets})
+                        != serde_json::json!({"policy":"native-name-preparation-v1","parent":scope.sources.destination,"temporaryNamespace":namespace,"targets":scope.targets})
                 {
                     return Err(failed("Namespace intent differs from its retained scope."));
                 }
@@ -65,7 +67,7 @@ impl State {
             (2, "namespace_created") => {
                 if fact.item.is_some()
                     || fact.evidence["temporaryNamespace"] != namespace
-                    || fact.evidence["object"]["volume"] != scope.binding.plan.destination.volume
+                    || fact.evidence["object"]["volume"] != scope.sources.destination.volume
                 {
                     return Err(failed(
                         "Namespace creation differs from its retained scope.",
@@ -75,8 +77,8 @@ impl State {
             (3.., "namespace_prepared") => {
                 preparation::validate_record(
                     &fact.evidence,
-                    &scope.binding.plan.destination,
-                    &namespace,
+                    &scope.sources.destination,
+                    namespace,
                     &scope.targets,
                 )?;
                 let report = &fact.evidence["report"];
@@ -125,26 +127,42 @@ struct NamespaceJournal {
     state: Mutex<State>,
 }
 impl NamespaceJournal {
+    #[cfg(test)]
     fn bind(fixture: &Fixture, token: String) -> Result<Self> {
+        Self::bind_kind(fixture, token, false)
+    }
+    fn bind_kind(fixture: &Fixture, token: String, organized_output: bool) -> Result<Self> {
         crate::operations::validate_id(&token)?;
         let owner = fixture.owner.clone();
-        let manifest = fixture.manifest.clone();
-        let plan = fixture.plan.clone();
+        let selected = token.clone();
+        let previous=fixture.library.catalog.call(move|db| {
+            use rusqlite::OptionalExtension;
+            let previous:Option<Option<String>>=db.query_row("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT 1",params![owner,selected,ANCHOR_PHASE],|row|row.get(0)).optional()?;
+            previous.map(|text|decode::<Scope>(&text.ok_or_else(||failed("Namespace scope exceeds 64 KiB."))?,MAX_RECORD).map(|scope|scope.sources)).transpose()
+        })?;
+        let sources = if let Some(previous) = previous {
+            previous
+        } else {
+            crate::executor::sources::Snapshot::build(
+                &fixture.library.catalog,
+                fixture.owner.clone(),
+                fixture.manifest.clone(),
+            )?
+        };
         let (scope, encoded, anchor, state) = fixture.library.catalog.call(move |db| {
             let tx = db.transaction()?;
-            let draft = operation_store::load(&tx, &owner)?;
-            let manifest = copy_manifest::load(&tx, &owner, &manifest)?;
             let scope = Scope {
-                targets: manifest.files.iter().map(|file| Target { id: file.view.id.clone(), path: file.view.target_relative_path.clone() }).collect(),
-                binding: Binding { policy: "catalog-copy-stream-v1".into(), catalog_id: draft.catalog_id, owner_id: owner, owner_digest: draft.view.digest, manifest_id: manifest.view.id, manifest_digest: manifest.view.digest, plan, namespace: None },
+                targets: sources.files.iter().map(|file| Target { id: file.id.clone(), path: file.target.clone() }).collect(),
+                sources,
+                namespace:if organized_output {format!("Stillharbour organized {token}")} else {format!(".stillharbour-preparing-{token}.partial")},
                 token,
             };
-            validate_binding(&tx, &scope.binding)?;
+            scope.sources.validate(&tx)?;
             let encoded = serde_json::to_string(&scope).map_err(|error| failed("Could not encode namespace scope.").caused_by(error))?;
             if encoded.len() > MAX_RECORD { return Err(failed("Namespace scope exceeds 64 KiB. Use a smaller selection.")); }
             let previous = {
                 let mut query = tx.prepare("SELECT sequence,CASE WHEN length(CAST(evidence AS BLOB))<=65536 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT 2")?;
-                let mut rows = query.query(params![scope.binding.owner_id,scope.token,ANCHOR_PHASE])?;
+                let mut rows = query.query(params![scope.sources.owner_id,scope.token,ANCHOR_PHASE])?;
                 let previous = if let Some(row) = rows.next()? { Some((row.get::<_,i64>(0)?,row.get::<_,Option<String>>(1)?)) } else { None };
                 if rows.next()?.is_some() { return Err(failed("Duplicate namespace preparation anchors.")); }
                 previous
@@ -153,13 +171,13 @@ impl NamespaceJournal {
                 if previous.as_ref() != Some(&encoded) { return Err(failed("Namespace scope changed or exceeds its bound.")); }
                 sequence
             } else {
-                tx.execute("INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) VALUES(?1,?2,?3,?4,?5)",params![scope.binding.owner_id,scope.token,ANCHOR_PHASE,encoded,crate::library::store::now()])?;
+                tx.execute("INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) VALUES(?1,?2,?3,?4,?5)",params![scope.sources.owner_id,scope.token,ANCHOR_PHASE,encoded,crate::library::store::now()])?;
                 tx.last_insert_rowid()
             };
             let mut state = State::default();
             {
                 let mut query = tx.prepare("SELECT CASE WHEN length(CAST(evidence AS BLOB))<=8388608 THEN evidence END FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3 ORDER BY sequence LIMIT ?4")?;
-                let mut rows = query.query(params![scope.binding.owner_id,scope.token,FACT_PHASE,(scope.targets.len()*6+1024*2+4) as i64])?;
+                let mut rows = query.query(params![scope.sources.owner_id,scope.token,FACT_PHASE,(scope.targets.len()*6+1024*2+4) as i64])?;
                 while let Some(row) = rows.next()? {
                     let text: Option<String> = row.get(0)?;
                     let text = text.ok_or_else(|| failed("Retained preparation fact exceeds 8 MiB."))?;
@@ -201,11 +219,11 @@ impl EventJournal for NamespaceJournal {
         let count = state.count;
         self.catalog.call(move |db| {
             let tx = db.transaction()?;
-            validate_binding(&tx,&scope.binding)?;
-            let unchanged: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM operation_journal WHERE sequence=?1 AND plan_id=?2 AND item_id=?3 AND phase=?4 AND evidence=?5) AND (SELECT count(*) FROM operation_journal WHERE plan_id=?2 AND item_id=?3 AND phase=?4)=1",params![anchor,scope.binding.owner_id,scope.token,ANCHOR_PHASE,encoded],|row|row.get(0))?;
-            let existing: i64 = tx.query_row("SELECT count(*) FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3",params![scope.binding.owner_id,scope.token,FACT_PHASE],|row|row.get(0))?;
+            scope.sources.validate(&tx)?;
+            let unchanged: bool = tx.query_row("SELECT EXISTS(SELECT 1 FROM operation_journal WHERE sequence=?1 AND plan_id=?2 AND item_id=?3 AND phase=?4 AND evidence=?5) AND (SELECT count(*) FROM operation_journal WHERE plan_id=?2 AND item_id=?3 AND phase=?4)=1",params![anchor,scope.sources.owner_id,scope.token,ANCHOR_PHASE,encoded],|row|row.get(0))?;
+            let existing: i64 = tx.query_row("SELECT count(*) FROM operation_journal WHERE plan_id=?1 AND item_id=?2 AND phase=?3",params![scope.sources.owner_id,scope.token,FACT_PHASE],|row|row.get(0))?;
             if !unchanged || u64::try_from(existing).ok()!=Some(count) { return Err(failed("Namespace preparation has another writer or changed anchor. Inspect retained objects.")); }
-            tx.execute("INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) VALUES(?1,?2,?3,?4,?5)",params![scope.binding.owner_id,scope.token,FACT_PHASE,text,crate::library::store::now()])?;
+            tx.execute("INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) VALUES(?1,?2,?3,?4,?5)",params![scope.sources.owner_id,scope.token,FACT_PHASE,text,crate::library::store::now()])?;
             tx.commit()?;
             Ok(())
         })?;
@@ -237,14 +255,12 @@ fn load_preparation(
         ));
     }
     let scope: Scope = decode(&text, MAX_RECORD)?;
-    if scope.token != reference.token
-        || scope.binding.owner_id != owner
-        || scope.binding.namespace.is_some()
-    {
+    preparation::validate_namespace(&scope.token, &scope.namespace)?;
+    if scope.token != reference.token || scope.sources.owner_id != owner {
         return Err(failed("Foreign or recursive prepared namespace binding."));
     }
-    validate_binding(db, &scope.binding)?;
-    let manifest = copy_manifest::load(db, owner, &scope.binding.manifest_id)?;
+    scope.sources.validate(db)?;
+    let manifest = copy_manifest::load(db, owner, &scope.sources.manifest_id)?;
     let targets: Vec<Target> = manifest
         .files
         .iter()
@@ -290,8 +306,8 @@ pub(super) fn validate_copy_binding(db: &Connection, binding: &Binding) -> Resul
         .as_ref()
         .ok_or_else(|| failed("Missing prepared namespace reference."))?;
     let (scope, completion) = load_preparation(db, &binding.owner_id, reference)?;
-    let base = &scope.binding;
-    if binding.policy != base.policy
+    let base = &scope.sources;
+    if binding.policy != "catalog-copy-stream-v1"
         || binding.catalog_id != base.catalog_id
         || binding.owner_id != base.owner_id
         || binding.owner_digest != base.owner_digest
@@ -302,11 +318,11 @@ pub(super) fn validate_copy_binding(db: &Connection, binding: &Binding) -> Resul
             "Prepared copy scope differs from its catalog/manifest binding.",
         ));
     }
-    let namespace = format!(".stillharbour-preparing-{}.partial", reference.token);
+    let namespace = scope.namespace.as_str();
     let expected = preparation::project_copy_plan(
         &completion,
-        &base.plan,
-        &namespace,
+        base,
+        namespace,
         &scope.targets,
         &binding.plan.id,
     )?;
@@ -353,26 +369,32 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
     Ok(receipt)
 }
 fn fixture_case(fault: Option<crate::executor::CopyFault>) -> Result<serde_json::Value> {
+    fixture_case_for(Fixture::with_nested(true)?, fault)
+}
+fn fixture_case_for(
+    fixture: Fixture,
+    fault: Option<crate::executor::CopyFault>,
+) -> Result<serde_json::Value> {
     use crate::jobs::operation_locks::{Access, Registry, Scope as NativeScope};
-    let fixture = Fixture::with_nested(true)?;
+    let token = uuid::Uuid::new_v4().to_string();
+    let journal = NamespaceJournal::bind_kind(&fixture, token.clone(), true)?;
     let (source, destination) = fixture.scope()?;
     let _lease = Registry::shared().try_acquire(vec![
         NativeScope::new(source, Access::Read),
         NativeScope::new(destination, Access::Write),
     ])?;
-    let token = uuid::Uuid::new_v4().to_string();
-    let journal = NamespaceJournal::bind(&fixture, token.clone())?;
-    let prepared = preparation::prepare_named(
+    let prepared = preparation::prepare_namespace(
         _lease.directory(1).leaf(),
         &journal.scope.targets,
         &journal,
         &AtomicBool::new(false),
         &token,
+        &journal.scope.namespace,
     )?;
     let report = serde_json::to_value(&prepared.report)
         .map_err(|error| failed("Could not encode namespace receipt.").caused_by(error))?;
     drop(journal);
-    let reopened = NamespaceJournal::bind(&fixture, token)?;
+    let reopened = NamespaceJournal::bind_kind(&fixture, token, true)?;
     let state = reopened
         .state
         .lock()
@@ -384,12 +406,13 @@ fn fixture_case(fault: Option<crate::executor::CopyFault>) -> Result<serde_json:
     }
     let count = state.count;
     drop(state);
-    let retry_blocked = preparation::prepare_named(
+    let retry_blocked = preparation::prepare_namespace(
         _lease.directory(1).leaf(),
         &reopened.scope.targets,
         &reopened,
         &AtomicBool::new(false),
         &reopened.scope.token,
+        &reopened.scope.namespace,
     )
     .is_err();
     if !retry_blocked
@@ -419,8 +442,8 @@ fn fixture_case(fault: Option<crate::executor::CopyFault>) -> Result<serde_json:
         let (scope, completion) = load_preparation(db, &owner, &supplied)?;
         preparation::project_copy_plan(
             &completion,
-            &scope.binding.plan,
-            &format!(".stillharbour-preparing-{}.partial", supplied.token),
+            &scope.sources,
+            &scope.namespace,
             &scope.targets,
             &stream,
         )
@@ -590,6 +613,143 @@ fn fixture_case(fault: Option<crate::executor::CopyFault>) -> Result<serde_json:
 mod tests {
     use super::*;
     #[test]
+    fn native_source_planning_copies_future_target_parents_without_creating_them_during_preview() {
+        use crate::operations::{
+            BundleConfirmationInput, BundleRelation, CopyManifestInput, PlanDraftInput,
+        };
+        use crate::organization::{MissingDatePolicy, OrganizationTemplate};
+        let mut fixture = Fixture::with_nested(true).unwrap();
+        let owner = fixture.owner.clone();
+        let source = fixture
+            .library
+            .catalog
+            .call(move |db| Ok(operation_store::load(db, &owner)?.sources[0].clone()))
+            .unwrap();
+        let template = OrganizationTemplate {
+            pattern: "future/nested/{original_stem}.{ext}".into(),
+            event: String::new(),
+            missing_date: MissingDatePolicy::Block,
+        };
+        let preview = fixture
+            .library
+            .organization_preview(vec![source.id.clone()], template.clone())
+            .unwrap();
+        let root = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let draft = fixture
+            .library
+            .organization_plan_create(
+                PlanDraftInput {
+                    asset_ids: vec![source.id.clone()],
+                    template,
+                    preview_fingerprint: preview.fingerprint,
+                    template_reference: None,
+                },
+                fixture.destination.clone(),
+                (
+                    crate::filesystem::identity(&root).unwrap(),
+                    fixture.plan.destination_volume.clone(),
+                ),
+            )
+            .unwrap();
+        drop(root);
+        let inventory = fixture
+            .library
+            .organization_bundle_inventory(source.id.clone(), source.revision.clone())
+            .unwrap();
+        let decision = fixture
+            .library
+            .organization_bundle_confirm(BundleConfirmationInput {
+                plan_id: draft.plan.id.clone(),
+                asset_id: source.id,
+                source_revision: source.revision,
+                inventory_fingerprint: inventory.fingerprint,
+                companion_ids: inventory
+                    .entries
+                    .iter()
+                    .filter(|entry| {
+                        entry.selectable && entry.relation != BundleRelation::Additional
+                    })
+                    .map(|entry| entry.id.clone())
+                    .collect(),
+                reviewed_all_entries: true,
+            })
+            .unwrap();
+        let manifest = fixture
+            .library
+            .organization_copy_manifest(CopyManifestInput {
+                plan_id: draft.plan.id.clone(),
+                bundle_confirmation_ids: vec![decision.id],
+            })
+            .unwrap();
+        fixture.owner = draft.plan.id;
+        fixture.manifest = manifest.id;
+        let snapshot = crate::executor::sources::Snapshot::build(
+            &fixture.library.catalog,
+            fixture.owner.clone(),
+            fixture.manifest.clone(),
+        )
+        .unwrap();
+        assert!(
+            snapshot
+                .files
+                .iter()
+                .all(|file| file.target.starts_with("future/nested/"))
+        );
+        assert!(!fixture.destination.join("future").exists());
+        assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
+        assert!(fixture.preserved().unwrap());
+        let receipt = fixture_case_for(fixture, None).unwrap();
+        assert_eq!(receipt["retainedFacts"], 15);
+        assert_eq!(receipt["preparedCopy"]["samePreparedObjectsPublished"], 2);
+        assert_eq!(
+            receipt["preparedCopy"]["after"],
+            serde_json::json!(["published_verified", "published_verified"])
+        );
+        assert!(
+            receipt["report"]["temporaryNamespace"]
+                .as_str()
+                .unwrap()
+                .starts_with("Stillharbour organized ")
+        );
+    }
+    #[test]
+    fn source_snapshot_refuses_active_destination_writers_and_changed_members_without_outputs() {
+        use crate::jobs::operation_locks::{Access, Registry, Scope};
+        let fixture = Fixture::with_nested(true).unwrap();
+        let (_, destination) = fixture.scope().unwrap();
+        let writer = Registry::shared()
+            .try_acquire(vec![Scope::new(destination, Access::Write)])
+            .unwrap();
+        let blocked = crate::executor::sources::Snapshot::build(
+            &fixture.library.catalog,
+            fixture.owner.clone(),
+            fixture.manifest.clone(),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(blocked.code, ErrorCode::Busy);
+        assert!(fixture.preserved().unwrap());
+        drop(writer);
+        let path = fixture.source.join("source-folder/Photo.JPG");
+        let mut changed = std::fs::read(&path).unwrap();
+        changed[0] ^= 0xff;
+        std::fs::write(&path, &changed).unwrap();
+        assert!(
+            crate::executor::sources::Snapshot::build(
+                &fixture.library.catalog,
+                fixture.owner.clone(),
+                fixture.manifest.clone()
+            )
+            .is_err()
+        );
+        assert_eq!(std::fs::read(&path).unwrap(), changed);
+        assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
+        assert_eq!(
+            std::fs::read(fixture.destination.join("destination-only.bin")).unwrap(),
+            NEIGHBOR_BYTES
+        );
+    }
+    #[test]
     fn catalog_namespace_retains_actual_preparation_and_refuses_replay() {
         let receipt = fixture_probe().unwrap();
         assert_eq!(receipt["retainedFacts"], 13);
@@ -642,7 +802,7 @@ mod tests {
                 let (scope, completion) = load_preparation(db, &owner, &supplied)?;
                 preparation::project_copy_plan(
                     &completion,
-                    &scope.binding.plan,
+                    &scope.sources,
                     &format!(".stillharbour-preparing-{}.partial", supplied.token),
                     &scope.targets,
                     &uuid::Uuid::new_v4().to_string(),
@@ -735,7 +895,7 @@ mod tests {
             let journal = NamespaceJournal::bind(&fixture, token.clone()).unwrap();
             fixture.library.catalog.call(move |db| {
                 if revoke { db.execute("UPDATE roots SET mode='referenced'",[])?; }
-                else { db.execute_batch("CREATE TRIGGER reject_namespace_fact BEFORE INSERT ON operation_journal WHEN NEW.phase='namespace_preparation_fact_v1' BEGIN SELECT RAISE(ABORT,'fixture journal denial'); END;")?; }
+                else { db.execute_batch("CREATE TRIGGER reject_namespace_fact BEFORE INSERT ON operation_journal WHEN NEW.phase='namespace_preparation_fact_v2' BEGIN SELECT RAISE(ABORT,'fixture journal denial'); END;")?; }
                 Ok(())
             }).unwrap();
             let (_, output) = fixture.scope().unwrap();
@@ -828,7 +988,7 @@ mod tests {
         // Hash chaining is corruption detection, never imported approval.
         let owner = fixture.owner.clone();
         fixture.library.catalog.call(move |db| {
-            db.execute("INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) VALUES(?1,?2,'namespace_preparation_fact_v1',?3,'fixture')",params![owner,token,serde_json::to_string(&Fact{ordinal:2,previous:"foreign".into(),item:None,phase:"namespace_created".into(),evidence:serde_json::json!({})}).unwrap()])?;
+            db.execute("INSERT INTO operation_journal(plan_id,item_id,phase,evidence,created_at) VALUES(?1,?2,'namespace_preparation_fact_v2',?3,'fixture')",params![owner,token,serde_json::to_string(&Fact{ordinal:2,previous:"foreign".into(),item:None,phase:"namespace_created".into(),evidence:serde_json::json!({})}).unwrap()])?;
             Ok(())
         }).unwrap();
         assert!(NamespaceJournal::bind(&fixture, reopened.scope.token.clone()).is_err());

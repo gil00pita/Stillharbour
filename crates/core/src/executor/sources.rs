@@ -1,0 +1,231 @@
+//! Native source planning is distinct from an executable copy plan. Future
+//! target folders need not exist and no output object is created here.
+use super::{Object, failed, locations};
+use crate::{
+    catalog::Catalog,
+    domain::Result,
+    filesystem::DirectoryChain,
+    jobs::operation_locks::{Access, Registry, Scope},
+    library::{copy_manifest, native, operation_store},
+};
+use rusqlite::Connection;
+use serde::{Deserialize, Serialize};
+use std::sync::Arc;
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct File {
+    pub id: String,
+    pub display_name: String,
+    pub location: locations::Source,
+    pub object: Object,
+    pub revision: String,
+    pub bytes: u64,
+    pub target: String,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Snapshot {
+    pub policy: String,
+    pub catalog_id: String,
+    pub owner_id: String,
+    pub owner_digest: String,
+    pub manifest_id: String,
+    pub manifest_digest: String,
+    pub root_id: String,
+    pub source: Object,
+    pub source_volume: String,
+    pub destination: Object,
+    pub destination_volume: String,
+    pub files: Vec<File>,
+}
+fn root(db: &Connection, id: &str) -> Result<(Vec<u8>, Object, String)> {
+    let (path,device,inode,volume,mode):(Option<Vec<u8>>,String,String,String,String)=db.query_row(
+        "SELECT CASE WHEN length(native_path)<=65536 THEN native_path END,device,inode,volume,mode FROM roots WHERE id=?",
+        [id],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?)))?;
+    if mode != "managed" {
+        return Err(failed("The source root needs its unchanged managed grant."));
+    }
+    Ok((
+        path.ok_or_else(|| failed("Source root path exceeds its bound."))?,
+        Object {
+            volume: device
+                .parse()
+                .map_err(|_| failed("Invalid source volume identity."))?,
+            file: inode
+                .parse()
+                .map_err(|_| failed("Invalid source file identity."))?,
+        },
+        volume,
+    ))
+}
+impl Snapshot {
+    pub(super) fn build(catalog: &Arc<Catalog>, owner: String, manifest: String) -> Result<Self> {
+        crate::operations::validate_id(&owner)?;
+        crate::operations::validate_id(&manifest)?;
+        let (draft, manifest, root_id, path, source, source_volume) = catalog.call(move |db| {
+            let draft = operation_store::load(db, &owner)?;
+            let manifest = copy_manifest::load(db, &owner, &manifest)?;
+            let root_id = manifest
+                .files
+                .first()
+                .ok_or_else(|| failed("No source files were selected."))?
+                .view
+                .root_id
+                .clone();
+            if !manifest.view.issues.is_empty()
+                || manifest
+                    .files
+                    .iter()
+                    .any(|file| file.view.root_id != root_id)
+            {
+                return Err(failed(
+                    "Source planning currently requires one conflict-free managed root.",
+                ));
+            }
+            let (path, source, volume) = root(db, &root_id)?;
+            Ok((draft, manifest, root_id, path, source, volume))
+        })?;
+        let source_path = native::decode_path(&path)?;
+        let destination_path = native::decode_path(&draft.destination_native)?;
+        let destination = Object {
+            volume: draft.destination_device,
+            file: draft.destination_file,
+        };
+        // Bind selected spellings first, then independently open canonical
+        // native components, including their ancestor identities.
+        let selected_source = native::open_root(&source_path, None)?;
+        let selected_destination = native::open_root(&destination_path, None)?;
+        if !source.matches(&selected_source)?
+            || !destination.matches(&selected_destination)?
+            || native::volume_token(&selected_source)? != source_volume
+            || native::volume_token(&selected_destination)? != draft.destination_volume
+        {
+            return Err(failed(
+                "Source/destination identity changed before source planning.",
+            ));
+        }
+        drop((selected_source, selected_destination));
+        let source_chain = DirectoryChain::open(&source_path.canonicalize()?)?;
+        let destination_chain = DirectoryChain::open(&destination_path.canonicalize()?)?;
+        if !source.matches(source_chain.leaf())?
+            || !destination.matches(destination_chain.leaf())?
+            || source_chain
+                .identities()
+                .iter()
+                .any(|id| id.volume == destination.volume && id.file == destination.file)
+            || destination_chain
+                .identities()
+                .iter()
+                .any(|id| id.volume == source.volume && id.file == source.file)
+        {
+            return Err(failed(
+                "Source planning requires separate unchanged native roots.",
+            ));
+        }
+        let lease = Registry::shared().try_acquire(vec![
+            Scope::new(source_chain, Access::Read),
+            Scope::new(destination_chain, Access::Read),
+        ])?;
+        let mut files = Vec::new();
+        for member in &manifest.files {
+            let location = locations::Source::capture(
+                lease.directory(0).leaf(),
+                &native::decode_path(&member.relative_native)?,
+            )?;
+            let file = location.open(lease.directory(0).leaf())?;
+            let object = Object::of(&file)?;
+            let revision = native::revision(&file)?;
+            let bytes = file.metadata()?.len();
+            if (object.volume, object.file) != member.identity
+                || revision != member.view.source_revision
+                || bytes.to_string() != member.view.bytes
+            {
+                return Err(failed(
+                    "A confirmed source changed during native source planning.",
+                ));
+            }
+            files.push(File {
+                id: member.view.id.clone(),
+                display_name: member.view.source_name.clone(),
+                location,
+                object,
+                revision,
+                bytes,
+                target: member.view.target_relative_path.clone(),
+            });
+        }
+        let snapshot = Self {
+            policy: "native-copy-source-snapshot-v1".into(),
+            catalog_id: draft.catalog_id,
+            owner_id: draft.view.id,
+            owner_digest: draft.view.digest,
+            manifest_id: manifest.view.id,
+            manifest_digest: manifest.view.digest,
+            root_id,
+            source,
+            source_volume,
+            destination,
+            destination_volume: draft.destination_volume,
+            files,
+        };
+        let retained = snapshot.clone();
+        catalog.call(move |db| retained.validate(db))?;
+        // Recheck every opened member through its native parent proof. This is
+        // not an atomic directory snapshot or permission to execute later.
+        for member in &snapshot.files {
+            let file = member.location.open(lease.directory(0).leaf())?;
+            if !member.object.matches(&file)?
+                || native::revision(&file)? != member.revision
+                || file.metadata()?.len() != member.bytes
+            {
+                return Err(failed(
+                    "Source membership changed before source planning completed.",
+                ));
+            }
+        }
+        Ok(snapshot)
+    }
+    pub(super) fn validate(&self, db: &Connection) -> Result<()> {
+        let draft = operation_store::load(db, &self.owner_id)?;
+        let manifest = copy_manifest::load(db, &self.owner_id, &self.manifest_id)?;
+        let (_, source, volume) = root(db, &self.root_id)?;
+        if self.policy != "native-copy-source-snapshot-v1"
+            || self.catalog_id != draft.catalog_id
+            || self.owner_digest != draft.view.digest
+            || self.manifest_digest != manifest.view.digest
+            || self.source != source
+            || self.source_volume != volume
+            || self.destination
+                != (Object {
+                    volume: draft.destination_device,
+                    file: draft.destination_file,
+                })
+            || self.destination_volume != draft.destination_volume
+            || self.files.is_empty()
+            || self.files.len() != manifest.files.len()
+            || !manifest.view.issues.is_empty()
+        {
+            return Err(failed(
+                "Source snapshot no longer matches its retained native scope.",
+            ));
+        }
+        for (file, member) in self.files.iter().zip(&manifest.files) {
+            file.location.validate()?;
+            if member.view.root_id != self.root_id
+                || file.id != member.view.id
+                || file.display_name != member.view.source_name
+                || file.location.relative_native != member.relative_native
+                || (file.object.volume, file.object.file) != member.identity
+                || file.revision != member.view.source_revision
+                || file.bytes.to_string() != member.view.bytes
+                || file.target != member.view.target_relative_path
+            {
+                return Err(failed(
+                    "Source snapshot differs from the exact confirmed file mapping.",
+                ));
+            }
+        }
+        Ok(())
+    }
+}

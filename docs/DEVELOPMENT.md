@@ -437,3 +437,7 @@ ADR-0035 adds executor::catalog_journal::namespace_journal under existing fixtur
 ## Prepared namespace catalog copy projection - 2026-10-31
 
 ADR-0036 adds optional private namespace references to catalog copy bindings, preserving omitted legacy encoding. Run namespace_ and executor:: Rust tests, full checks and isolated native suites. The existing namespacePreparation receipt now includes preparedCopy and interruptedAfterPublish.preparedCopy: exact before/after states, thirteen/five events, two/one identical prepared objects and replay/second-stream refusal. Only the constructor-owned fixture can invoke this path. Production ready-plan/session approvals/jobs remain unavailable. Do not treat preparation completion or imported history as approval.
+
+## Native source snapshots and future folders - 2026-10-31
+
+ADR-0037 adds executor::sources. Namespace preparation now uses source-only snapshots and v2 anchor/fact phases; no pre-created destination parent proof is required. Run namespace_ (including native_source_planning and source_snapshot_refuses) and executor:: Rust cases, then full/native checks. Current generated namespace diagnostics use the frozen visible Stillharbour organized UUID folder; generic name-preparation diagnostics retain their pending name. Reopening retained snapshots does not reacquire a conflicting read lease under a live preparation writer. No production command or user-catalog migration is added; v1 disposable diagnostic facts are not upgraded into approval.
