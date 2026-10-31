@@ -32,8 +32,13 @@ impl DirectoryChain {
             handles: Vec::new(),
             identities: Vec::new(),
         };
-        let _count = path.components().count();
-        for (_index, component) in path.components().enumerate() {
+        #[cfg(windows)]
+        let mut remaining_components = path.components().count();
+        for component in path.components() {
+            #[cfg(windows)]
+            {
+                remaining_components -= 1;
+            }
             let handle = match component {
                 Component::Prefix(_) if chain.handles.is_empty() => {
                     prefix.push(component);
@@ -49,7 +54,7 @@ impl DirectoryChain {
                 }
                 Component::Normal(name) if !chain.handles.is_empty() => {
                     #[cfg(windows)]
-                    let file = if _owned_publication && _index + 1 == _count {
+                    let file = if _owned_publication && remaining_components == 0 {
                         super::windows::owned_directory_child(chain.leaf(), name)?
                     } else {
                         super::windows::child(chain.leaf(), name, true)?
