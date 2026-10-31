@@ -45,6 +45,13 @@ async function reviewRemovalStopsJobs(receipt) {
   await $('button=Cancel').click();
   assert.ok((await native({ kind: 'status' })).data.roots.some((value) => value.id === root.id));
   await $('button[aria-label="Photos"]').click();
+  await browser.waitUntil(async () =>
+    browser.execute(() =>
+      document
+        .querySelector('.preparation-banner')
+        ?.textContent.includes('Preview preparation paused'),
+    ),
+  );
 }
 async function preparationLayout() {
   return browser.execute(() => {

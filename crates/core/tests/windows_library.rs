@@ -353,6 +353,7 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
     };
     let scan = library.scan(root_id.clone(), filter).unwrap();
     wait(&library, &scan.id);
+    settle(&library);
     assert_eq!(
         library
             .query(AssetQuery::default(), None, 240)
