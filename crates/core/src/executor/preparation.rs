@@ -1,13 +1,13 @@
 //! Native future-name evidence in a newly owned pending output namespace.
 //! No normalization/lowercasing is used to authorize distinct target names.
-use super::{CopyFixture, Journal, Object, failed, native};
+use super::{CopyFixture, EventJournal, Journal, Object, failed, native};
 use crate::{
     domain::{AppError, ErrorCode, Result},
     filesystem,
     operations::MAX_PLAN_BYTES,
     organization::portable_relative_target,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::File,
@@ -35,28 +35,29 @@ fn boundary(point: Boundary) -> Result<()> {
     let _ = point;
     Ok(())
 }
-#[derive(Clone, Serialize)]
-struct Target {
-    id: String,
-    path: String,
+#[derive(Clone, Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Target {
+    pub(super) id: String,
+    pub(super) path: String,
 }
-#[derive(Clone, Copy, Serialize, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]
 enum State {
     Prepared,
     NativeConflict,
     BlockedAncestor,
 }
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Row {
     id: String,
     target_relative_path: String,
     state: State,
 }
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Report {
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct Report {
     policy: String,
     temporary_namespace: String,
     fingerprint: String,
@@ -70,7 +71,8 @@ struct Directory {
     handle: File,
     object: Object,
 }
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Stage {
     target_id: String,
     parent: usize,
@@ -86,10 +88,96 @@ struct Placeholder {
     identity: filesystem::FileIdentity,
     revision: String,
 }
-struct Preparation {
-    report: Report,
+pub(super) struct Preparation {
+    pub(super) report: Report,
     directories: Vec<Directory>,
     stages: Vec<Stage>,
+}
+/// Decode recorded facts defensively. This checks internal consistency only;
+/// callers still need fresh native inspection and separate execution approval.
+pub(super) fn validate_record(
+    value: &serde_json::Value,
+    parent: &Object,
+    namespace: &str,
+    targets: &[Target],
+) -> Result<()> {
+    type Evidence = (
+        String,
+        Object,
+        String,
+        Vec<Row>,
+        Vec<Stage>,
+        Vec<(Vec<String>, Object)>,
+    );
+    let evidence: Evidence = serde_json::from_value(value["evidence"].clone())
+        .map_err(|error| failed("Invalid retained namespace evidence.").caused_by(error))?;
+    let report: Report = serde_json::from_value(value["report"].clone())
+        .map_err(|error| failed("Invalid retained namespace report.").caused_by(error))?;
+    let encoded = serde_json::to_vec(&evidence)
+        .map_err(|error| failed("Could not validate namespace fingerprint.").caused_by(error))?;
+    if evidence.0 != "native-name-preparation-v1"
+        || &evidence.1 != parent
+        || evidence.2 != namespace
+        || report.policy != evidence.0
+        || report.temporary_namespace != namespace
+        || report.execution_available
+        || report.fingerprint != blake3::hash(&encoded).to_hex().as_str()
+        || report.directories != evidence.5.len()
+        || report.retained_stages != evidence.4.len()
+        || evidence.5.is_empty()
+        || evidence.5.len() > MAX_DIRECTORIES
+        || !evidence.5[0].0.is_empty()
+        || evidence.3.len() != targets.len()
+        || evidence.4.len() > targets.len()
+        || serde_json::to_value(&report.rows).ok() != serde_json::to_value(&evidence.3).ok()
+        || evidence
+            .3
+            .iter()
+            .zip(targets)
+            .any(|(row, target)| row.id != target.id || row.target_relative_path != target.path)
+    {
+        return Err(failed(
+            "Retained namespace facts disagree with their scope/fingerprint.",
+        ));
+    }
+    let mut paths = BTreeSet::new();
+    let mut objects = BTreeSet::new();
+    for (path, object) in &evidence.5 {
+        if object.volume != parent.volume
+            || !paths.insert(path.clone())
+            || !objects.insert((object.volume, object.file))
+        {
+            return Err(failed("Repeated or foreign namespace directory evidence."));
+        }
+    }
+    let mut staged = BTreeSet::new();
+    for stage in &evidence.4 {
+        let target = targets
+            .iter()
+            .find(|target| target.id == stage.target_id)
+            .ok_or_else(|| failed("Unknown retained stage target."))?;
+        let (directory, object) = evidence
+            .5
+            .get(stage.parent)
+            .ok_or_else(|| failed("Unknown retained stage parent."))?;
+        let expected = directory
+            .iter()
+            .map(String::as_str)
+            .chain(std::iter::once(stage.original_leaf.as_str()))
+            .collect::<Vec<_>>()
+            .join("/");
+        if expected != target.path
+            || stage.object.volume != object.volume
+            || stage.revision.len() != 64
+            || !stage.revision.bytes().all(|byte| byte.is_ascii_hexdigit())
+            || !crate::organization::portable_filename(&stage.stage_leaf)
+            || !staged.insert(&stage.target_id)
+            || !objects.insert((stage.object.volume, stage.object.file))
+        {
+            return Err(failed("Invalid retained stage mapping or identity."));
+        }
+    }
+    Ok(())
 }
 fn validate_members(
     parent: &File,
@@ -161,9 +249,32 @@ fn canceled(cancel: &AtomicBool) -> Result<()> {
 fn prepare(
     parent: &File,
     targets: &[Target],
-    journal: &Journal,
+    journal: &dyn EventJournal,
     cancel: &AtomicBool,
 ) -> Result<Preparation> {
+    prepare_named(
+        parent,
+        targets,
+        journal,
+        cancel,
+        &uuid::Uuid::new_v4().to_string(),
+    )
+}
+pub(super) fn prepare_named(
+    parent: &File,
+    targets: &[Target],
+    journal: &dyn EventJournal,
+    cancel: &AtomicBool,
+    token: &str,
+) -> Result<Preparation> {
+    if uuid::Uuid::parse_str(token)
+        .ok()
+        .map(|id| id.to_string())
+        .as_deref()
+        != Some(token)
+    {
+        return Err(input("Invalid backend namespace identity."));
+    }
     if targets.is_empty() || targets.len() > 15_600 {
         return Err(input("Prepare between 1 and 15,600 proposed outputs."));
     }
@@ -187,7 +298,6 @@ fn prepare(
         return Err(input("The target-name scope exceeds 8 MiB."));
     }
     canceled(cancel)?;
-    let token = uuid::Uuid::new_v4().to_string();
     let temporary_namespace = format!(".stillharbour-preparing-{token}.partial");
     let parent_object = Object::of(parent)?;
     journal.append(None,"namespace_prepare_intent",serde_json::json!({"policy":"native-name-preparation-v1","parent":parent_object,"temporaryNamespace":temporary_namespace,"targets":targets}))?;

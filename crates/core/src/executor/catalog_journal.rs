@@ -1,6 +1,7 @@
 //! Catalog-actor adapter for the central engine. Currently constructor-owned
 //! fixture capability only; retained records are never execution approvals.
-use super::{CopyJournal, CopyPlan, Object, failed};
+mod namespace_journal;
+use super::{CopyJournal, CopyPlan, EventJournal, Object, failed};
 use crate::{
     catalog::Catalog,
     domain::{ErrorCode, Result},
@@ -325,7 +326,7 @@ impl CatalogJournal {
         })
     }
 }
-impl CopyJournal for CatalogJournal {
+impl EventJournal for CatalogJournal {
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()> {
         let mut history = self
             .history
@@ -362,6 +363,8 @@ impl CopyJournal for CatalogJournal {
         *history = proposed;
         Ok(())
     }
+}
+impl CopyJournal for CatalogJournal {
     fn history_count(&self) -> Result<u64> {
         Ok(self
             .history
@@ -733,7 +736,7 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
         cases.push(serde_json::json!({"outcome":outcome,"publishedVerified":verified,"sourceAndNeighborPreserved":preserved,"replayBlocked":rejected,"journalEvents":reopened.history_count()?}));
     }
     Ok(
-        serde_json::json!({"scope":"generated-temporary-only","catalogSchema":crate::catalog::SCHEMA_VERSION,"completed":cases[0],"interruptedAfterPublish":cases[1],"nested":cases[2]}),
+        serde_json::json!({"scope":"generated-temporary-only","catalogSchema":crate::catalog::SCHEMA_VERSION,"completed":cases[0],"interruptedAfterPublish":cases[1],"nested":cases[2],"namespacePreparation":namespace_journal::fixture_probe()?}),
     )
 }
 

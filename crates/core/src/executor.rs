@@ -227,8 +227,10 @@ fn failed(message: &str) -> AppError {
 }
 
 struct Journal(Connection);
-trait CopyJournal {
+trait EventJournal {
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()>;
+}
+trait CopyJournal: EventJournal {
     fn history_count(&self) -> Result<u64>;
     fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>>;
     fn deny_writes_for_fixture_fault(&self) -> Result<()> {
@@ -238,10 +240,12 @@ trait CopyJournal {
         ))
     }
 }
-impl CopyJournal for Journal {
+impl EventJournal for Journal {
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()> {
         Journal::append(self, item, phase, evidence)
     }
+}
+impl CopyJournal for Journal {
     fn history_count(&self) -> Result<u64> {
         let count: i64 = self
             .0

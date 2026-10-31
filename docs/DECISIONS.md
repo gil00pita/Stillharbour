@@ -219,3 +219,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Identified empty-stage reuse — 2026-10-31
 
 [ADR-0034](decisions/ADR-0034-identified-empty-stage-reuse.md) joins actual constructor-owned name preparation to copying through immutable empty-stage identity/revision proofs and a distinct copy journal. Verify single-link/empty/unchanged membership before writing; never recreate or truncate a changed stage. The catalog adapter rejects unbound prepared-stage authority. This fixture pipeline still grants no production approval.
+
+## Catalog namespace preparation facts - 2026-10-31
+
+[ADR-0035](decisions/ADR-0035-catalog-namespace-preparation-facts.md) separates event append from copy inspection and binds frozen namespace identity/exact manifest targets to bounded append-only catalog facts. Scope validation, atomic anchor/count checks, hash-chain/recomputed typed fingerprint checks and terminal replay refusal preserve interrupted evidence without granting copy approval. Production prepared-stage ready plans and approvals remain open.
