@@ -524,6 +524,18 @@ pub enum LibraryRequest {
         plan_id: String,
         manifest_id: String,
     },
+    OrganizationImportComparisonStart {
+        input: crate::operations::ImportComparisonInput,
+    },
+    OrganizationImportComparisonJob {
+        job_id: String,
+    },
+    OrganizationImportComparisonCancel {
+        job_id: String,
+    },
+    OrganizationImportComparisonDiscard {
+        job_id: String,
+    },
     OrganizationCopyCapabilities {},
     OrganizationCopyEffectMatch {
         plan_id: String,
@@ -704,6 +716,7 @@ pub enum LibraryRequest {
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
     OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),
+    OrganizationImportComparisonJob(Box<crate::operations::ImportComparisonJob>),
     OrganizationCopyEffectMatch(crate::operations::CopyEffectMatch),
     OrganizationCopyReview(Box<crate::operations::CopyActionReview>),
     OrganizationCopyPreparationReopened(Box<crate::operations::CopyPreparationReopened>),

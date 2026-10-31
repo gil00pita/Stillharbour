@@ -1177,6 +1177,455 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
+    fn comparison_root(
+        fixture: &Fixture,
+        files: &[(&str, Vec<u8>)],
+    ) -> (String, std::path::PathBuf, Vec<String>) {
+        use crate::library::{
+            model::{RootMode, ScanFilter},
+            native, store,
+        };
+        let path = fixture
+            ._run
+            .path()
+            .join(format!("comparison-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&path).unwrap();
+        for (name, bytes) in files {
+            assert!(crate::organization::portable_filename(name));
+            std::fs::write(path.join(name), bytes).unwrap();
+        }
+        let root = native::open_root(&path, None).unwrap();
+        let identity = crate::filesystem::identity(&root).unwrap();
+        let volume = native::volume_token(&root).unwrap();
+        drop(root);
+        let id = store::add_root(
+            &fixture.library.catalog,
+            path.clone(),
+            identity.clone(),
+            volume.clone(),
+            "Owned comparison fixture".into(),
+            RootMode::Referenced,
+            ScanFilter::default(),
+        )
+        .unwrap();
+        let mut ids = Vec::new();
+        for (name, bytes) in files {
+            let file = native::open_asset(&path, &identity, &volume, Path::new(name)).unwrap();
+            let object = Object::of(&file).unwrap();
+            let revision = native::revision(&file).unwrap();
+            drop(file);
+            let asset = uuid::Uuid::new_v4().to_string();
+            let retained = asset.clone();
+            let root = id.clone();
+            let name = name.to_string();
+            let size = bytes.len() as i64;
+            fixture.library.catalog.call(move|db|{db.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,presence,is_media,seen_scan) VALUES(?1,?2,?3,?4,?5,'',?4,?4,'jpg',?6,?7,?8,'now','2026-10-31T00:00:00','filesystem_modified','ready','pending','present',1,'owned-comparison-fixture')",params![retained,root,native::encode_path(Path::new(&name)),name,native::encode_path(Path::new("")),format!("{}:{}",object.volume,object.file),size,revision])?;Ok(())}).unwrap();
+            ids.push(asset);
+        }
+        let root = id.clone();
+        fixture.library.catalog.call(move|db|{db.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?1,?2,'completed','Owned seeded comparison fixture','2026-10-31T00:00:00Z')",params![uuid::Uuid::new_v4().to_string(),root])?;db.execute("UPDATE roots SET availability='online',last_scan='owned-complete' WHERE id=?",[root])?;Ok(())}).unwrap();
+        (id, path, ids)
+    }
+    fn wait_comparison(
+        workflow: &crate::executor::CopyWorkflow,
+        id: String,
+    ) -> crate::operations::ImportComparisonJob {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let job = workflow.import_comparison_job(id.clone()).unwrap();
+            if !matches!(
+                job.state,
+                crate::operations::ImportComparisonState::Queued
+                    | crate::operations::ImportComparisonState::Running
+                    | crate::operations::ImportComparisonState::CancelRequested
+            ) {
+                return job;
+            }
+            assert!(
+                std::time::Instant::now() < deadline,
+                "read comparison did not finish"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+    #[test]
+    fn import_comparison_reports_renamed_exact_bytes_without_writes_or_managed_source_authority() {
+        use crate::operations::{
+            ImportComparisonInput, ImportComparisonState, ImportFileComparison,
+        };
+        let fixture = Fixture::with_nested(true).unwrap();
+        let (root, path, ids) = comparison_root(
+            &fixture,
+            &[
+                ("Renamed.JPG", generated_photo_bytes().unwrap()),
+                ("Renamed.xmp", COMPANION_BYTES.to_vec()),
+                ("Other.JPG", b"different".to_vec()),
+            ],
+        );
+        let owner = fixture.owner.clone();
+        let source_root = fixture
+            .library
+            .catalog
+            .call(move |db| {
+                Ok(operation_store::load(db, &owner)?.sources[0]
+                    .root_id
+                    .clone())
+            })
+            .unwrap();
+        let source = source_root.clone();
+        fixture
+            .library
+            .catalog
+            .call(move |db| {
+                db.execute("UPDATE roots SET mode='referenced' WHERE id=?", [source])?;
+                Ok(())
+            })
+            .unwrap();
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let before: i64 = fixture
+            .library
+            .catalog
+            .call(
+                |db| Ok(db.query_row("SELECT count(*) FROM operation_journal", [], |r| r.get(0))?),
+            )
+            .unwrap();
+        let queued = workflow
+            .start_import_comparison(
+                &fixture.library,
+                ImportComparisonInput {
+                    plan_id: fixture.owner.clone(),
+                    manifest_id: fixture.manifest.clone(),
+                    scope_root_ids: vec![root.clone()],
+                },
+            )
+            .unwrap();
+        let completed = wait_comparison(&workflow, queued.id);
+        assert_eq!(
+            completed.state,
+            ImportComparisonState::Completed,
+            "{:?}",
+            completed.error
+        );
+        assert!(completed.bytes_read.parse::<u128>().unwrap() > 0);
+        let report = completed.report.unwrap();
+        assert!(report.all_scope_available);
+        assert!(!report.mutation_authorized);
+        assert!(report.bundle_review_required);
+        assert_eq!(report.files.len(), 2);
+        assert!(
+            report
+                .files
+                .iter()
+                .all(|file| file.state == ImportFileComparison::ExactBytesCompared)
+        );
+        assert!(
+            report
+                .files
+                .iter()
+                .flat_map(|file| &file.matches)
+                .all(|found| ids[..2].contains(&found.asset_id))
+        );
+        let after: i64 = fixture
+            .library
+            .catalog
+            .call(
+                |db| Ok(db.query_row("SELECT count(*) FROM operation_journal", [], |r| r.get(0))?),
+            )
+            .unwrap();
+        assert_eq!(before, after);
+        assert!(fixture.preserved().unwrap());
+        assert_eq!(
+            std::fs::read(path.join("Renamed.JPG")).unwrap(),
+            generated_photo_bytes().unwrap()
+        );
+        // Read-only comparison is not a managed-write grant for ordinary copying.
+        let target = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&target).unwrap();
+        let volume = crate::library::native::volume_token(&target).unwrap();
+        drop(target);
+        assert!(
+            fixture
+                .library
+                .organization_copy_review_create(
+                    fixture.owner.clone(),
+                    fixture.manifest.clone(),
+                    uuid::Uuid::new_v4().to_string(),
+                    fixture.destination.clone(),
+                    (identity, volume)
+                )
+                .is_err()
+        );
+        assert!(
+            workflow
+                .start_import_comparison(
+                    &fixture.library,
+                    ImportComparisonInput {
+                        plan_id: fixture.owner.clone(),
+                        manifest_id: fixture.manifest.clone(),
+                        scope_root_ids: vec![source_root]
+                    }
+                )
+                .is_err()
+        );
+    }
+    #[test]
+    fn import_comparison_mock_collisions_offline_scope_and_candidate_errors_never_claim_absence() {
+        use crate::jobs::paced_io::IoStep;
+        use crate::operations::{ImportComparisonInput, ImportFileComparison};
+        let fixture = Fixture::with_nested(true).unwrap();
+        let mut different = generated_photo_bytes().unwrap();
+        different[0] ^= 1;
+        let (root, path, ids) = comparison_root(&fixture, &[("Collision.JPG", different.clone())]);
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let input = ImportComparisonInput {
+            plan_id: fixture.owner.clone(),
+            manifest_id: fixture.manifest.clone(),
+            scope_root_ids: vec![root.clone()],
+        };
+        let IoStep::Completed(report) =
+            crate::executor::workflow::compare_fixture(&workflow, input.clone(), true).unwrap()
+        else {
+            panic!("unexpected cancellation")
+        };
+        assert!(report.files.iter().all(|file| file.matches.is_empty()));
+        assert!(
+            report
+                .files
+                .iter()
+                .all(|file| file.state == ImportFileComparison::NoIndexedMatch)
+        );
+        assert!(!report.mutation_authorized);
+        let inaccessible = ids[0].clone();
+        fixture
+            .library
+            .catalog
+            .call(move |db| {
+                db.execute(
+                    "UPDATE assets SET presence='inaccessible' WHERE id=?",
+                    [inaccessible],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        let IoStep::Completed(unresolved) =
+            crate::executor::workflow::compare_fixture(&workflow, input.clone(), false).unwrap()
+        else {
+            panic!("unexpected cancellation")
+        };
+        assert!(!unresolved.all_scope_available);
+        assert_eq!(unresolved.excluded_or_missing_files, 0);
+        assert!(
+            unresolved
+                .files
+                .iter()
+                .all(|file| file.state == ImportFileComparison::NeedsAttention)
+        );
+        let accessible = ids[0].clone();
+        fixture
+            .library
+            .catalog
+            .call(move |db| {
+                db.execute(
+                    "UPDATE assets SET presence='present' WHERE id=?",
+                    [accessible],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        // Stale indexed metadata is an explicit error, even when restored mtime
+        // would make a size/mtime-only cache appear valid.
+        let modified = std::fs::metadata(path.join("Collision.JPG"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        std::fs::write(path.join("Collision.JPG"), generated_photo_bytes().unwrap()).unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path.join("Collision.JPG"))
+            .unwrap()
+            .set_times(std::fs::FileTimes::new().set_modified(modified))
+            .unwrap();
+        let IoStep::Completed(report) =
+            crate::executor::workflow::compare_fixture(&workflow, input.clone(), false).unwrap()
+        else {
+            panic!("unexpected cancellation")
+        };
+        assert!(!report.all_scope_available);
+        assert!(
+            report
+                .files
+                .iter()
+                .all(|file| file.state == ImportFileComparison::NeedsAttention)
+        );
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.asset_id.as_ref() == Some(&ids[0]))
+        );
+        let offline = root.clone();
+        fixture
+            .library
+            .catalog
+            .call(move |db| {
+                db.execute(
+                    "UPDATE roots SET availability='offline' WHERE id=?",
+                    [offline],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        assert!(crate::executor::workflow::compare_fixture(&workflow, input, false).is_err());
+        assert!(fixture.preserved().unwrap());
+        assert_eq!(
+            std::fs::read(path.join("Collision.JPG")).unwrap(),
+            generated_photo_bytes().unwrap()
+        );
+    }
+    #[test]
+    fn import_comparison_bounds_reports_matches_and_candidate_inventory() {
+        use crate::operations::{ImportComparisonInput, ImportComparisonState};
+        let fixture = Fixture::with_nested(true).unwrap();
+        let bytes = generated_photo_bytes().unwrap();
+        let files = (0..5)
+            .map(|index| (format!("Renamed-{index}.JPG"), bytes.clone()))
+            .collect::<Vec<_>>();
+        let borrowed = files
+            .iter()
+            .map(|(name, bytes)| (name.as_str(), bytes.clone()))
+            .collect::<Vec<_>>();
+        let (root, _, _) = comparison_root(&fixture, &borrowed);
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let input = ImportComparisonInput {
+            plan_id: fixture.owner.clone(),
+            manifest_id: fixture.manifest.clone(),
+            scope_root_ids: vec![root.clone()],
+        };
+        let too_many = crate::operations::ImportComparisonInput {
+            scope_root_ids: (0..17).map(|_| uuid::Uuid::new_v4().to_string()).collect(),
+            ..input.clone()
+        };
+        assert!(
+            workflow
+                .start_import_comparison(&fixture.library, too_many)
+                .is_err()
+        );
+        let duplicated = crate::operations::ImportComparisonInput {
+            scope_root_ids: vec![root.clone(), root],
+            ..input.clone()
+        };
+        assert!(
+            workflow
+                .start_import_comparison(&fixture.library, duplicated)
+                .is_err()
+        );
+        let mut retained = Vec::new();
+        for _ in 0..8 {
+            let queued = workflow
+                .start_import_comparison(&fixture.library, input.clone())
+                .unwrap();
+            let completed = wait_comparison(&workflow, queued.id.clone());
+            assert_eq!(completed.state, ImportComparisonState::Completed);
+            let report = completed.report.unwrap();
+            let matching = report
+                .files
+                .iter()
+                .find(|file| !file.matches.is_empty())
+                .unwrap();
+            assert_eq!(matching.matches.len(), 4);
+            assert!(matching.further_candidates_uncompared);
+            retained.push(queued.id);
+        }
+        assert!(
+            workflow
+                .start_import_comparison(&fixture.library, input.clone())
+                .is_err()
+        );
+        workflow
+            .discard_import_comparison(retained.remove(0))
+            .unwrap();
+        let queued = workflow
+            .start_import_comparison(&fixture.library, input)
+            .unwrap();
+        assert_eq!(
+            wait_comparison(&workflow, queued.id).state,
+            ImportComparisonState::Completed
+        );
+        // Corrupt/overlarge indexed scopes are rejected before unbounded native
+        // traversal; no missing files are manufactured as successful evidence.
+        let (oversized, _, _) = comparison_root(&fixture, &[]);
+        let added = oversized.clone();
+        fixture.library.catalog.call(move|db|{let tx=db.transaction()?;for index in 0..4097 {let name=format!("bounded-{index}.JPG");tx.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,presence,is_media,seen_scan) VALUES(?1,?2,?3,?4,?5,'',?4,?4,'jpg','1:1',1,?6,'now','2026-10-31T00:00:00','filesystem_modified','ready','pending','present',1,'bounded-fixture')",params![uuid::Uuid::new_v4().to_string(),added,crate::library::native::encode_path(Path::new(&name)),name,crate::library::native::encode_path(Path::new("")),"0".repeat(64)])?;}tx.commit()?;Ok(())}).unwrap();
+        let fresh = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let queued = fresh
+            .start_import_comparison(
+                &fixture.library,
+                ImportComparisonInput {
+                    plan_id: fixture.owner.clone(),
+                    manifest_id: fixture.manifest.clone(),
+                    scope_root_ids: vec![oversized],
+                },
+            )
+            .unwrap();
+        let failed = wait_comparison(&fresh, queued.id);
+        assert_eq!(failed.state, ImportComparisonState::Failed);
+        assert!(failed.report.is_none());
+        assert!(failed.error.unwrap().message.contains("4,096"));
+        assert!(fixture.preserved().unwrap());
+    }
+    #[test]
+    fn import_comparison_root_cancellation_releases_admission_and_discarded_reports() {
+        use crate::operations::{ImportComparisonInput, ImportComparisonState};
+        let mut bytes = generated_photo_bytes().unwrap();
+        bytes.extend(vec![81; 2 * 1024 * 1024]);
+        let fixture = Fixture::with_media(true, bytes.clone()).unwrap();
+        let (root, path, _) = comparison_root(&fixture, &[("Large renamed.JPG", bytes.clone())]);
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let queued = workflow
+            .start_import_comparison(
+                &fixture.library,
+                ImportComparisonInput {
+                    plan_id: fixture.owner.clone(),
+                    manifest_id: fixture.manifest.clone(),
+                    scope_root_ids: vec![root.clone()],
+                },
+            )
+            .unwrap();
+        assert!(workflow.cancel_root(&root).unwrap());
+        let stopped = wait_comparison(&workflow, queued.id.clone());
+        assert_eq!(stopped.state, ImportComparisonState::Canceled);
+        assert!(stopped.report.is_none());
+        assert!(!workflow.has_active_root(&root).unwrap());
+        workflow
+            .discard_import_comparison(queued.id.clone())
+            .unwrap();
+        assert!(workflow.import_comparison_job(queued.id).is_err());
+        assert!(fixture.preserved().unwrap());
+        assert_eq!(
+            std::fs::read(path.join("Large renamed.JPG")).unwrap(),
+            bytes
+        );
+    }
     fn equivalent_manifest(
         fixture: &Fixture,
         changed_template: bool,

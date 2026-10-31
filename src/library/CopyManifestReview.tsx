@@ -8,6 +8,7 @@ import type {
 import { errorMessage, libraryData } from '../ipc';
 import { CopyAssessmentReview } from './CopyAssessmentReview';
 import { VerifiedCopyWorkflow } from './VerifiedCopyWorkflow';
+import { ImportComparisonReview } from './ImportComparisonReview';
 
 const issues: Record<CopyManifestIssueKind, string> = {
   source_has_multiple_targets: 'A source has different proposed destinations across bundles',
@@ -185,6 +186,9 @@ export function CopyManifestReview({
           </button>
           <p className="help">Manifest fingerprint: {manifest.digest}</p>
           {!changed && <CopyAssessmentReview key={manifest.digest} manifest={manifest} />}
+          {!changed && manifest.issues.length === 0 && (
+            <ImportComparisonReview key={`compare-${manifest.digest}`} manifest={manifest} />
+          )}
           {!changed && manifest.issues.length === 0 && (
             <VerifiedCopyWorkflow key={`copy-${manifest.digest}`} manifest={manifest} />
           )}

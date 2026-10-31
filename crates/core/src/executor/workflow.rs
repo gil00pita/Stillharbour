@@ -1,5 +1,8 @@
 //! Application workflow; native filesystem effects remain in the central
 //! preparation/copy engine, after a separate exact session approval.
+mod import_comparison;
+#[cfg(test)]
+pub(in crate::executor) use import_comparison::compare_fixture;
 mod recovery;
 use super::{
     CopyInputs, CopyJournal, CopyOutcome, Object,
@@ -58,6 +61,7 @@ pub(crate) struct CopyWorkflow {
     data_volume: String,
     sessions: Mutex<BTreeMap<String, Option<Arc<Session>>>>,
     recovery: recovery::Sessions,
+    comparisons: import_comparison::Comparisons,
     approvals: Approvals,
     gate: JobScheduler,
     active: Mutex<Option<Active>>,
@@ -285,6 +289,7 @@ impl CopyWorkflow {
             data_volume: native::volume_token(&data)?,
             sessions: Mutex::new(BTreeMap::new()),
             recovery: Default::default(),
+            comparisons: Default::default(),
             approvals: Approvals::new(),
             gate: JobScheduler::new(1)?,
             active: Mutex::new(None),
@@ -892,6 +897,7 @@ impl CopyWorkflow {
         operation_jobs::load(&self.catalog, id.into())
     }
     pub(crate) fn cancel_root(&self, root: &str) -> Result<bool> {
+        let comparison = self.comparisons.root(root, true)?;
         let active = self
             .active
             .lock()
@@ -900,7 +906,7 @@ impl CopyWorkflow {
             active.cancel.store(true, Ordering::Release);
             return Ok(true);
         }
-        Ok(false)
+        Ok(comparison)
     }
     pub(crate) fn has_active_root(&self, root: &str) -> Result<bool> {
         Ok(self
@@ -908,7 +914,8 @@ impl CopyWorkflow {
             .lock()
             .map_err(|_| failed("Copy job state is unavailable."))?
             .as_ref()
-            .is_some_and(|active| active.root == root))
+            .is_some_and(|active| active.root == root)
+            || self.comparisons.root(root, false)?)
     }
     pub(crate) fn io_status(&self) -> Result<CopyIoStatus> {
         let io = PacedIo::shared();

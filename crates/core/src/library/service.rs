@@ -194,7 +194,7 @@ impl Library {
         });
         Ok(preview)
     }
-    pub(super) fn ensure_work_admission(&self) -> Result<()> {
+    pub(crate) fn ensure_work_admission(&self) -> Result<()> {
         if self.maintenance_pending.load(Ordering::Acquire) {
             return Err(AppError::new(
                 ErrorCode::Busy,

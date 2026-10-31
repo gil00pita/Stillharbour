@@ -14,6 +14,53 @@ fn unavailable() -> AppError {
     )
 }
 impl Library {
+    pub fn organization_import_comparison_start(
+        &self,
+        _input: ImportComparisonInput,
+    ) -> Result<ImportComparisonJob> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.start_import_comparison(self, _input)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_comparison_job(&self, _id: String) -> Result<ImportComparisonJob> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.import_comparison_job(_id)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_comparison_cancel(
+        &self,
+        _id: String,
+    ) -> Result<ImportComparisonJob> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.cancel_import_comparison(_id)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_comparison_discard(&self, _id: String) -> Result<()> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.discard_import_comparison(_id)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+
     pub fn organization_copy_preparation_reopen(
         &self,
         _job: String,

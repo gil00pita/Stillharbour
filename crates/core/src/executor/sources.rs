@@ -39,7 +39,7 @@ pub(super) struct Snapshot {
     pub destination_volume: String,
     pub files: Vec<File>,
 }
-fn root(db: &Connection, id: &str, managed: bool) -> Result<(Vec<u8>, Object, String)> {
+pub(super) fn root(db: &Connection, id: &str, managed: bool) -> Result<(Vec<u8>, Object, String)> {
     let (path,device,inode,volume,mode):(Option<Vec<u8>>,String,String,String,String)=db.query_row(
         "SELECT CASE WHEN length(native_path)<=65536 THEN native_path END,device,inode,volume,mode FROM roots WHERE id=?",
         [id],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?)))?;
@@ -84,6 +84,22 @@ impl Snapshot {
         Ok(())
     }
     pub(super) fn build(catalog: &Arc<Catalog>, owner: String, manifest: String) -> Result<Self> {
+        Self::build_for(catalog, owner, manifest, true)
+    }
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(super) fn build_read(
+        catalog: &Arc<Catalog>,
+        owner: String,
+        manifest: String,
+    ) -> Result<Self> {
+        Self::build_for(catalog, owner, manifest, false)
+    }
+    fn build_for(
+        catalog: &Arc<Catalog>,
+        owner: String,
+        manifest: String,
+        managed: bool,
+    ) -> Result<Self> {
         crate::operations::validate_id(&owner)?;
         crate::operations::validate_id(&manifest)?;
         let (draft, manifest, root_id, path, source, source_volume) = catalog.call(move |db| {
@@ -103,10 +119,10 @@ impl Snapshot {
                     .any(|file| file.view.root_id != root_id)
             {
                 return Err(failed(
-                    "Source planning currently requires one conflict-free managed root.",
+                    "Source planning currently requires one conflict-free source root.",
                 ));
             }
-            let (path, source, volume) = root(db, &root_id, true)?;
+            let (path, source, volume) = root(db, &root_id, managed)?;
             Ok((draft, manifest, root_id, path, source, volume))
         })?;
         let source_path = native::decode_path(&path)?;
@@ -195,7 +211,7 @@ impl Snapshot {
             files,
         };
         let retained = snapshot.clone();
-        catalog.call(move |db| retained.validate(db))?;
+        catalog.call(move |db| retained.validate_for(db, managed))?;
         // Recheck every opened member through its native parent proof. This is
         // not an atomic directory snapshot or permission to execute later.
         for member in &snapshot.files {

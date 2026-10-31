@@ -379,3 +379,6 @@ mod tests {
         );
     }
 }
+
+mod import_comparison;
+pub use import_comparison::*;

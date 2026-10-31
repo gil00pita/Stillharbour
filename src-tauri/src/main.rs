@@ -33,6 +33,13 @@ struct Foundation {
     #[cfg(feature = "desktop-test")]
     destination_fixture: Mutex<Option<tempfile::TempDir>>,
     #[cfg(feature = "desktop-test")]
+    comparison_fixture: Mutex<
+        Option<(
+            stillharbour_core::library_fixture::LibraryFixture,
+            Option<String>,
+        )>,
+    >,
+    #[cfg(feature = "desktop-test")]
     export_fixture: Mutex<Option<tempfile::TempDir>>,
     _catalog: Arc<Catalog>,
     preferences: Arc<stillharbour_core::preferences::PreferencesStore>,
@@ -217,6 +224,25 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationImportComparisonStart { input } => {
+                LibraryResponse::OrganizationImportComparisonJob(Box::new(
+                    library.organization_import_comparison_start(input)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportComparisonJob { job_id } => {
+                LibraryResponse::OrganizationImportComparisonJob(Box::new(
+                    library.organization_import_comparison_job(job_id)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportComparisonCancel { job_id } => {
+                LibraryResponse::OrganizationImportComparisonJob(Box::new(
+                    library.organization_import_comparison_cancel(job_id)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportComparisonDiscard { job_id } => {
+                library.organization_import_comparison_discard(job_id)?;
+                LibraryResponse::Done
+            }
             LibraryRequest::OrganizationCopyCapabilities {} => {
                 LibraryResponse::OrganizationCopyCapabilities(
                     library.organization_copy_capabilities(),
@@ -996,6 +1022,97 @@ async fn test_performance(
             state.library.start_monitoring()?;
             Ok(serde_json::json!({"started":true}))
         }
+        "import_comparison_fixture" | "import_comparison_verify" | "import_comparison_finish" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Owned comparison fixtures accept no supplied scope.",
+                ));
+            }
+            let source = state.fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Owned source fixture unavailable.")
+            })?;
+            let source = source.as_ref().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate the source fixture first.",
+                )
+            })?;
+            let source_count = source.verify_unchanged()?;
+            let mut comparison = state.comparison_fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Comparison fixture unavailable.")
+            })?;
+            if action == "import_comparison_fixture" {
+                if comparison.is_some() {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Comparison fixture already exists.",
+                    ));
+                }
+                *comparison = Some((source.renamed_comparison_copy()?, None));
+                let (fixture, root_id) = comparison.as_mut().ok_or_else(|| {
+                    AppError::new(ErrorCode::WorkerFailed, "Comparison fixture unavailable.")
+                })?;
+                let path = fixture.path().to_owned();
+                let handle = stillharbour_core::library::native::open_root(&path, None)?;
+                let identity = filesystem::identity(&handle)?;
+                let volume = stillharbour_core::library::native::volume_token(&handle)?;
+                drop(handle);
+                let job = state.library.register_verified(
+                    path,
+                    (identity, volume),
+                    "Existing import comparison fixture".into(),
+                    stillharbour_core::library::model::RootMode::Referenced,
+                    stillharbour_core::library::model::ScanFilter::default(),
+                )?;
+                *root_id = Some(job.root_id.clone());
+                return Ok(
+                    serde_json::json!({"job":job,"sourceVerifiedEntries":source_count,"comparisonVerifiedEntries":fixture.verify_unchanged()?}),
+                );
+            }
+            let (fixture, root_id) = comparison.as_mut().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Create the owned comparison fixture first.",
+                )
+            })?;
+            let compared = fixture.verify_unchanged()?;
+            if action == "import_comparison_finish" {
+                let root = root_id
+                    .as_ref()
+                    .ok_or_else(|| {
+                        AppError::new(
+                            ErrorCode::InvalidInput,
+                            "No registered comparison root remains.",
+                        )
+                    })?
+                    .clone();
+                #[cfg(windows)]
+                {
+                    return Ok(
+                        serde_json::json!({"retainedRoot":root,"catalogRegistrationRetained":true,"reason":"Windows cache cleanup still requires its native validation gate.","sourceVerifiedEntries":source_count,"comparisonVerifiedEntries":compared,"sourceFilesRemoved":false}),
+                    );
+                }
+                #[cfg(not(windows))]
+                {
+                    let preview = state.library.prepare_maintenance(
+                        stillharbour_core::library::model::MaintenanceTarget::Library {
+                            root_id: root.clone(),
+                        },
+                    )?;
+                    state.library.apply_maintenance(preview.id)?;
+                    *root_id = None;
+                    fixture.verify_unchanged()?;
+                    source.verify_unchanged()?;
+                    return Ok(
+                        serde_json::json!({"removedRoot":root,"sourceVerifiedEntries":source_count,"comparisonVerifiedEntries":compared,"sourceFilesRemoved":false}),
+                    );
+                }
+            }
+            Ok(
+                serde_json::json!({"sourceVerifiedEntries":source_count,"comparisonVerifiedEntries":compared,"rootId":root_id}),
+            )
+        }
         "fixture_reselect" => {
             if rows.is_some() {
                 return Err(AppError::new(
@@ -1318,6 +1435,8 @@ fn main() {
                 fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 destination_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                comparison_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 export_fixture: Mutex::new(None),
                 _catalog: catalog,

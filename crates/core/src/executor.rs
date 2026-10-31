@@ -3,6 +3,8 @@
 mod approval;
 mod catalog_journal;
 mod effects;
+#[cfg(any(test, feature = "copy-workflow"))]
+mod fingerprints;
 mod locations;
 mod native;
 mod preparation;

@@ -259,3 +259,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Reopen complete retained preparation - 2026-10-31
 
 [ADR-0044](decisions/ADR-0044-reopen-complete-preparation.md) handles loss of the ready-copy binding after complete recorded native name preparation. Fresh private selection and exact retained/native validation reconstruct planning metadata only; the copy still needs new fidelity acknowledgment, approval and start. Unknown/changed/incomplete objects remain blocked and preserved. Reopened/discarded scopes revoke previous ephemeral grants. No schema/default feature/original mutation change.
+
+## Read-only import comparison - 2026-10-31
+
+[ADR-0045](decisions/ADR-0045-read-only-import-comparison.md) adds bounded ephemeral comparison jobs against explicitly selected indexed roots. Size/sample/full BLAKE3 filters always precede direct byte equality evidence, with native version/membership checks and shared pacing/cancellation. Referenced reads do not enable managed copying. Offline, inaccessible and incomplete scope stays unknown. Reports grant no skip/removal authority; bundle-aware import planning and execution remain unfinished.

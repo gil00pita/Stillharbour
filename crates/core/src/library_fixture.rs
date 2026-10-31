@@ -10,6 +10,56 @@ pub struct LibraryFixture {
     baseline: BTreeMap<PathBuf, String>,
 }
 impl LibraryFixture {
+    /// Constructor-only copies of this generated baseline, with different
+    /// filenames. No renderer-supplied root, filename or content is accepted.
+    pub fn renamed_comparison_copy(&self) -> Result<Self> {
+        use std::io::Write;
+        self.verify_unchanged()?;
+        let directory = tempfile::Builder::new()
+            .prefix("stillharbour-import-comparison-")
+            .tempdir()?;
+        for (index, (relative, signature)) in self.baseline.iter().enumerate() {
+            if relative
+                .components()
+                .any(|part| !matches!(part, std::path::Component::Normal(_)))
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated comparison source escaped its boundary.",
+                ));
+            }
+            if signature == "directory" || signature.starts_with("link:") {
+                continue;
+            }
+            let source = self.path().join(relative);
+            if !std::fs::symlink_metadata(&source)?.is_file()
+                || source.metadata()?.len() > 16 * 1024 * 1024
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Unexpected generated comparison source type or size.",
+                ));
+            }
+            let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+            let mut name = std::ffi::OsString::from(format!("existing-{index:04}-"));
+            name.push(relative.file_name().ok_or_else(|| {
+                AppError::new(ErrorCode::Conflict, "Missing generated filename.")
+            })?);
+            let target_parent = directory.path().join(parent);
+            std::fs::create_dir_all(&target_parent)?;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(target_parent.join(name))?;
+            file.write_all(&std::fs::read(source)?)?;
+        }
+        self.verify_unchanged()?;
+        let baseline = manifest(directory.path())?;
+        Ok(Self {
+            directory,
+            baseline,
+        })
+    }
     pub fn generate() -> Result<Self> {
         Self::generate_in(None)
     }

@@ -65,6 +65,107 @@ async function reopenPreparedReview(original, destination, evidence) {
     `.context/screenshots/m2-prepared-review-reopened-${process.platform}.png`,
   );
 }
+async function compareGeneratedImportScope(manifest, evidence, outputAudit) {
+  const fixture = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'import_comparison_fixture', rows: null }),
+  );
+  try {
+    let scanned;
+    await browser.waitUntil(
+      async () => {
+        scanned = (await native({ kind: 'status' })).data.jobs.find(
+          (job) => job.id === fixture.job.id,
+        );
+        return !!scanned && !['queued', 'running', 'cancel_requested'].includes(scanned.state);
+      },
+      { timeout: 60000 },
+    );
+    assert.ok(['completed', 'partial'].includes(scanned.state), JSON.stringify(scanned));
+    await $('button=Choose indexed comparison scope').scrollIntoView();
+    await $('button=Choose indexed comparison scope').click();
+    const scope = await $('section[aria-label="Import byte comparison"] fieldset');
+    await scope.waitForDisplayed();
+    const label = await $('section[aria-label="Import byte comparison"]').$(
+      'label*=Existing import comparison fixture',
+    );
+    await label.scrollIntoView();
+    await label.$('input').click();
+    await browser.execute(() => {
+      window.__stillharbourImportComparisonRequests = [];
+      window.addEventListener('stillharbour:test-library-request', (event) => {
+        if (
+          event.detail.kind === 'organization_import_comparison_job' &&
+          window.__stillharbourImportComparisonRequests.length < 32
+        )
+          window.__stillharbourImportComparisonRequests.push(event.detail.job_id);
+      });
+    });
+    await $('button=Start read-only comparison').scrollIntoView();
+    await $('button=Start read-only comparison').click();
+    await $('h4=Observed file comparison').waitForDisplayed({ timeout: 30000 });
+    const requests = await browser.execute(
+      () => window.__stillharbourImportComparisonRequests ?? [],
+    );
+    let finalJob;
+    // Observe the actual ID-only request rather than inventing a result/ID.
+    assert.ok(requests.length > 0);
+    await browser.waitUntil(async () => {
+      finalJob = (
+        await native({ kind: 'organization_import_comparison_job', job_id: requests.at(-1) })
+      ).data;
+      return ['completed', 'completed_with_issues', 'failed', 'canceled'].includes(finalJob.state);
+    });
+    assert.ok(
+      ['completed', 'completed_with_issues'].includes(finalJob.state),
+      JSON.stringify(finalJob.error),
+    );
+    assert.equal(finalJob.planId, manifest.planId);
+    assert.equal(finalJob.manifestId, manifest.id);
+    assert.equal(finalJob.report.mutationAuthorized, false);
+    assert.equal(finalJob.report.bundleReviewRequired, true);
+    assert.equal(finalJob.report.files.length, manifest.files.length);
+    assert.ok(finalJob.report.files.some((file) => file.matches.length > 0));
+    assert.ok(
+      finalJob.report.files
+        .flatMap((file) => file.matches)
+        .every((match) => match.relativePath.includes('existing-') && !match.sameNativeObject),
+    );
+    const verification = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'import_comparison_verify', rows: null }),
+    );
+    assert.equal(verification.sourceVerifiedEntries, fixture.sourceVerifiedEntries);
+    assert.equal(verification.comparisonVerifiedEntries, fixture.comparisonVerifiedEntries);
+    const after = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+    );
+    assert.deepEqual(after, outputAudit);
+    await writeFile(
+      `${evidence}/import-byte-comparison-${process.platform}.json`,
+      JSON.stringify({
+        scan: scanned,
+        comparison: finalJob,
+        preservation: verification,
+        unchangedOutputAudit: after,
+      }),
+    );
+    await browser.saveScreenshot(
+      `.context/screenshots/m2-import-byte-comparison-${process.platform}.png`,
+    );
+  } finally {
+    const removed = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'import_comparison_finish', rows: null }),
+    );
+    if (process.platform === 'win32') {
+      assert.equal(removed.retainedRoot, fixture.job.rootId);
+      assert.equal(removed.catalogRegistrationRetained, true);
+    } else assert.equal(removed.removedRoot, fixture.job.rootId);
+    assert.equal(removed.sourceFilesRemoved, false);
+    await writeFile(
+      `${evidence}/import-comparison-root-state-${process.platform}.json`,
+      JSON.stringify(removed),
+    );
+  }
+}
 async function reviewEquivalentDraft(original, destination, evidence, audit) {
   // Recreate the user's selected mapping through real ID-only IPC. Draft UUIDs
   // and approvals differ; output effect identity must remain the same.
@@ -161,6 +262,7 @@ async function reviewEquivalentDraft(original, destination, evidence, audit) {
     }),
   );
   await browser.saveScreenshot(`.context/screenshots/m2-equivalent-draft-${process.platform}.png`);
+  await compareGeneratedImportScope(compiled, evidence, audit);
   await $('button=Close saved plans').click();
 }
 async function reviewRemovalStopsJobs(receipt) {
@@ -670,7 +772,8 @@ describe('native read-only library', () => {
   );
   (process.platform === 'win32' ? it : it.skip)(
     'saves and scans a generated NTFS library and displays real cached previews',
-    async () => {
+    async function () {
+      this.timeout(120000);
       const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
       const selection = await browser.tauri.execute(async ({ core }) =>
         core.invoke('test_library_fixture', { verify: false }),
@@ -2753,7 +2856,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       assert.deepEqual(after, before);
     }
   });
-  it('prepares, copies and freshly continues generated outputs through the native organization UI', async () => {
+  it('prepares, copies and freshly continues generated outputs through the native organization UI', async function () {
+    this.timeout(120000);
     const before = JSON.parse(
       execFileSync('python3', ['scripts/performance/manifest.py', sourceRoot, '--lossless-stat'], {
         encoding: 'utf8',
