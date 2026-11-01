@@ -84,3 +84,10 @@ Windows CI portability checks (2026-10-28): [Rust slice::as_chunks](https://doc.
 ## Retained append review - 2026-10-31
 
 [Microsoft NtCreateFile](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntcreatefile) documents file access/sharing and append rights; [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers) documents its write-access requirement. The Windows fixture continuation keeps the existing native writable no-write/delete-sharing handle and explicitly seeks to the verified end; it does not claim append-only access. [rustix 1.1.6 OFlags](https://docs.rs/rustix/1.1.6/rustix/fs/struct.OFlags.html) supplies the pinned Unix APPEND/NOFOLLOW flags. No dependency version changes; target-platform execution evidence remains required.
+
+## Native cross-volume fixture references (ADR-0052)
+
+- [Microsoft Mount-DiskImage](https://learn.microsoft.com/powershell/module/storage/mount-diskimage): image-path mounting and Windows VHD administrator requirement; no Hyper-V dependency is assumed for the Storage adapter.
+- [Microsoft Get-DiskImage](https://learn.microsoft.com/powershell/module/storage/get-diskimage): derive the image's disk/partition/volume objects from its exact image path.
+- [Microsoft DiskPart](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/diskpart): the test helper restricts its script to creation of the new named image; initialization/format use validated Storage objects.
+- [Apple disk image guidance](https://support.apple.com/guide/disk-utility/create-a-disk-image-dskutl11888/mac): APFS image choices and the installed hdiutil manual. The macOS harness records installed create-help output and OS/helper provenance; native execution remains the API/behavior gate.

@@ -683,65 +683,100 @@ async function indexCompletedImportOutput(receipt, outputFolder, evidence) {
   assert.ok(root);
   assert.equal(root.mode, 'referenced');
   assert.equal(root.fileCount, 1);
-  const scan = status.jobs.find(
-    (job) => job.rootId === root.id && !job.id.startsWith('thumbnail:'),
-  );
-  assert.equal(scan.state, 'completed');
-  assert.equal(scan.indexed, 1);
-  const query = {
-    rootId: root.id,
-    folder: '',
-    name: '',
-    fromDate: '',
-    throughDate: '',
-    minBytes: '',
-    maxBytes: '',
-    extension: '',
-    favoritesOnly: false,
-    tag: '',
-    sort: 'capture',
-    includeMissing: false,
-  };
-  const page = (await native({ kind: 'query', query, cursor: null, limit: 24 })).data;
-  assert.equal(page.rows.length, 1);
-  assert(page.rows[0][3].endsWith('Generated-01.png'));
-  const beforeRetry = await browser.tauri.execute(async ({ core }) =>
-    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
-  );
-  await section.$('button=Review output registration').scrollIntoView();
-  await section.$('button=Review output registration').click();
-  await section.$('p*=Output folder already registered:').waitForExist();
-  const retried = (await native({ kind: 'status' })).data;
-  assert.equal(retried.roots.length, status.roots.length);
-  assert.equal(
-    retried.jobs.filter((job) => job.rootId === root.id && !job.id.startsWith('thumbnail:')).length,
-    1,
-  );
-  assert.equal(
-    retried.jobs.find((job) => job.rootId === root.id && !job.id.startsWith('thumbnail:')).id,
-    scan.id,
-  );
-  const afterRetry = await browser.tauri.execute(async ({ core }) =>
-    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
-  );
-  assert.deepEqual(afterRetry, beforeRetry);
-  assert.deepEqual(
-    (await native({ kind: 'organization_import_copy_receipt', job_id: receipt.jobId })).data,
-    receipt,
-  );
-  await writeFile(
-    `${evidence}/import-output-index-${process.platform}.json`,
-    JSON.stringify({
-      root,
-      scan,
-      page,
+  assert.match(outputFolder, /^Stillharbour organized [a-f0-9-]{36}$/);
+  try {
+    const scan = status.jobs.find(
+      (job) => job.rootId === root.id && !job.id.startsWith('thumbnail:'),
+    );
+    assert.equal(scan.state, 'completed');
+    assert.equal(scan.indexed, 1);
+    const query = {
+      rootId: root.id,
+      folder: '',
+      name: '',
+      fromDate: '',
+      throughDate: '',
+      minBytes: '',
+      maxBytes: '',
+      extension: '',
+      favoritesOnly: false,
+      tag: '',
+      sort: 'capture',
+      includeMissing: false,
+    };
+    const page = (await native({ kind: 'query', query, cursor: null, limit: 24 })).data;
+    assert.equal(page.rows.length, 1);
+    assert(page.rows[0][3].endsWith('Generated-01.png'));
+    const beforeRetry = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+    );
+    await section.$('button=Review output registration').scrollIntoView();
+    await section.$('button=Review output registration').click();
+    await section.$('p*=Output folder already registered:').waitForExist();
+    const retried = (await native({ kind: 'status' })).data;
+    assert.equal(retried.roots.length, status.roots.length);
+    assert.equal(
+      retried.jobs.filter((job) => job.rootId === root.id && !job.id.startsWith('thumbnail:'))
+        .length,
+      1,
+    );
+    assert.equal(
+      retried.jobs.find((job) => job.rootId === root.id && !job.id.startsWith('thumbnail:')).id,
+      scan.id,
+    );
+    const afterRetry = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+    );
+    assert.deepEqual(afterRetry, beforeRetry);
+    assert.deepEqual(
+      (await native({ kind: 'organization_import_copy_receipt', job_id: receipt.jobId })).data,
       receipt,
-      unchangedOutputs: afterRetry,
-      registrationRetryAddedNoRootOrScan: true,
-    }),
-  );
-  await section.scrollIntoView();
-  await browser.saveScreenshot(`.context/screenshots/m2-import-index-${process.platform}.png`);
+    );
+    await writeFile(
+      `${evidence}/import-output-index-${process.platform}.json`,
+      JSON.stringify({
+        root,
+        scan,
+        page,
+        receipt,
+        unchangedOutputs: afterRetry,
+        registrationRetryAddedNoRootOrScan: true,
+      }),
+    );
+    await section.scrollIntoView();
+    await browser.saveScreenshot(`.context/screenshots/m2-import-index-${process.platform}.png`);
+  } finally {
+    if (process.platform === 'darwin') {
+      await browser.waitUntil(
+        async () => {
+          const preparation = (await native({ kind: 'status' })).data.jobs.find(
+            (job) => job.id === `thumbnail:initial:${root.id}`,
+          );
+          return (
+            preparation && !['queued', 'running', 'cancel_requested'].includes(preparation.state)
+          );
+        },
+        { timeout: 30000 },
+      );
+      const beforeRemoval = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+      );
+      const preview = (
+        await native({ kind: 'prepare_maintenance', target: { kind: 'library', root_id: root.id } })
+      ).data;
+      assert.equal(preview.rootDisplayPath, root.displayPath);
+      const removed = (await native({ kind: 'apply_maintenance', plan_id: preview.id })).data;
+      assert.equal(removed.removedRootId, root.id);
+      const afterRemoval = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+      );
+      assert.deepEqual(afterRemoval, beforeRemoval);
+      await writeFile(
+        `${evidence}/import-output-root-teardown-${process.platform}.json`,
+        JSON.stringify({ removed, unchangedOutputs: afterRemoval, sourceFilesRemoved: false }),
+      );
+    }
+  }
 }
 async function reviewEquivalentDraft(original, destination, evidence, audit) {
   // Recreate the user's selected mapping through real ID-only IPC. Draft UUIDs

@@ -1,5 +1,7 @@
 //! Catalog-actor adapter for the central engine. Currently constructor-owned
 //! fixture capability only; retained records are never execution approvals.
+#[cfg(all(feature = "fixture-probes", feature = "copy-workflow"))]
+pub(in crate::executor) mod cross_volume_fixture;
 pub(in crate::executor) mod namespace_journal;
 use super::{CopyJournal, CopyPlan, EventJournal, Object, failed};
 use crate::{
@@ -809,6 +811,13 @@ impl Fixture {
         Self::with_media(nested, generated_photo_bytes()?)
     }
     fn with_media(nested: bool, photo: Vec<u8>) -> Result<Self> {
+        Self::with_media_at(nested, photo, None)
+    }
+    fn with_media_at(
+        nested: bool,
+        photo: Vec<u8>,
+        destination_parent: Option<&Path>,
+    ) -> Result<Self> {
         use crate::library::{
             Library, LibraryOptions, WorkerPaths,
             model::{RootMode, ScanFilter},
@@ -824,7 +833,13 @@ impl Fixture {
         let base = run.path().canonicalize()?;
         let source = base.join("source");
         let data = base.join("data");
-        let destination = base.join("output");
+        let destination = match destination_parent {
+            Some(parent) => parent.join(
+                base.file_name()
+                    .ok_or_else(|| failed("Owned fixture run has no directory name."))?,
+            ),
+            None => base.join("output"),
+        };
         for path in [&source, &data, &destination] {
             std::fs::create_dir(path)?;
         }

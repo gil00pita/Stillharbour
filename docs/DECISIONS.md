@@ -281,3 +281,5 @@ The owner continued to M2 and selected organization templates/previews as the pr
 [ADR-0050](decisions/ADR-0050-import-copy-review.md) connects exact new-only capacity/review, feature-gated mixed import IPC/UI and durable combined verification facts. Completed receipts require both valid evidence and committed job success; neither replay nor approval is restored.
 
 [ADR-0051](decisions/ADR-0051-import-output-indexing.md) adds explicit picker-bound catalog discovery of unchanged completed import output. New roots are Referenced; existing native root/scan identities are reused. Publication-version checks do not become a fresh hash baseline, and overlap guards remain unchanged.
+
+[ADR-0052](decisions/ADR-0052-native-cross-volume-fixtures.md) adds a closed, nonce-owned virtual-volume harness for actual distinct filesystem identities, application-core copy jobs and nine in-process interruption/continuation cases. Local capability unavailability is not a passing native result. No original mutation/recovery-provider gate changes.

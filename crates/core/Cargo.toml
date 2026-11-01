@@ -66,3 +66,7 @@ required-features = ["fixture-probes"]
 [[example]]
 name = "filtered_probe"
 required-features = ["fixture-probes"]
+
+[[example]]
+name = "cross_volume_probe"
+required-features = ["fixture-probes", "copy-workflow"]

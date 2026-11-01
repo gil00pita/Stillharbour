@@ -32,6 +32,10 @@ use std::{
 };
 #[cfg(any(test, feature = "copy-workflow"))]
 pub(crate) use workflow::CopyWorkflow;
+#[cfg(all(feature = "fixture-probes", feature = "copy-workflow"))]
+pub fn run_cross_volume_fixture_probe() -> Result<serde_json::Value> {
+    catalog_journal::cross_volume_fixture::run()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
