@@ -83,7 +83,7 @@ fn decode(row: &rusqlite::Row<'_>) -> Result<OriginalOperationJob> {
     Ok(job)
 }
 const COLUMNS: &str = "CASE WHEN length(CAST(j.payload AS BLOB))<=65536 THEN j.payload END,j.id,j.plan_id,j.state,j.started_at,j.updated_at,p.root_id,p.kind,p.total_moves";
-fn load_db(db: &Connection, id: &str) -> Result<OriginalOperationJob> {
+pub(super) fn load_db(db: &Connection, id: &str) -> Result<OriginalOperationJob> {
     let mut statement = db.prepare(&format!("SELECT {COLUMNS} FROM original_operation_jobs j JOIN original_operation_plans p ON p.id=j.plan_id WHERE j.id=?"))?;
     let mut rows = statement.query([id])?;
     decode(

@@ -238,6 +238,7 @@ pub(crate) fn build(id: String, mut members: Vec<Member>, facts: Facts) -> Resul
     .to_string();
     Ok(plan)
 }
+#[cfg(any(test, feature = "fixture-probes"))]
 pub(crate) fn reverse(
     id: String,
     forward: &Plan,
@@ -287,6 +288,7 @@ pub(crate) fn reverse(
 
 /// Simulated name facts exercise pure ordering only. This is not native name
 /// reservation, a recovery provider, an executable plan or mutation evidence.
+#[cfg(any(test, feature = "fixture-probes"))]
 pub(crate) fn fixture_preview_probe() -> Result<serde_json::Value> {
     let id = uuid::Uuid::new_v4().to_string();
     let root = uuid::Uuid::new_v4().to_string();

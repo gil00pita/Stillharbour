@@ -37,6 +37,7 @@ jobs:
             .context/wdio
             .context/gallery/**/warm-scroll.json
             .context/gallery/**/manifest-*.json
+            .context/gallery/**/multi-source-*.json
             .context/windows-directory-selection/native-*/*.json
             .context/generated-rename/*.json
             .context/cross-volume/**/*.json

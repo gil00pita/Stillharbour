@@ -42,6 +42,18 @@ fn busy() -> AppError {
     )
 }
 impl GeneratedRenameController {
+    /// Catalog-only history from this controller's constructor-owned scope.
+    /// It does not inspect files, grant approval, or resume a worker.
+    pub fn history(
+        &self,
+        job_id: String,
+    ) -> Result<crate::operations::original_jobs::OriginalOperationHistory> {
+        let catalog =
+            self.inner.reader.get().ok_or_else(|| {
+                failed("Create the generated scope before reviewing its history.")
+            })?;
+        crate::library::original_history::review(catalog, job_id)
+    }
     pub fn request(&self, request: GeneratedRenameRequest) -> Result<GeneratedRenameReview> {
         if let GeneratedRenameRequest::Start { plan_id, ticket } = request {
             return self.start(plan_id, ticket);

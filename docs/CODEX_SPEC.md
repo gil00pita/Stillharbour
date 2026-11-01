@@ -311,6 +311,8 @@ Only application-created empty directories may be automatically tidied after suc
 
 ## 10. Safe operation executor and recovery
 
+M2 history review continuation, 2026-11-01 (ADR-0067): Jobs can request a bounded retained organization plan by job UUID. The backend validates its payload hash, catalog/root/job relationship and canonical pure graph; saved paths render as historical text with current locations explicitly unchecked. The review grants no approval or mutation capability. The instrumented generated lab uses the same validator and review over its owned catalog. This advances recovery discovery, not general runtime mutation adoption or independent recovery. Production original mutation and duplicate quarantine remain gated.
+
 Implement this subsystem before enabling any original-file mutation. The planner is pure over a recorded snapshot of inputs; validation and execution are separate services.
 
 Plan-level states: draft -> ready -> approved -> running -> completed / completed_with_errors / canceled / needs_recovery / invalidated. Blocking conflicts prevent approval. A changed precondition invalidates the affected operation and pauses dependent work; never silently regenerate the plan.

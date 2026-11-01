@@ -1633,10 +1633,37 @@ describe('native read-only library', () => {
         ),
       ),
     );
+    const historyJob = restored.jobs[0];
+    assert.ok(historyJob);
+    const history = await browser.tauri.execute(
+      async ({ core }, jobId) => core.invoke('test_generated_rename_history', { jobId }),
+      historyJob.id,
+    );
+    assert.equal(history.job.id, historyJob.id);
+    assert.equal(history.historyOnly, true);
+    assert.equal(history.currentLocationsChecked, false);
+    assert.equal(history.executionAvailable, false);
+    assert.equal(history.members.length, restored.members.length);
+    const historyButtons = await $$('button=Review retained organization plan');
+    await historyButtons[0].scrollIntoView();
+    await historyButtons[0].click();
+    const historyDialog = await $('dialog[aria-labelledby="original-history-title"]');
+    await historyDialog.waitForDisplayed();
+    await browser.waitUntil(async () =>
+      (await historyDialog.getText()).includes(history.planDigest),
+    );
+    assert.equal((await historyDialog.$$('tbody tr')).length, history.members.length);
+    assert.match(await historyDialog.getText(), /Current file locations and contents require/);
+    assert.equal((await historyDialog.$$('button')).length, 1);
+    await browser.saveScreenshot(
+      `.context/screenshots/m2-original-history-${process.platform}.png`,
+    );
+    await $('button=Close plan history').click();
+    assert.equal(await historyDialog.isExisting(), false);
     await mkdir('.context/generated-rename', { recursive: true });
     await writeFile(
       `.context/generated-rename/reviewed-${process.platform}.json`,
-      JSON.stringify({ states, generatedOnly: true, catalogIntegration: true }),
+      JSON.stringify({ states, history, generatedOnly: true, catalogIntegration: true }),
     );
     await $('button=Close fixture review').click();
     assert.equal(await $('dialog[aria-labelledby="rename-lab-title"]').isExisting(), false);

@@ -57,6 +57,8 @@ Inject failure after every journal/copy/publish/catalog stage. Exercise source c
 
 ## Gate
 
+Retained original-history continuation, 2026-11-01 (ADR-0067): add read-only Jobs review of bounded saved paths and attempts with defensive catalog/graph validation. Current locations remain unchecked and no approval or execution is restored. General runtime mutation adoption and the remaining M2 gates stay open; actual validation results follow in the implementation log.
+
 Current aggregate acceptance evidence and remaining qualifications are indexed in [M2 validation](../docs/M2_VALIDATION.md). Earlier dated continuation notes retain their historical scope.
 
 Applicable AC-023 through AC-039, AC-081, AC-082 and AC-084 pass. A source-preserving generated import and reviewed same-volume organization work through real UI/IPC on target systems. Any unverified safety primitive keeps original mutation disabled. Record evidence before proceeding to the owner's subsequently authorized M3 continuation; do not skip this prerequisite gate.

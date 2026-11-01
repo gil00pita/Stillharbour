@@ -31,3 +31,23 @@ pub struct OriginalOperationJob {
     pub message: String,
     pub generated_fixture_only: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OriginalHistoryMember {
+    pub id: String,
+    pub before: String,
+    pub after: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OriginalOperationHistory {
+    pub job: OriginalOperationJob,
+    pub plan_digest: String,
+    pub reverse_of: Option<String>,
+    pub members: Vec<OriginalHistoryMember>,
+    pub history_only: bool,
+    pub current_locations_checked: bool,
+    pub execution_available: bool,
+}

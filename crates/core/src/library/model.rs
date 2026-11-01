@@ -603,6 +603,9 @@ pub enum LibraryRequest {
     OrganizationImportComparisonDiscard {
         job_id: String,
     },
+    OrganizationOriginalHistory {
+        job_id: String,
+    },
     OrganizationCopyCapabilities {},
     OrganizationCopyEffectMatch {
         plan_id: String,
@@ -789,6 +792,7 @@ pub enum LibraryRequest {
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
     OrganizationImportDestination(ImportDestinationPreference),
+    OrganizationOriginalHistory(crate::operations::original_jobs::OriginalOperationHistory),
     OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),
     OrganizationImportComparisonJob(Box<crate::operations::ImportComparisonJob>),
     OrganizationImportPlan(Box<crate::operations::ImportPlan>),

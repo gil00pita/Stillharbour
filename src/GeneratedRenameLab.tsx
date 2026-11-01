@@ -6,9 +6,15 @@ import type {
   GeneratedRenameRequest,
   GeneratedRenameReview,
   GeneratedWorkerStatus,
+  OriginalOperationHistory,
 } from './bindings';
 import { errorMessage } from './ipc';
 import { OriginalJobProgress } from './library/OriginalJobProgress';
+import { OriginalHistoryReview } from './library/OriginalHistoryReview';
+
+function readGeneratedHistory(jobId: string) {
+  return invoke<OriginalOperationHistory>('test_generated_rename_history', { jobId });
+}
 
 export function GeneratedRenameLab() {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -213,7 +219,10 @@ export function GeneratedRenameLab() {
                   {review.jobs
                     .filter((job) => !worker?.busy || job.id !== worker.job?.id)
                     .map((job) => (
-                      <OriginalJobProgress key={job.id} job={job} />
+                      <div key={job.id}>
+                        <OriginalJobProgress job={job} />
+                        <OriginalHistoryReview job={job} readHistory={readGeneratedHistory} />
+                      </div>
                     ))}
                 </section>
               )}

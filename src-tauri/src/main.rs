@@ -487,6 +487,11 @@ async fn library_request(
             LibraryRequest::OrganizationCopyJob { job_id } => {
                 LibraryResponse::OrganizationCopyJob(library.organization_copy_job(job_id)?)
             }
+            LibraryRequest::OrganizationOriginalHistory { job_id } => {
+                LibraryResponse::OrganizationOriginalHistory(
+                    library.organization_original_history(job_id)?,
+                )
+            }
             LibraryRequest::OrganizationCopyCancel { job_id } => {
                 LibraryResponse::OrganizationCopyJob(library.organization_copy_cancel(job_id)?)
             }
@@ -918,6 +923,28 @@ async fn test_generated_rename(
         .await
         .map_err(|error| {
             AppError::new(ErrorCode::WorkerFailed, "Generated review worker stopped.")
+                .caused_by(error)
+        })?
+}
+
+#[cfg(feature = "desktop-test")]
+#[tauri::command]
+async fn test_generated_rename_history(
+    window: tauri::WebviewWindow,
+    state: State<'_, Foundation>,
+    job_id: String,
+) -> Result<stillharbour_core::operations::original_jobs::OriginalOperationHistory> {
+    if window.label() != "main" {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Invalid generated-history window.",
+        ));
+    }
+    let controller = state.rename_fixture.clone();
+    tokio::task::spawn_blocking(move || controller.history(job_id))
+        .await
+        .map_err(|error| {
+            AppError::new(ErrorCode::WorkerFailed, "Generated history review failed.")
                 .caused_by(error)
         })?
 }
@@ -1747,6 +1774,7 @@ fn main() {
         test_library_fixture,
         test_scroll_catalog,
         test_generated_rename,
+        test_generated_rename_history,
         test_generated_rename_worker,
         test_performance
     ]);

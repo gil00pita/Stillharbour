@@ -9,6 +9,7 @@ import { copyJobActive } from './copyJobs';
 import { RetainedCopyInspection } from './RetainedCopyInspection';
 import { ReopenPreparedCopy } from './VerifiedCopyWorkflow';
 import { OriginalJobProgress } from './OriginalJobProgress';
+import { OriginalHistoryReview } from './OriginalHistoryReview';
 
 export function JobsDropdown({
   status,
@@ -63,7 +64,7 @@ export function JobsDropdown({
         setOpen(false);
     }
     function escape(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || panel.current?.querySelector('dialog[open]')) return;
       event.preventDefault();
       event.stopPropagation();
       setOpen(false);
@@ -185,7 +186,10 @@ export function JobsDropdown({
                   ))}
                 <LibraryChanges status={status} />
                 {originalJobs.map((job) => (
-                  <OriginalJobProgress key={job.id} job={job} />
+                  <div key={job.id}>
+                    <OriginalJobProgress job={job} />
+                    <OriginalHistoryReview job={job} />
+                  </div>
                 ))}
                 {recent.length > 0 && (
                   <details className="recent-jobs">
