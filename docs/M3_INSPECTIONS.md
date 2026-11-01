@@ -1,0 +1,29 @@
+# M3 duplicate, health and storage implementation
+
+Started 2026-11-01 after the recorded M2 disposable-fixture gate in M2_VALIDATION.md. M3 is in progress; this is not an acceptance declaration. The current evidence index is [M3_VALIDATION.md](M3_VALIDATION.md). The native inspection IPC and Duplicates, Integrity and Storage screens are connected in source. M3 acceptance and native UI validation remain pending.
+
+## Current implementation
+
+`crates/core/src/inspection` starts the read-only domain and bounded content primitives. Content options are BLAKE3, SHA-256, SHA-1, MD5 and direct bytes. Sampling is a versioned three-window BLAKE3 filter. Full hashes retain their standard algorithm bytes; direct-byte mode does not silently produce a full-file hash. All issued content reads use the shared paced-I/O interface, bounded 64 KiB buffers, cancellation and explicit expected-length checks. The native adapter now reopens authorized handle-relative entries and checks root binding, object identity, revision, link count and length around reads. Reports retain immutable scope and findings in catalog schema 9.
+
+Property rules have explicit All/Any logic and Match/Different/Unknown results. Missing birthtime, unsupported attributes and empty normalized names remain unknown. Dates use explicit filesystem fields and millisecond tolerance, never EXIF or Unix ctime substitution. Name normalization is optional NFC, Unicode lowercase, whitespace removal and selected literal-character removal; it changes comparison keys only. Lowercase is not advertised as complete Unicode case folding.
+
+## Connected read-only features
+
+One bounded background inspection runs per catalog. Bounds include 64 roots, 100,000 retained files, 50,000 folder nodes, one million property/collision comparisons, 4,096 groups and 1,024 members per backend keeper review. Retained-name accounting has a separate budget; these are algorithmic bounds, not a process RSS guarantee. Reaching a tree bound fails explicitly and retains file observations without publishing an incomplete tree as complete. Cancellation retains partial observations; startup interrupts abandoned jobs without replaying source I/O. Media-and-companion and all-eligible-file scopes retain hidden/glob/size exclusions; inspection intentionally ignores indexing extension/date restrictions and discloses that choice. Recursive logical totals and treemap use the same native inventory; allocated bytes are explicitly unknown where unavailable, and physical reclaimability remains unknown. Same-volume quarantine reports zero freed bytes.
+
+Checksum comparison does not establish a missing baseline. Explicitly acknowledged establishment appends a BLAKE3 baseline with previous-history linkage. A mismatch means changed since baseline, not proven damage.
+
+A supervised, path-free helper now implements bounded header checks and full static PNG/JPEG/WebP decode. Input is limited to 32 MiB (quick checks use a 64 KiB prefix), 16 megapixels and declared dimension/allocation limits. The existing helper supervisor supplies cancellation, a 12-second deadline and output limits. macOS additionally samples child RSS against 512 MiB; Windows does not currently have that RSS sampler. Decoder allocation/dimension/pixel/input limits apply on both platforms and are not an OS memory sandbox. Opaque codec I/O/CPU is not advertised as byte-rate throttled. Full RAW and animated/multipage validation are unsupported. Normalized-pixel candidates support only static RGB8/RGBA8 PNG with a declared sRGB/straight-alpha policy. Descriptive PNG text/time is excluded in temporary decode bytes; color profiles, orientation, palette, grayscale, higher precision, animation and unknown components are rejected. Pixel fingerprints remain manual-review evidence and never authorize quarantine.
+
+## Remaining milestone work
+
+Complete full strict validation, native screen evidence on both target OSes and the AC-040–057 / AC-059–065 evidence index. Finish remaining bounded-report and fixture regressions found during that validation. The full M3 gate remains open until those results agree with backend behavior, UI states and documentation. Do not begin M4.
+
+Constructor-owned duplicate fixtures now compare complete primary/companion bytes against accessible independent keeper objects before every quarantine step. They reuse the M2 quarantine/restore journal, stop and freshly continue in both directions, and retain zero freed bytes. The ordinary library UI remains read-only; its retained keeper review does not grant execution approval. Protected/preferred folder choices, manual keep-multiple and explicit filesystem-date policies are backend-reviewed. Native frontend screenshot and both-target validation remain pending.
+
+Production quarantine remains backend-disabled until independent recovery and applicable native gates pass. Same-volume quarantine frees no data blocks. Hash or pixel matches never authorize cleanup. No perceptual similarity mode, permanent delete or automatic repair is in this milestone.
+
+## Dependencies and validation
+
+Pin RustCrypto `sha2` 0.11.1, `sha1` 0.11.0 and `md-5` 0.11.0, plus `unicode-normalization` 0.1.26, with Cargo.lock checksums. These provide required algorithms/Unicode policy rather than bespoke implementations. Existing transitive SHA-2 0.10.9 remains unchanged. No native binary or compiler flags are added. Cargo metadata confirms MIT/Apache-2.0 licensing for the new RustCrypto family; unicode-normalization additionally carries Unicode-3.0 terms. Nine new source packages are locked. The older transitive SHA-2/digest family is retained for its existing consumers rather than upgraded incidentally. Exact checks/outcomes, including compilation failures, belong in IMPLEMENTATION_LOG.md.

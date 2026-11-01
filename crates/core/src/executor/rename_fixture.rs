@@ -35,6 +35,8 @@ use std::{
     time::SystemTime,
 };
 
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Original {
     identity: FileIdentity,
     version: FileIdentity,
@@ -789,6 +791,9 @@ fn unicode_probe() -> Result<serde_json::Value> {
     Ok(
         serde_json::json!({"canonicalTargetsEquivalent":equivalent,"collisionBlockedBeforeMove":equivalent,"distinctTargetsRoundTrip":!equivalent,"companionRenameContinuedAndUndone":true,"allOriginalObjectsBytesAndMetadataVerified":true,"sourceMembers":4,"productionAuthorization":false}),
     )
+}
+pub(super) fn duplicate_probe() -> Result<serde_json::Value> {
+    quarantine::duplicate_probe()
 }
 pub(super) fn relocation_probe() -> Result<serde_json::Value> {
     quarantine::probe()

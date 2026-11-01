@@ -138,6 +138,9 @@ pub struct LibraryChangePage {
 pub struct LibraryStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub inspection_jobs: Option<Vec<crate::inspection::model::InspectionJob>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub import_destination: Option<ImportDestinationPreference>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -486,6 +489,48 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    InspectionIssues {
+        job_id: String,
+        after: Option<String>,
+    },
+    InspectionKeeperLatest {
+        job_id: String,
+        group_id: String,
+    },
+    InspectionKeeperReview {
+        input: crate::inspection::KeeperReviewInput,
+    },
+    InspectionStart {
+        input: crate::inspection::model::InspectionInput,
+    },
+    InspectionJob {
+        job_id: String,
+    },
+    InspectionJobs {},
+    InspectionCancel {
+        job_id: String,
+    },
+    InspectionFindings {
+        job_id: String,
+        after: Option<String>,
+    },
+    InspectionGroups {
+        job_id: String,
+        after: Option<String>,
+    },
+    InspectionGroupMembers {
+        job_id: String,
+        group_id: String,
+        after: Option<String>,
+    },
+    InspectionReport {
+        job_id: String,
+    },
+    InspectionFolders {
+        job_id: String,
+        parent_id: String,
+        after: Option<String>,
+    },
     OrganizationImportDestinationSet {
         catalog_id: String,
         root_id: Option<String>,
@@ -791,6 +836,15 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    InspectionIssues(crate::inspection::model::InspectionIssuePage),
+    InspectionKeeperLatest(Option<Box<crate::inspection::KeeperReview>>),
+    InspectionKeeperReview(crate::inspection::KeeperReview),
+    InspectionJob(Box<crate::inspection::model::InspectionJob>),
+    InspectionJobs(Vec<crate::inspection::model::InspectionJob>),
+    InspectionFindings(crate::inspection::model::FindingPage),
+    InspectionGroups(crate::inspection::model::DuplicatePage),
+    InspectionReport(Option<Box<crate::inspection::model::InspectionReport>>),
+    InspectionFolders(crate::inspection::model::FolderPage),
     OrganizationImportDestination(ImportDestinationPreference),
     OrganizationOriginalHistory(crate::operations::original_jobs::OriginalOperationHistory),
     OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),

@@ -2,12 +2,23 @@
 //! authority. It has no production constructor, expiry, purge or source unlink.
 use super::super::Object;
 use super::*;
+#[path = "duplicate_recovery.rs"]
+mod duplicate_recovery;
 
 struct Quarantine {
     fixture: Fixture,
     root: Object,
     volume: String,
     selected: Vec<String>,
+    duplicate_keeper: Option<DuplicateKeeper>,
+}
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DuplicateKeeper {
+    directory: Object,
+    members: BTreeMap<String, FileIdentity>,
+    revisions: BTreeMap<String, String>,
+    protected: std::collections::BTreeSet<String>,
 }
 struct Held {
     source: DirectoryChain,
@@ -86,9 +97,161 @@ impl Quarantine {
             volume: source_native::volume_token(&directory)?,
             fixture,
             selected,
+            duplicate_keeper: None,
         };
         result.db()?;
         Ok(result)
+    }
+    fn duplicate() -> Result<Self> {
+        use std::io::Write;
+        let mut result = Self::new()?;
+        let path = result.fixture.run.path().canonicalize()?;
+        let container = root(&path)?;
+        let directory = native::create_directory(container.leaf(), "duplicate-keeper")?;
+        let mut members = BTreeMap::new();
+        let mut revisions = BTreeMap::new();
+        for id in &result.selected {
+            let member = result
+                .fixture
+                .plan
+                .members
+                .iter()
+                .find(|member| &member.id == id)
+                .ok_or_else(|| failed("Missing generated bundle component."))?;
+            let index = MEMBERS
+                .iter()
+                .position(|(before, _)| *before == member.before)
+                .ok_or_else(|| failed("Unknown fixed generated bundle payload."))?;
+            let mut file = native::create_file(&directory, id)?;
+            let bytes = payload(index);
+            if !matches!(
+                PacedIo::shared().write_all(
+                    &mut file,
+                    bytes.as_bytes(),
+                    &AtomicBool::new(false)
+                )?,
+                IoStep::Completed(())
+            ) {
+                return Err(failed("Generated keeper creation canceled."));
+            }
+            file.flush()?;
+            file.sync_all()?;
+            members.insert(id.clone(), filesystem::identity(&file)?);
+            revisions.insert(id.clone(), source_native::revision(&file)?);
+        }
+        result.duplicate_keeper = Some(DuplicateKeeper {
+            directory: Object::of(&directory)?,
+            members,
+            revisions,
+            protected: Default::default(),
+        });
+        Ok(result)
+    }
+    fn duplicate_guard(&self, held: &Held) -> Result<()> {
+        use crate::inspection::{
+            hashing,
+            keepers::{self, Member},
+            model::MatchMode,
+        };
+        let Some(keeper) = &self.duplicate_keeper else {
+            return Ok(());
+        };
+        let directory = root(
+            &self
+                .fixture
+                .run
+                .path()
+                .canonicalize()?
+                .join("duplicate-keeper"),
+        )?;
+        if !keeper.directory.matches(directory.leaf())? {
+            return Err(failed("The generated keeper root changed."));
+        }
+        let mut members = Vec::new();
+        let mut pairs = std::collections::BTreeSet::new();
+        for id in &self.selected {
+            let original = &self.fixture.originals[id];
+            let member = self
+                .fixture
+                .plan
+                .members
+                .iter()
+                .find(|member| &member.id == id)
+                .ok_or_else(|| failed("Unknown generated bundle member."))?;
+            let source =
+                native::reopen_stage(held.source.leaf(), &member.before, &original.identity)
+                    .or_else(|_| {
+                        native::reopen_stage(
+                            held.quarantine.leaf(),
+                            &Self::leaf(id),
+                            &original.identity,
+                        )
+                    })?;
+            let mut source = source;
+            let mut copy = native::reopen_stage(directory.leaf(), id, &keeper.members[id])?;
+            let before = source_native::revision(&copy)?;
+            if before != keeper.revisions[id] {
+                return Err(failed(
+                    "Keeper bytes/revision changed; review the whole generated bundle again.",
+                ));
+            }
+            let equal = hashing::equal(
+                &mut source,
+                &mut copy,
+                original.bytes,
+                &PacedIo::shared(),
+                &AtomicBool::new(false),
+                &mut hashing::Stats::default(),
+            )?;
+            let after = source_native::revision(&copy)?;
+            drop(copy);
+            let fresh = native::reopen_stage(directory.leaf(), id, &keeper.members[id])?;
+            if !matches!(equal, IoStep::Completed(true))
+                || after != before
+                || source_native::revision(&fresh)? != before
+                || filesystem::identity(&fresh)? != keeper.members[id]
+            {
+                return Err(failed(
+                    "A unique or changed companion cannot be quarantined.",
+                ));
+            }
+            let keeper_id = format!("keeper-{id}");
+            pairs.insert((id.clone(), keeper_id.clone()));
+            members.push(Member {
+                id: id.clone(),
+                object: format!("{}:{}", original.identity.volume, original.identity.file),
+                online: true,
+                protected: keeper.protected.contains(id),
+                preferred_rank: 1,
+                modified_millis: None,
+                created_millis: None,
+                bundle_complete: true,
+                unique_companion: false,
+            });
+            members.push(Member {
+                id: keeper_id,
+                object: format!("{}:{}", keeper.members[id].volume, keeper.members[id].file),
+                online: true,
+                protected: false,
+                preferred_rank: 0,
+                modified_millis: None,
+                created_millis: None,
+                bundle_complete: true,
+                unique_companion: false,
+            });
+        }
+        let blocks = keepers::review_selection(
+            &members,
+            &self.selected.iter().cloned().collect(),
+            MatchMode::ExactContent,
+            &pairs,
+        )?;
+        if !blocks.is_empty() {
+            return Err(failed(
+                "Generated duplicate keeper protections block quarantine.",
+            ));
+        }
+        Ok(())
     }
     fn leaf(id: &str) -> String {
         format!("{id}.retained")
@@ -133,11 +296,18 @@ impl Quarantine {
     }
     fn lease(&self, access: Access) -> Result<crate::jobs::operation_locks::Lease> {
         let path = self.fixture.run.path().canonicalize()?;
-        Registry::shared().try_acquire(vec![
+        let mut scopes = vec![
             Scope::new(root(&path.join("originals"))?, access),
             Scope::new(root(&path.join("quarantine"))?, access),
             Scope::new(root(&path.join("retained"))?, Access::Read),
-        ])
+        ];
+        if self.duplicate_keeper.is_some() {
+            scopes.push(Scope::new(
+                root(&path.join("duplicate-keeper"))?,
+                Access::Read,
+            ));
+        }
+        Registry::shared().try_acquire(scopes)
     }
     fn inspect(&self, held: &Held) -> Result<Observed> {
         if !self.fixture.source_root.matches(held.source.leaf())?
@@ -404,6 +574,9 @@ impl Quarantine {
             ));
         }
         let db = self.db()?;
+        if !restore {
+            self.duplicate_guard(&held)?;
+        }
         let role = if restore { "restore" } else { "quarantine" };
         let existing: i64 =
             db.query_row("SELECT count(*) FROM plans WHERE role=?1", [role], |row| {
@@ -491,6 +664,9 @@ impl Quarantine {
                 )
             };
             let current = self.inspect(held)?;
+            if !restore {
+                self.duplicate_guard(held)?;
+            }
             if current.revisions != expected {
                 return Err(failed(
                     "Relocation evidence changed before its next member.",
@@ -573,9 +749,99 @@ pub(super) fn probe() -> Result<serde_json::Value> {
     )
 }
 
+pub(super) fn duplicate_probe() -> Result<serde_json::Value> {
+    let retained = duplicate_recovery::Retained::capture(Quarantine::duplicate()?)?;
+    let fixture = retained.open()?;
+    if fixture.execute(false, Some(Fault::AfterMove(0)))? {
+        return Err(failed("Generated duplicate did not stop."));
+    }
+    drop(fixture);
+    let fixture = retained.open()?;
+    if !fixture.resume(false, None)? || fixture.execute(true, Some(Fault::AfterMove(0)))? {
+        return Err(failed("Generated duplicate restore did not stop."));
+    }
+    drop(fixture);
+    let fixture = retained.open()?;
+    if !fixture.resume(true, None)? {
+        return Err(failed(
+            "Generated duplicate quarantine/restore did not finish.",
+        ));
+    }
+    let _lease = fixture.lease(Access::Read)?;
+    let held = fixture.open()?;
+    if fixture
+        .inspect(&held)?
+        .positions
+        .values()
+        .any(|position| *position)
+    {
+        return Err(failed("Generated duplicate originals were not restored."));
+    }
+    fixture.duplicate_guard(&held)?;
+    Ok(
+        serde_json::json!({"scope":"constructor-owned-duplicate-bundle-only","nativeOs":std::env::consts::OS,"freshCompleteComponentComparisons":true,"independentAccessibleKeeperRetained":true,"companionsRestoredTogether":true,"quarantinedMembers":2,"restoredOriginalObjects":5,"quarantineFreedBytes":"0","interruptedAndFreshlyContinuedBothDirections":true,"independentRecoveryProven":false,"productionAuthorization":false}),
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn duplicate_bundle_probe_freshly_compares_and_restores_through_m2_journal() {
+        let report = duplicate_probe().unwrap();
+        assert_eq!(report["quarantineFreedBytes"], "0");
+        assert_eq!(report["companionsRestoredTogether"], true);
+    }
+    #[test]
+    fn duplicate_bundle_blocks_protected_offline_changed_and_unique_keepers_before_moves() {
+        for variant in 0..4 {
+            let mut fixture = Quarantine::duplicate().unwrap();
+            if variant == 0 {
+                fixture
+                    .duplicate_keeper
+                    .as_mut()
+                    .unwrap()
+                    .protected
+                    .insert(fixture.selected[0].clone());
+            }
+            if variant == 1 {
+                let base = fixture.fixture.run.path();
+                let path = base.join("duplicate-keeper");
+                let other = base.join("unavailable-keeper");
+                assert!(path.starts_with(base) && other.starts_with(base));
+                std::fs::rename(path, other).unwrap();
+            }
+            if variant >= 2 {
+                let id = &fixture.selected[if variant == 2 { 0 } else { 1 }];
+                let path = fixture.fixture.run.path().join("duplicate-keeper").join(id);
+                assert!(path.starts_with(fixture.fixture.run.path()));
+                let file = std::fs::OpenOptions::new().write(true).open(path).unwrap();
+                let metadata = file.metadata().unwrap();
+                use std::io::Write;
+                (&file).write_all(b"different").unwrap();
+                file.set_times(
+                    std::fs::FileTimes::new().set_modified(metadata.modified().unwrap()),
+                )
+                .unwrap();
+            }
+            assert!(fixture.execute(false, None).is_err());
+            let held = fixture.open().unwrap();
+            assert!(
+                fixture
+                    .inspect(&held)
+                    .unwrap()
+                    .positions
+                    .values()
+                    .all(|position| !*position)
+            );
+            let count: i64 = fixture
+                .db()
+                .unwrap()
+                .query_row("SELECT count(*) FROM events", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(count, 0);
+        }
+    }
     #[test]
     fn relocation_fixture_continuation_refuses_foreign_or_unknown_retained_scope_before_approval() {
         for variant in 0..3 {

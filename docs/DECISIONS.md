@@ -308,3 +308,8 @@ The owner continued to M2 and selected organization templates/previews as the pr
 [ADR-0061](decisions/ADR-0061-original-operation-scan-coordination.md) retains a single generated native lease through movement and catalog/job commit, and defers scans/removal while durable original recovery is unresolved. Verified completion resolves only its own plan; monitor invalidations remain pending. This is partial coordination evidence, not production mutation or restart adoption.
 
 [ADR-0062](decisions/ADR-0062-explicit-managed-copy-destination.md) adds an explicitly selected different managed copy destination, immutable optional root binding, fresh grant/recovery checks and existing-root import discovery. External-folder policy remains strict/default; original mutation stays gated. Validation is in progress.
+
+
+## M3 read-only inspections — 2026-11-01 (in progress)
+
+[ADR-0070](decisions/ADR-0070-read-only-inspection-jobs.md) connects bounded native duplicate/health/storage jobs to catalog schema 9 and native UI. Root/object/revision validation, complete direct-byte comparisons, versioned candidate fingerprints and append-only explicit baselines remain backend-owned. Keeper review retains protected/preferred folder and manual/date policy without granting cleanup approval. Constructor-owned duplicate bundle proof reuses M2 quarantine/restore; real-library quarantine and independent-recovery gates remain closed. Full M3 acceptance and both-target native evidence are still outstanding; no M4 implementation is authorized.

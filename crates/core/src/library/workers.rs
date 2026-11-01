@@ -28,6 +28,53 @@ pub struct WorkerPaths {
     pub working_directory: PathBuf,
 }
 
+pub(super) async fn inspect(
+    paths: &WorkerPaths,
+    bytes: Vec<u8>,
+    mode: crate::inspection::decoder::DecodeMode,
+    hint: crate::inspection::decoder::FormatHint,
+    complete: bool,
+    cancel: Arc<AtomicBool>,
+) -> Result<crate::inspection::decoder::DecodeReport> {
+    use crate::inspection::decoder::{self, DecodeMode, FormatHint};
+    if bytes.len() as u64 > decoder::INPUT_LIMIT {
+        return Err(invalid("Inspection input exceeds its budget."));
+    }
+    let mut command = Command::new(&paths.executable);
+    command
+        .args([
+            "--inspection-worker",
+            match mode {
+                DecodeMode::Quick => "quick",
+                DecodeMode::Deep => "deep",
+                DecodeMode::Pixels => "pixels",
+            },
+            match hint {
+                FormatHint::Image => "image",
+                FormatHint::Raw => "raw",
+                FormatHint::Unknown => "unknown",
+            },
+            if complete { "complete" } else { "prefix" },
+        ])
+        .env_clear()
+        .current_dir(&paths.working_directory);
+    let output = run(
+        command,
+        WorkerInput::Bytes(bytes),
+        decoder::OUTPUT_LIMIT,
+        true,
+        cancel,
+    )
+    .await?;
+    serde_json::from_slice(&output).map_err(|error| {
+        AppError::new(
+            ErrorCode::WorkerFailed,
+            "Invalid inspection worker response.",
+        )
+        .caused_by(error)
+    })
+}
+
 pub fn read_input(file: File) -> Result<Vec<u8>> {
     read_input_at(file, crate::performance::Endpoint::Source)
 }

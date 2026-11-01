@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: u32 = 8;
+pub const SCHEMA_VERSION: u32 = 9;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
@@ -501,6 +501,7 @@ mod tests {
     }
 
     fn strip_original_job_schema(db: &Connection) -> rusqlite::Result<()> {
+        crate::library::inspection_store::strip_schema(db)?;
         db.execute_batch("DROP TABLE import_destination_preference; DROP TABLE original_operation_events; DROP TABLE original_operation_jobs; DROP TABLE original_operation_plans;")
     }
     fn legacy_fixture(path: &Path) -> String {
@@ -695,10 +696,74 @@ mod tests {
         drop(catalog);
         id
     }
+    fn legacy_eight_fixture(path: &Path) -> String {
+        let catalog = Catalog::open(path.to_owned()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        catalog.call(|db| {
+            crate::library::inspection_store::strip_schema(db)?;
+            db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data'); PRAGMA user_version=8;")?;
+            Ok(())
+        }).unwrap();
+        id
+    }
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn inspection_migration_retains_v8_snapshot_and_rolls_back_partial_schema_on_collision() {
+        for collision in [false, true] {
+            let owned = tempfile::tempdir().unwrap();
+            let path = owned.path().join("Fixture.stillharbour");
+            let id = legacy_eight_fixture(&path);
+            if collision {
+                Connection::open(&path).unwrap().execute_batch("CREATE TABLE inspection_folder_children(value TEXT); INSERT INTO inspection_folder_children VALUES('retained neighbor');").unwrap();
+            }
+            let result = Catalog::open(path.clone());
+            if collision {
+                assert!(result.is_err());
+                let db = Connection::open(&path).unwrap();
+                assert_eq!(summary(&db).unwrap().schema, 8);
+                assert_eq!(summary(&db).unwrap().id, id);
+                assert_eq!(
+                    db.query_row("SELECT value FROM inspection_folder_children", [], |row| {
+                        row.get::<_, String>(0)
+                    })
+                    .unwrap(),
+                    "retained neighbor"
+                );
+                assert_eq!(db.query_row("SELECT count(*) FROM sqlite_schema WHERE type='table' AND name='inspection_jobs'",[],|row|row.get::<_,i64>(0)).unwrap(),0);
+            } else {
+                let catalog = result.unwrap();
+                assert_eq!(catalog.summary().unwrap().schema, 9);
+                assert_eq!(catalog.summary().unwrap().id, id);
+            }
+            let snapshot = std::fs::read_dir(owned.path())
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .find(|path| {
+                    path.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("pre-migration-v8-")
+                })
+                .unwrap();
+            let backup =
+                Connection::open_with_flags(snapshot, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            assert_eq!(summary(&backup).unwrap().schema, 8);
+            assert_eq!(summary(&backup).unwrap().id, id);
+            assert_eq!(
+                backup
+                    .query_row("SELECT state FROM job_events WHERE sequence=1", [], |row| {
+                        row.get::<_, String>(0)
+                    })
+                    .unwrap(),
+                "retained user data"
+            );
+        }
+    }
     fn legacy_seven_fixture(path: &Path) -> String {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
         catalog.call(|db|{
+            crate::library::inspection_store::strip_schema(db)?;
             db.execute_batch("DROP TABLE import_destination_preference; INSERT INTO job_events VALUES(1,'fixture','retained user data'); PRAGMA user_version=7;")?;
             db.execute("INSERT INTO roots(id,label,native_path,display_path,mode,is_base,platform,volume,device,inode,availability,filter) VALUES('327d8c01-938e-4c13-8514-91f848e2eabc','Offline metadata fixture',X'00','Generated offline observation','referenced',1,'fixture','retained-volume','1','2','offline',?)",[serde_json::to_string(&crate::library::model::ScanFilter::default()).unwrap()])?;
             Ok(())
@@ -1032,7 +1097,7 @@ mod tests {
     #[test]
     #[cfg(any(windows, target_os = "macos"))]
     fn process_exit_during_migration_retains_a_consistent_catalog_and_backup() {
-        for (version, stage) in [2, 3, 4, 5, 6, 7].into_iter().flat_map(|version| {
+        for (version, stage) in [2, 3, 4, 5, 6, 7, 8].into_iter().flat_map(|version| {
             ["after_snapshot", "before_commit", "after_commit"].map(|stage| (version, stage))
         }) {
             let owned = tempfile::Builder::new()
@@ -1052,8 +1117,10 @@ mod tests {
                 legacy_five_fixture(&path)
             } else if version == 6 {
                 legacy_six_fixture(&path)
-            } else {
+            } else if version == 7 {
                 legacy_seven_fixture(&path)
+            } else {
+                legacy_eight_fixture(&path)
             };
             let mut child = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([

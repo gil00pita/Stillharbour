@@ -200,3 +200,60 @@ it('starts a separate thumbnail job for a selected saved library and exposes thu
   fireEvent.click(screen.getByRole('button', { name: 'Cancel thumbnails' }));
   await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'cancel', job_id: job.id }));
 });
+
+it('shows and cancels a durable inspection outside its results screen', async () => {
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_cancel')
+      return {
+        id: 'inspection',
+        input: { rootIds: ['root'], scope: 'all_eligible_files', task: { kind: 'storage' } },
+        state: 'cancel_requested',
+        startedAt: '2026-11-01',
+        updatedAt: '2026-11-01',
+        finishedAt: null,
+        filesObserved: 5,
+        filesChecked: 2,
+        bytesRead: '100',
+        issues: 0,
+        limited: false,
+        message: 'Stopping inspection',
+      };
+    if (request.kind === 'changes') return { changes: [], nextBefore: null };
+    throw new Error('Unexpected request');
+  });
+  render(
+    <JobsDropdown
+      status={{
+        ...status,
+        jobs: [],
+        inspectionJobs: [
+          {
+            id: 'inspection',
+            input: { rootIds: ['root'], scope: 'all_eligible_files', task: { kind: 'storage' } },
+            state: 'running',
+            startedAt: '2026-11-01',
+            updatedAt: '2026-11-01',
+            finishedAt: null,
+            filesObserved: 5,
+            filesChecked: 2,
+            bytesRead: '100',
+            issues: 0,
+            limited: false,
+            message: 'Inspecting generated files',
+          },
+        ],
+      }}
+      onRefresh={refresh}
+    />,
+  );
+  const panel = open();
+  expect(within(panel).getByText('Inspecting generated files')).toBeVisible();
+  fireEvent.click(within(panel).getByRole('button', { name: 'Cancel inspection' }));
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenCalledWith(
+      { kind: 'inspection_cancel', job_id: 'inspection' },
+      'inspection_job',
+    ),
+  );
+  await waitFor(() => expect(refresh).toHaveBeenCalled());
+});

@@ -12,6 +12,60 @@ async function native(request) {
     request,
   );
 }
+async function reviewReadOnlyInspections(evidence) {
+  if (await $('button[aria-label="Expand navigation"]').isExisting())
+    await $('button[aria-label="Expand navigation"]').click();
+  const receipts = [];
+  for (const [section, label] of [
+    ['Storage', 'Start storage inspection'],
+    ['Duplicates', 'Start duplicate inspection'],
+    ['Integrity', 'Start quick header check'],
+  ]) {
+    await $(`button[aria-label="${section}"]`).click();
+    await $('.inspection-controls').waitForDisplayed();
+    if (section === 'Integrity') await changeSizeUnit('Integrity mode', 'quick');
+    const before = (await native({ kind: 'inspection_jobs' })).data.map((job) => job.id);
+    await $(`button=${label}`).click();
+    let job;
+    await browser.waitUntil(
+      async () => {
+        const jobs = (await native({ kind: 'inspection_jobs' })).data;
+        job = jobs.find((job) => !before.includes(job.id));
+        return job && !['queued', 'running', 'cancel_requested'].includes(job.state);
+      },
+      { timeout: 45000, interval: 200, timeoutMsg: `${section} native inspection did not finish` },
+    );
+    assert.ok(['completed', 'partial'].includes(job.state), job.message);
+    await $('.inspection-table-wrap tbody tr').waitForDisplayed();
+    const report = (await native({ kind: 'inspection_report', job_id: job.id })).data;
+    const files = (await native({ kind: 'inspection_findings', job_id: job.id, after: null })).data;
+    assert.ok(files.rows.length > 0);
+    const bytes = files.rows.map((row) => BigInt(row.bytes));
+    assert.ok(bytes.every((value, index) => index === 0 || value <= bytes[index - 1]));
+    assert.equal(report.storage.quarantineFreedBytes, '0');
+    assert.equal(report.storage.reclaimablePhysicalBytes, null);
+    await browser.waitUntil(async () =>
+      browser.execute(
+        () =>
+          document
+            .querySelector('.inspection-job')
+            ?.textContent.includes('Re-run to check current files') &&
+          document.querySelectorAll('.inspection-job progress').length === 0,
+      ),
+    );
+    await browser.saveScreenshot(
+      `.context/screenshots/m3-${section.toLowerCase()}-${process.platform}.png`,
+    );
+    receipts.push({ job, report, firstPage: files });
+  }
+  await writeFile(
+    `${evidence}/m3-inspections-${process.platform}.json`,
+    JSON.stringify({ productionAuthorization: false, receipts }),
+  );
+  await $('button[aria-label="Photos"]').click();
+  await $('.asset').waitForDisplayed();
+}
+
 async function ownedOperationReceipt() {
   const token = randomUUID();
   // DirectEvalClient has its own 30-second limit, independent of WebDriver's
@@ -1452,7 +1506,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 8);
+    assert.equal(status.data.catalogSchema, 9);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -1731,7 +1785,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 8);
+      assert.equal(receipt.catalogJournal.catalogSchema, 9);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',
@@ -1746,6 +1800,19 @@ describe('native read-only library', () => {
         duplicateRemovalAuthorized: false,
         productionAuthorization: false,
         automaticExpiry: false,
+      });
+      assert.deepEqual(receipt.duplicateReview, {
+        scope: 'constructor-owned-duplicate-bundle-only',
+        nativeOs: process.platform === 'win32' ? 'windows' : 'macos',
+        freshCompleteComponentComparisons: true,
+        independentAccessibleKeeperRetained: true,
+        companionsRestoredTogether: true,
+        quarantinedMembers: 2,
+        restoredOriginalObjects: 5,
+        quarantineFreedBytes: '0',
+        interruptedAndFreshlyContinuedBothDirections: true,
+        independentRecoveryProven: false,
+        productionAuthorization: false,
       });
       assert.equal(receipt.renamePlanning.nativeMutationTested, false);
       assert.equal(receipt.renamePlanning.forward.execution_available, false);
@@ -2042,6 +2109,7 @@ describe('native read-only library', () => {
           await browser.saveScreenshot(`.context/screenshots/windows-library-${name}.png`);
         }
         await browser.setWindowSize(1180, 780);
+        await reviewReadOnlyInspections(evidence);
         const tile = (await $$('.asset'))[0];
         await tile.moveTo();
         await tile.$('.asset-check').click();
@@ -5309,6 +5377,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       removeEventListener('stillharbour:test-library-request', window.folderListener),
     );
     await browser.setWindowSize(1180, 780);
+  });
+  it('reviews native duplicate, integrity and storage jobs without changing generated originals', async function () {
+    this.timeout(180000);
+    await reviewReadOnlyInspections(evidence);
   });
   it('clears previews and confirms library removal without changing generated originals', async () => {
     await $('button[aria-label="Settings"]').click();

@@ -97,3 +97,11 @@ Windows CI portability checks (2026-10-28): [Rust slice::as_chunks](https://doc.
 
 - [Microsoft FILE_RENAME_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information): destination-directory handle and replacement flag semantics for the existing held-file rename primitive. Existing-target refusal requires replacement disabled.
 - [Apple XNU rename manual](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/rename.2): source/destination directory-relative operations and filesystem-dependent RENAME_EXCL refusal. The current fixture uses bounded leaves and held ordinary directories. API documentation does not replace the actual Windows/macOS preservation and recovery tests.
+
+## M3 read-only comparison APIs — 2026-11-01
+
+- [RustCrypto SHA-2 0.11.1](https://docs.rs/sha2/0.11.1/sha2/): incremental Digest interface for standard SHA-256 output.
+- [RustCrypto SHA-1 0.11.0](https://docs.rs/sha1/0.11.0/sha1/) and [MD5 0.11.0](https://docs.rs/md-5/0.11.0/md5/): compatibility-only algorithms; their documented collision limitations reinforce the separate full-byte comparator.
+- [Unicode normalization 0.1.26](https://docs.rs/unicode-normalization/0.1.26/unicode_normalization/): explicit NFC comparison keys; this does not rename originals or establish native filesystem equivalence.
+
+- M3 actual-volume capacity uses existing pinned fs2 0.4.3 `statvfs` / `FsStats` (native adapter source inspected locally): https://docs.rs/fs2/0.4.3/fs2/fn.statvfs.html and https://docs.rs/fs2/0.4.3/fs2/struct.FsStats.html. Capacity is an observation, not a reservation or physical reclaim estimate.

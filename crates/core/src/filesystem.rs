@@ -14,7 +14,8 @@ pub(crate) mod catalog_snapshot;
 #[cfg(windows)]
 pub(crate) mod windows;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FileIdentity {
     pub volume: u64,
     pub file: u64,

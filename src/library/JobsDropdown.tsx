@@ -10,6 +10,7 @@ import { RetainedCopyInspection } from './RetainedCopyInspection';
 import { ReopenPreparedCopy } from './VerifiedCopyWorkflow';
 import { OriginalJobProgress } from './OriginalJobProgress';
 import { OriginalHistoryReview } from './OriginalHistoryReview';
+import { InspectionJobProgress } from '../inspection/InspectionJobProgress';
 
 export function JobsDropdown({
   status,
@@ -36,7 +37,10 @@ export function JobsDropdown({
   const copyJobs = status?.copyJobs ?? [];
   const activeCopies = copyJobs.filter(copyJobActive);
   const originalJobs = status?.originalJobs ?? [];
+  const inspections = status?.inspectionJobs ?? [];
   const activeCount =
+    inspections.filter((job) => ['queued', 'running', 'cancel_requested'].includes(job.state))
+      .length +
     active.length +
     activeCopies.length +
     originalJobs.filter((job) => job.state === 'queued' || job.state === 'running').length;
@@ -184,6 +188,9 @@ export function JobsDropdown({
                       )}
                     </div>
                   ))}
+                {inspections.map((job) => (
+                  <InspectionJobProgress key={job.id} job={job} onRefresh={onRefresh} />
+                ))}
                 <LibraryChanges status={status} />
                 {originalJobs.map((job) => (
                   <div key={job.id}>

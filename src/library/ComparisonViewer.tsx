@@ -8,11 +8,13 @@ export function ComparisonViewer({
   status,
   onClose,
   onError,
+  returnLabel = 'Back to gallery',
 }: {
   assets: AssetSummary[];
   status: LibraryStatus;
   onClose: () => void;
   onError: (error: unknown) => void;
+  returnLabel?: string;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const keys = assets.map((asset) => ({ assetId: asset.id, revision: asset.revision, edge: 512 }));
@@ -34,7 +36,7 @@ export function ComparisonViewer({
     >
       <header className="viewer-toolbar">
         <h2>Compare {assets.length} selected photos</h2>
-        <button onClick={onClose}>Back to gallery</button>
+        <button onClick={onClose}>{returnLabel}</button>
       </header>
       <p className="viewer-status">
         Visual comparison does not establish exact duplicates. Only these explicitly selected photos

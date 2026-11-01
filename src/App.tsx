@@ -6,11 +6,12 @@ import type { DirectorySelection, LibraryRoot, RootMode, ScanFilter } from './bi
 import { JobsDropdown } from './library/JobsDropdown';
 import { LibraryScreen, type Section } from './library/LibraryScreen';
 import { FolderExplorer } from './library/FolderExplorer';
+import { InspectionScreen, type InspectionSection } from './inspection/InspectionScreen';
 import { RootSetup } from './library/RootSetup';
 import logo from '../assets/branding/stillharbour-logo.svg';
 import { libraryData } from './ipc';
 
-type AppSection = Section | 'Settings';
+type AppSection = Section | 'Settings' | InspectionSection;
 
 export default function App() {
   const app = useFoundation();
@@ -125,6 +126,9 @@ function NavigationIcon({ section }: { section: AppSection | 'Map' | 'Utilities'
     Tags: 'M3 3h8l10 10-8 8L3 11ZM7 7h.01',
     Map: 'M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2ZM9 3v16M15 5v16',
     Utilities: 'M4 7h16M4 17h16M8 4v6M16 14v6',
+    Duplicates: 'M4 4h11v13H4ZM9 8h11v13H9',
+    Integrity: 'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6ZM8 12l3 3 5-6',
+    Storage: 'M4 4h16v16H4ZM4 11h16M12 11v9',
     Settings:
       'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z',
   };
@@ -171,6 +175,18 @@ function Sidebar({
               >
                 <NavigationIcon section={item} />
                 <span className="nav-label">{item === 'Tags' ? 'Albums / Tags' : item}</span>
+              </button>
+            ))}
+            {(['Duplicates', 'Integrity', 'Storage'] as const).map((item) => (
+              <button
+                key={item}
+                aria-label={item}
+                title={collapsed ? item : undefined}
+                aria-current={section === item ? 'page' : undefined}
+                onClick={() => onNavigate(item)}
+              >
+                <NavigationIcon section={item} />
+                <span className="nav-label">{item}</span>
               </button>
             ))}
             <button disabled title="Map browsing is planned for a later milestone">
@@ -466,6 +482,17 @@ function WorkspaceContent({
         onError={showError}
       />
     );
+  if ((section === 'Duplicates' || section === 'Integrity' || section === 'Storage') && status)
+    return (
+      <InspectionScreen
+        key={`${foundation?.catalogId ?? 'catalog'}:${section}`}
+        section={section}
+        status={status}
+        navigationControl={navigationControl}
+        jobsControl={jobsControl}
+      />
+    );
+  if (section === 'Duplicates' || section === 'Integrity' || section === 'Storage') return null;
   if (section === 'Folders' && status)
     return (
       <FolderExplorer

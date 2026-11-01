@@ -38,6 +38,7 @@ jobs:
             .context/gallery/**/warm-scroll.json
             .context/gallery/**/manifest-*.json
             .context/gallery/**/multi-source-*.json
+            .context/gallery/**/m3-inspections-*.json
             .context/windows-directory-selection/native-*/*.json
             .context/generated-rename/*.json
             .context/cross-volume/**/*.json

@@ -114,6 +114,10 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
         super::import_destination::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 8)?;
     }
+    if current < 9 {
+        super::inspection_store::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 9)?;
+    }
     #[cfg(test)]
     crate::catalog::migration_test_exit("before_commit");
     tx.commit()?;

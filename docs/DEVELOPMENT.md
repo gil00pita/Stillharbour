@@ -1,5 +1,7 @@
 # Development
 
+M3 read-only inspection work is in progress. Duplicates, Integrity and Storage use the native catalog job API; the header Jobs dropdown includes retained inspection jobs and cancellation. Coverage, decoder limits and outstanding acceptance work are documented in [M3_INSPECTIONS.md](M3_INSPECTIONS.md). Real-library duplicate quarantine remains unavailable pending M4 recovery evidence.
+
 The desktop-test generated rename lab can explicitly reopen its owned retained scope (ADR-0068). This retires the live catalog/session and approvals, then revalidates the exact retained evidence and current native objects before another review. It accepts no renderer path. Existing real child-exit tests use the same decoder. The action does not restart the application process or enable adoption of a real library.
 
 Current M2 acceptance evidence and remaining qualifications are indexed in [M2_VALIDATION.md](M2_VALIDATION.md); dated implementation-log entries retain exact checkpoint outcomes.
@@ -566,4 +568,4 @@ Generated template continuation (ADR-0069): the desktop-test rename lab can cons
 
 Isolation diagnostic continuation, 2026-11-01: test_process drains both owned child output pipes concurrently, retaining a bounded initial proof and diagnostic tail. EOF waiting after process exit is bounded. Existing sixty-second scenarios and inner operation deadlines remain unchanged. The real-child pipe-capacity regression and bounded-capture case must pass; a previously observed projected-import CI timeout is not explained merely by adding this fix.
 
-M2 fixture-stage acceptance is recorded in M2_VALIDATION.md against complete Windows/macOS application CI 41308576901 (b41833f). This authorizes the already-requested M3 continuation, not production original mutation. Historical pending statements below describe earlier checkpoints. The separate cfg(test)-only child-output checkpoint still has a pending macOS result; monitor it without treating it as new application evidence.
+M2 fixture-stage acceptance is recorded in M2_VALIDATION.md against complete Windows/macOS application CI 41308576901 (b41833f). This authorizes the already-requested M3 continuation, not production original mutation. Historical pending statements below describe earlier checkpoints. The separate cfg(test)-only child-output checkpoint 269c2be also passes both OS jobs in CI 41309765574; application gate evidence remains separately identified.

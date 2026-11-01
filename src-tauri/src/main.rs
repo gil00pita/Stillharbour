@@ -728,6 +728,54 @@ async fn library_request(
             } => {
                 LibraryResponse::Page(library.seek_asset(query, asset_id, position, limit)?.into())
             }
+            LibraryRequest::InspectionIssues { job_id, after } => {
+                LibraryResponse::InspectionIssues(library.inspection_issues(job_id, after)?)
+            }
+            LibraryRequest::InspectionKeeperLatest { job_id, group_id } => {
+                LibraryResponse::InspectionKeeperLatest(
+                    library
+                        .inspection_keeper_latest(job_id, group_id)?
+                        .map(Box::new),
+                )
+            }
+            LibraryRequest::InspectionKeeperReview { input } => {
+                LibraryResponse::InspectionKeeperReview(library.inspection_keeper_review(input)?)
+            }
+            LibraryRequest::InspectionStart { input } => {
+                LibraryResponse::InspectionJob(Box::new(library.inspection_start(input)?))
+            }
+            LibraryRequest::InspectionJob { job_id } => {
+                LibraryResponse::InspectionJob(Box::new(library.inspection_job(job_id)?))
+            }
+            LibraryRequest::InspectionJobs {} => {
+                LibraryResponse::InspectionJobs(library.inspection_jobs()?)
+            }
+            LibraryRequest::InspectionCancel { job_id } => {
+                LibraryResponse::InspectionJob(Box::new(library.inspection_cancel(job_id)?))
+            }
+            LibraryRequest::InspectionFindings { job_id, after } => {
+                LibraryResponse::InspectionFindings(library.inspection_findings(job_id, after)?)
+            }
+            LibraryRequest::InspectionGroups { job_id, after } => {
+                LibraryResponse::InspectionGroups(library.inspection_groups(job_id, after)?)
+            }
+            LibraryRequest::InspectionGroupMembers {
+                job_id,
+                group_id,
+                after,
+            } => LibraryResponse::InspectionFindings(
+                library.inspection_group_members(job_id, group_id, after)?,
+            ),
+            LibraryRequest::InspectionReport { job_id } => {
+                LibraryResponse::InspectionReport(library.inspection_report(job_id)?.map(Box::new))
+            }
+            LibraryRequest::InspectionFolders {
+                job_id,
+                parent_id,
+                after,
+            } => LibraryResponse::InspectionFolders(
+                library.inspection_folders(job_id, parent_id, after)?,
+            ),
             LibraryRequest::Status {} => LibraryResponse::Status(library.status()?),
             LibraryRequest::SaveAndScan {
                 label,
@@ -1684,6 +1732,17 @@ async fn test_performance(
 
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
+    if args.get(1).is_some_and(|arg| arg == "--inspection-worker") {
+        let result = if args.len() == 5 {
+            stillharbour_core::inspection::decoder::worker(&args[2], &args[3], &args[4])
+        } else {
+            Err(AppError::new(
+                ErrorCode::InvalidInput,
+                "Invalid inspection worker arguments.",
+            ))
+        };
+        std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
     if args
         .get(1)
         .is_some_and(|arg| arg == "--media-worker-file-v2" || arg == "--media-worker-stdin-v2")

@@ -36,4 +36,4 @@ N1 adds structured inventory/content reports. Treat checksum mismatch, no baseli
 
 ## Authorized continuation — 2026-11-01
 
-M2's implemented disposable-fixture gate is recorded in docs/M2_VALIDATION.md using complete Windows/macOS application CI 41308576901 at b41833f. Begin M3 now under the owner's continuing request; preserve all production mutation and independent-recovery gates. The subsequent cfg(test)-only child-output harness checkpoint passes full local checks and Windows CI; its macOS job remains pending and must still be monitored. No M4 implementation or real-library development mutation is authorized.
+M2's implemented disposable-fixture gate is recorded in docs/M2_VALIDATION.md using complete Windows/macOS application CI 41308576901 at b41833f. Begin M3 now under the owner's continuing request; preserve all production mutation and independent-recovery gates. The subsequent cfg(test)-only child-output harness checkpoint passes full local checks and both Windows/macOS CI. No M4 implementation or real-library development mutation is authorized.

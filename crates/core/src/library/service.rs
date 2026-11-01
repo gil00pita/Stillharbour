@@ -84,6 +84,7 @@ impl Drop for MaintenanceGuard<'_> {
 }
 
 pub struct Library {
+    pub(super) inspections: Arc<super::inspection_jobs::InspectionJobs>,
     monitor: Mutex<Option<super::monitor::Monitor>>,
     cache_cleanup: super::cache_cleanup::CacheCleanup,
     cache_gate: RwLock<()>,
@@ -99,7 +100,7 @@ pub struct Library {
     thumbnail_jobs: Mutex<Vec<rendition_jobs::ThumbnailJob>>,
     thumbnail_job_gate: JobScheduler,
     scan_gate: JobScheduler,
-    resources: ResourceScheduler,
+    pub(super) resources: ResourceScheduler,
     original_gate: JobScheduler,
     original_cancel: Mutex<Option<Arc<AtomicBool>>>,
     #[cfg(feature = "fixture-probes")]
@@ -265,6 +266,12 @@ impl Library {
             MaintenanceTarget::Library { root_id } => {
                 uuid::Uuid::parse_str(root_id).map_err(|_| invalid("Invalid library identity."))?;
                 self.validate_root_id(root_id.clone())?;
+                if self.inspections.root_busy(&self.catalog, root_id)? {
+                    return Err(AppError::new(
+                        ErrorCode::Busy,
+                        "An inspection is active in this library. Cancel it before removing the library.",
+                    ));
+                }
                 super::original_jobs::require_reconciled_root(&self.catalog, root_id.clone())?;
                 Some(root_id.as_str())
             }
@@ -432,7 +439,9 @@ impl Library {
         let recovery = store::recover_jobs(&catalog)?;
         super::original_jobs::recover(&catalog)?;
         super::operation_jobs::recover(&catalog)?;
+        super::inspection_store::recover(&catalog)?;
         let library = Arc::new(Self {
+            inspections: Arc::new(super::inspection_jobs::InspectionJobs::default()),
             #[cfg(any(test, feature = "copy-workflow"))]
             copy_workflow: crate::executor::CopyWorkflow::new(
                 catalog.clone(),
@@ -940,6 +949,7 @@ impl Library {
             })
             .transpose()?;
         Ok(LibraryStatus {
+            inspection_jobs: Some(super::inspection_store::jobs(&self.catalog)?),
             import_destination: Some(super::import_destination::load(&self.catalog)?),
             original_jobs: Some(super::original_jobs::list(&self.catalog)?),
             copy_jobs: Some(super::operation_jobs::list(&self.catalog)?),

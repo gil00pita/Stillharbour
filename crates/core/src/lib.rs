@@ -6,6 +6,7 @@ pub mod domain;
 #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
 pub mod executor;
 pub mod filesystem;
+pub mod inspection;
 pub mod jobs;
 pub mod library;
 pub mod media;
