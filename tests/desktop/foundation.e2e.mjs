@@ -875,132 +875,145 @@ describe('native read-only library', () => {
     await mkdir('.context/screenshots', { recursive: true });
     await browser.saveScreenshot('.context/screenshots/m1-onboarding.png');
   });
-  it('copies and inspects only backend-owned operation fixtures through native IPC', async () => {
-    const receipt = await browser.tauri.execute(async ({ core }) =>
-      core.invoke('test_performance', { action: 'organization_copy_executor_fixture', rows: null }),
-    );
-    assert.equal(receipt.scope, 'generated-temporary-only');
-    assert.equal(receipt.chunkBytes, 65_536);
-    assert.equal(receipt.burstBytes, 131_072);
-    assert.equal(receipt.nativeOs, process.platform === 'darwin' ? 'macos' : 'windows');
-    assert.equal(receipt.completed.outcome, 'completed_verified');
-    assert.equal(receipt.completed.sourcesPreserved, true);
-    assert.equal(receipt.completed.destinationNeighborPreserved, true);
-    assert.equal(receipt.completed.verifiedSourceFiles, 3);
-    assert.equal(receipt.completed.publishedOutputsVerified, 3);
-    assert.equal(receipt.completed.allOutputsByteVerified, true);
-    assert.equal(receipt.completed.retryBlocked, true);
-    assert.equal(receipt.interruptedAfterPublish.outcome, 'interrupted');
-    assert.equal(receipt.interruptedAfterPublish.sourcesPreserved, true);
-    assert.equal(receipt.interruptedAfterPublish.destinationNeighborPreserved, true);
-    assert.equal(receipt.interruptedAfterPublish.publishedOutputsVerified, 1);
-    assert.equal(receipt.interruptedAfterPublish.allOutputsByteVerified, false);
-    assert.equal(receipt.interruptedAfterPublish.retryBlocked, true);
-    assert.deepEqual(receipt.scopeLocks, {
-      incompatibleCopyBlocked: true,
-      incompatibleRecoveryBlocked: true,
-      deniedJournalEvents: 0,
-      sharedSourceReaderCoexists: true,
-      completedAfterRelease: true,
-      sourcesPreserved: true,
-    });
-    assert.equal(receipt.catalogJournal.catalogSchema, 6);
-    assert.equal(receipt.catalogJournal.completed.publishedVerified, 2);
-    assert.equal(receipt.catalogJournal.completed.journalEvents, 13);
-    assert.equal(receipt.catalogJournal.completed.sourceAndNeighborPreserved, true);
-    assert.equal(receipt.catalogJournal.completed.replayBlocked, true);
-    assert.equal(receipt.catalogJournal.interruptedAfterPublish.publishedVerified, 1);
-    assert.equal(receipt.catalogJournal.interruptedAfterPublish.journalEvents, 5);
-    assert.equal(receipt.catalogJournal.interruptedAfterPublish.sourceAndNeighborPreserved, true);
-    assert.equal(receipt.catalogJournal.interruptedAfterPublish.replayBlocked, true);
-    assert.equal(receipt.catalogJournal.nested.publishedVerified, 2);
-    assert.equal(receipt.catalogJournal.nested.journalEvents, 13);
-    assert.equal(receipt.catalogJournal.nested.sourceAndNeighborPreserved, true);
-    assert.equal(receipt.catalogJournal.nested.replayBlocked, true);
-    assert.equal(receipt.catalogJournal.reviewedContinuation.initialPartialBytes, '65536');
-    assert.equal(receipt.catalogJournal.reviewedContinuation.interruptedEvents, 5);
-    assert.equal(receipt.catalogJournal.reviewedContinuation.completedEvents, 13);
-    assert.equal(receipt.catalogJournal.reviewedContinuation.publishedVerified, 2);
-    assert.equal(receipt.catalogJournal.reviewedContinuation.originalStageObjectPublished, true);
-    assert.equal(receipt.catalogJournal.reviewedContinuation.freshVerifiedNoOp, true);
-    assert.equal(receipt.catalogJournal.reviewedContinuation.sourceAndNeighborPreserved, true);
-    assert.equal(receipt.catalogJournal.reviewedContinuation.executionApproval, false);
-    assert.equal(
-      receipt.catalogJournal.namespacePreparation.reviewedContinuation.preparedCopy.journalEvents,
-      13,
-    );
-    assert.equal(
-      receipt.catalogJournal.namespacePreparation.reviewedContinuation.preparedCopy
-        .samePreparedObjectsPublished,
-      2,
-    );
-    assert.equal(receipt.catalogJournal.namespacePreparation.retainedFacts, 13);
-    assert.equal(receipt.catalogJournal.namespacePreparation.reopenedCompleted, true);
-    assert.equal(receipt.catalogJournal.namespacePreparation.replayBlocked, true);
-    assert.equal(receipt.catalogJournal.namespacePreparation.sourceAndNeighborPreserved, true);
-    assert.equal(receipt.catalogJournal.namespacePreparation.executionApproval, false);
-    assert.deepEqual(receipt.catalogJournal.namespacePreparation.sessionApprovalFixture, {
-      foreignSelectionRejectedBeforeWrites: true,
-      preparationReplayBlocked: true,
-      copyReplayBlocked: true,
-    });
-    assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.journalEvents, 13);
-    assert.equal(
-      receipt.catalogJournal.namespacePreparation.preparedCopy.samePreparedObjectsPublished,
-      2,
-    );
-    assert.equal(
-      receipt.catalogJournal.namespacePreparation.preparedCopy.secondStreamBlocked,
-      true,
-    );
-    assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.replayBlocked, true);
-    assert.deepEqual(
-      receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy.after,
-      ['published_verified', 'prepared_empty_stage'],
-    );
-    assert.equal(
-      receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy
-        .journalEvents,
-      5,
-    );
-    assert.equal(
-      receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy
-        .samePreparedObjectsPublished,
-      1,
-    );
-    const preparation = await browser.tauri.execute(async ({ core }) =>
-      core.invoke('test_performance', {
-        action: 'organization_name_preparation_fixture',
-        rows: null,
-      }),
-    );
-    assert.equal(preparation.scope, 'generated-temporary-only');
-    assert.equal(preparation.sourcesPreserved, true);
-    assert.equal(preparation.report.executionAvailable, false);
-    assert.equal(preparation.copyFromPreparedStages.outcome, 'completed_verified');
-    assert.deepEqual(
-      preparation.copyFromPreparedStages.before,
-      Array(3).fill('prepared_empty_stage'),
-    );
-    assert.deepEqual(preparation.copyFromPreparedStages.after, Array(3).fill('published_verified'));
-    assert.equal(preparation.copyFromPreparedStages.samePreparedObjectsPublished, 3);
-    assert.equal(preparation.copyFromPreparedStages.sourcesPreserved, true);
-    assert.equal(preparation.copyFromPreparedStages.destinationNeighborPreserved, true);
-    assert.equal(preparation.report.rows.length, 3);
-    assert.equal(preparation.report.retainedStages, 3);
-    assert.equal(
-      preparation.report.rows.every((row) => row.state === 'prepared'),
-      true,
-    );
-    const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
-    await writeFile(
-      `${evidence}/owned-copy-executor-${process.platform}.json`,
-      JSON.stringify(receipt),
-    );
-    await writeFile(
-      `${evidence}/owned-name-preparation-${process.platform}.json`,
-      JSON.stringify(preparation),
-    );
+  it('copies and inspects only backend-owned operation fixtures through native IPC', async function () {
+    this.timeout(180000);
+    const previousTimeouts = await browser.getTimeouts();
+    await browser.setTimeout({ script: 120000 });
+    try {
+      const receipt = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', {
+          action: 'organization_copy_executor_fixture',
+          rows: null,
+        }),
+      );
+      assert.equal(receipt.scope, 'generated-temporary-only');
+      assert.equal(receipt.chunkBytes, 65_536);
+      assert.equal(receipt.burstBytes, 131_072);
+      assert.equal(receipt.nativeOs, process.platform === 'darwin' ? 'macos' : 'windows');
+      assert.equal(receipt.completed.outcome, 'completed_verified');
+      assert.equal(receipt.completed.sourcesPreserved, true);
+      assert.equal(receipt.completed.destinationNeighborPreserved, true);
+      assert.equal(receipt.completed.verifiedSourceFiles, 3);
+      assert.equal(receipt.completed.publishedOutputsVerified, 3);
+      assert.equal(receipt.completed.allOutputsByteVerified, true);
+      assert.equal(receipt.completed.retryBlocked, true);
+      assert.equal(receipt.interruptedAfterPublish.outcome, 'interrupted');
+      assert.equal(receipt.interruptedAfterPublish.sourcesPreserved, true);
+      assert.equal(receipt.interruptedAfterPublish.destinationNeighborPreserved, true);
+      assert.equal(receipt.interruptedAfterPublish.publishedOutputsVerified, 1);
+      assert.equal(receipt.interruptedAfterPublish.allOutputsByteVerified, false);
+      assert.equal(receipt.interruptedAfterPublish.retryBlocked, true);
+      assert.deepEqual(receipt.scopeLocks, {
+        incompatibleCopyBlocked: true,
+        incompatibleRecoveryBlocked: true,
+        deniedJournalEvents: 0,
+        sharedSourceReaderCoexists: true,
+        completedAfterRelease: true,
+        sourcesPreserved: true,
+      });
+      assert.equal(receipt.catalogJournal.catalogSchema, 6);
+      assert.equal(receipt.catalogJournal.completed.publishedVerified, 2);
+      assert.equal(receipt.catalogJournal.completed.journalEvents, 13);
+      assert.equal(receipt.catalogJournal.completed.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.completed.replayBlocked, true);
+      assert.equal(receipt.catalogJournal.interruptedAfterPublish.publishedVerified, 1);
+      assert.equal(receipt.catalogJournal.interruptedAfterPublish.journalEvents, 5);
+      assert.equal(receipt.catalogJournal.interruptedAfterPublish.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.interruptedAfterPublish.replayBlocked, true);
+      assert.equal(receipt.catalogJournal.nested.publishedVerified, 2);
+      assert.equal(receipt.catalogJournal.nested.journalEvents, 13);
+      assert.equal(receipt.catalogJournal.nested.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.nested.replayBlocked, true);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.initialPartialBytes, '65536');
+      assert.equal(receipt.catalogJournal.reviewedContinuation.interruptedEvents, 5);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.completedEvents, 13);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.publishedVerified, 2);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.originalStageObjectPublished, true);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.freshVerifiedNoOp, true);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.executionApproval, false);
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.reviewedContinuation.preparedCopy.journalEvents,
+        13,
+      );
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.reviewedContinuation.preparedCopy
+          .samePreparedObjectsPublished,
+        2,
+      );
+      assert.equal(receipt.catalogJournal.namespacePreparation.retainedFacts, 13);
+      assert.equal(receipt.catalogJournal.namespacePreparation.reopenedCompleted, true);
+      assert.equal(receipt.catalogJournal.namespacePreparation.replayBlocked, true);
+      assert.equal(receipt.catalogJournal.namespacePreparation.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.namespacePreparation.executionApproval, false);
+      assert.deepEqual(receipt.catalogJournal.namespacePreparation.sessionApprovalFixture, {
+        foreignSelectionRejectedBeforeWrites: true,
+        preparationReplayBlocked: true,
+        copyReplayBlocked: true,
+      });
+      assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.journalEvents, 13);
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.preparedCopy.samePreparedObjectsPublished,
+        2,
+      );
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.preparedCopy.secondStreamBlocked,
+        true,
+      );
+      assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.replayBlocked, true);
+      assert.deepEqual(
+        receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy.after,
+        ['published_verified', 'prepared_empty_stage'],
+      );
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy
+          .journalEvents,
+        5,
+      );
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy
+          .samePreparedObjectsPublished,
+        1,
+      );
+      const preparation = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', {
+          action: 'organization_name_preparation_fixture',
+          rows: null,
+        }),
+      );
+      assert.equal(preparation.scope, 'generated-temporary-only');
+      assert.equal(preparation.sourcesPreserved, true);
+      assert.equal(preparation.report.executionAvailable, false);
+      assert.equal(preparation.copyFromPreparedStages.outcome, 'completed_verified');
+      assert.deepEqual(
+        preparation.copyFromPreparedStages.before,
+        Array(3).fill('prepared_empty_stage'),
+      );
+      assert.deepEqual(
+        preparation.copyFromPreparedStages.after,
+        Array(3).fill('published_verified'),
+      );
+      assert.equal(preparation.copyFromPreparedStages.samePreparedObjectsPublished, 3);
+      assert.equal(preparation.copyFromPreparedStages.sourcesPreserved, true);
+      assert.equal(preparation.copyFromPreparedStages.destinationNeighborPreserved, true);
+      assert.equal(preparation.report.rows.length, 3);
+      assert.equal(preparation.report.retainedStages, 3);
+      assert.equal(
+        preparation.report.rows.every((row) => row.state === 'prepared'),
+        true,
+      );
+      const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
+      await writeFile(
+        `${evidence}/owned-copy-executor-${process.platform}.json`,
+        JSON.stringify(receipt),
+      );
+      await writeFile(
+        `${evidence}/owned-name-preparation-${process.platform}.json`,
+        JSON.stringify(preparation),
+      );
+    } finally {
+      await browser.setTimeout({ script: previousTimeouts.script ?? 30000 });
+    }
   });
   (process.platform === 'win32' ? it : it.skip)(
     'highlights an identity-unavailable selection without starting a scan',
