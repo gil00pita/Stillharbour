@@ -138,6 +138,9 @@ pub struct LibraryChangePage {
 pub struct LibraryStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub import_destination: Option<ImportDestinationPreference>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub original_jobs: Option<Vec<crate::operations::original_jobs::OriginalOperationJob>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
@@ -151,6 +154,12 @@ pub struct LibraryStatus {
     pub preview_generation: String,
     pub metadata_available: bool,
     pub preview_available: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportDestinationPreference {
+    pub catalog_id: String,
+    pub root_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -477,6 +486,10 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    OrganizationImportDestinationSet {
+        catalog_id: String,
+        root_id: Option<String>,
+    },
     OrganizationTemplates {},
     OrganizationTemplateSave {
         save: crate::operations::TemplateSave,
@@ -769,6 +782,7 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    OrganizationImportDestination(ImportDestinationPreference),
     OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),
     OrganizationImportComparisonJob(Box<crate::operations::ImportComparisonJob>),
     OrganizationImportPlan(Box<crate::operations::ImportPlan>),

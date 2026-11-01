@@ -28,6 +28,28 @@ fn directory_chain(path: &Path) -> Result<DirectoryChain> {
 }
 
 impl Library {
+    /// A saved preference is a catalog-scoped hint, never write authority.
+    /// Offline managed roots may remain preferred until explicitly reconnected.
+    pub fn validate_import_destination_preference(
+        &self,
+        catalog_id: &str,
+        root_id: String,
+    ) -> Result<()> {
+        crate::operations::validate_id(&root_id)?;
+        if self.catalog.summary()?.id != catalog_id
+            || !store::root_exists(&self.catalog, root_id.clone())?
+        {
+            return Err(invalid(
+                "Choose a preferred import destination in the current catalog.",
+            ));
+        }
+        if store::root(&self.catalog, root_id)?.view.mode != super::model::RootMode::Managed {
+            return Err(invalid(
+                "A referenced library cannot be the preferred import destination. Its grant is unchanged.",
+            ));
+        }
+        Ok(())
+    }
     pub fn organization_destination(
         &self,
         asset_ids: Vec<String>,

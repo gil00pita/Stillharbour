@@ -8,6 +8,7 @@ import { LibraryScreen, type Section } from './library/LibraryScreen';
 import { FolderExplorer } from './library/FolderExplorer';
 import { RootSetup } from './library/RootSetup';
 import logo from '../assets/branding/stillharbour-logo.svg';
+import { libraryData } from './ipc';
 
 type AppSection = Section | 'Settings';
 
@@ -430,6 +431,20 @@ function WorkspaceContent({
   if (section === 'Settings')
     return (
       <SettingsScreen
+        catalogId={foundation?.catalogId ?? null}
+        onSaveImportDestination={async (rootId) => {
+          if (!foundation) throw new Error('Open a catalog before saving its import destination.');
+          const value = await libraryData(
+            {
+              kind: 'organization_import_destination_set',
+              catalog_id: foundation.catalogId,
+              root_id: rootId,
+            },
+            'organization_import_destination',
+          );
+          await refresh();
+          return value;
+        }}
         jobsControl={jobsControl}
         navigationControl={navigationControl}
         preferences={preferences}
@@ -464,6 +479,7 @@ function WorkspaceContent({
   return (
     status && (
       <LibraryScreen
+        catalogId={foundation?.catalogId ?? null}
         jobsControl={jobsControl}
         navigationControl={navigationControl}
         defaults={preferences}

@@ -4,6 +4,7 @@ import type {
   OrganizationPreview as Preview,
   OrganizationTemplate,
   TemplateRef,
+  ImportDestinationPreference,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { OrganizationCompanions } from './OrganizationCompanions';
@@ -37,11 +38,15 @@ const issueLabels: Record<OrganizationIssue, string> = {
 };
 
 export function OrganizationPreview({
+  catalogId = null,
+  preferredImportRoot = null,
   assetIds,
   revision,
   roots,
   onClose,
 }: {
+  catalogId?: string | null;
+  preferredImportRoot?: ImportDestinationPreference | null;
   assetIds: string[];
   revision: string;
   roots: DestinationRootOption[];
@@ -251,6 +256,8 @@ export function OrganizationPreview({
               and native source path order.
             </p>
             <OrganizationDestination
+              catalogId={catalogId}
+              preferredImportRoot={preferredImportRoot}
               key={preview.fingerprint}
               preview={preview}
               revision={revision}

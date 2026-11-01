@@ -237,6 +237,12 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationImportDestinationSet {
+                catalog_id,
+                root_id,
+            } => LibraryResponse::OrganizationImportDestination(
+                library.set_import_destination(catalog_id, root_id)?,
+            ),
             LibraryRequest::OrganizationImportIndexOutput { job_id, .. } => {
                 let chosen = selection.as_ref().ok_or_else(|| {
                     AppError::new(

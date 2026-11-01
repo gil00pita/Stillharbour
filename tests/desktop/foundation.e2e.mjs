@@ -197,6 +197,82 @@ async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
     if (!existingPicker) await picker.mockRestore();
   }
 }
+async function preferredImportDestinationPreference(evidence) {
+  const before = (await native({ kind: 'status' })).data;
+  const root = before.roots.find((root) => root.mode === 'managed');
+  assert.ok(root, 'A generated managed root is required');
+  const context = before.importDestination;
+  assert.ok(context?.catalogId);
+  const globalBefore = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('foundation_request', { request: { kind: 'get_preferences' } }),
+  );
+  await $('button[aria-label="Settings"]').click();
+  const select = await $('select[aria-label="Preferred import destination"]');
+  await select.waitForEnabled();
+  await select.scrollIntoView();
+  await changeSizeUnit('Preferred import destination', root.id);
+  await $('button=Save import destination').click();
+  await browser.waitUntil(
+    async () =>
+      browser.execute(() =>
+        document
+          .querySelector('form[aria-label="Import destination preference"] [role="status"]')
+          ?.textContent?.includes('Import destination saved'),
+      ),
+    { timeout: 15000 },
+  );
+  const saved = (await native({ kind: 'status' })).data;
+  assert.deepEqual(saved.importDestination, { catalogId: context.catalogId, rootId: root.id });
+  const rootBindings = (status) =>
+    status.roots
+      .map((root) => ({ id: root.id, mode: root.mode, isBase: root.isBase }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  assert.deepEqual(rootBindings(saved), rootBindings(before));
+  const wrong = await browser.tauri.execute(async ({ core }, catalogId) => {
+    try {
+      await core.invoke('library_request', {
+        request: {
+          kind: 'organization_import_destination_set',
+          catalog_id: catalogId,
+          root_id: null,
+        },
+      });
+      return null;
+    } catch (error) {
+      return error;
+    }
+  }, randomUUID());
+  assert.equal(wrong.code, 'CONFLICT');
+  assert.deepEqual(
+    (await native({ kind: 'status' })).data.importDestination,
+    saved.importDestination,
+  );
+  await browser.saveScreenshot(`.context/screenshots/m2-preferred-import-${process.platform}.png`);
+  await changeSizeUnit('Preferred import destination', '');
+  await $('button=Save import destination').click();
+  await browser.waitUntil(
+    async () => (await native({ kind: 'status' })).data.importDestination.rootId === null,
+    { timeout: 15000 },
+  );
+  const globalAfter = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('foundation_request', { request: { kind: 'get_preferences' } }),
+  );
+  assert.deepEqual(globalAfter, globalBefore);
+  const proof = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_library_fixture', { verify: true }),
+  );
+  assert.ok(proof.verifiedFiles > 20);
+  await writeFile(
+    `${evidence}/preferred-import-${process.platform}.json`,
+    JSON.stringify({
+      saved: saved.importDestination,
+      cleared: true,
+      rootBindingsUnchanged: true,
+      globalPreferencesUnchanged: true,
+      verifiedSourceFiles: proof.verifiedFiles,
+    }),
+  );
+}
 async function reopenPreparedReview(original, destination, evidence) {
   const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
     (job) => job.planId === original.id,
@@ -1376,7 +1452,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 7);
+    assert.equal(status.data.catalogSchema, 8);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -1596,7 +1672,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 7);
+      assert.equal(receipt.catalogJournal.catalogSchema, 8);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',
@@ -2497,6 +2573,16 @@ describe('native read-only library', () => {
         assert.equal(sourceLocation.selectionId, sourceSelection.id);
         await browser.setWindowSize(1180, 780);
       }
+    },
+  );
+  // The Windows global preferences writer remains gated. This independent
+  // catalog preference must still work through actual SQLite-backed UI/IPC.
+  (process.platform === 'win32' ? it : it.skip)(
+    'persists a catalog-scoped import destination without enabling global settings writes',
+    async function () {
+      this.timeout(30000);
+      const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
+      await preferredImportDestinationPreference(evidence);
     },
   );
 });
@@ -4466,6 +4552,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     );
   });
   it('persists Settings defaults and reuses the native library-location workflow', async () => {
+    const preferenceEvidence = await createEvidenceDirectory(
+      '.context/windows-directory-selection',
+    );
+    await preferredImportDestinationPreference(preferenceEvidence);
     await $('button[aria-label="Settings"]').click();
     await $('.settings-page h1').waitForDisplayed();
     const before = (await native({ kind: 'status' })).data.roots[0];

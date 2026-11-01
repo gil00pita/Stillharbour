@@ -7,6 +7,7 @@ import type {
   TemplateRef,
   OrganizationTargetState,
   LibraryRoot,
+  ImportDestinationPreference,
 } from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
 
@@ -21,11 +22,15 @@ export type DestinationRootOption = Pick<LibraryRoot, 'id' | 'label'> &
   Partial<Pick<LibraryRoot, 'mode' | 'availability'>>;
 
 export function OrganizationDestination({
+  catalogId = null,
+  preferredImportRoot = null,
   preview,
   revision,
   templateReference = null,
   roots = [],
 }: {
+  catalogId?: string | null;
+  preferredImportRoot?: ImportDestinationPreference | null;
   preview: OrganizationPreview;
   revision: string;
   templateReference?: TemplateRef | null;
@@ -37,7 +42,21 @@ export function OrganizationDestination({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<OrganizationPlanDetail | null>(null);
-  const [destinationRootId, setDestinationRootId] = useState('');
+  const preferredId =
+    catalogId && preferredImportRoot?.catalogId === catalogId
+      ? (preferredImportRoot.rootId ?? '')
+      : '';
+  const [destinationRootId, setDestinationRootId] = useState(preferredId);
+  const selectedRoot = roots.find((root) => root.id === destinationRootId);
+  const destinationProblem = !destinationRootId
+    ? null
+    : preview.rows.some((row) => row.rootId === destinationRootId)
+      ? 'The preferred or selected destination is also a selected source. Choose a different destination.'
+      : !selectedRoot || selectedRoot.availability !== 'online'
+        ? 'The preferred or selected destination is unavailable. Reconnect it or explicitly choose another destination.'
+        : selectedRoot.mode !== 'managed'
+          ? 'The preferred or selected destination is read-only. Choose an authorized managed destination.'
+          : null;
   useEffect(
     () => () => {
       requestId.current += 1;
@@ -50,7 +69,7 @@ export function OrganizationDestination({
       (BigInt(review.catalogRevision) < BigInt(revision) ||
         review.previewFingerprint !== preview.fingerprint));
   async function check(choose: boolean) {
-    if (busy || stale) return;
+    if (busy || stale || destinationProblem) return;
     const id = ++requestId.current;
     setBusy(true);
     setError(null);
@@ -86,7 +105,7 @@ export function OrganizationDestination({
     }
   }
   async function save() {
-    if (!selection || !review || stale || busy || saved) return;
+    if (!selection || !review || stale || busy || saved || destinationProblem) return;
     const id = ++requestId.current;
     setBusy(true);
     setError(null);
@@ -135,6 +154,11 @@ export function OrganizationDestination({
           }}
         >
           <option value="">Separate destination folder</option>
+          {destinationRootId && !selectedRoot && (
+            <option value={destinationRootId} disabled>
+              Unavailable preferred destination
+            </option>
+          )}
           {roots.map((root) => {
             const source = preview.rows.some((row) => row.rootId === root.id);
             const reason = source
@@ -153,13 +177,23 @@ export function OrganizationDestination({
           })}
         </select>
       </label>
+      {preferredId && destinationRootId === preferredId && (
+        <p className="help">
+          Saved preferred import destination for this catalog. This does not approve copying.
+        </p>
+      )}
+      {destinationProblem && <p role="status">{destinationProblem}</p>}
       <p>
         {destinationRootId
           ? 'Choose the selected managed library’s root itself with the folder picker. Existing files are retained; new copies require a separately reviewed output namespace.'
           : 'Choose an existing folder outside every indexed library.'}{' '}
         Checking it leaves both folders unchanged.
       </p>
-      <button type="button" disabled={busy || stale} onClick={() => void check(true)}>
+      <button
+        type="button"
+        disabled={busy || stale || !!destinationProblem}
+        onClick={() => void check(true)}
+      >
         {busy ? 'Checking destination…' : 'Choose destination'}
       </button>
       {selection && (
@@ -167,7 +201,11 @@ export function OrganizationDestination({
           <p>
             <bdi>{review?.destinationPath ?? selection.displayPath}</bdi>
           </p>
-          <button type="button" disabled={busy || stale} onClick={() => void check(false)}>
+          <button
+            type="button"
+            disabled={busy || stale || !!destinationProblem}
+            onClick={() => void check(false)}
+          >
             Check destination again
           </button>
         </>
@@ -220,7 +258,11 @@ export function OrganizationDestination({
               </tbody>
             </table>
           </div>
-          <button type="button" disabled={busy || saved !== null} onClick={() => void save()}>
+          <button
+            type="button"
+            disabled={busy || saved !== null || !!destinationProblem}
+            onClick={() => void save()}
+          >
             Save plan draft
           </button>
         </>

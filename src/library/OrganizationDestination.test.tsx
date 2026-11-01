@@ -53,6 +53,74 @@ beforeEach(() => {
   vi.mocked(libraryData).mockReset().mockResolvedValue(response);
 });
 const choose = () => fireEvent.click(screen.getByRole('button', { name: 'Choose destination' }));
+it('uses a matching catalog preference only as the initial managed destination choice', async () => {
+  render(
+    <OrganizationDestination
+      preview={preview}
+      revision="1"
+      catalogId="catalog"
+      preferredImportRoot={{ catalogId: 'catalog', rootId: 'destination' }}
+      roots={[
+        { id: 'destination', label: 'Managed copies', mode: 'managed', availability: 'online' },
+      ]}
+    />,
+  );
+  expect(screen.getByRole('combobox', { name: 'Destination library policy' })).toHaveValue(
+    'destination',
+  );
+  expect(pickDirectory).not.toHaveBeenCalled();
+  choose();
+  await screen.findByText('Destination identity and indexed-root overlap checked.');
+  expect(libraryData).toHaveBeenCalledWith(
+    expect.objectContaining({ destination_root_id: 'destination' }),
+    'organization_destination',
+  );
+});
+it.each(['source', 'offline', 'missing', 'readonly'] as const)(
+  'does not silently fall back from an unsafe preferred destination: %s',
+  async (variant) => {
+    const id = variant === 'source' ? 'root' : 'preferred';
+    render(
+      <OrganizationDestination
+        preview={preview}
+        revision="1"
+        catalogId="catalog"
+        preferredImportRoot={{ catalogId: 'catalog', rootId: id }}
+        roots={
+          variant === 'missing'
+            ? []
+            : [
+                {
+                  id,
+                  label: 'Preferred copies',
+                  mode: variant === 'readonly' ? 'referenced' : 'managed',
+                  availability: variant === 'offline' ? 'offline' : 'online',
+                },
+              ]
+        }
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: 'Destination library policy' })).toHaveValue(id);
+    expect(screen.getByRole('button', { name: 'Choose destination' })).toBeDisabled();
+    expect(pickDirectory).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Destination library policy' }), {
+      target: { value: '' },
+    });
+    expect(screen.getByRole('button', { name: 'Choose destination' })).toBeEnabled();
+  },
+);
+it('ignores a preference from another catalog', () => {
+  render(
+    <OrganizationDestination
+      preview={preview}
+      revision="1"
+      catalogId="current"
+      preferredImportRoot={{ catalogId: 'other', rootId: 'destination' }}
+    />,
+  );
+  expect(screen.getByRole('combobox', { name: 'Destination library policy' })).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'Choose destination' })).toBeEnabled();
+});
 it('binds an explicitly selected managed destination and retires its review when policy changes', async () => {
   render(
     <OrganizationDestination

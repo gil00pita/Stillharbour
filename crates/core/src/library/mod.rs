@@ -9,6 +9,7 @@ mod destination;
 pub mod destination_fixture;
 mod directory;
 pub mod filters;
+pub(crate) mod import_destination;
 pub mod model;
 mod monitor;
 pub(crate) mod operation_jobs;

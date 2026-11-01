@@ -940,6 +940,7 @@ impl Library {
             })
             .transpose()?;
         Ok(LibraryStatus {
+            import_destination: Some(super::import_destination::load(&self.catalog)?),
             original_jobs: Some(super::original_jobs::list(&self.catalog)?),
             copy_jobs: Some(super::operation_jobs::list(&self.catalog)?),
             monitoring,

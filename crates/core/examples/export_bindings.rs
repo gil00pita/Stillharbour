@@ -114,6 +114,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         CopyRecordedPhase::decl(&config),
         CopyContinuationFile::decl(&config),
         CopyContinuationReview::decl(&config),
+        ImportDestinationPreference::decl(&config),
         AppPreferences::decl(&config),
         GalleryView::decl(&config),
         ThumbnailSize::decl(&config),

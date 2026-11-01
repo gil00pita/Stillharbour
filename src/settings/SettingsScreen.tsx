@@ -13,7 +13,11 @@ import { scanFilterFromForm } from '../library/scanForm';
 import { BrowserControls } from '../library/BrowserControls';
 import { LibraryMaintenance } from './LibraryMaintenance';
 import { ScanSettingsGroup } from './ScanSettingsGroup';
+import { ImportDestinationSettings } from './ImportDestinationSettings';
+import type { ImportDestinationPreference } from '../bindings';
 type SettingsScreenProps = {
+  catalogId?: string | null;
+  onSaveImportDestination?: (rootId: string | null) => Promise<ImportDestinationPreference>;
   jobsControl?: ReactNode;
   navigationControl?: ReactNode;
   preferences: AppPreferences;
@@ -33,6 +37,8 @@ type SettingsScreenProps = {
 };
 
 export function SettingsScreen({
+  catalogId = null,
+  onSaveImportDestination,
   jobsControl,
   navigationControl,
   preferences,
@@ -204,6 +210,13 @@ export function SettingsScreen({
         busy={busy || controlsBusy}
         onRescan={onRescan}
         onError={onError}
+      />
+      <ImportDestinationSettings
+        key={catalogId ?? 'unavailable'}
+        catalogId={catalogId}
+        preference={status?.importDestination ?? null}
+        roots={status?.roots ?? []}
+        onSave={onSaveImportDestination ?? null}
       />
       <form
         className="settings-defaults-form"
