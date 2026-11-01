@@ -100,6 +100,9 @@ fn wait(load: impl Fn() -> Result<CopyWorkflowJob>) -> Result<CopyWorkflowJob> {
         std::thread::sleep(Duration::from_millis(10));
     }
 }
+fn owned_container(run: &tempfile::TempDir) -> Result<crate::filesystem::DirectoryChain> {
+    super::super::output_chain(&run.path().canonicalize()?)
+}
 pub(in crate::executor) fn run() -> Result<serde_json::Value> {
     let scope = scope()?;
     let fixture = Fixture::with_media_at(
@@ -117,7 +120,7 @@ pub(in crate::executor) fn run() -> Result<serde_json::Value> {
     // Separate newly generated probe objects exercise rejection before any
     // actual source-library member is opened for relocation.
     {
-        let container = super::super::output_chain(fixture._run.path())?;
+        let container = owned_container(&fixture._run)?;
         let source =
             super::super::native::create_directory(container.leaf(), "relocation-refusal-source")?;
         let output = super::super::output_chain(&fixture.destination)?;
@@ -277,6 +280,29 @@ pub(in crate::executor) fn run() -> Result<serde_json::Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn cross_volume_owned_container_resolves_generated_temp_parent_alias_before_exact_name_checks()
+    {
+        let parent = tempfile::Builder::new()
+            .prefix("Stillharbour-Temp-Alias-")
+            .tempdir()
+            .unwrap();
+        let actual = parent.path().canonicalize().unwrap();
+        let name = actual.file_name().unwrap().to_str().unwrap();
+        let alias = actual.with_file_name(name.to_ascii_uppercase());
+        assert_ne!(alias, actual);
+        let run = tempfile::Builder::new()
+            .prefix("owned-child-")
+            .tempdir_in(&alias)
+            .unwrap();
+        assert!(super::super::super::output_chain(run.path()).is_err());
+        let opened = owned_container(&run).unwrap();
+        let expected =
+            crate::filesystem::open_directory_readonly(&run.path().canonicalize().unwrap())
+                .unwrap();
+        assert!(Object::of(opened.leaf()).unwrap() == Object::of(&expected).unwrap());
+    }
     #[test]
     fn cross_volume_scope_refuses_same_volume_and_forged_records_before_fixture_writes() {
         for variant in 0..4 {

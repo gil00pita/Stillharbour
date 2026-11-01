@@ -12,6 +12,55 @@ async function native(request) {
     request,
   );
 }
+async function ownedOperationReceipt() {
+  const token = randomUUID();
+  // DirectEvalClient has its own 30-second limit, independent of WebDriver's
+  // script timeout. Start once, then poll short evaluations within our bound.
+  await browser.tauri.execute(({ core }, token) => {
+    if (window.__stillharbourOwnedOperationProbe) throw new Error('Owned fixture already running');
+    const state = { token, status: 'pending' };
+    window.__stillharbourOwnedOperationProbe = state;
+    core
+      .invoke('test_performance', { action: 'organization_copy_executor_fixture', rows: null })
+      .then(
+        (value) => {
+          if (window.__stillharbourOwnedOperationProbe === state)
+            Object.assign(state, { status: 'done', value });
+        },
+        (error) => {
+          if (window.__stillharbourOwnedOperationProbe === state)
+            Object.assign(state, { status: 'failed', error });
+        },
+      );
+    return true;
+  }, token);
+  try {
+    await browser.waitUntil(
+      async () =>
+        browser.execute((token) => {
+          const state = window.__stillharbourOwnedOperationProbe;
+          return state?.token === token && state.status !== 'pending';
+        }, token),
+      {
+        timeout: 120000,
+        interval: 100,
+        timeoutMsg: 'Owned native fixture did not finish within 120 seconds',
+      },
+    );
+    const result = await browser.execute((token) => {
+      const state = window.__stillharbourOwnedOperationProbe;
+      if (state?.token !== token) throw new Error('Owned fixture receipt scope changed');
+      return state;
+    }, token);
+    assert.equal(result.status, 'done', JSON.stringify(result.error));
+    return result.value;
+  } finally {
+    await browser.execute((token) => {
+      if (window.__stillharbourOwnedOperationProbe?.token === token)
+        delete window.__stillharbourOwnedOperationProbe;
+    }, token);
+  }
+}
 async function reopenPreparedReview(original, destination, evidence) {
   const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
     (job) => job.planId === original.id,
@@ -1237,12 +1286,7 @@ describe('native read-only library', () => {
     const previousTimeouts = await browser.getTimeouts();
     await browser.setTimeout({ script: 120000 });
     try {
-      const receipt = await browser.tauri.execute(async ({ core }) =>
-        core.invoke('test_performance', {
-          action: 'organization_copy_executor_fixture',
-          rows: null,
-        }),
-      );
+      const receipt = await ownedOperationReceipt();
       assert.equal(receipt.scope, 'generated-temporary-only');
       assert.equal(receipt.chunkBytes, 65_536);
       assert.equal(receipt.burstBytes, 131_072);
@@ -1278,6 +1322,7 @@ describe('native read-only library', () => {
         originalObjectsAndBytesVerified: 5,
         planRecords: 2,
         journalEvents: 8,
+        freshContinuationRecords: 2,
         independentRecoveryProven: false,
         duplicateRemovalAuthorized: false,
         productionAuthorization: false,
