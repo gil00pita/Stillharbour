@@ -801,3 +801,6 @@ Generated rename review continuation (2026-11-01): ADR-0056 develops an instrume
 
 
 Generated catalog continuation (2026-11-01): ADR-0057 develops actual schema-6 Catalog path updates within the constructor-owned rename lab. Atomic cycle-safe updates retain asset IDs/annotations and append protected commit receipts. Native completion without a catalog receipt remains pending and needs fresh approval; reverse review requires both. No production catalog schema/identity or real-library mutation permission changes. General application-root organization/jobs/restart integration and remaining M2 gates still precede M3.
+
+
+Generated process-exit continuation (2026-11-01): ADR-0058 develops actual child exits across six catalog transaction boundaries in forward/reverse generated rename. Cold admission validates bounded canonical plans, owner marker, exact constructor payloads/objects/metadata and retained catalog/asset IDs. SQLite reopen must yield either atomic old paths with a pending fresh-approved commit or the exact completed paths/receipt. No approval is retained; no desktop/production arbitrary-scope adoption or general restart discovery is added. Remaining M2 gates still precede M3.

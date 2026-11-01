@@ -6,9 +6,11 @@ Enable safe operations only after immutable planning, no-clobber execution and c
 
 ## Current authorized work — 2026-11-01
 
-The owner authorized continuing M2 and then M3 without stopping at intermediate checkpoints, and pushing those checkpoints to draft PR #9. M2 remains unfinished; M3 has not started. Current experimental work includes retained single-root copy planning, approvals/jobs, native staged copying/continuation, mixed whole-bundle import and explicit referenced output indexing. Strict generated cross-volume tests pass on Windows VHDX and macOS APFS in the documented separate CI runs. ADR-0053 adds pure rename/reverse planning and closed native generated-file execution, including actual process exits. ADR-0054 adds generated same-volume companion relocation/restoration and separately approved continuation. Checkpoint 8415096 passes complete Windows/macOS CI 41273367880, including strict mounted-volume refusal and copy continuation. ADR-0055 adds explicit filename-stem case under current native validation. Default real-library original mutations and duplicate quarantine remain disabled.
+The owner authorized continuing M2 and then M3 without stopping at intermediate checkpoints, and pushing those checkpoints to draft PR #9. M2 remains unfinished; M3 has not started. Experimental work includes retained single-root copy planning, approvals/jobs, native staged copying/continuation, mixed whole-bundle import and explicit referenced output indexing. Generated rename/undo now has actual instrumented UI review/approval and atomic path commits in its own actual Catalog (ADR-0053–0057). ADR-0058 develops strict test-only cold recovery across twelve actual catalog process exits; focused and full local checks pass (twelve actual exits plus malformed-scope admission); checkpoint CI remains pending. Real-library original mutations and duplicate quarantine remain disabled.
 
-Remaining gate work includes multi-root/target-root policies, full case/Unicode/native failure coverage, original-organization and undo integration through actual fixture UI/IPC, quarantine infrastructure and the other required acceptance scenarios. Local retained fixture versions cannot waive independent recovery. Record actual results before advancing to M3.
+Complete Windows/macOS CI passes checkpoints 8415096 (41273367880), 8b7891c (41274810329) and 1f8846b (41275768949), including strict generated VHDX/APFS probes. Checkpoint dfcc529 adds catalog commits and has its own CI pending. Local retained fixture versions cannot waive independent recovery.
+
+Remaining gate work includes general application original-organization/undo and durable jobs/restart discovery, multi-root/target-root policies, full case/Unicode/native failures and the other required acceptance scenarios. Test-only marked-scope reconstruction is not production adoption. Record actual results before advancing to M3.
 
 ## Historical planning progression — 2026-10-30 onward
 
@@ -130,3 +132,6 @@ Generated review continuation, 2026-11-01: ADR-0056 connects a typed instrumente
 
 
 Generated catalog continuation, 2026-11-01: ADR-0057 connects the rename lab to a constructor-owned actual Catalog actor. Atomic path/receipt commits retain IDs/annotations and separate native completion from catalog completion, including fresh approved retry without repeated moves. Validation is running. General application library organization, durable jobs/restart adoption, multi-root/target-root policies and remaining M2 gates still precede M3.
+
+
+Generated catalog exit continuation, 2026-11-01: ADR-0058 adds a test-only twelve-case real child-exit matrix across native-to-catalog transaction boundaries, bounded strict cold reconstruction and fresh-approved no-move retry. Validation is running. Production restart discovery/adoption, general application jobs/root organization, multi-root policies and remaining M2 gates remain open before M3.

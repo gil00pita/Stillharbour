@@ -246,23 +246,121 @@ impl GeneratedCatalog {
                 if !unchanged { return Err(failed("Generated catalog changed before its commit.")); }
             }
             let stage = uuid();
+            #[cfg(test)]
+            catalog_exit("before_staging");
             for row in &before.rows {
                 let leaf = format!(".stillharbour-catalog-{stage}-{}", row.asset);
                 tx.execute("UPDATE assets SET relative_native=? WHERE id=?", params![paths::encode_path(Path::new(&leaf)),row.asset])?;
             }
+            #[cfg(test)]
+            catalog_exit("after_staging");
             let mut after = before.rows;
             for row in &mut after {
                 let member = plan.members.iter().find(|member| member.id == row.member).ok_or_else(|| failed("Unknown generated catalog target."))?;
                 let leaf = Path::new(&member.after);
                 tx.execute("UPDATE assets SET relative_native=?,relative_path=?,name=?,stem=?,extension=?,revision=? WHERE id=?", params![paths::encode_path(leaf),member.after,member.after,leaf.file_stem().unwrap_or_default().to_string_lossy(),leaf.extension().unwrap_or_default().to_string_lossy().to_ascii_lowercase(),revisions[&member.id],row.asset])?;
                 row.path = member.after.clone(); row.revision = revisions[&member.id].clone();
+                #[cfg(test)]
+                catalog_exit("during_targets");
             }
             let receipt = Receipt { policy: "generated-rename-catalog-v1".into(), plan: plan.id.clone(), digest: plan.digest, root, rows: Self::committed_rows(&after) };
             let payload = serde_json::to_string(&receipt).map_err(|error| failed("Cannot retain generated catalog commit.").caused_by(error))?;
             if payload.len() > 65536 { return Err(failed("Generated catalog commit exceeds its bound.")); }
+            #[cfg(test)]
+            catalog_exit("before_receipt");
             tx.execute("INSERT INTO job_events(job_id,state) VALUES(?,?)", params![stream(&plan.id),payload])?;
             tx.execute("UPDATE library_state SET revision=revision+1 WHERE singleton=1", [])?;
-            tx.commit()?; Ok(())
+            #[cfg(test)]
+            catalog_exit("after_receipt");
+            tx.commit()?;
+            #[cfg(test)]
+            catalog_exit("after_commit");
+            Ok(())
+        })
+    }
+}
+
+#[cfg(test)]
+fn catalog_exit(phase: &str) {
+    if std::env::var("STILLHARBOUR_GENERATED_CATALOG_EXIT").is_ok_and(|value| value == phase) {
+        std::process::exit(81);
+    }
+}
+
+#[cfg(test)]
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct ReopenScope {
+    catalog: String,
+    file: super::super::Object,
+    root: String,
+    assets: BTreeMap<String, String>,
+}
+#[cfg(test)]
+impl GeneratedCatalog {
+    pub(super) fn reopen_scope(&self, fixture: &Fixture) -> Result<ReopenScope> {
+        let container = root(&fixture.run.path().canonicalize()?)?;
+        let file = native::maybe_metadata(container.leaf(), "rename-catalog.stillharbour")?
+            .ok_or_else(|| failed("The retained generated catalog is missing."))?;
+        Ok(ReopenScope {
+            catalog: self.db.summary()?.id,
+            file: super::super::Object::of(&file)?,
+            root: self.root_id.clone(),
+            assets: self.assets.clone(),
+        })
+    }
+    pub(super) fn reopen(fixture: &Fixture, scope: ReopenScope) -> Result<Self> {
+        for id in [&scope.catalog, &scope.root] {
+            crate::operations::validate_id(id)?;
+        }
+        let keys = scope
+            .assets
+            .keys()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
+        let members = fixture
+            .plan
+            .members
+            .iter()
+            .map(|member| member.id.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        if keys != members
+            || scope
+                .assets
+                .values()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                != MEMBERS.len()
+        {
+            return Err(failed("Foreign generated catalog membership."));
+        }
+        for id in scope.assets.values() {
+            crate::operations::validate_id(id)?;
+        }
+        let path = fixture.run.path().canonicalize()?;
+        let container = root(&path)?;
+        let file = native::maybe_metadata(container.leaf(), "rename-catalog.stillharbour")?
+            .ok_or_else(|| failed("The retained generated catalog is missing."))?;
+        if !scope.file.matches(&file)? || filesystem::identity(&file)?.links != 1 {
+            return Err(failed("The retained generated catalog changed object."));
+        }
+        let directory = root(&path.join("originals"))?;
+        let db = Catalog::open(path.join("rename-catalog.stillharbour"))?;
+        let current = native::maybe_metadata(container.leaf(), "rename-catalog.stillharbour")?
+            .ok_or_else(|| failed("The retained generated catalog disappeared."))?;
+        if !scope.file.matches(&current)?
+            || filesystem::identity(&current)?.links != 1
+            || db.summary()?.id != scope.catalog
+        {
+            return Err(failed("The retained generated catalog changed identity."));
+        }
+        Ok(Self {
+            db,
+            root_id: scope.root,
+            volume: source_native::volume_token(directory.leaf())?,
+            source: fixture.source_root.clone(),
+            source_path: paths::encode_path(&path.join("originals")),
+            assets: scope.assets,
         })
     }
 }

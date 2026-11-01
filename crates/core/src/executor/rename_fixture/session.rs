@@ -2,6 +2,9 @@
 //! adopt a caller path. Approvals are session-only and never journal contents.
 use super::*;
 use crate::operations::generated_rename::*;
+#[cfg(test)]
+#[path = "restart_tests.rs"]
+mod restart_tests;
 
 pub struct GeneratedRenameSession {
     // Close the catalog actor before its constructor-owned directory drops.

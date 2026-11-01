@@ -295,3 +295,6 @@ The owner continued to M2 and selected organization templates/previews as the pr
 
 
 [ADR-0057](decisions/ADR-0057-generated-rename-catalog-commit.md) adds atomic actual-catalog path commits in the closed generated session. Stable IDs/annotations survive case/cycles; native-complete/catalog-pending states require a fresh approved commit. Production catalogs and original-mutation gates are unchanged.
+
+
+[ADR-0058](decisions/ADR-0058-generated-catalog-process-exits.md) adds real child exits at six native-to-catalog transaction boundaries in both directions, bounded cold reconstruction and SQLite reopen. Approval is never reconstructed; pre-commit recovery needs fresh approval and adds no native moves. This remains test-only generated-scope evidence.
