@@ -323,7 +323,7 @@ fn comparison_blocks_native_aliases_and_file_directory_conflicts_without_reading
         "{}",
         result.message
     );
-    assert_eq!(result.policy_version, 2);
+    assert_eq!(result.policy_version, 3);
     assert!(result.plan_digest.is_none());
     assert_eq!(result.bytes_read, "0");
     assert_eq!(result.summary.as_ref().unwrap().blocked, 4);
@@ -739,4 +739,202 @@ fn comparison_does_not_follow_links_and_marks_inventory_incomplete() {
     assert!(inventory.incomplete);
     assert_eq!(inventory.files.len(), 1);
     assert_eq!(inventory.issues.len(), 1);
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_history_detects_destination_edits_without_reusing_equality_or_recovery() {
+    let f = Fixture::new();
+    let dataset = f.dataset();
+    std::fs::create_dir_all(&dataset).unwrap();
+    std::fs::write(f.source.join("photo.jpg"), b"left").unwrap();
+    std::fs::write(f.source.join("photo.xmp"), b"unique sidecar").unwrap();
+    std::fs::write(dataset.join("photo.jpg"), b"left").unwrap();
+    let first = f.start(CompareMode::Verified);
+    let first = f.wait(&first.id);
+    assert!(first.baseline_id.is_none());
+    assert_eq!(first.state, ComparisonState::NeedsReview);
+    std::fs::write(dataset.join("photo.jpg"), b"edit").unwrap();
+    let quick = f.start(CompareMode::Quick);
+    let quick = f.wait(&quick.id);
+    assert_eq!(quick.baseline_id.as_deref(), Some(first.id.as_str()));
+    let full = f.start(CompareMode::Verified);
+    let full = f.wait(&full.id);
+    assert_eq!(full.baseline_id.as_deref(), Some(first.id.as_str()));
+    let rows = f
+        .library
+        .backup_comparison_page(full.id.clone(), 0)
+        .unwrap()
+        .entries;
+    let row = rows.iter().find(|r| r.display_path == "photo.jpg").unwrap();
+    assert_eq!(
+        row.category,
+        ComparisonCategory::DestinationEditedSinceLastRun
+    );
+    assert_eq!(row.proposal, SyncProposal::ReviewDifference);
+    assert_eq!(row.companions, vec!["photo.xmp"]);
+    assert!(!full.capabilities.execution_available);
+    assert!(!full.capabilities.independent_recovery_verified);
+    f.library
+        .catalog
+        .call(|db| {
+            assert_eq!(
+                db.query_row("SELECT count(*) FROM backup_comparison_history", [], |r| {
+                    r.get::<_, u32>(0)
+                })?,
+                2
+            );
+            assert!(
+                db.execute("DELETE FROM backup_comparison_history", [])
+                    .is_err()
+            );
+            assert!(
+                db.execute("UPDATE backup_comparison_history SET scope='foreign'", [])
+                    .is_err()
+            );
+            Ok(())
+        })
+        .unwrap();
+    assert_eq!(std::fs::read(f.source.join("photo.jpg")).unwrap(), b"left");
+    assert_eq!(std::fs::read(dataset.join("photo.jpg")).unwrap(), b"edit");
+    assert_eq!(
+        std::fs::read(f.source.join("photo.xmp")).unwrap(),
+        b"unique sidecar"
+    );
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_rebinding_retains_prior_profile_and_requires_review_and_fresh_comparison() {
+    let f = Fixture::new();
+    let handle = native::open_root(&f.destination, None).unwrap();
+    let expected = (
+        filesystem::identity(&handle).unwrap(),
+        native::volume_token(&handle).unwrap(),
+    );
+    let prior = f
+        .library
+        .backup_profile_save(f.destination.clone(), expected.clone(), "Original".into())
+        .unwrap();
+    assert!(
+        f.library
+            .backup_profile_rebind(
+                prior.id.clone(),
+                f.destination.clone(),
+                expected.clone(),
+                "New binding".into(),
+                false
+            )
+            .is_err()
+    );
+    let next = f
+        .library
+        .backup_profile_rebind(
+            prior.id.clone(),
+            f.destination.clone(),
+            expected,
+            "New binding".into(),
+            true,
+        )
+        .unwrap();
+    assert_ne!(prior.id, next.id);
+    assert_eq!(next.supersedes.as_deref(), Some(prior.id.as_str()));
+    assert_eq!(f.library.backup_profiles().unwrap().len(), 2);
+    assert!(f.library.backup_comparison_latest().unwrap().is_none());
+    let run = f
+        .library
+        .backup_profile_compare(next.id.clone(), CompareMode::Verified)
+        .unwrap();
+    let result = f.wait(&run.id);
+    assert_eq!(result.profile_id.as_deref(), Some(next.id.as_str()));
+    assert!(!result.capabilities.execution_available);
+    assert_eq!(std::fs::read_dir(f.destination).unwrap().count(), 0);
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_inventory_failures_and_late_changes_never_prove_absence_or_keep_a_digest() {
+    let f = Fixture::new();
+    std::fs::write(f.source.join("fixture.bin"), b"original").unwrap();
+    let handle = native::open_root(&f.source, None).unwrap();
+    let root = Binding {
+        path: f.source.clone(),
+        identity: filesystem::identity(&handle).unwrap(),
+        volume: native::volume_token(&handle).unwrap(),
+    };
+    let mut inventory = Inventory::default();
+    inventory
+        .walk(&root, Path::new(""), &AtomicBool::new(false), 0)
+        .unwrap();
+    std::fs::write(f.source.join("fixture.bin"), b"modified").unwrap();
+    assert!(inventory.validate(&root).is_err());
+    let mut denied = Inventory::default();
+    denied
+        .walk(
+            &root,
+            Path::new("unavailable-directory"),
+            &AtomicBool::new(false),
+            0,
+        )
+        .unwrap();
+    assert!(denied.incomplete);
+    assert!(!denied.issues.is_empty());
+    assert_eq!(
+        classify(true, false, !denied.incomplete, None, false).0,
+        ComparisonCategory::Uncertain
+    );
+    let mut bounded = Inventory {
+        visited: MAX_ENTRIES,
+        ..Default::default()
+    };
+    bounded
+        .walk(&root, Path::new(""), &AtomicBool::new(false), 0)
+        .unwrap();
+    assert!(bounded.incomplete);
+    assert!(bounded.files.is_empty());
+    let dataset = f.dataset();
+    assert!(dataset.starts_with(f._owned.path().canonicalize().unwrap()));
+    std::fs::create_dir_all(dataset.parent().unwrap()).unwrap();
+    std::fs::write(&dataset, b"namespace occupant").unwrap();
+    let run = f.start(CompareMode::Verified);
+    let report = f.wait(&run.id);
+    assert_eq!(report.state, ComparisonState::Failed);
+    assert!(report.plan_digest.is_none());
+    assert_eq!(std::fs::read(dataset).unwrap(), b"namespace occupant");
+    assert_eq!(
+        std::fs::read(f.source.join("fixture.bin")).unwrap(),
+        b"modified"
+    );
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_preview_refuses_revoked_source_before_starting_a_decoder() {
+    let f = Fixture::new();
+    std::fs::write(f.source.join("original.png"), b"preserved undecoded source").unwrap();
+    let run = f.start(CompareMode::Verified);
+    assert_eq!(f.wait(&run.id).state, ComparisonState::NeedsReview);
+    let row = f
+        .library
+        .backup_comparison_page(run.id.clone(), 0)
+        .unwrap()
+        .entries
+        .remove(0);
+    let id = f.root.clone();
+    f.library
+        .catalog
+        .call(move |db| {
+            db.execute("UPDATE roots SET availability='offline' WHERE id=?", [id])?;
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        f.library
+            .backup_comparison_preview(run.id.clone(), row.id, ComparisonSide::Source)
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read(f.source.join("original.png")).unwrap(),
+        b"preserved undecoded source"
+    );
 }

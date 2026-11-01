@@ -245,12 +245,41 @@ async fn library_request(
         | LibraryRequest::OrganizationCopyContinuationReview { selection_id, .. }
         | LibraryRequest::OrganizationCopyContinuationApprove { selection_id, .. }
         | LibraryRequest::OrganizationCopyContinuationStart { selection_id, .. }
+        | LibraryRequest::BackupProfileRebind { selection_id, .. }
         | LibraryRequest::Relink { selection_id, .. } => Some(selected(&state, selection_id)?),
         _ => None,
     };
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::BackupComparisonPreview {
+                run_id,
+                entry_id,
+                side,
+            } => LibraryResponse::BackupComparisonPreview(
+                library.backup_comparison_preview(run_id, entry_id, side)?,
+            ),
+            LibraryRequest::BackupProfileRebind {
+                prior_id,
+                label,
+                reviewed,
+                ..
+            } => {
+                let selection = selection.ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose a fresh profile destination.",
+                    )
+                })?;
+                let identity = selected_identity(&selection)?;
+                LibraryResponse::BackupProfile(library.backup_profile_rebind(
+                    prior_id,
+                    selection.path,
+                    identity,
+                    label,
+                    reviewed,
+                )?)
+            }
             LibraryRequest::BackupProfiles {} => {
                 LibraryResponse::BackupProfiles(library.backup_profiles()?)
             }

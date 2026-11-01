@@ -11,6 +11,7 @@ import type {
 } from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import './backup.css';
+import { ComparisonPreviews } from './ComparisonPreviews';
 
 type ComparisonSource = Pick<
   LibraryStatus['roots'][number],
@@ -22,6 +23,7 @@ const categories: ComparisonCategory[] = [
   'verified_equal',
   'appears_unchanged_unverified',
   'different_content',
+  'destination_edited_since_last_run',
   'uncertain',
   'blocked',
 ];
@@ -31,6 +33,7 @@ const summaryKeys = {
   verified_equal: 'verifiedEqual',
   appears_unchanged_unverified: 'appearsUnchangedUnverified',
   different_content: 'differentContent',
+  destination_edited_since_last_run: 'destinationEditedSinceLastRun',
   uncertain: 'uncertain',
   blocked: 'blocked',
 } as const;
@@ -46,6 +49,7 @@ export function BackupScreen({
 }) {
   const [profiles, setProfiles] = useState<SyncProfile[]>([]);
   const [selectedId, setSelectedId] = useState('');
+  const [rebindFrom, setRebindFrom] = useState<SyncProfile | undefined>();
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileRefresh, setProfileRefresh] = useState(0);
@@ -85,13 +89,15 @@ export function BackupScreen({
   // Saved profiles retain their source even if the catalog's base changes.
   return (
     <BackupWorkspace
-      key={`${selectedId}:${base?.id ?? 'unconfigured'}`}
+      key={`${selectedId}:${base?.id ?? 'unconfigured'}:${rebindFrom?.id ?? ''}`}
+      rebindFrom={rebindFrom}
       base={base}
       profile={profile}
       onActivityChange={setControlsBusy}
       onProfileSaved={(value) => {
         setProfiles((previous) => [...previous, value]);
         setSelectedId(value.id);
+        setRebindFrom(undefined);
       }}
       profileControls={
         <section aria-label="Saved comparisons">
@@ -100,7 +106,10 @@ export function BackupScreen({
             <select
               value={selectedId}
               disabled={controlsBusy || profileLoading}
-              onChange={(event) => setSelectedId(event.target.value)}
+              onChange={(event) => {
+                setSelectedId(event.target.value);
+                setRebindFrom(undefined);
+              }}
             >
               <option value="">New comparison (current base library)</option>
               {profiles.map((item) => (
@@ -132,6 +141,17 @@ export function BackupScreen({
             </p>
           )}
           {profile && (
+            <button
+              disabled={controlsBusy}
+              onClick={() => {
+                setRebindFrom(profile);
+                setSelectedId('');
+              }}
+            >
+              Review profile rebinding
+            </button>
+          )}
+          {profile && (
             <p>
               Bound to root {profile.sourceRootId}. To change source or destination, choose New
               comparison and save a separate profile. Existing bindings are retained.
@@ -146,6 +166,7 @@ export function BackupScreen({
 }
 
 function BackupWorkspace({
+  rebindFrom,
   base,
   profile,
   profileControls,
@@ -154,6 +175,7 @@ function BackupWorkspace({
   navigationControl,
   jobsControl,
 }: {
+  rebindFrom: SyncProfile | undefined;
   base: ComparisonSource | undefined;
   profile: SyncProfile | undefined;
   profileControls: ReactNode;
@@ -171,6 +193,7 @@ function BackupWorkspace({
   const [selected, setSelected] = useState<ComparisonEntry | null>(null);
   const [busy, setBusy] = useState(false);
   const [profileLabel, setProfileLabel] = useState('');
+  const [rebindReviewed, setRebindReviewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
   const generation = useRef(0);
@@ -290,6 +313,29 @@ function BackupWorkspace({
       </header>
       <div className="backup-workspace">
         {profileControls}
+        {rebindFrom && (
+          <section aria-label="Profile rebinding review">
+            <h2>Review a new immutable binding</h2>
+            <p className="backup-path">
+              Previous source: {rebindFrom.sourceLabel} · {rebindFrom.sourceDisplayPath} ·{' '}
+              {rebindFrom.sourceRootId}
+            </p>
+            <p className="backup-path">Previous destination: {rebindFrom.destinationDisplayPath}</p>
+            <p>
+              The cards below show the current base and newly selected destination. The previous
+              profile and historical observations are retained. A fresh comparison is required; no
+              destination content is adopted or removed.
+            </p>
+            <label>
+              <input
+                type="checkbox"
+                checked={rebindReviewed}
+                onChange={(event) => setRebindReviewed(event.target.checked)}
+              />
+              I reviewed the previous and new source/destination bindings
+            </label>
+          </section>
+        )}
         <h2>Compare before copying</h2>
         <p>
           Library → Destination. Comparison leaves both folders unchanged. Copying, retained
@@ -322,6 +368,7 @@ function BackupWorkspace({
                   if (alive.current && token === generation.current && selected) {
                     retire();
                     setDestination(selected);
+                    setRebindReviewed(false);
                   }
                 })
               }
@@ -351,6 +398,7 @@ function BackupWorkspace({
                 running ||
                 !destination?.identityAvailable ||
                 !profileLabel.trim() ||
+                Boolean(rebindFrom && !rebindReviewed) ||
                 base?.availability !== 'online'
               }
               onClick={() =>
@@ -358,11 +406,19 @@ function BackupWorkspace({
                   if (!destination || !base) return;
                   const token = generation.current;
                   const value = await libraryData(
-                    {
-                      kind: 'backup_profile_save',
-                      selection_id: destination.id,
-                      label: profileLabel,
-                    },
+                    rebindFrom
+                      ? {
+                          kind: 'backup_profile_rebind',
+                          prior_id: rebindFrom.id,
+                          selection_id: destination.id,
+                          label: profileLabel,
+                          reviewed: rebindReviewed,
+                        }
+                      : {
+                          kind: 'backup_profile_save',
+                          selection_id: destination.id,
+                          label: profileLabel,
+                        },
                     'backup_profile',
                   );
                   if (!alive.current || token !== generation.current) return;
@@ -473,7 +529,15 @@ function BackupWorkspace({
             <p role="status">{run.message}</p>
             <p className="backup-path">Dataset: {run.datasetDisplayPath}</p>
             <p>
+              {run.historyMessage} Prior observation:{' '}
+              {run.baselineId ?? 'none (initial comparison)'}
+            </p>
+            <p>
               {run.entries} entries observed · {run.bytesRead} content bytes read
+            </p>
+            <p>
+              Modified timestamps are filesystem observations in UTC, with filesystem-dependent
+              precision; they are separate from capture and birth dates.
             </p>
             {run.summary && (
               <ul aria-label="Comparison totals" className="backup-totals">
@@ -538,6 +602,11 @@ function BackupWorkspace({
                       {selected.proposal.replaceAll('_', ' ')}
                     </p>
                     <p>{selected.evidence}</p>
+                    <p>
+                      Potential same-stem companions (up to 32; each retains its own evidence):{' '}
+                      {selected.companions?.join(' · ') || 'none displayed'}. Name association does
+                      not prove bundle completeness or redundancy.
+                    </p>
                     <dl>
                       {(['source', 'destination'] as const).map((side) => (
                         <div key={side}>
@@ -555,6 +624,11 @@ function BackupWorkspace({
                       Observed metadata and comparison evidence only. This review does not establish
                       companion completeness, metadata fidelity or recovery.
                     </p>
+                    <ComparisonPreviews
+                      key={`${run.id}:${selected.id}`}
+                      runId={run.id}
+                      entryId={selected.id}
+                    />
                     <button onClick={() => setSelected(null)}>Close entry details</button>
                   </section>
                 )}

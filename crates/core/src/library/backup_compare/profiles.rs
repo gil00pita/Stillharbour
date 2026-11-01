@@ -14,6 +14,8 @@ pub(crate) fn migrate(db: &Connection) -> Result<()> {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct StoredProfile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    supersedes: Option<String>,
     pub id: String,
     version: u32,
     catalog_id: String,
@@ -41,6 +43,9 @@ fn valid_label(label: &str) -> Result<String> {
 }
 impl StoredProfile {
     fn validate(&self, catalog_id: &str) -> Result<()> {
+        if let Some(id) = &self.supersedes {
+            crate::operations::validate_id(id)?;
+        }
         for id in [&self.id, &self.source_root_id, &self.catalog_id] {
             crate::operations::validate_id(id)?;
         }
@@ -85,6 +90,7 @@ impl StoredProfile {
     }
     fn view(&self) -> Result<SyncProfile> {
         Ok(SyncProfile {
+            supersedes: self.supersedes.clone(),
             id: self.id.clone(),
             version: self.version,
             catalog_id: self.catalog_id.clone(),
@@ -140,9 +146,36 @@ impl Library {
         expected: (FileIdentity, String),
         label: String,
     ) -> Result<SyncProfile> {
+        self.save_comparison_profile(selection, expected, label, None)
+    }
+    pub fn backup_profile_rebind(
+        &self,
+        prior_id: String,
+        selection: PathBuf,
+        expected: (FileIdentity, String),
+        label: String,
+        reviewed: bool,
+    ) -> Result<SyncProfile> {
+        if !reviewed {
+            return Err(error(
+                ErrorCode::InvalidInput,
+                "Review the old and new profile scope before rebinding.",
+            ));
+        }
+        let prior = load(&self.catalog, prior_id)?;
+        self.save_comparison_profile(selection, expected, label, Some(prior.id))
+    }
+    fn save_comparison_profile(
+        &self,
+        selection: PathBuf,
+        expected: (FileIdentity, String),
+        label: String,
+        supersedes: Option<String>,
+    ) -> Result<SyncProfile> {
         let label = valid_label(&label)?;
         let scope = self.comparison_scope(selection, expected, None)?;
         let profile = StoredProfile {
+            supersedes,
             id: uuid::Uuid::new_v4().to_string(),
             version: 1,
             catalog_id: scope.catalog_id.clone(),
@@ -209,6 +242,7 @@ mod tests {
         for mutation in ["catalog", "platform", "version", "approval", "path"] {
             let id = uuid::Uuid::new_v4().to_string();
             let record = StoredProfile {
+                supersedes: None,
                 id: id.clone(),
                 version: 1,
                 catalog_id: catalog_id.clone(),

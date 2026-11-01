@@ -6,6 +6,20 @@ use std::{
 };
 use unicode_normalization::UnicodeNormalization;
 
+fn native_component(name: &str) -> bool {
+    #[cfg(windows)]
+    {
+        crate::organization::portable_filename(name)
+    }
+    #[cfg(not(windows))]
+    {
+        !name.is_empty()
+            && !matches!(name, "." | "..")
+            && name.len() <= 255
+            && !name.contains(['\0', '/'])
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum NameBlock {
     Alias,
@@ -26,7 +40,7 @@ impl NameBlock {
                 "This link, special object or placeholder was not read or followed. Its contents and fidelity are unverified; retain it."
             }
             Self::NativeName => {
-                "This native name cannot be evaluated by the Unicode comparison policy. Native bytes are retained; display text cannot authorize a copy."
+                "This native name is outside the supported native destination naming policy. Native bytes are retained; display text cannot authorize a copy."
             }
         }
     }
@@ -39,6 +53,12 @@ pub(crate) fn blocks(
     let mut prefixes = BTreeMap::new();
     let mut aliases = BTreeMap::<Vec<String>, BTreeSet<&PathBuf>>::new();
     for path in &paths {
+        if path
+            .components()
+            .any(|c| c.as_os_str().to_str().is_none_or(|s| !native_component(s)))
+        {
+            prefixes.insert((*path).clone(), NameBlock::NativeName);
+        }
         let key = path
             .components()
             .map(|part| {

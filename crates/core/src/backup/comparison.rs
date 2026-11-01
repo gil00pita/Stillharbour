@@ -11,6 +11,9 @@ pub enum CompareMode {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncProfile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub supersedes: Option<String>,
     pub id: String,
     pub version: u32,
     pub catalog_id: String,
@@ -29,6 +32,7 @@ pub enum ComparisonCategory {
     VerifiedEqual,
     AppearsUnchangedUnverified,
     DifferentContent,
+    DestinationEditedSinceLastRun,
     Uncertain,
     Blocked,
 }
@@ -51,6 +55,7 @@ pub enum ComparisonSide {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ComparisonSummary {
+    pub destination_edited_since_last_run: u32,
     pub source_only: u32,
     pub destination_only: u32,
     pub verified_equal: u32,
@@ -71,6 +76,9 @@ impl ComparisonSummary {
                     &mut result.appears_unchanged_unverified
                 }
                 ComparisonCategory::DifferentContent => &mut result.different_content,
+                ComparisonCategory::DestinationEditedSinceLastRun => {
+                    &mut result.destination_edited_since_last_run
+                }
                 ComparisonCategory::Uncertain => &mut result.uncertain,
                 ComparisonCategory::Blocked => &mut result.blocked,
             };
@@ -125,6 +133,7 @@ pub struct SyncIssue {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ComparisonEntry {
+    pub companions: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub source_kind: Option<ComparisonEntryKind>,
@@ -154,6 +163,9 @@ pub enum ComparisonState {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ComparisonRun {
+    pub review_plan: Option<ImmutableSyncPlan>,
+    pub baseline_id: Option<String>,
+    pub history_message: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub summary: Option<ComparisonSummary>,
@@ -187,6 +199,29 @@ pub struct ComparisonPage {
     pub run_id: String,
     pub entries: Vec<ComparisonEntry>,
     pub next_offset: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ComparisonPreview {
+    pub run_id: String,
+    pub entry_id: String,
+    pub side: ComparisonSide,
+    pub png: Vec<u8>,
+    pub message: String,
+}
+
+/// Immutable read-only plan descriptor. No transfer/approval command accepts it.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ImmutableSyncPlan {
+    pub run_id: String,
+    pub catalog_id: String,
+    pub source_root_id: String,
+    pub policy_version: u32,
+    pub digest: String,
+    pub entries: u32,
+    pub execution_available: bool,
 }
 
 /// Pure classification: absence is meaningful only after complete inventories.

@@ -24,7 +24,10 @@ const status = {
 function report(state: ComparisonRun['state'] = 'needs_review'): ComparisonRun {
   return {
     id: 'run',
-    policyVersion: 2,
+    policyVersion: 3,
+    baselineId: null,
+    reviewPlan: null,
+    historyMessage: 'No retained observation.',
     catalogId: 'catalog',
     sourceRootId: 'base',
     sourceLabel: 'Family',
@@ -67,6 +70,7 @@ beforeEach(() => {
           entries: [
             {
               id: 'file',
+              companions: ['photo.raw'],
               sourceKind: 'file',
               destinationKind: 'file',
               displayPath: '<script>hostile</script>.xmp',
@@ -297,4 +301,47 @@ it('discards a late response when the base-root binding changes', async () => {
   finish(report());
   await screen.findByText('Other base');
   expect(screen.queryByText('Read-only comparison finished.')).not.toBeInTheDocument();
+});
+
+it('requires explicit scope review before creating a replacement profile binding', async () => {
+  const profile = savedProfile();
+  const fallback = vi.mocked(libraryData).getMockImplementation()!;
+  vi.mocked(libraryData).mockImplementation(async (request, kind) => {
+    if (request.kind === 'backup_profiles') return [profile];
+    if (request.kind === 'backup_profile_rebind')
+      return { ...profile, id: 'new-binding', supersedes: profile.id };
+    return fallback(request, kind);
+  });
+  open();
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Saved comparison' })).toBeEnabled(),
+  );
+  fireEvent.change(screen.getByRole('combobox', { name: 'Saved comparison' }), {
+    target: { value: profile.id },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Review profile rebinding' }));
+  expect(screen.getByRole('region', { name: 'Profile rebinding review' })).toHaveTextContent(
+    'Previous source: Family',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Choose destination' }));
+  fireEvent.change(screen.getByRole('textbox', { name: 'Comparison profile name' }), {
+    target: { value: 'Reviewed replacement' },
+  });
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Compare' })).toBeEnabled());
+  expect(screen.getByRole('button', { name: 'Save comparison profile' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /I reviewed the previous/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Save comparison profile' }));
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenCalledWith(
+      {
+        kind: 'backup_profile_rebind',
+        prior_id: profile.id,
+        selection_id: 'selection',
+        label: 'Reviewed replacement',
+        reviewed: true,
+      },
+      'backup_profile',
+    ),
+  );
+  expect(screen.getByRole('button', { name: 'Start safe sync' })).toBeDisabled();
 });

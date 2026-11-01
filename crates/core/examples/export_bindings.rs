@@ -21,6 +21,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let declarations = [
         SyncProfile::decl(&config),
         ComparisonEntryKind::decl(&config),
+        ComparisonPreview::decl(&config),
+        ImmutableSyncPlan::decl(&config),
         ComparisonSide::decl(&config),
         ComparisonSummary::decl(&config),
         CompareMode::decl(&config),

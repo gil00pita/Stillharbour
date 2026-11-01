@@ -470,7 +470,6 @@ pub fn helper_available(paths: &WorkerPaths) -> bool {
             && paths.exiftool.as_ref().is_some_and(|p| p.is_file()))
 }
 
-#[cfg(feature = "fixture-probes")]
 pub async fn thumbnail(
     paths: &WorkerPaths,
     bytes: Vec<u8>,

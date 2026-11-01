@@ -32,3 +32,5 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 - [ADR-0072: Read-only Backup & Sync comparison](ADR-0072-read-only-backup-comparison.md).
 - [ADR-0073: Immutable saved comparison profiles](ADR-0073-saved-comparison-profiles.md).
 - [ADR-0074: Conservative comparison conflicts and full-report review](ADR-0074-comparison-conflicts-and-review.md).
+
+- [ADR-0075: Complete read-only M4A review and retain observation history](ADR-0075-m4a-review-completion.md).

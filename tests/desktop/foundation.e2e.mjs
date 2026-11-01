@@ -85,6 +85,19 @@ async function reviewBackupComparison(evidence, existingPicker) {
     );
     await $('.backup-table tbody tr:first-child').waitForDisplayed();
     assert.equal((await $$('.backup-table tbody tr')).length, page.entries.length);
+    const decodable = page.entries.find((entry) => /\.(png|jpe?g|webp)$/i.test(entry.displayPath));
+    assert.ok(decodable, 'Generated comparison fixture must include a decodable image');
+    await browser.execute((id) => {
+      const rows = [...document.querySelectorAll('.backup-table tbody tr')];
+      const button = rows
+        .map((row) => row.querySelector('button'))
+        .find((button) => button?.textContent === id);
+      button?.click();
+    }, decodable.displayPath);
+    await $('button=Load side-by-side previews').click();
+    await $('img[alt="source comparison preview"]').waitForDisplayed({ timeout: 30000 });
+    await $('section[aria-label="Entry details"]').scrollIntoView();
+    await browser.saveScreenshot(`.context/screenshots/m4a-${process.platform}-entry-details.png`);
     await $('button[aria-label="Photos"]').click();
     await $('button[aria-label="Backup & Sync"]').click();
     await browser.waitUntil(async () =>
@@ -112,10 +125,40 @@ async function reviewBackupComparison(evidence, existingPicker) {
     assert.equal(reopened.profileId, profile.id);
     assert.equal(reopened.sourceRootId, run.sourceRootId);
     assert.equal(reopened.datasetDisplayPath, run.datasetDisplayPath);
+    assert.equal(reopened.baselineId, run.id);
     await browser.waitUntil(
       async () =>
         (await $('section[aria-label="Comparison review"] h3').getText()) === 'needs review',
       { timeout: 10000, timeoutMsg: 'Reopened profile result did not reach the native review UI' },
+    );
+    await $('button=Review profile rebinding').click();
+    await $('section[aria-label="Profile rebinding review"]').waitForDisplayed();
+    await $('button=Choose destination').click();
+    await $('input[maxlength="80"]').setValue('Reviewed native rebind');
+    assert.equal(await $('button=Save comparison profile').isEnabled(), false);
+    await $('section[aria-label="Profile rebinding review"] input[type="checkbox"]').click();
+    await $('button=Save comparison profile').click();
+    let rebound;
+    await browser.waitUntil(async () => {
+      rebound = (await native({ kind: 'backup_profiles' })).data.find(
+        (value) => value.label === 'Reviewed native rebind',
+      );
+      return Boolean(rebound);
+    });
+    assert.equal(rebound.supersedes, profile.id);
+    assert.equal(rebound.sourceRootId, profile.sourceRootId);
+    await browser.waitUntil(async () => $('button=Compare').isEnabled());
+    await $('button=Compare').click();
+    let reboundRun;
+    await browser.waitUntil(async () => {
+      reboundRun = (await native({ kind: 'backup_comparison_latest' })).data;
+      return reboundRun?.profileId === rebound.id && reboundRun.state !== 'comparing';
+    });
+    assert.equal(reboundRun.state, 'needs_review', reboundRun.message);
+    assert.notEqual(reboundRun.id, reopened.id);
+    await browser.waitUntil(
+      async () =>
+        (await $('section[aria-label="Comparison review"] h3').getText()) === 'needs review',
     );
     const source = await browser.tauri.execute(async ({ core }) =>
       core.invoke('test_library_fixture', { verify: true }),
@@ -137,7 +180,7 @@ async function reviewBackupComparison(evidence, existingPicker) {
     }
     await writeFile(
       `${evidence}/m4a-comparison.json`,
-      JSON.stringify({ profile, run, reopened, page, source, target }),
+      JSON.stringify({ profile, run, reopened, rebound, reboundRun, page, source, target }),
     );
   } finally {
     if (!existingPicker) await picker.mockRestore();
@@ -1790,7 +1833,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 11);
+    assert.equal(status.data.catalogSchema, 12);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -2069,7 +2112,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 11);
+      assert.equal(receipt.catalogJournal.catalogSchema, 12);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',

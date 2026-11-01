@@ -138,6 +138,10 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
         super::backup_compare::profiles::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 11)?;
     }
+    if current < 12 {
+        super::backup_compare::history::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 12)?;
+    }
     #[cfg(test)]
     crate::catalog::migration_test_exit("before_commit");
     tx.commit()?;

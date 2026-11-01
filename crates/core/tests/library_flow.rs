@@ -965,7 +965,7 @@ fn photo_extension_preset_discovers_all_requested_suffixes_without_requiring_a_d
         .unwrap();
     wait(&library, &job.id);
     let page = library.query(AssetQuery::default(), None, 240).unwrap();
-    assert_eq!(page.total, 33);
+    assert_eq!(page.total, 34);
     for (name, bytes) in baseline {
         assert!(page.assets.iter().any(|asset| asset.name == name));
         assert_eq!(std::fs::read(source.path().join(name)).unwrap(), bytes);

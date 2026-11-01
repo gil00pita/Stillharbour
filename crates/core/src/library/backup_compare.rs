@@ -27,6 +27,8 @@ const MAX_ENTRIES: usize = 10_000;
 const MAX_NAMES: usize = 16 * 1024 * 1024;
 const MAX_ISSUES: usize = 200;
 
+pub(super) mod history;
+mod inspector;
 pub(super) mod profiles;
 
 fn same_directory(a: &FileIdentity, b: &FileIdentity) -> bool {
@@ -60,12 +62,16 @@ fn canceled(cancel: &AtomicBool) -> Result<()> {
 }
 
 struct Review {
+    observations: BTreeMap<String, (PathBuf, Option<Snapshot>, Option<Snapshot>)>,
+    source: Option<Binding>,
+    destination: Option<Binding>,
     run: ComparisonRun,
     rows: Vec<ComparisonEntry>,
     cancel: Arc<AtomicBool>,
 }
 #[derive(Default)]
 pub(super) struct CompareJobs {
+    preview_gate: Mutex<()>,
     review: Mutex<Option<Review>>,
 }
 impl CompareJobs {
@@ -87,6 +93,7 @@ struct ComparisonScope {
     lease: crate::jobs::operation_locks::Lease,
 }
 
+#[derive(Clone)]
 struct Binding {
     path: PathBuf,
     identity: FileIdentity,
@@ -126,6 +133,7 @@ impl Binding {
         native::open_asset(&self.path, &self.identity, &self.volume, relative)
     }
 }
+#[derive(Clone)]
 struct Snapshot {
     bytes: u64,
     modified: Option<String>,
@@ -314,6 +322,29 @@ fn equal(
     Ok(matches)
 }
 
+fn content_digest(
+    root: &Binding,
+    path: &Path,
+    snapshot: &Snapshot,
+    cancel: &AtomicBool,
+    count: &mut u64,
+) -> Result<String> {
+    let mut file = root.file(path)?;
+    snapshot.validate(&file)?;
+    let mut hash = blake3::Hasher::new();
+    let mut buffer = [0; CHUNK_BYTES];
+    loop {
+        let n = fill(&mut file, &mut buffer, cancel, count)?;
+        if n == 0 {
+            break;
+        }
+        hash.update(&buffer[..n]);
+    }
+    snapshot.validate(&file)?;
+    snapshot.validate(&root.file(path)?)?;
+    Ok(hash.finalize().to_hex().to_string())
+}
+
 impl Library {
     pub fn backup_comparison_latest(&self) -> Result<Option<ComparisonRun>> {
         Ok(self
@@ -370,16 +401,25 @@ impl Library {
             lease,
         } = scope;
         let run = ComparisonRun {
+            review_plan: None,
+            baseline_id: None,
+            history_message: "No historical byte observation has been loaded.".into(),
             summary: None,
             profile_id: profile.as_ref().map(|p| p.id.clone()),
-            id: uuid::Uuid::new_v4().to_string(), policy_version: 2, catalog_id,
+            id: uuid::Uuid::new_v4().to_string(), policy_version: 3, catalog_id,
             source_root_id: base.view.id.clone(), source_label: base.view.label.clone(), source_display_path: base.view.display_path.clone(),
             destination_display_path: destination.path.to_string_lossy().into_owned(), dataset_display_path: destination.path.join(&namespace).to_string_lossy().into_owned(),
             mode, state: ComparisonState::Comparing, started_at: chrono::Utc::now().to_rfc3339(), bytes_read: "0".into(), entries: 0, issues: vec![],
             message: "Comparing all regular files, including hidden and unrecognised files. No changes will be made.".into(), plan_digest: None, capabilities: DestinationCapability::default(),
         };
         let cancel = Arc::new(AtomicBool::new(false));
+        if let Some(previous) = current.as_ref() {
+            previous.cancel.store(true, Ordering::Release);
+        }
         *current = Some(Review {
+            observations: BTreeMap::new(),
+            source: None,
+            destination: None,
             run: run.clone(),
             rows: vec![],
             cancel: cancel.clone(),
@@ -590,6 +630,10 @@ impl Library {
             dst.walk(root, Path::new(""), cancel, 0)?;
         }
         let complete = !src.incomplete && !dst.incomplete;
+        let history_scope = history::scope(&source, &destination, &namespace)?;
+        let prior = history::load(&self.catalog, &history_scope)?;
+        let mut observed = BTreeMap::new();
+        let mut observations = BTreeMap::new();
         let blocked = crate::backup::names::blocks(&src.objects, &dst.objects);
         let names: BTreeSet<_> = src
             .objects
@@ -604,7 +648,7 @@ impl Library {
         let mut count = 0;
         let mut comparison_issues = Vec::new();
         let mut digest = blake3::Hasher::new();
-        digest.update(b"stillharbour-m4a-review-v2");
+        digest.update(b"stillharbour-m4a-review-v3");
         digest.update(&native::encode_path(&source.path));
         digest.update(&native::encode_path(&destination.path));
         digest.update(
@@ -641,7 +685,8 @@ impl Library {
                 && a.zip(b).is_some_and(|(a, b)| {
                     a.bytes == b.bytes && a.modified.is_some() && a.modified == b.modified
                 });
-            let (category, proposal, evidence) = if block.is_some() || missing_snapshot {
+            let (mut category, mut proposal, mut evidence) = if block.is_some() || missing_snapshot
+            {
                 (ComparisonCategory::Blocked, SyncProposal::Blocked, block.map_or("A regular file could not be captured. Absence and content equality are unproven; retain both trees.", |reason| reason.message()).into())
             } else {
                 match comparison {
@@ -691,6 +736,42 @@ impl Library {
                     }
                 }
             };
+            if mode == CompareMode::Verified
+                && block.is_none()
+                && !missing_snapshot
+                && let (Some(snapshot), Some(root)) = (b, dataset.as_ref())
+            {
+                match content_digest(root, &path, snapshot, cancel, &mut count) {
+                    Ok(hash) => {
+                        if matches!(
+                            category,
+                            ComparisonCategory::VerifiedEqual
+                                | ComparisonCategory::DifferentContent
+                        ) && prior
+                            .as_ref()
+                            .and_then(|m| m.files.get(&history::key(&path)))
+                            .is_some_and(|old| old != &hash)
+                        {
+                            category = ComparisonCategory::DestinationEditedSinceLastRun;
+                            proposal = SyncProposal::ReviewDifference;
+                            evidence.push_str(" Destination bytes changed since the retained observation. This is historical context, not proof of damage or permission to replace.");
+                        }
+                        observed.insert(history::key(&path), hash);
+                    }
+                    Err(e) => {
+                        if comparison_issues.len() < MAX_ISSUES {
+                            comparison_issues.push(SyncIssue {
+                                side: Some(ComparisonSide::Destination),
+                                display_path: path.to_string_lossy().into_owned(),
+                                message: e.message.clone(),
+                            });
+                        }
+                        category = ComparisonCategory::Uncertain;
+                        proposal = SyncProposal::Recompare;
+                        evidence = e.message;
+                    }
+                }
+            }
             let raw = native::encode_path(&path);
             digest.update(&(raw.len() as u64).to_le_bytes());
             digest.update(&raw);
@@ -701,10 +782,13 @@ impl Library {
                     digest.update(b"absent");
                 }
             }
+            let entry_id = blake3::hash(&raw).to_hex().to_string();
+            observations.insert(entry_id.clone(), (path.clone(), a.cloned(), b.cloned()));
             rows.push(ComparisonEntry {
+                companions: vec![],
                 source_kind: src.objects.get(&path).copied(),
                 destination_kind: dst.objects.get(&path).copied(),
-                id: blake3::hash(&raw).to_hex().to_string(),
+                id: entry_id,
                 display_path: path.to_string_lossy().into_owned(),
                 source_bytes: a.map(|s| s.bytes.to_string()),
                 destination_bytes: b.map(|s| s.bytes.to_string()),
@@ -739,6 +823,8 @@ impl Library {
             return Err(changed());
         }
         canceled(cancel)?;
+        inspector::companions(&mut rows, &observations);
+        review.run.baseline_id = prior.as_ref().map(|m| m.id.clone());
         review.run.bytes_read = count.to_string();
         review.run.entries = rows.len() as u32;
         let incomplete = src.incomplete
@@ -746,6 +832,11 @@ impl Library {
             || !comparison_issues.is_empty()
             || !blocked.is_empty();
         review.run.summary = Some(ComparisonSummary::collect(&rows));
+        review.run.history_message = if mode == CompareMode::Verified && !incomplete {
+            history::save(&self.catalog, id, history_scope, observed)?
+        } else {
+            "No history saved: quick, incomplete or canceled evidence cannot replace retained full-byte observations.".into()
+        };
         review.run.issues = src
             .issues
             .into_iter()
@@ -773,8 +864,24 @@ impl Library {
         digest.update(&native::encode_path(&namespace));
         digest.update(&serde_json::to_vec(&rows).map_err(|_| changed())?);
         review.run.plan_digest = (!incomplete).then(|| digest.finalize().to_hex().to_string());
+        review.run.review_plan = review
+            .run
+            .plan_digest
+            .as_ref()
+            .map(|digest| ImmutableSyncPlan {
+                run_id: review.run.id.clone(),
+                catalog_id: review.run.catalog_id.clone(),
+                source_root_id: review.run.source_root_id.clone(),
+                policy_version: review.run.policy_version,
+                digest: digest.clone(),
+                entries: review.run.entries,
+                execution_available: false,
+            });
         review.run.message = "Read-only comparison finished. Review is session-only; copying, replacement and snapshot backup are unavailable. Existing dataset contents are not adopted. Other destination files remain outside this scope. Byte equality does not establish metadata fidelity or independent recovery.".into();
         review.rows = rows;
+        review.observations = observations;
+        review.source = Some(source);
+        review.destination = dataset;
         Ok(())
     }
     fn compare_progress(&self, id: &str, count: u64, entries: u32) -> Result<()> {

@@ -1,5 +1,7 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0075](decisions/ADR-0075-m4a-review-completion.md) completes the read-only M4A implementation with schema-12 observation history, explicit superseding profile rebind, companion context, an immutable nonexecutable review plan and ID-authorized bounded previews. Native acceptance is tracked in [M4A_VALIDATION.md](M4A_VALIDATION.md); M4B–D remain gated.
+
 [ADR-0074](decisions/ADR-0074-comparison-conflicts-and-review.md) adds conservative native-name/type conflict blocking and full-report category filtering with observed entry details to M4A. Policy 2 reviews remain read-only; schema 11 and profile version 1 are unchanged. Native naming, fidelity, historical baseline and recovery gates remain open.
 
 [ADR-0073](decisions/ADR-0073-saved-comparison-profiles.md) continues M4A with immutable catalog-scoped comparison profiles and schema 11. Reopening pins the original root/destination and grants no transfer/recovery permission. The owner's 2026-11-01 scan revision also adds `.mp4` to the built-in preset (34 suffixes); saved filters and decoder/playback gates remain intact.

@@ -400,7 +400,7 @@ Imported filenames and capture-time formatting use the selected saved date polic
 
 ## 13. Backup & Sync and restore
 
-Current M4A implementation scope is recorded in docs/M4_BACKUP_SYNC.md. Its read-only comparison review must retain ambiguous native names and file/folder conflicts without proposing a copy, expose category totals/filtering over the whole bounded report and render per-side observed entry details safely. Conservative Unicode/case warnings do not establish native destination equivalence; metadata observations do not establish companion completeness, fidelity or recovery. M4A acceptance and all later transfer gates remain separate.
+Current M4A implementation scope is recorded in docs/M4_BACKUP_SYNC.md. Its read-only comparison review must retain ambiguous native names and file/folder conflicts without proposing a copy, expose category totals/filtering over the whole bounded report and render per-side observed entry details safely. Conservative Unicode/case warnings do not establish native destination equivalence; metadata observations do not establish companion completeness, fidelity or recovery. M4A policy 3/schema 12 also supply immutable observation history, reviewed superseding profile rebind, potential companion relationships and bounded side-by-side previews. See docs/M4A_VALIDATION.md for the read-only acceptance matrix; all later transfer gates remain separate.
 
 Version 1.1 adds a required readable Safe copy / one-way sync workflow with the base library selected automatically. See docs/BACKUP_SYNC_ADDENDUM.md for compare, retained-version replacement, contextual errors, throttling and M4A-M4D gates. Keep this separate from restic snapshots. Both obey docs/PRESERVATION_CONTRACT.md.
 
