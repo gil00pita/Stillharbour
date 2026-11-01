@@ -109,6 +109,15 @@ fn root(path: &std::path::Path) -> Result<DirectoryChain> {
 }
 impl Fixture {
     fn new() -> Result<Self> {
+        let fixture = Self::generated_members(&MEMBERS)?;
+        if !fixture.plan.issues.is_empty() {
+            return Err(failed("Generated native rename planning conflicted."));
+        }
+        Ok(fixture)
+    }
+    // All callers supply literal generated names. This is not an imported-plan
+    // constructor or a grant to touch a supplied directory.
+    fn generated_members(pairs: &[(&str, &str)]) -> Result<Self> {
         let run = tempfile::Builder::new()
             .prefix("stillharbour-rename-fixture-")
             .tempdir()?;
@@ -120,12 +129,12 @@ impl Fixture {
         let parent = directory.leaf();
         let id = uuid();
         let root_id = uuid();
-        let mut members = MEMBERS
-            .into_iter()
+        let mut members = pairs
+            .iter()
             .map(|(before, after)| Member {
                 id: uuid(),
-                before: before.into(),
-                after: after.into(),
+                before: (*before).into(),
+                after: (*after).into(),
                 revision: "0".repeat(64),
             })
             .collect::<Vec<_>>();
@@ -244,9 +253,6 @@ impl Fixture {
         }
         facts.root_revision = source_native::revision(parent)?;
         let plan = graph::build(id, members, facts)?;
-        if !plan.issues.is_empty() {
-            return Err(failed("Generated native rename planning conflicted."));
-        }
         let result = Self {
             run: Run::Owned(run),
             root_id,
@@ -701,8 +707,84 @@ pub(super) fn probe() -> Result<serde_json::Value> {
     if !reverse.issues.is_empty() || !fixture.execute(&reverse, None)? {
         return Err(failed("Native fixture undo did not restore originals."));
     }
+    let unicode = unicode_probe()?;
     Ok(
-        serde_json::json!({"scope":"constructor-owned-generated-only","nativeOs":std::env::consts::OS,"members":fixture.plan.members.len(),"steps":fixture.plan.steps.len(),"interruptedAfterFirstRename":interrupted,"freshApprovedContinuation":resumed,"reverseSteps":reverse.steps.len(),"reverseRestoredOriginalNames":true,"completeBytesAndModifiedTimeVerified":true,"originalObjectsRetained":true,"localRetainedVersionsOnly":true,"independentRecoveryProven":false,"productionAuthorization":false}),
+        serde_json::json!({"scope":"constructor-owned-generated-only","nativeOs":std::env::consts::OS,"members":fixture.plan.members.len(),"steps":fixture.plan.steps.len(),"interruptedAfterFirstRename":interrupted,"freshApprovedContinuation":resumed,"reverseSteps":reverse.steps.len(),"reverseRestoredOriginalNames":true,"completeBytesAndModifiedTimeVerified":true,"originalObjectsRetained":true,"localRetainedVersionsOnly":true,"independentRecoveryProven":false,"productionAuthorization":false,"unicode":unicode}),
+    )
+}
+fn unicode_probe() -> Result<serde_json::Value> {
+    fn originals(fixture: &Fixture) -> Result<()> {
+        let scope = fixture.execution_scope()?;
+        let locations = fixture
+            .plan
+            .members
+            .iter()
+            .map(|m| (m.id.clone(), m.before.clone()))
+            .collect();
+        fixture.verify(
+            scope.lease.directory(0).leaf(),
+            scope.lease.directory(1).leaf(),
+            &locations,
+        )?;
+        Ok(())
+    }
+    let mut rename = Fixture::generated_members(&[
+        ("caf\u{e9}.JPG", "cafe\u{301}.JPG"),
+        ("caf\u{e9}.xmp", "cafe\u{301}.xmp"),
+    ])?;
+    if !rename.plan.issues.is_empty()
+        || rename.execute(&rename.plan, Some(Fault::AfterMove(0)))?
+        || !rename.execute(&rename.plan, None)?
+    {
+        return Err(failed("Generated Unicode rename did not reconcile."));
+    }
+    let reverse = rename.reverse_plan()?;
+    if !rename.execute(&reverse, None)? {
+        return Err(failed("Generated Unicode undo did not complete."));
+    }
+    originals(&rename)?;
+
+    let mut collision = Fixture::generated_members(&[
+        ("First.JPG", "caf\u{e9}.JPG"),
+        ("Second.JPG", "cafe\u{301}.JPG"),
+    ])?;
+    let keys = collision
+        .plan
+        .name_facts
+        .targets
+        .values()
+        .map(|fact| &fact.native_key)
+        .collect::<Vec<_>>();
+    let equivalent = keys[0] == keys[1];
+    if equivalent {
+        if !collision.plan.issues.iter().any(|issue| {
+            issue.kind == graph::Conflict::NativeNameCollision && issue.member_ids.len() == 2
+        }) || !collision.plan.steps.is_empty()
+            || collision.execute(&collision.plan, None).is_ok()
+            || collision.journal(&collision.plan)?.query_row(
+                "SELECT count(*) FROM events",
+                [],
+                |row| row.get::<_, i64>(0),
+            )? != 0
+        {
+            return Err(failed(
+                "Native equivalent Unicode targets were not blocked before movement.",
+            ));
+        }
+    } else {
+        if !collision.plan.issues.is_empty() || !collision.execute(&collision.plan, None)? {
+            return Err(failed(
+                "Distinct native Unicode targets did not remain distinct.",
+            ));
+        }
+        let reverse = collision.reverse_plan()?;
+        if !collision.execute(&reverse, None)? {
+            return Err(failed("Distinct native Unicode targets did not undo."));
+        }
+    }
+    originals(&collision)?;
+    Ok(
+        serde_json::json!({"canonicalTargetsEquivalent":equivalent,"collisionBlockedBeforeMove":equivalent,"distinctTargetsRoundTrip":!equivalent,"companionRenameContinuedAndUndone":true,"allOriginalObjectsBytesAndMetadataVerified":true,"sourceMembers":4,"productionAuthorization":false}),
     )
 }
 pub(super) fn relocation_probe() -> Result<serde_json::Value> {
@@ -713,6 +795,18 @@ pub(super) fn relocation_probe() -> Result<serde_json::Value> {
 mod tests {
     use super::*;
     use std::io::{Read, Write};
+    #[test]
+    fn native_unicode_rename_and_collision_follow_observed_parent_semantics() {
+        let receipt = unicode_probe().unwrap();
+        assert_eq!(receipt["companionRenameContinuedAndUndone"], true);
+        assert_eq!(receipt["allOriginalObjectsBytesAndMetadataVerified"], true);
+        assert_eq!(receipt["sourceMembers"], 4);
+        assert_eq!(receipt["productionAuthorization"], false);
+        assert_ne!(
+            receipt["collisionBlockedBeforeMove"],
+            receipt["distinctTargetsRoundTrip"]
+        );
+    }
     #[derive(serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
     struct ChildScope {

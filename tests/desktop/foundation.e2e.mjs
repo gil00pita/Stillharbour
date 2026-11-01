@@ -1691,7 +1691,8 @@ describe('native read-only library', () => {
       assert.equal(receipt.renamePlanning.nativeMutationTested, false);
       assert.equal(receipt.renamePlanning.forward.execution_available, false);
       assert.deepEqual(receipt.renamePlanning.forward.issues, []);
-      assert.deepEqual(receipt.nativeRename, {
+      const { unicode, ...nativeRename } = receipt.nativeRename;
+      assert.deepEqual(nativeRename, {
         scope: 'constructor-owned-generated-only',
         nativeOs: process.platform === 'win32' ? 'windows' : 'macos',
         members: 5,
@@ -1704,6 +1705,16 @@ describe('native read-only library', () => {
         originalObjectsRetained: true,
         localRetainedVersionsOnly: true,
         independentRecoveryProven: false,
+        productionAuthorization: false,
+      });
+      assert.equal(typeof unicode.canonicalTargetsEquivalent, 'boolean');
+      assert.deepEqual(unicode, {
+        canonicalTargetsEquivalent: unicode.canonicalTargetsEquivalent,
+        collisionBlockedBeforeMove: unicode.canonicalTargetsEquivalent,
+        distinctTargetsRoundTrip: !unicode.canonicalTargetsEquivalent,
+        companionRenameContinuedAndUndone: true,
+        allOriginalObjectsBytesAndMetadataVerified: true,
+        sourceMembers: 4,
         productionAuthorization: false,
       });
       assert.equal(receipt.catalogJournal.completed.publishedVerified, 2);
