@@ -2629,6 +2629,7 @@ mod tests {
         }
         use crate::operations::{CopyAction, CopyApprovalInput, CopyJobState, CopyStartInput};
         for variant in 0..6 {
+            eprintln!("Generated projected import variant {variant}: setup");
             let (fixture, workflow, plan, source_root, _) = mixed_import_fixture_with_destination(
                 (variant == 5).then_some(crate::library::model::RootMode::Managed),
             );
@@ -2688,6 +2689,7 @@ mod tests {
             assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
             let mut final_job = String::new();
             for action in [CopyAction::PrepareNames, CopyAction::CopyFiles] {
+                eprintln!("Generated projected import variant {variant}: {action:?}");
                 assert_eq!(review.action, action);
                 let approval = workflow
                     .approve(
