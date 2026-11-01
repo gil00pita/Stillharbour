@@ -3,6 +3,7 @@ mod changes;
 mod destination;
 mod directory;
 pub mod filters;
+mod job_control;
 pub mod model;
 mod monitor;
 pub(crate) mod operation_store;

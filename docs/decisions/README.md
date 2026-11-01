@@ -27,3 +27,5 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 - [ADR-0021: Windows local NTFS read-only scanning](ADR-0021-windows-ntfs-scanning.md).
 - [ADR-0022: Read-only organization destination preflight](ADR-0022-organization-destination-review.md).
 - [ADR-0023: Retained organization drafts and template versions](ADR-0023-retained-organization-drafts.md).
+
+- [ADR-0024: Scan control and filename progress](ADR-0024-scan-control-progress.md).

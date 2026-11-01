@@ -12,13 +12,40 @@ async function native(request) {
     request,
   );
 }
+async function pauseResumeJob(receipt) {
+  const before = (await native({ kind: 'status' })).data;
+  const job = before.jobs.find((job) => job.kind === 'thumbnails' && job.state === 'running');
+  assert.ok(job, 'Held thumbnail job must be running');
+  await $('button[aria-label="Jobs"]').click();
+  const row = await $('.job-row[data-job-kind="thumbnails"]');
+  await row.$('button=Pause').click();
+  await browser.waitUntil(
+    async () => (await native({ kind: 'job_details', job_id: job.id })).data.job.state === 'paused',
+    { timeout: 10000 },
+  );
+  const paused = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(paused.indexed, job.indexed);
+  assert.equal(paused.discovered, job.discovered);
+  await row.$('button=Resume').waitForDisplayed();
+  await row.$('button=Resume').click();
+  await browser.waitUntil(
+    async () =>
+      (await native({ kind: 'job_details', job_id: job.id })).data.job.state === 'running',
+    { timeout: 10000 },
+  );
+  const resumed = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(resumed.id, job.id);
+  await $('button[aria-label="Close jobs"]').click();
+  await writeFile(receipt, JSON.stringify({ before: job, paused, resumed }));
+}
 async function reviewRemovalStopsJobs(receipt) {
   const before = (await native({ kind: 'status' })).data;
   const root = before.roots[0];
   assert.ok(
     before.jobs.some(
       (job) =>
-        job.rootId === root.id && ['queued', 'running', 'cancel_requested'].includes(job.state),
+        job.rootId === root.id &&
+        ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(job.state),
     ),
   );
   await $('button[aria-label="Settings"]').click();
@@ -29,7 +56,12 @@ async function reviewRemovalStopsJobs(receipt) {
   assert.ok(
     after.jobs
       .filter((job) => job.rootId === root.id)
-      .every((job) => !['queued', 'running', 'cancel_requested'].includes(job.state)),
+      .every(
+        (job) =>
+          !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+            job.state,
+          ),
+      ),
   );
   assert.ok(after.jobs.some((job) => job.rootId === root.id && job.state === 'canceled'));
   assert.ok(
@@ -260,7 +292,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 3);
+    assert.equal(status.data.catalogSchema, 4);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -399,6 +431,7 @@ describe('native read-only library', () => {
             await writeFile(`${evidence}/windows-banner-${name}.json`, JSON.stringify(layout));
             await browser.saveScreenshot(`.context/screenshots/windows-banner-${name}.png`);
           }
+          await pauseResumeJob(`${evidence}/windows-job-pause.json`);
           await reviewRemovalStopsJobs(`${evidence}/windows-removal-stopped-jobs.json`);
         } finally {
           await browser.tauri.execute(async ({ core }) =>
@@ -416,7 +449,12 @@ describe('native read-only library', () => {
               status.roots.length === 1 &&
               status.roots[0].fileCount >= 18 &&
               status.jobs.some((j) => j.kind === 'thumbnails') &&
-              status.jobs.every((j) => !['queued', 'running', 'cancel_requested'].includes(j.state))
+              status.jobs.every(
+                (j) =>
+                  !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+                    j.state,
+                  ),
+              )
             );
           },
           { timeout: 25000, timeoutMsg: 'Generated Windows scan/previews did not settle' },
@@ -926,6 +964,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       assert.equal(await $('.preparation-banner button').getText(), 'Resume previews');
       await browser.saveScreenshot('.context/screenshots/initial-previews-paused.png');
       await native({ kind: 'generate_thumbnails', root_id: root.id });
+      await pauseResumeJob(`${evidence}/job-pause.json`);
       await reviewRemovalStopsJobs(`${evidence}/removal-stopped-jobs.json`);
       observations.initialPreparation = {
         total: thumbnail.discovered,
@@ -955,7 +994,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               .filter((job) => job.kind !== 'thumbnails')
               .every((job) => job.state === 'completed') &&
             status.data.jobs.every(
-              (job) => !['queued', 'running', 'cancel_requested'].includes(job.state),
+              (job) =>
+                !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+                  job.state,
+                ),
             )
           );
         },
@@ -1023,7 +1065,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           // enqueued. Do not mistake that observable handoff gap for all done.
           status.data.jobs.some((job) => job.kind === 'thumbnails') &&
           status.data.jobs.every(
-            (job) => !['queued', 'running', 'cancel_requested'].includes(job.state),
+            (job) =>
+              !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+                job.state,
+              ),
           )
         );
       },
@@ -2408,7 +2453,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await browser.waitUntil(
         async () =>
           !(await native({ kind: 'status' })).data.jobs.some((job) =>
-            ['queued', 'running', 'cancel_requested'].includes(job.state),
+            ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+              job.state,
+            ),
           ),
       );
     } finally {
@@ -2616,7 +2663,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(
       async () =>
         !(await native({ kind: 'status' })).data.jobs.some((job) =>
-          ['queued', 'running', 'cancel_requested'].includes(job.state),
+          ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+            job.state,
+          ),
         ),
     );
     const after = (await native({ kind: 'status' })).data.roots[0];
@@ -2958,7 +3007,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(
       async () =>
         !(await native({ kind: 'status' })).data.jobs.some((job) =>
-          ['queued', 'running', 'cancel_requested'].includes(job.state),
+          ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+            job.state,
+          ),
         ),
     );
     const jobs = (await native({ kind: 'status' })).data.jobs.length;

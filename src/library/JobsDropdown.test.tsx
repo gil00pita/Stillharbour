@@ -167,3 +167,29 @@ it('starts a separate thumbnail job for a selected saved library and exposes thu
   fireEvent.click(screen.getByRole('button', { name: 'Cancel thumbnails' }));
   await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'cancel', job_id: job.id }));
 });
+
+it('pauses and resumes the same job and retries terminal work by native identity', async () => {
+  const { rerender } = render(<JobsDropdown status={status} onRefresh={refresh} />);
+  open();
+  fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'pause', job_id: job.id }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  rerender(
+    <JobsDropdown
+      status={{ ...status, jobs: [{ ...job, state: 'paused' }] }}
+      onRefresh={refresh}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'resume', job_id: job.id }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+  rerender(
+    <JobsDropdown
+      status={{ ...status, jobs: [{ ...job, state: 'partial' }] }}
+      onRefresh={refresh}
+    />,
+  );
+  fireEvent.click(screen.getByText('Recent jobs (1)'));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry scan' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'retry', job_id: job.id }));
+});

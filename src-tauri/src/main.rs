@@ -317,6 +317,15 @@ async fn library_request(
             LibraryRequest::GenerateThumbnails { root_id } => {
                 LibraryResponse::Job(library.generate_thumbnails(root_id)?)
             }
+            LibraryRequest::Pause { job_id } => {
+                library.set_paused(job_id, true)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::Resume { job_id } => {
+                library.set_paused(job_id, false)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::Retry { job_id } => LibraryResponse::Job(library.retry(job_id)?),
             LibraryRequest::Cancel { job_id } => {
                 library.cancel(job_id)?;
                 LibraryResponse::Done

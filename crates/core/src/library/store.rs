@@ -94,6 +94,10 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
         super::operation_store::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 3)?;
     }
+    if current < 4 {
+        tx.execute_batch("ALTER TABLE scans ADD COLUMN total_files INTEGER; ALTER TABLE scans ADD COLUMN processed_files INTEGER;")?;
+        tx.pragma_update(None, "user_version", 4)?;
+    }
     #[cfg(test)]
     crate::catalog::migration_test_exit("before_commit");
     tx.commit()?;
@@ -231,6 +235,8 @@ fn job_row(row: &Row<'_>) -> rusqlite::Result<ScanJob> {
         id: row.get("id")?,
         root_id: row.get("root_id")?,
         state: row.get("state")?,
+        total_files: row.get("total_files")?,
+        processed_files: row.get("processed_files")?,
         discovered: row.get("discovered")?,
         indexed: row.get("indexed")?,
         skipped: row.get("skipped")?,
@@ -242,7 +248,7 @@ fn job_row(row: &Row<'_>) -> rusqlite::Result<ScanJob> {
 pub fn jobs(catalog: &Catalog) -> Result<Vec<ScanJob>> {
     catalog.call(|db| {
         Ok(db
-            .prepare("SELECT * FROM scans ORDER BY CASE WHEN state IN ('queued','running','cancel_requested') THEN 0 ELSE 1 END, started_at DESC LIMIT 32")?
+            .prepare("SELECT * FROM scans ORDER BY CASE WHEN state IN ('queued','running','cancel_requested','pause_requested','paused') THEN 0 ELSE 1 END, started_at DESC LIMIT 32")?
             .query_map([], job_row)?
             .collect::<rusqlite::Result<_>>()?)
     })
@@ -259,13 +265,13 @@ pub fn begin_job(catalog: &Catalog, root_id: String, filter: ScanFilter) -> Resu
     tx.execute("UPDATE assets SET preview_state='pending',preview_error=NULL WHERE root_id=? AND preview_state='unavailable'",[&root_id])?;
     tx.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?,?,'running','Discovering files',?)",params![id,root_id,started])?;
     tx.commit()?;
-    Ok(ScanJob{kind:Some(JobKind::Scan),id,root_id,state:"running".into(),discovered:0,indexed:0,skipped:0,errors:0,message:"Discovering files".into(),started_at:started})
+    Ok(ScanJob{total_files:None,processed_files:None,kind:Some(JobKind::Scan),id,root_id,state:"running".into(),discovered:0,indexed:0,skipped:0,errors:0,message:"Discovering files".into(),started_at:started})
 })
 }
 pub fn recover_jobs(catalog: &Catalog) -> Result<Vec<String>> {
     catalog.call(|db|{
-    let roots=db.prepare("SELECT DISTINCT root_id FROM scans WHERE id NOT LIKE 'thumbnail:%' AND state IN ('running','cancel_requested')")?.query_map([],|r|r.get(0))?.collect::<rusqlite::Result<Vec<String>>>()?;
-    db.execute("UPDATE scans SET state='interrupted',message=CASE WHEN id LIKE 'thumbnail:%' THEN 'Thumbnail generation interrupted; cached previews retained. Generate again to resume.' ELSE 'Interrupted; inventory retained. Rescan to reconcile.' END WHERE state IN ('queued','running','cancel_requested')",[])?;
+    let roots=db.prepare("SELECT DISTINCT root_id FROM scans WHERE id NOT LIKE 'thumbnail:%' AND state IN ('running','cancel_requested','pause_requested','paused')")?.query_map([],|r|r.get(0))?.collect::<rusqlite::Result<Vec<String>>>()?;
+    db.execute("UPDATE scans SET state='interrupted',message=CASE WHEN id LIKE 'thumbnail:%' THEN 'Thumbnail generation interrupted; cached previews retained. Generate again to resume.' ELSE 'Interrupted; inventory retained. Rescan to reconcile.' END WHERE state IN ('queued','running','cancel_requested','pause_requested','paused')",[])?;
     db.execute("UPDATE roots SET availability='unknown' WHERE availability='scanning'",[])?;Ok(roots)
 })
 }
@@ -287,7 +293,7 @@ pub fn progress(
     })
 }
 pub fn cancel_requested(catalog: &Catalog, id: String) -> Result<()> {
-    catalog.call(move|db|{db.execute("UPDATE scans SET state='cancel_requested',message='Stopping at a safe read boundary' WHERE id=? AND state IN ('queued','running')",[id])?;Ok(())})
+    catalog.call(move|db|{db.execute("UPDATE scans SET state='cancel_requested',message='Stopping at a safe read boundary' WHERE id=? AND state IN ('queued','running','pause_requested','paused')",[id])?;Ok(())})
 }
 pub fn issue(
     catalog: &Catalog,
@@ -299,7 +305,7 @@ pub fn issue(
     catalog.call(move|db|{db.execute("INSERT INTO scan_issues(job_id,relative_path,code,message) SELECT ?1,?2,?3,?4 WHERE (SELECT count(*) FROM scan_issues WHERE job_id=?1)<200",params![id,relative,code,message])?;Ok(())})
 }
 pub fn job_issues(catalog: &Catalog, id: String) -> Result<Vec<String>> {
-    catalog.call(move|db|Ok(db.prepare("SELECT relative_path||': '||message FROM scan_issues WHERE job_id=? ORDER BY sequence LIMIT 200")?.query_map([id],|r|r.get(0))?.collect::<rusqlite::Result<_>>()?))
+    catalog.call(move|db|Ok(db.prepare("SELECT coalesce(a.relative_path,i.relative_path)||': '||i.message FROM scan_issues i LEFT JOIN assets a ON a.id=i.relative_path AND i.job_id LIKE 'thumbnail:%' WHERE job_id=? ORDER BY i.sequence LIMIT 200")?.query_map([id],|r|r.get(0))?.collect::<rusqlite::Result<_>>()?))
 }
 
 #[derive(Clone)]
@@ -1424,6 +1430,7 @@ pub fn begin_thumbnail_job(catalog: &Catalog, root_id: String) -> Result<ScanJob
         let unfinished:bool=db.query_row("SELECT EXISTS(SELECT 1 FROM scans WHERE id=? AND state NOT IN ('completed','partial'))",[&initial],|r|r.get(0))?;
         let id = if unfinished {initial} else {format!("thumbnail:{}", uuid::Uuid::new_v4())};
         db.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?,?,'queued','Waiting to generate tiny previews',?) ON CONFLICT(id) DO UPDATE SET state='queued',discovered=0,indexed=0,skipped=0,errors=0,message=excluded.message", params![id,root_id,now()])?;
+        db.execute("DELETE FROM scan_issues WHERE job_id=?",[&id])?;
         bump(db)?;
         Ok(db.query_row("SELECT * FROM scans WHERE id=?",[id],job_row)?)
     })

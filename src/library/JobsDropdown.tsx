@@ -18,14 +18,13 @@ export function JobsDropdown({
   const id = useId();
   const [position, setPosition] = useState({ top: 64, right: 16, maxHeight: 400 });
   const active =
-    status?.jobs.filter(
-      (job) =>
-        job.state === 'queued' || job.state === 'running' || job.state === 'cancel_requested',
+    status?.jobs.filter((job) =>
+      ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(job.state),
     ) ?? [];
   const recent =
     status?.jobs.filter(
       (job) =>
-        job.state !== 'queued' && job.state !== 'running' && job.state !== 'cancel_requested',
+        !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(job.state),
     ) ?? [];
   useLayoutEffect(() => {
     if (!open) return;
@@ -183,7 +182,10 @@ function JobEntry({
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
-  const [canceling, setCanceling] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    'cancel' | 'pause' | 'resume' | 'retry' | null
+  >(null);
+  const canceling = pendingAction !== null;
   const detailId = useId();
   useEffect(() => {
     if (!expanded) return;
@@ -198,17 +200,17 @@ function JobEntry({
     return () => {
       active = false;
     };
-  }, [expanded, job.id]);
-  async function cancel() {
-    setCanceling(true);
+  }, [expanded, job.id, job.skipped, job.errors, job.state]);
+  async function action(kind: 'cancel' | 'pause' | 'resume' | 'retry') {
+    setPendingAction(kind);
     setCancelError(null);
     try {
-      await library({ kind: 'cancel', job_id: job.id });
+      await library({ kind, job_id: job.id });
       await onRefresh();
     } catch (error) {
       setCancelError(errorMessage(error));
     } finally {
-      setCanceling(false);
+      setPendingAction(null);
     }
   }
   return (
@@ -235,12 +237,39 @@ function JobEntry({
         >
           {expanded ? 'Hide details' : 'Details'}
         </button>
-        {['queued', 'running', 'cancel_requested'].includes(job.state) && (
+        {['queued', 'running', 'pause_requested', 'paused'].includes(job.state) && (
           <button
-            disabled={canceling || job.state === 'cancel_requested'}
-            onClick={() => void cancel()}
+            disabled={canceling || job.state === 'pause_requested'}
+            onClick={() => void action(job.state === 'paused' ? 'resume' : 'pause')}
           >
-            {canceling || job.state === 'cancel_requested'
+            {pendingAction === 'resume'
+              ? 'Resuming…'
+              : pendingAction === 'pause'
+                ? 'Pausing…'
+                : job.state === 'paused'
+                  ? 'Resume'
+                  : job.state === 'pause_requested'
+                    ? 'Pausing…'
+                    : 'Pause'}
+          </button>
+        )}
+        {!['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+          job.state,
+        ) && (
+          <button disabled={canceling} onClick={() => void action('retry')}>
+            {pendingAction === 'retry'
+              ? 'Retrying…'
+              : `Retry ${job.kind === 'thumbnails' ? 'thumbnails' : 'scan'}`}
+          </button>
+        )}
+        {['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+          job.state,
+        ) && (
+          <button
+            disabled={pendingAction === 'cancel' || job.state === 'cancel_requested'}
+            onClick={() => void action('cancel')}
+          >
+            {pendingAction === 'cancel' || job.state === 'cancel_requested'
               ? 'Stopping…'
               : job.kind === 'thumbnails'
                 ? 'Cancel thumbnails'
@@ -348,13 +377,20 @@ function JobDetails({
       ) : !detail ? (
         <p role="status">Loading job details…</p>
       ) : detail.issues.length ? (
-        <ul>
-          {Array.from(new Set(detail.issues)).map((issue) => (
-            <li key={issue}>
-              <bdi>{issue}</bdi>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="help">
+            Skip reasons and failures (up to 200 entries). Retry scans the saved scope again,
+            reusing unchanged metadata. Change scan settings to include intentionally excluded
+            files. Cached thumbnails are reused.
+          </p>
+          <ul>
+            {Array.from(new Set(detail.issues)).map((issue) => (
+              <li key={issue}>
+                <bdi>{issue}</bdi>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : (
         <p>No file issues recorded.</p>
       )}

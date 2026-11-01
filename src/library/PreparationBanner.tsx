@@ -4,7 +4,13 @@ import { errorMessage, library } from '../ipc';
 import { ScanJobProgress } from './ScanJobProgress';
 import { thumbnailProgress } from './jobProgress';
 
-const activeStates = new Set(['queued', 'running', 'cancel_requested']);
+const activeStates = new Set([
+  'queued',
+  'running',
+  'cancel_requested',
+  'paused',
+  'pause_requested',
+]);
 
 export function PreparationBanner({
   status,
@@ -64,13 +70,21 @@ function PreparationStatus({
   const [error, setError] = useState('');
   const thumbnails = job?.kind === 'thumbnails' ? thumbnailProgress(job) : null;
   const stopping = job?.state === 'cancel_requested';
-  async function act() {
+  async function act(pause = false) {
     setBusy(true);
     setError('');
     try {
       await library(
         job
-          ? { kind: 'cancel', job_id: job.id }
+          ? {
+              kind:
+                job.state === 'paused'
+                  ? 'resume'
+                  : pause || job.kind === 'thumbnails'
+                    ? 'pause'
+                    : 'cancel',
+              job_id: job.id,
+            }
           : { kind: 'generate_thumbnails', root_id: root.id },
       );
       try {
@@ -92,25 +106,50 @@ function PreparationStatus({
     >
       <div className="preparation-row">
         <span className="preparation-summary">
-          {!job
-            ? 'Preview preparation paused'
-            : thumbnails
-              ? `${thumbnails.processed.toLocaleString()} previews processed`
-              : `${job.discovered.toLocaleString()} files scanned`}
+          {job?.state === 'paused'
+            ? 'Preparation paused'
+            : !job
+              ? 'Preview preparation paused'
+              : thumbnails
+                ? `${thumbnails.processed.toLocaleString()} previews processed`
+                : `${job.discovered.toLocaleString()} files scanned`}
         </span>
         {job ? <ScanJobProgress job={job} label={root.label} compact /> : <span />}
-        <button disabled={busy || stopping} onClick={() => void act()}>
-          {busy
-            ? 'Updating…'
-            : stopping
-              ? 'Stopping…'
-              : !job
-                ? 'Resume previews'
-                : job.kind === 'thumbnails'
-                  ? 'Pause previews'
-                  : 'Stop scan'}
-        </button>
+        <div className="preparation-actions">
+          {job && job.kind !== 'thumbnails' && job.state !== 'paused' && (
+            <button
+              disabled={busy || stopping || job.state === 'pause_requested'}
+              onClick={() => void act(true)}
+            >
+              {job.state === 'pause_requested' ? 'Pausing…' : 'Pause scan'}
+            </button>
+          )}
+          <button
+            disabled={busy || stopping || job?.state === 'pause_requested'}
+            onClick={() => void act()}
+          >
+            {busy
+              ? 'Updating…'
+              : job?.state === 'paused'
+                ? 'Resume job'
+                : job?.state === 'pause_requested'
+                  ? 'Pausing…'
+                  : stopping
+                    ? 'Stopping…'
+                    : !job
+                      ? 'Resume previews'
+                      : job.kind === 'thumbnails'
+                        ? 'Pause previews'
+                        : 'Stop scan'}
+          </button>
+        </div>
       </div>
+      {thumbnails && thumbnails.processed > 0 && thumbnails.percentage !== undefined && (
+        <p className="preparation-detail">
+          {thumbnails.percentage}% complete
+          {job?.message.includes('remaining') ? ` · ${job.message}` : ''}
+        </p>
+      )}
       {job && job.errors > 0 && (
         <p className="preparation-detail">
           {job.errors.toLocaleString()} {thumbnails ? 'previews unavailable' : 'scan issues'} ·

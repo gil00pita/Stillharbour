@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
@@ -500,6 +500,46 @@ mod tests {
         assert_eq!(Catalog::open(path).unwrap().summary().unwrap().id, id);
     }
 
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn schema_four_migration_retains_schema_three_before_adding_progress() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("progress.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        drop(catalog);
+        {
+            let db = Connection::open(&path).unwrap();
+            db.execute_batch("ALTER TABLE scans DROP COLUMN total_files; ALTER TABLE scans DROP COLUMN processed_files; PRAGMA user_version=3;").unwrap();
+        }
+        let catalog = Catalog::open(path).unwrap();
+        assert_eq!(catalog.summary().unwrap().id, id);
+        assert_eq!(catalog.summary().unwrap().schema, 4);
+        let retained = std::fs::read_dir(owned.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|p| {
+                p.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("pre-migration-v3-")
+            })
+            .unwrap();
+        let backup =
+            Connection::open_with_flags(retained, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        assert_eq!(summary(&backup).unwrap().schema, 3);
+        assert_eq!(summary(&backup).unwrap().id, id);
+        assert_eq!(
+            backup
+                .query_row(
+                    "SELECT count(*) FROM pragma_table_info('scans') WHERE name='total_files'",
+                    [],
+                    |r| r.get::<_, u32>(0)
+                )
+                .unwrap(),
+            0
+        );
+    }
     fn legacy_fixture(path: &Path) -> String {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
@@ -514,7 +554,7 @@ mod tests {
             .unwrap();
         drop(catalog);
         let db = Connection::open(path).unwrap();
-        db.execute_batch("DROP TABLE operation_journal; DROP TABLE organization_plans; DROP TABLE organization_templates; PRAGMA user_version=2;").unwrap();
+        db.execute_batch("ALTER TABLE scans DROP COLUMN total_files; ALTER TABLE scans DROP COLUMN processed_files; DROP TABLE operation_journal; DROP TABLE organization_plans; DROP TABLE organization_templates; PRAGMA user_version=2;").unwrap();
         id
     }
     #[test]
@@ -525,7 +565,7 @@ mod tests {
         let id = legacy_fixture(&path);
         let current = Catalog::open(path.clone()).unwrap();
         assert_eq!(current.summary().unwrap().id, id);
-        assert_eq!(current.summary().unwrap().schema, 3);
+        assert_eq!(current.summary().unwrap().schema, 4);
         assert_eq!(
             current
                 .call(|db| Ok(db.query_row(
@@ -653,7 +693,7 @@ mod tests {
             assert_eq!(summary(&db).unwrap().id, id);
             assert_eq!(
                 summary(&db).unwrap().schema,
-                if stage == "after_commit" { 3 } else { 2 }
+                if stage == "after_commit" { 4 } else { 2 }
             );
             assert_eq!(
                 db.query_row("SELECT state FROM job_events WHERE sequence=1", [], |r| {

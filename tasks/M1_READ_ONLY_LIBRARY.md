@@ -72,3 +72,7 @@ Owner HEIC viewer fix (2026-10-30): remove the original-format restriction causi
 ## Windows continuation — 2026-10-30
 
 Owner explicitly authorizes the native Windows scan backend alongside the identity alert and requested PR. ADR-0021 records the local NTFS adapter, captured volume binding, exact native names, held-handle enumeration/file-ID opens, worker-based baseline metadata/previews and cache-only publication. Follow the current M1 validation/development/log evidence. This does not waive broader filesystem/format/distribution/performance or original-mutation/recovery gates and does not advance M2 execution.
+
+## Bounded scan-control refinement — 2026-11-01
+
+Owner requests skip reasons/retry, pause and filename-first progress. Implemented scope and acceptance extensions are recorded in [ADR-0024](../docs/decisions/ADR-0024-scan-control-progress.md), the specification and initial-preparation contract. Validate generated-source inventory/retry, in-place pause/resume/cancel/restart, schema-4 retained snapshots, frontend states and native platform controls. This refinement does not complete or bypass any M2/M3, original-operation, format, native packaging or preservation gate. Actual outcomes belong in the implementation log.

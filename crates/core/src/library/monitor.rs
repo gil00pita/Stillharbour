@@ -197,7 +197,11 @@ fn run(owner: Weak<Library>, state: Monitor, managed: PathBuf) {
                         && !job.id.starts_with("thumbnail:")
                         && !matches!(
                             job.state.as_str(),
-                            "queued" | "running" | "cancel_requested"
+                            "queued"
+                                | "running"
+                                | "cancel_requested"
+                                | "paused"
+                                | "pause_requested"
                         )
                 })
                 .map(|job| job.id.clone());

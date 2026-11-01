@@ -2,6 +2,12 @@
 
 Owner requests: 2026-10-30/31. New photos should enter the collection after a thumbnail has been generated, with a full-width top progress banner showing actual scanned/processed counts. This is a bounded M1 refinement; all original-file, platform and recovery gates remain unchanged. [ADR-0016](decisions/ADR-0016-initial-preview-preparation.md) records the durable job and visibility decision.
 
+## Scan-control refinement — 2026-11-01
+
+The filename/attribute-only pass now precedes header/metadata work, yielding an advisory scan total. The later authoritative scan still revalidates identities and reconciles presence. Unknown/unreadable or changed inventory never proves absence. Active scan progress uses separately recorded processedFiles/totalFiles and stays below 100 until completion; preview generation uses its own catalog media inventory.
+
+Jobs provides skip reasons and failures (first 200 local display entries), Pause/Resume and Retry. The banner adds Pause scan beside Stop scan and resumes a paused job in place; Pause previews now uses the same cooperative pause instead of canceling and requeuing. An in-flight worker finishes its current unit before acknowledging pause. A paused worker retains its bounded queue/handles, and cancellation/shutdown/removal wakes it. Restart marks it interrupted; Retry uses saved filters and valid cached results. Intentional exclusions still require changed scan settings. Thumbnail percentage is visible, with a remaining-time estimate after three observations that excludes paused boundary time. Schema 4 retains nullable scan counters with the existing migration snapshot workflow. Older evidence below records the earlier cancellation-based pause contract, which this revision supersedes.
+
 ## Behavior
 
 On the first scan of a saved photo folder, the scanner records metadata without rewriting originals. Photos/Tags withhold pending/placeholder image entries during initial preparation; they appear progressively when their tiny previews are published. Unsupported/failed previews remain explicit outcomes with an unavailable reason. Collection counts, timeline buckets, paging, viewer seeks and frozen selection use the same initial-ready scope. Ordinary catalog queries and Folders metadata remain available, and the Text list still requests no images. Existing completed libraries, positive caches, cache clearing and root identities keep their previous behavior.
