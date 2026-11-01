@@ -40,6 +40,13 @@ struct Foundation {
         )>,
     >,
     #[cfg(feature = "desktop-test")]
+    import_skip_fixture: Mutex<
+        Option<(
+            stillharbour_core::library_fixture::LibraryFixture,
+            Option<String>,
+        )>,
+    >,
+    #[cfg(feature = "desktop-test")]
     export_fixture: Mutex<Option<tempfile::TempDir>>,
     _catalog: Arc<Catalog>,
     preferences: Arc<stillharbour_core::preferences::PreferencesStore>,
@@ -224,6 +231,64 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationImportSavedPlans { plan_id } => {
+                LibraryResponse::OrganizationImportSavedPlans(
+                    library.organization_import_saved_plans(plan_id)?,
+                )
+            }
+            LibraryRequest::OrganizationImportPlanRelease {
+                plan_id,
+                import_plan_id,
+            } => {
+                library.organization_import_plan_release(plan_id, import_plan_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationImportHistory {
+                plan_id,
+                manifest_id,
+            } => LibraryResponse::OrganizationImportHistory(Box::new(
+                library.organization_import_history(plan_id, manifest_id)?,
+            )),
+            LibraryRequest::OrganizationImportSkipApprove { input } => {
+                LibraryResponse::OrganizationImportSkipApproval(
+                    library.organization_import_skip_approve(input)?,
+                )
+            }
+            LibraryRequest::OrganizationImportSkipStart { input } => {
+                LibraryResponse::OrganizationImportSession(Box::new(
+                    library.organization_import_skip_start(input)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportSession {
+                plan_id,
+                session_id,
+            } => LibraryResponse::OrganizationImportSession(Box::new(
+                library.organization_import_session(plan_id, session_id)?,
+            )),
+            LibraryRequest::OrganizationImportSessionCancel {
+                plan_id,
+                session_id,
+            } => LibraryResponse::OrganizationImportSession(Box::new(
+                library.organization_import_session_cancel(plan_id, session_id)?,
+            )),
+            LibraryRequest::OrganizationImportSessionDiscard {
+                plan_id,
+                session_id,
+            } => {
+                library.organization_import_session_discard(plan_id, session_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationImportPlanCreate { input } => {
+                LibraryResponse::OrganizationImportPlan(Box::new(
+                    library.organization_import_plan_create(input)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportPlanOpen {
+                plan_id,
+                import_plan_id,
+            } => LibraryResponse::OrganizationImportPlan(Box::new(
+                library.organization_import_plan_open(plan_id, import_plan_id)?,
+            )),
             LibraryRequest::OrganizationImportComparisonStart { input } => {
                 LibraryResponse::OrganizationImportComparisonJob(Box::new(
                     library.organization_import_comparison_start(input)?,
@@ -1022,7 +1087,12 @@ async fn test_performance(
             state.library.start_monitoring()?;
             Ok(serde_json::json!({"started":true}))
         }
-        "import_comparison_fixture" | "import_comparison_verify" | "import_comparison_finish" => {
+        "import_comparison_fixture"
+        | "import_comparison_verify"
+        | "import_comparison_finish"
+        | "import_skip_fixture"
+        | "import_skip_verify"
+        | "import_skip_finish" => {
             if rows.is_some() {
                 return Err(AppError::new(
                     ErrorCode::InvalidInput,
@@ -1039,17 +1109,31 @@ async fn test_performance(
                 )
             })?;
             let source_count = source.verify_unchanged()?;
-            let mut comparison = state.comparison_fixture.lock().map_err(|_| {
+            let skip_fixture = action.starts_with("import_skip_");
+            let mut comparison = if skip_fixture {
+                &state.import_skip_fixture
+            } else {
+                &state.comparison_fixture
+            }
+            .lock()
+            .map_err(|_| {
                 AppError::new(ErrorCode::WorkerFailed, "Comparison fixture unavailable.")
             })?;
-            if action == "import_comparison_fixture" {
+            if action == "import_comparison_fixture" || action == "import_skip_fixture" {
                 if comparison.is_some() {
                     return Err(AppError::new(
                         ErrorCode::Conflict,
                         "Comparison fixture already exists.",
                     ));
                 }
-                *comparison = Some((source.renamed_comparison_copy()?, None));
+                *comparison = Some((
+                    if skip_fixture {
+                        source.coherent_import_copy()?
+                    } else {
+                        source.renamed_comparison_copy()?
+                    },
+                    None,
+                ));
                 let (fixture, root_id) = comparison.as_mut().ok_or_else(|| {
                     AppError::new(ErrorCode::WorkerFailed, "Comparison fixture unavailable.")
                 })?;
@@ -1061,7 +1145,11 @@ async fn test_performance(
                 let job = state.library.register_verified(
                     path,
                     (identity, volume),
-                    "Existing import comparison fixture".into(),
+                    if skip_fixture {
+                        "Complete existing import bundle fixture".into()
+                    } else {
+                        "Existing import comparison fixture".into()
+                    },
                     stillharbour_core::library::model::RootMode::Referenced,
                     stillharbour_core::library::model::ScanFilter::default(),
                 )?;
@@ -1077,7 +1165,7 @@ async fn test_performance(
                 )
             })?;
             let compared = fixture.verify_unchanged()?;
-            if action == "import_comparison_finish" {
+            if action == "import_comparison_finish" || action == "import_skip_finish" {
                 let root = root_id
                     .as_ref()
                     .ok_or_else(|| {
@@ -1437,6 +1525,8 @@ fn main() {
                 destination_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 comparison_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                import_skip_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 export_fixture: Mutex::new(None),
                 _catalog: catalog,

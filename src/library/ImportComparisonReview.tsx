@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CopyManifest, ImportComparisonJob, LibraryRoot } from '../bindings';
 import { errorMessage, library, libraryData } from '../ipc';
 import { CopyIoControls } from './CopyJobProgress';
+import { ImportPlanReview } from './ImportPlanReview';
 
 const active = (job: ImportComparisonJob) =>
   ['queued', 'running', 'cancel_requested'].includes(job.state);
@@ -413,6 +414,11 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
           )}
         </>
       )}
+      <ImportPlanReview
+        key={job?.id ?? 'history'}
+        manifest={manifest}
+        comparison={job ?? undefined}
+      />
     </section>
   );
 }

@@ -1,6 +1,6 @@
 # ADR-0046 — Whole-bundle import observations
 
-Date: 2026-10-31. Status: experimental M2 planning; full checks and Windows native validation pass; macOS CI pending.
+Date: 2026-10-31. Status: experimental M2 planning; full checks and Windows/macOS native CI pass.
 
 ## Decision
 
@@ -17,3 +17,5 @@ The UI validates complete source coverage, connected bundle membership, distinct
 Generated tests cover renamed RAW/JPEG/compound sidecars, transitive shared companions, different folders/roots/stems, missing companions, non-media primary matches, ambiguous/reused keepers, incomplete coverage, alternate source naming and invalid native Unicode. An actual catalog/native comparison checks coherent renamed photo/sidecar groups and unchanged source/candidate/journal evidence. Component cases cover whole-bundle presentation and rejection of unverified keeper evidence. Full/native outcomes follow in the implementation log.
 
 This is a planning prerequisite. Actual import skipping, mixed copy/skip execution and the remaining M2 gate still precede M3. Real-library original mutation and duplicate quarantine remain disabled.
+
+Both target-platform CI jobs pass in [run 41252874028](https://github.com/gil00pita/Stillharbour/actions/runs/41252874028). This validates this checkpoint only; remaining milestone gates are unchanged.

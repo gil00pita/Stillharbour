@@ -15,6 +15,8 @@ pub(super) enum Action {
     CopyFiles,
     #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
     ResumeFiles,
+    #[cfg(any(test, feature = "copy-workflow"))]
+    RecordImportSkip,
 }
 #[derive(Clone, PartialEq, Eq)]
 pub(super) struct Review {

@@ -178,6 +178,270 @@ async function compareGeneratedImportScope(manifest, evidence, outputAudit) {
     );
   }
 }
+async function verifyAllExistingImport(sourceRootId, destination, evidence, outputAudit) {
+  const fixture = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'import_skip_fixture', rows: null }),
+  );
+  try {
+    let scanned;
+    await browser.waitUntil(
+      async () => {
+        scanned = (await native({ kind: 'status' })).data.jobs.find(
+          (job) => job.id === fixture.job.id,
+        );
+        return scanned && !['queued', 'running', 'cancel_requested'].includes(scanned.state);
+      },
+      { timeout: 60000 },
+    );
+    assert.equal(scanned.state, 'completed', JSON.stringify(scanned));
+    let preparation;
+    await browser.waitUntil(
+      async () => {
+        preparation = (await native({ kind: 'status' })).data.jobs.find(
+          (job) => job.id === `thumbnail:initial:${fixture.job.rootId}`,
+        );
+        return (
+          preparation && ['completed', 'partial', 'failed', 'canceled'].includes(preparation.state)
+        );
+      },
+      { timeout: 60000 },
+    );
+    assert.equal(preparation.state, 'completed', JSON.stringify(preparation));
+    const packed = (
+      await native({
+        kind: 'query',
+        query: {
+          rootId: sourceRootId,
+          folder: '',
+          name: 'Generated-00.jpg',
+          fromDate: '',
+          throughDate: '',
+          minBytes: '',
+          maxBytes: '',
+          extension: '',
+          favoritesOnly: false,
+          tag: '',
+          sort: 'capture',
+          includeMissing: false,
+        },
+        cursor: null,
+        limit: 24,
+      })
+    ).data;
+    const primary = packed.rows.find(
+      (row) => row[3].replaceAll('\\', '/') === 'Coast/Generated-00.jpg',
+    );
+    assert.ok(primary, 'owned generated photo is actually indexed');
+    const template = {
+      pattern: 'Imports/{original_stem}.{ext}',
+      event: '',
+      missingDate: 'undated',
+    };
+    const preview = (
+      await native({ kind: 'organization_preview', asset_ids: [primary[0]], template })
+    ).data;
+    const draft = (
+      await native({
+        kind: 'organization_plan_create',
+        selection_id: destination.id,
+        draft: {
+          assetIds: [primary[0]],
+          template,
+          previewFingerprint: preview.fingerprint,
+          templateReference: null,
+        },
+      })
+    ).data.plan;
+    async function openDraft() {
+      await $('button=Close saved plans').click();
+      await $('button=Saved plans').click();
+      const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
+      const index = plans.findIndex((plan) => plan.id === draft.id);
+      assert.ok(index >= 0);
+      await browser.waitUntil(
+        async () => (await $$('.organization-preview li button')).length === plans.length,
+      );
+      await (await $$('.organization-preview li button'))[index].click();
+    }
+    await openDraft();
+    const opened = (await native({ kind: 'organization_plan', plan_id: draft.id })).data;
+    await writeFile(
+      `${evidence}/import-skip-preflight-${process.platform}.json`,
+      JSON.stringify({ scan: scanned, preparation, draft, opened }),
+    );
+    assert.equal(
+      opened.stale,
+      false,
+      'Complete native preparation must settle before the saved import draft is reviewed.',
+    );
+    await $('button=Review all companion filenames').scrollIntoView();
+    await $('button=Review all companion filenames').click();
+    await $('button=Read all filenames').waitForDisplayed();
+    await $('button=Read all filenames').click();
+    await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+    await $('label*=I reviewed all filenames').scrollIntoView();
+    await $('label*=I reviewed all filenames').click();
+    await $('button=Save companion review').click();
+    await $('section[aria-label="Retained companion decision"] [role="status"]').waitForDisplayed();
+    await $('button=Close companion inventory').click();
+    async function compile() {
+      await $('button=Compile copy review').scrollIntoView();
+      await $('button=Compile copy review').click();
+      await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+    }
+    await compile();
+    const decisions = (
+      await native({ kind: 'organization_bundle_reviews', plan_id: draft.id, asset_id: primary[0] })
+    ).data;
+    const manifest = (
+      await native({
+        kind: 'organization_copy_manifest',
+        input: { planId: draft.id, bundleConfirmationIds: [decisions[0].id] },
+      })
+    ).data;
+    assert.equal(manifest.files.length, 2);
+    await $('button=Choose indexed comparison scope').scrollIntoView();
+    await $('button=Choose indexed comparison scope').click();
+    const label = await $('label*=Complete existing import bundle fixture');
+    await label.scrollIntoView();
+    await label.$('input').click();
+    await $('button=Start read-only comparison').scrollIntoView();
+    await $('button=Start read-only comparison').click();
+    const choice = await $('select[aria-label^="Import choice for"]');
+    await choice.waitForExist({ timeout: 30000 });
+    const options = await choice.$$('option');
+    const values = [];
+    for (let index = 0; index < options.length; index++)
+      values.push(await options[index].getAttribute('value'));
+    const group = values.find((value) => /^[a-f0-9]{64}$/.test(value));
+    assert.ok(group);
+    await choice.scrollIntoView();
+    await changeSizeUnit(await choice.getAttribute('aria-label'), group);
+    await $('button=Save import decisions').waitForEnabled();
+    await $('button=Save import decisions').click();
+    const section = await $('section[aria-label="Import decisions"]');
+    await browser.waitUntil(async () =>
+      (await section.getText()).includes('Saved import plan: 0 files to copy · 2 existing files'),
+    );
+    async function execute() {
+      const ack = await $('label*=I understand sources remain');
+      await ack.scrollIntoView();
+      await ack.$('input').click();
+      assert.equal((await $$('button=Verify and record skipped import')).length, 0);
+      await $('button=Approve existing-bundle import').click();
+      const start = await $('button=Verify and record skipped import');
+      await start.waitForDisplayed();
+      await start.click();
+      await browser.waitUntil(
+        async () =>
+          (await $('section[aria-label="Import decisions"]').getText()).includes(
+            'Import recorded: 2 existing files freshly compared',
+          ),
+        { timeout: 30000 },
+      );
+    }
+    await execute();
+    const first = (
+      await native({
+        kind: 'organization_import_history',
+        plan_id: draft.id,
+        manifest_id: manifest.id,
+      })
+    ).data;
+    assert.equal(first.plans.length, 1);
+    assert.equal(first.sessions.length, 1);
+    const receipt = first.sessions[0];
+    assert.equal(receipt.state, 'completed');
+    assert.equal(receipt.verifiedFiles, 2);
+    assert.equal(receipt.outputCreated, false);
+    assert.equal(receipt.sourcesRetained, true);
+    const expectedRead = 2n * manifest.files.reduce((sum, file) => sum + BigInt(file.bytes), 0n);
+    assert.equal(BigInt(receipt.bytesRead), expectedRead);
+    await writeFile(
+      `${evidence}/import-skip-first-${process.platform}.json`,
+      JSON.stringify({ manifest, history: first, expectedRead: expectedRead.toString() }),
+    );
+    await native({
+      kind: 'organization_import_session_discard',
+      plan_id: draft.id,
+      session_id: receipt.id,
+    });
+    await openDraft();
+    await $('button=Check retained import history').scrollIntoView();
+    await $('button=Check retained import history').click();
+    const retainedImport = await $('button*=Review retained import: 0 copy / 2 existing');
+    await retainedImport.waitForExist();
+    await retainedImport.scrollIntoView();
+    await retainedImport.click();
+    await $('button=Review saved import decisions').waitForEnabled();
+    await $('button=Review saved import decisions').scrollIntoView();
+    await $('button=Review saved import decisions').click();
+    const history = await $('button*=Review import attempt: completed');
+    await history.waitForExist();
+    await history.scrollIntoView();
+    await history.click();
+    await browser.waitUntil(async () =>
+      (await $('section[aria-label="Import decisions"]').getText()).includes(
+        'Import recorded: 2 existing files freshly compared',
+      ),
+    );
+    assert.equal(await $('label*=I understand sources remain').$('input').isSelected(), false);
+    assert.equal((await $$('button=Verify and record skipped import')).length, 0);
+    const restored = (
+      await native({
+        kind: 'organization_import_history',
+        plan_id: draft.id,
+        manifest_id: manifest.id,
+      })
+    ).data;
+    assert.equal(restored.sessions.length, 1);
+    await execute();
+    const retried = (
+      await native({
+        kind: 'organization_import_history',
+        plan_id: draft.id,
+        manifest_id: manifest.id,
+      })
+    ).data;
+    assert.equal(retried.sessions.length, 2);
+    assert.equal(BigInt(retried.sessions[0].bytesRead), expectedRead);
+    assert.notEqual(retried.sessions[0].id, receipt.id);
+    const verification = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'import_skip_verify', rows: null }),
+    );
+    assert.equal(verification.sourceVerifiedEntries, fixture.sourceVerifiedEntries);
+    assert.equal(verification.comparisonVerifiedEntries, 2);
+    const after = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+    );
+    assert.deepEqual(after, outputAudit);
+    await writeFile(
+      `${evidence}/import-skip-execution-${process.platform}.json`,
+      JSON.stringify({
+        scan: scanned,
+        manifest,
+        first,
+        restored,
+        retried,
+        expectedRead: expectedRead.toString(),
+        preservation: verification,
+        unchangedOutputAudit: after,
+      }),
+    );
+    await $('p*=Import recorded: 2 existing files freshly compared').scrollIntoView();
+    await browser.saveScreenshot(`.context/screenshots/m2-import-skip-${process.platform}.png`);
+  } finally {
+    const finished = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'import_skip_finish', rows: null }),
+    );
+    assert.equal(finished.sourceFilesRemoved, false);
+    if (process.platform === 'win32') assert.equal(finished.catalogRegistrationRetained, true);
+    await writeFile(
+      `${evidence}/import-skip-root-state-${process.platform}.json`,
+      JSON.stringify(finished),
+    );
+  }
+}
 async function reviewEquivalentDraft(original, destination, evidence, audit) {
   // Recreate the user's selected mapping through real ID-only IPC. Draft UUIDs
   // and approvals differ; output effect identity must remain the same.
@@ -275,6 +539,7 @@ async function reviewEquivalentDraft(original, destination, evidence, audit) {
   );
   await browser.saveScreenshot(`.context/screenshots/m2-equivalent-draft-${process.platform}.png`);
   await compareGeneratedImportScope(compiled, evidence, audit);
+  await verifyAllExistingImport(compiled.files[0].rootId, destination, evidence, audit);
   await $('button=Close saved plans').click();
 }
 async function reviewRemovalStopsJobs(receipt) {

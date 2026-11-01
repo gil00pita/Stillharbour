@@ -527,6 +527,42 @@ pub enum LibraryRequest {
     OrganizationImportComparisonStart {
         input: crate::operations::ImportComparisonInput,
     },
+    OrganizationImportPlanCreate {
+        input: crate::operations::ImportPlanInput,
+    },
+    OrganizationImportHistory {
+        plan_id: String,
+        manifest_id: String,
+    },
+    OrganizationImportSavedPlans {
+        plan_id: String,
+    },
+    OrganizationImportSkipApprove {
+        input: crate::operations::ImportSkipApprovalInput,
+    },
+    OrganizationImportSkipStart {
+        input: crate::operations::ImportSkipStartInput,
+    },
+    OrganizationImportSession {
+        plan_id: String,
+        session_id: String,
+    },
+    OrganizationImportSessionCancel {
+        plan_id: String,
+        session_id: String,
+    },
+    OrganizationImportSessionDiscard {
+        plan_id: String,
+        session_id: String,
+    },
+    OrganizationImportPlanOpen {
+        plan_id: String,
+        import_plan_id: String,
+    },
+    OrganizationImportPlanRelease {
+        plan_id: String,
+        import_plan_id: String,
+    },
     OrganizationImportComparisonJob {
         job_id: String,
     },
@@ -717,6 +753,11 @@ pub enum LibraryRequest {
 pub enum LibraryResponse {
     OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),
     OrganizationImportComparisonJob(Box<crate::operations::ImportComparisonJob>),
+    OrganizationImportPlan(Box<crate::operations::ImportPlan>),
+    OrganizationImportSkipApproval(crate::operations::ImportSkipApproval),
+    OrganizationImportSession(Box<crate::operations::ImportSession>),
+    OrganizationImportHistory(Box<crate::operations::ImportHistory>),
+    OrganizationImportSavedPlans(Vec<crate::operations::ImportPlanSummary>),
     OrganizationCopyEffectMatch(crate::operations::CopyEffectMatch),
     OrganizationCopyReview(Box<crate::operations::CopyActionReview>),
     OrganizationCopyPreparationReopened(Box<crate::operations::CopyPreparationReopened>),

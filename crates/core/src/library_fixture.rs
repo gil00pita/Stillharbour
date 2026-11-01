@@ -10,6 +10,46 @@ pub struct LibraryFixture {
     baseline: BTreeMap<PathBuf, String>,
 }
 impl LibraryFixture {
+    /// Only the constructor-owned valid JPEG and its companion; unlike the
+    /// malformed-format coverage fixture, this supports a complete real scan.
+    pub fn coherent_import_copy(&self) -> Result<Self> {
+        use std::io::Write;
+        self.verify_unchanged()?;
+        let directory = tempfile::Builder::new()
+            .prefix("stillharbour-complete-import-")
+            .tempdir()?;
+        for (source, target) in [
+            ("Coast/Generated-00.jpg", "Renamed.jpg"),
+            ("Coast/Generated-00.xmp", "Renamed.xmp"),
+        ] {
+            let relative = Path::new(source);
+            if !self.baseline.contains_key(relative) {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "The expected generated import member is missing.",
+                ));
+            }
+            let path = self.path().join(relative);
+            let metadata = std::fs::symlink_metadata(&path)?;
+            if !metadata.is_file() || metadata.len() > 16 * 1024 * 1024 {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Unexpected generated import member type or size.",
+                ));
+            }
+            let mut output = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(directory.path().join(target))?;
+            output.write_all(&std::fs::read(path)?)?;
+        }
+        self.verify_unchanged()?;
+        let baseline = manifest(directory.path())?;
+        Ok(Self {
+            directory,
+            baseline,
+        })
+    }
     /// Constructor-only copies of this generated baseline, with different
     /// filenames. No renderer-supplied root, filename or content is accepted.
     pub fn renamed_comparison_copy(&self) -> Result<Self> {

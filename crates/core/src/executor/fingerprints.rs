@@ -12,7 +12,8 @@ use std::{
 };
 
 pub(super) const SAMPLE_POLICY: &str = "import-three-window-blake3-v1";
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Entry {
     pub id: String,
     pub root_id: String,

@@ -1498,6 +1498,500 @@ mod tests {
         );
     }
     #[test]
+    fn import_decisions_retain_whole_bundle_native_proofs_and_reuse_exact_selection() {
+        use crate::operations::*;
+        let fixture = Fixture::with_nested(true).unwrap();
+        let (root, path, _) = comparison_root(
+            &fixture,
+            &[
+                ("Renamed.JPG", generated_photo_bytes().unwrap()),
+                ("Renamed.xmp", COMPANION_BYTES.to_vec()),
+            ],
+        );
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let job = workflow
+            .start_import_comparison(
+                &fixture.library,
+                ImportComparisonInput {
+                    plan_id: fixture.owner.clone(),
+                    manifest_id: fixture.manifest.clone(),
+                    scope_root_ids: vec![root],
+                },
+            )
+            .unwrap();
+        let job = wait_comparison(&workflow, job.id);
+        let bundle = &job.report.as_ref().unwrap().bundles[0];
+        let input = ImportPlanInput {
+            comparison_job_id: job.id.clone(),
+            choices: vec![ImportBundleChoice {
+                file_id: bundle.file_ids[0].clone(),
+                existing_group_id: Some(bundle.existing_groups[0].id.clone()),
+            }],
+        };
+        let retained = workflow
+            .create_import_plan(&fixture.library, input.clone())
+            .unwrap();
+        assert_eq!(retained.skip_files.len(), 2);
+        assert!(retained.copy_file_ids.is_empty());
+        assert!(retained.sources_retained);
+        assert!(retained.execution_available);
+        let repeated = workflow
+            .create_import_plan(&fixture.library, input.clone())
+            .unwrap();
+        assert_eq!(retained.id, repeated.id);
+        assert_eq!(retained.digest, repeated.digest);
+        let mut copy = input.clone();
+        copy.choices[0].existing_group_id = None;
+        let copy = workflow.create_import_plan(&fixture.library, copy).unwrap();
+        assert_eq!(copy.copy_file_ids.len(), 2);
+        assert!(copy.skip_files.is_empty());
+        assert_ne!(copy.id, retained.id);
+        for choices in [
+            vec![],
+            vec![input.choices[0].clone(), input.choices[0].clone()],
+            vec![ImportBundleChoice {
+                file_id: "foreign".into(),
+                existing_group_id: input.choices[0].existing_group_id.clone(),
+            }],
+            vec![ImportBundleChoice {
+                file_id: input.choices[0].file_id.clone(),
+                existing_group_id: Some("f".repeat(64)),
+            }],
+        ] {
+            assert!(
+                workflow
+                    .create_import_plan(
+                        &fixture.library,
+                        ImportPlanInput {
+                            comparison_job_id: job.id.clone(),
+                            choices
+                        }
+                    )
+                    .is_err()
+            );
+        }
+        workflow.discard_import_comparison(job.id).unwrap();
+        drop(workflow);
+        let reopened = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let opened = reopened
+            .open_import_plan(fixture.owner.clone(), retained.id.clone())
+            .unwrap();
+        let summaries = reopened
+            .import_plan_summaries(fixture.owner.clone(), None)
+            .unwrap();
+        assert_eq!(summaries.len(), 2);
+        assert!(
+            summaries
+                .iter()
+                .all(|summary| summary.manifest_id == fixture.manifest)
+        );
+        assert_eq!(opened.digest, retained.digest);
+        assert!(opened.execution_available);
+        assert!(
+            reopened
+                .open_import_plan(uuid::Uuid::new_v4().to_string(), retained.id)
+                .is_err()
+        );
+        assert!(fixture.preserved().unwrap());
+        assert_eq!(
+            std::fs::read(path.join("Renamed.xmp")).unwrap(),
+            COMPANION_BYTES
+        );
+        let owner = fixture.owner.clone();
+        let count:i64=fixture.library.catalog.call(move|db|Ok(db.query_row("SELECT count(*) FROM operation_journal WHERE plan_id=? AND phase='import_selection_plan_v1'",[owner],|row|row.get(0))?)).unwrap();
+        assert_eq!(count, 2);
+    }
+    #[test]
+    fn import_decision_save_rejects_changed_source_or_keeper_without_writing_a_plan() {
+        use crate::operations::*;
+        for source_changed in [false, true] {
+            let fixture = Fixture::with_nested(true).unwrap();
+            let (root, path, _) = comparison_root(
+                &fixture,
+                &[
+                    ("Renamed.JPG", generated_photo_bytes().unwrap()),
+                    ("Renamed.xmp", COMPANION_BYTES.to_vec()),
+                ],
+            );
+            let workflow = crate::executor::CopyWorkflow::new(
+                fixture.library.catalog.clone(),
+                fixture._run.path().join("data"),
+            )
+            .unwrap();
+            let job = workflow
+                .start_import_comparison(
+                    &fixture.library,
+                    ImportComparisonInput {
+                        plan_id: fixture.owner.clone(),
+                        manifest_id: fixture.manifest.clone(),
+                        scope_root_ids: vec![root],
+                    },
+                )
+                .unwrap();
+            let job = wait_comparison(&workflow, job.id);
+            let bundle = &job.report.as_ref().unwrap().bundles[0];
+            let input = ImportPlanInput {
+                comparison_job_id: job.id,
+                choices: vec![ImportBundleChoice {
+                    file_id: bundle.file_ids[0].clone(),
+                    existing_group_id: Some(bundle.existing_groups[0].id.clone()),
+                }],
+            };
+            let changed = if source_changed {
+                fixture.source.join("source-folder/Photo.xmp")
+            } else {
+                path.join("Renamed.xmp")
+            };
+            let mut bytes = COMPANION_BYTES.to_vec();
+            bytes[0] ^= 1;
+            std::fs::write(&changed, &bytes).unwrap();
+            assert!(
+                workflow
+                    .create_import_plan(&fixture.library, input)
+                    .is_err()
+            );
+            assert_eq!(std::fs::read(&changed).unwrap(), bytes);
+            let owner = fixture.owner.clone();
+            let count:i64=fixture.library.catalog.call(move|db|Ok(db.query_row("SELECT count(*) FROM operation_journal WHERE plan_id=? AND phase='import_selection_plan_v1'",[owner],|row|row.get(0))?)).unwrap();
+            assert_eq!(count, 0);
+        }
+    }
+    fn import_skip_plan(
+        fixture: &Fixture,
+        workflow: &Arc<crate::executor::CopyWorkflow>,
+        root: String,
+    ) -> crate::operations::ImportPlan {
+        use crate::operations::*;
+        let job = workflow
+            .start_import_comparison(
+                &fixture.library,
+                ImportComparisonInput {
+                    plan_id: fixture.owner.clone(),
+                    manifest_id: fixture.manifest.clone(),
+                    scope_root_ids: vec![root],
+                },
+            )
+            .unwrap();
+        let job = wait_comparison(workflow, job.id);
+        let report = job.report.as_ref().unwrap();
+        assert!(report.all_scope_available);
+        workflow
+            .create_import_plan(
+                &fixture.library,
+                ImportPlanInput {
+                    comparison_job_id: job.id,
+                    choices: report
+                        .bundles
+                        .iter()
+                        .map(|bundle| ImportBundleChoice {
+                            file_id: bundle.file_ids[0].clone(),
+                            existing_group_id: Some(bundle.existing_groups[0].id.clone()),
+                        })
+                        .collect(),
+                },
+            )
+            .unwrap()
+    }
+    fn import_approval(
+        fixture: &Fixture,
+        workflow: &crate::executor::CopyWorkflow,
+        plan: &crate::operations::ImportPlan,
+    ) -> crate::operations::ImportSkipStartInput {
+        use crate::operations::*;
+        let approval = workflow
+            .approve_import_skip(
+                &fixture.library,
+                ImportSkipApprovalInput {
+                    plan_id: fixture.owner.clone(),
+                    import_plan_id: plan.id.clone(),
+                    digest: plan.digest.clone(),
+                    sources_retained_acknowledged: true,
+                },
+            )
+            .unwrap();
+        ImportSkipStartInput {
+            plan_id: fixture.owner.clone(),
+            import_plan_id: plan.id.clone(),
+            digest: plan.digest.clone(),
+            approval_id: approval.id,
+        }
+    }
+    fn wait_import(
+        fixture: &Fixture,
+        workflow: &crate::executor::CopyWorkflow,
+        id: String,
+    ) -> crate::operations::ImportSession {
+        use crate::operations::ImportSessionState::*;
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        loop {
+            let job = workflow
+                .import_session(fixture.owner.clone(), id.clone())
+                .unwrap();
+            if !matches!(job.state, Queued | Running | CancelRequested) {
+                return job;
+            }
+            assert!(
+                std::time::Instant::now() < until,
+                "import verification did not settle"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+    #[test]
+    fn import_skip_freshly_verifies_all_members_records_history_and_creates_no_output() {
+        use crate::operations::*;
+        let fixture = Fixture::with_nested(true).unwrap();
+        let (root, path, _) = comparison_root(
+            &fixture,
+            &[
+                ("Renamed.JPG", generated_photo_bytes().unwrap()),
+                ("Renamed.xmp", COMPANION_BYTES.to_vec()),
+            ],
+        );
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let plan = import_skip_plan(&fixture, &workflow, root);
+        let revoked = import_approval(&fixture, &workflow, &plan);
+        workflow
+            .release_import_plan(fixture.owner.clone(), plan.id.clone())
+            .unwrap();
+        assert!(
+            workflow
+                .start_import_skip(&fixture.library, revoked)
+                .is_err()
+        );
+        let replaced = import_approval(&fixture, &workflow, &plan);
+        let _new_approval = import_approval(&fixture, &workflow, &plan);
+        assert!(
+            workflow
+                .start_import_skip(&fixture.library, replaced)
+                .is_err()
+        );
+        assert!(
+            workflow
+                .start_import_skip(
+                    &fixture.library,
+                    ImportSkipStartInput {
+                        plan_id: fixture.owner.clone(),
+                        import_plan_id: plan.id.clone(),
+                        digest: plan.digest.clone(),
+                        approval_id: uuid::Uuid::new_v4().to_string()
+                    }
+                )
+                .is_err()
+        );
+        assert!(
+            workflow
+                .approve_import_skip(
+                    &fixture.library,
+                    ImportSkipApprovalInput {
+                        plan_id: fixture.owner.clone(),
+                        import_plan_id: plan.id.clone(),
+                        digest: plan.digest.clone(),
+                        sources_retained_acknowledged: false
+                    }
+                )
+                .is_err()
+        );
+        let mut verified = Vec::new();
+        for _ in 0..2 {
+            let input = import_approval(&fixture, &workflow, &plan);
+            let job = workflow
+                .start_import_skip(&fixture.library, input.clone())
+                .unwrap();
+            let job = wait_import(&fixture, &workflow, job.id);
+            assert_eq!(job.state, ImportSessionState::Completed, "{:?}", job.error);
+            assert_eq!(job.verified_files, 2);
+            assert!(!job.output_created);
+            assert!(job.sources_retained);
+            assert_eq!(
+                job.bytes_read.parse::<u128>().unwrap(),
+                2 * (generated_photo_bytes().unwrap().len() + COMPANION_BYTES.len()) as u128
+            );
+            assert!(workflow.start_import_skip(&fixture.library, input).is_err());
+            assert!(fixture.preserved().unwrap());
+            assert_eq!(
+                std::fs::read_dir(fixture.destination.join("organized"))
+                    .unwrap()
+                    .count(),
+                0
+            );
+            verified.push(job);
+        }
+        assert_ne!(verified[0].id, verified[1].id);
+        let old_ticket = import_approval(&fixture, &workflow, &plan);
+        drop(workflow);
+        std::fs::rename(&path, path.with_extension("offline")).unwrap();
+        let fresh = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let history = fresh
+            .import_session(fixture.owner.clone(), verified[0].id.clone())
+            .unwrap();
+        assert_eq!(history.state, ImportSessionState::Completed);
+        assert!(
+            fresh
+                .start_import_skip(&fixture.library, old_ticket)
+                .is_err()
+        );
+        assert!(
+            fresh
+                .approve_import_skip(
+                    &fixture.library,
+                    ImportSkipApprovalInput {
+                        plan_id: fixture.owner.clone(),
+                        import_plan_id: plan.id,
+                        digest: plan.digest,
+                        sources_retained_acknowledged: true
+                    }
+                )
+                .is_err()
+        );
+    }
+    #[test]
+    fn import_skip_wrong_digest_consumes_ticket_and_changed_keeper_never_records_completion() {
+        use crate::operations::*;
+        let fixture = Fixture::with_nested(true).unwrap();
+        let (root, path, _) = comparison_root(
+            &fixture,
+            &[
+                ("Renamed.JPG", generated_photo_bytes().unwrap()),
+                ("Renamed.xmp", COMPANION_BYTES.to_vec()),
+            ],
+        );
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let plan = import_skip_plan(&fixture, &workflow, root);
+        let input = import_approval(&fixture, &workflow, &plan);
+        let mut wrong = input.clone();
+        wrong.digest = "f".repeat(64);
+        assert!(workflow.start_import_skip(&fixture.library, wrong).is_err());
+        assert!(workflow.start_import_skip(&fixture.library, input).is_err());
+        let input = import_approval(&fixture, &workflow, &plan);
+        let modified = std::fs::metadata(path.join("Renamed.xmp"))
+            .unwrap()
+            .modified()
+            .unwrap();
+        let mut changed = COMPANION_BYTES.to_vec();
+        changed[0] ^= 1;
+        std::fs::write(path.join("Renamed.xmp"), &changed).unwrap();
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(path.join("Renamed.xmp"))
+            .unwrap()
+            .set_times(std::fs::FileTimes::new().set_modified(modified))
+            .unwrap();
+        let job = workflow.start_import_skip(&fixture.library, input).unwrap();
+        let job = wait_import(&fixture, &workflow, job.id);
+        assert_eq!(job.state, ImportSessionState::Failed);
+        assert!(job.error.is_some());
+        assert!(!job.output_created);
+        assert_eq!(job.verified_files, 0);
+        assert_eq!(std::fs::read(path.join("Renamed.xmp")).unwrap(), changed);
+        assert!(fixture.preserved().unwrap());
+    }
+    #[test]
+    fn import_skip_journal_denial_retains_a_needs_recovery_attempt_without_false_success() {
+        use crate::operations::*;
+        let fixture = Fixture::with_nested(true).unwrap();
+        let (root, _, _) = comparison_root(
+            &fixture,
+            &[
+                ("Renamed.JPG", generated_photo_bytes().unwrap()),
+                ("Renamed.xmp", COMPANION_BYTES.to_vec()),
+            ],
+        );
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let plan = import_skip_plan(&fixture, &workflow, root);
+        let input = import_approval(&fixture, &workflow, &plan);
+        fixture.library.catalog.call(|db|{db.execute_batch("CREATE TRIGGER fixture_deny_import_completion BEFORE INSERT ON operation_journal WHEN NEW.phase='import_skip_outcome_v1' BEGIN SELECT RAISE(ABORT,'Owned import journal denied completion'); END;")?;Ok(())}).unwrap();
+        let job = workflow.start_import_skip(&fixture.library, input).unwrap();
+        let job = wait_import(&fixture, &workflow, job.id);
+        assert_eq!(job.state, ImportSessionState::Failed);
+        assert_eq!(job.verified_files, 2);
+        assert!(job.error.is_some());
+        assert!(fixture.preserved().unwrap());
+        workflow
+            .discard_import_session(fixture.owner.clone(), job.id.clone())
+            .unwrap();
+        let retained = workflow
+            .import_session(fixture.owner.clone(), job.id)
+            .unwrap();
+        assert_eq!(retained.state, ImportSessionState::NeedsRecovery);
+        assert_eq!(retained.verified_files, 0);
+    }
+    #[test]
+    fn import_skip_root_cancellation_keeps_source_and_keeper_and_releases_admission() {
+        use crate::operations::*;
+        let mut bytes = generated_photo_bytes().unwrap();
+        bytes.extend(vec![81; 2 * 1024 * 1024]);
+        let fixture = Fixture::with_media(true, bytes.clone()).unwrap();
+        let (root, path, _) = comparison_root(
+            &fixture,
+            &[
+                ("Renamed.JPG", bytes.clone()),
+                ("Renamed.xmp", COMPANION_BYTES.to_vec()),
+            ],
+        );
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let plan = import_skip_plan(&fixture, &workflow, root.clone());
+        let input = import_approval(&fixture, &workflow, &plan);
+        let job = workflow.start_import_skip(&fixture.library, input).unwrap();
+        assert!(workflow.cancel_root(&root).unwrap());
+        let job = wait_import(&fixture, &workflow, job.id);
+        assert_eq!(job.state, ImportSessionState::Canceled);
+        assert!(!workflow.has_active_root(&root).unwrap());
+        assert!(fixture.preserved().unwrap());
+        assert_eq!(std::fs::read(path.join("Renamed.JPG")).unwrap(), bytes);
+        let retry = workflow
+            .start_import_skip(
+                &fixture.library,
+                import_approval(&fixture, &workflow, &plan),
+            )
+            .unwrap();
+        assert_eq!(
+            wait_import(&fixture, &workflow, retry.id).state,
+            ImportSessionState::Completed
+        );
+        let closing = workflow
+            .start_import_skip(
+                &fixture.library,
+                import_approval(&fixture, &workflow, &plan),
+            )
+            .unwrap();
+        workflow
+            .discard_import_session(fixture.owner.clone(), closing.id.clone())
+            .unwrap();
+        let closed = wait_import(&fixture, &workflow, closing.id);
+        assert_eq!(closed.state, ImportSessionState::Canceled);
+        assert!(!workflow.has_active_root(&root).unwrap());
+        assert!(fixture.preserved().unwrap());
+    }
+    #[test]
     fn import_comparison_bounds_reports_matches_and_candidate_inventory() {
         use crate::operations::{ImportComparisonInput, ImportComparisonState};
         let fixture = Fixture::with_nested(true).unwrap();

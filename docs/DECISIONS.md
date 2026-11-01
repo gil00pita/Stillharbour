@@ -267,3 +267,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Whole-bundle import observations - 2026-10-31
 
 [ADR-0046](decisions/ADR-0046-import-bundle-observations.md) groups connected confirmed companions and requires coherent native folder/stem mappings, distinct byte-compared keepers and indexed-media primary matches before showing an existing bundle. Incomplete/ambiguous layouts require attention. Observations grant no execution authority.
+
+## Import decisions and verified skip receipts - 2026-10-31
+
+[ADR-0047](decisions/ADR-0047-import-decisions-and-skip-receipts.md) retains explicit whole-bundle choices/native keeper versions, reuses equivalent decisions, and implements all-existing completion through separate acknowledgment/approval/start and fresh direct comparison. Durable queued/outcome records never restore authority or replay. Mixed copy/skip execution remains disabled.

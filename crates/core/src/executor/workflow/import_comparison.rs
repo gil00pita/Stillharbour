@@ -23,6 +23,7 @@ fn active(state: ImportComparisonState) -> bool {
 }
 struct Comparison {
     view: Mutex<ImportComparisonJob>,
+    evidence: Mutex<Option<super::import_planning::Evidence>>,
     cancel: AtomicBool,
     discard: AtomicBool,
 }
@@ -58,6 +59,7 @@ impl Comparisons {
         Ok(found)
     }
 }
+#[derive(Clone)]
 struct Root {
     id: String,
     path: PathBuf,
@@ -612,6 +614,34 @@ fn run(
     }
     let bundles =
         super::import_bundles::observe(&members, &keepers, &files, scope.issues.is_empty());
+    *job.evidence
+        .lock()
+        .map_err(|_| failed("Import comparison evidence is unavailable."))? =
+        Some(super::import_planning::Evidence {
+            source,
+            roots: scope
+                .roots
+                .iter()
+                .map(|root| super::import_planning::Root {
+                    id: root.id.clone(),
+                    native_path: native::encode_path(&root.path),
+                    object: root.object.clone(),
+                    volume: root.volume.clone(),
+                    scan: root.scan.clone(),
+                })
+                .collect(),
+            keepers: candidates
+                .into_iter()
+                .map(|(_, entry)| entry)
+                .filter(|entry| {
+                    files.iter().any(|file| {
+                        file.matches.iter().any(|found| {
+                            found.asset_id == entry.id && found.root_id == entry.root_id
+                        })
+                    })
+                })
+                .collect(),
+        });
     Ok(IoStep::Completed(ImportComparisonReport {
         policy: "indexed-import-comparison-v1".into(),
         sample_policy: fingerprints::SAMPLE_POLICY.into(),
@@ -705,6 +735,7 @@ impl CopyWorkflow {
             error: None,
         };
         let job = Arc::new(Comparison {
+            evidence: Mutex::new(None),
             view: Mutex::new(view.clone()),
             cancel: AtomicBool::new(false),
             discard: AtomicBool::new(false),
@@ -776,6 +807,34 @@ impl CopyWorkflow {
             .clone();
         Ok(view)
     }
+    pub(super) fn import_plan_evidence(
+        &self,
+        id: &str,
+    ) -> Result<(ImportComparisonJob, super::import_planning::Evidence)> {
+        let job = self.comparisons.get(id)?;
+        let view = job
+            .view
+            .lock()
+            .map_err(|_| failed("Import comparison state is unavailable."))?
+            .clone();
+        if view.state != ImportComparisonState::Completed
+            || !view
+                .report
+                .as_ref()
+                .is_some_and(|report| report.all_scope_available)
+        {
+            return Err(failed(
+                "Finish a complete comparison before saving import decisions. Incomplete scope is not approval evidence.",
+            ));
+        }
+        let evidence = job
+            .evidence
+            .lock()
+            .map_err(|_| failed("Import comparison evidence is unavailable."))?
+            .clone()
+            .ok_or_else(|| failed("Compare again to obtain native import evidence."))?;
+        Ok((view, evidence))
+    }
     pub(crate) fn cancel_import_comparison(&self, id: String) -> Result<ImportComparisonJob> {
         let job = self.comparisons.get(&id)?;
         job.cancel.store(true, Ordering::Release);
@@ -819,6 +878,7 @@ pub(in crate::executor) fn compare_fixture(
         input.manifest_id.clone(),
     )?;
     let job = Comparison {
+        evidence: Mutex::new(None),
         view: Mutex::new(ImportComparisonJob {
             id: uuid::Uuid::new_v4().to_string(),
             plan_id: input.plan_id.clone(),

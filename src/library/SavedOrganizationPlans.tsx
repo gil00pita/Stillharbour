@@ -12,6 +12,7 @@ import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import { OrganizationTrees } from './OrganizationTrees';
 import { BundleInventoryReview } from './BundleInventoryReview';
 import { CopyManifestReview } from './CopyManifestReview';
+import { SavedImportPlans } from './SavedImportPlans';
 
 export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -263,6 +264,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
               />
             )}
             <CopyManifestReview key={detail.plan.id} detail={detail} choices={companionChoices} />
+            <SavedImportPlans key={`imports:${detail.plan.id}`} planId={detail.plan.id} />
             <p className="help">
               Copying requires fresh companion, destination and capacity checks, separate native
               preparation and explicit approval. Recovery and metadata fidelity limits apply.

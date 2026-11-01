@@ -1,6 +1,6 @@
 # ADR-0045 — Bounded read-only byte comparison before import
 
-Date: 2026-10-31. Status: experimental M2 import prerequisite; full checks and Windows native validation pass; macOS CI pending.
+Date: 2026-10-31. Status: experimental M2 import prerequisite; full checks and Windows/macOS native CI pass.
 
 ## Decision
 
@@ -21,3 +21,5 @@ Focused native-file tests pass naturally equal samples with different unsampled 
 Native fixture setup constructs renamed copies only from its owned generated baseline, registers/scans that disposable referenced root, then independently audits preservation. macOS removes only the catalog registration; Windows retains the disposable registered root because its cache-cleanup native gate remains disabled. Those constructor/audit helper reads are test instrumentation, not production throttling evidence. Default feature and original-mutation gates remain unchanged. This checkpoint does not complete folder import, duplicate skipping, M2 or M3.
 
 Complete checks pass 272 frontend and 187 applicable Windows Rust cases, strict/generated IPC, lint/format, denied-warning Clippy and build. A final Rust rerun covers the additional native identity/volume guards. Separate application-only and fixture-only graphs pass. Actual Windows UI passes four applicable cases with sixteen macOS skips, including renamed matches, honest partial coverage and unchanged independent source/candidate/output audits. The initial test-only teardown encounters the existing disabled Windows cleanup gate; retain the generated registered root instead of bypassing that gate. Production assets and release exclusions pass. The expanded macOS scenario awaits this checkpoint’s own CI.
+
+Both target-platform CI jobs pass in [run 41251665854](https://github.com/gil00pita/Stillharbour/actions/runs/41251665854). This validates this checkpoint only; remaining milestone gates are unchanged.

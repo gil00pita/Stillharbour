@@ -79,7 +79,12 @@ const manifest: CopyManifest = {
   selectedBytes: '9007199254740993',
   executionAvailable: false,
 };
-beforeEach(() => vi.mocked(libraryData).mockReset());
+beforeEach(() =>
+  vi.mocked(libraryData).mockReset().mockResolvedValue({
+    available: false,
+    reason: 'Experimental workflows are disabled in this component fixture.',
+  }),
+);
 
 it('requires explicit decisions and sends only retained IDs, preserving exact bytes and literal filenames', async () => {
   vi.mocked(libraryData).mockResolvedValueOnce(manifest);

@@ -287,15 +287,22 @@ impl Snapshot {
         self.validate_for(db, true)
     }
     pub(super) fn validate_for(&self, db: &Connection, managed: bool) -> Result<()> {
+        self.validate_mapping(db)?;
+        let (_, source, volume) = root(db, &self.root_id, managed)?;
+        if self.source != source || self.source_volume != volume {
+            return Err(failed(
+                "Source snapshot no longer matches its current root grant.",
+            ));
+        }
+        Ok(())
+    }
+    pub(super) fn validate_mapping(&self, db: &Connection) -> Result<()> {
         let draft = operation_store::load(db, &self.owner_id)?;
         let manifest = copy_manifest::load(db, &self.owner_id, &self.manifest_id)?;
-        let (_, source, volume) = root(db, &self.root_id, managed)?;
         if self.policy != "native-copy-source-snapshot-v1"
             || self.catalog_id != draft.catalog_id
             || self.owner_digest != draft.view.digest
             || self.manifest_digest != manifest.view.digest
-            || self.source != source
-            || self.source_volume != volume
             || self.destination
                 != (Object {
                     volume: draft.destination_device,

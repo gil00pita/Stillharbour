@@ -14,6 +14,127 @@ fn unavailable() -> AppError {
     )
 }
 impl Library {
+    pub fn organization_import_saved_plans(
+        &self,
+        _owner: String,
+    ) -> Result<Vec<ImportPlanSummary>> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.import_plan_summaries(_owner, None)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_plan_release(&self, _owner: String, _id: String) -> Result<()> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.release_import_plan(_owner, _id)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_history(
+        &self,
+        _owner: String,
+        _manifest: String,
+    ) -> Result<ImportHistory> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.import_history(_owner, _manifest)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_skip_approve(
+        &self,
+        _input: ImportSkipApprovalInput,
+    ) -> Result<ImportSkipApproval> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.approve_import_skip(self, _input)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_skip_start(
+        &self,
+        _input: ImportSkipStartInput,
+    ) -> Result<ImportSession> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.start_import_skip(self, _input)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_session(
+        &self,
+        _owner: String,
+        _id: String,
+    ) -> Result<ImportSession> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.import_session(_owner, _id)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_session_cancel(
+        &self,
+        _owner: String,
+        _id: String,
+    ) -> Result<ImportSession> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.cancel_import_session(_owner, _id)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_session_discard(&self, _owner: String, _id: String) -> Result<()> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.discard_import_session(_owner, _id)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_plan_create(&self, _input: ImportPlanInput) -> Result<ImportPlan> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.create_import_plan(self, _input)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_plan_open(&self, _owner: String, _id: String) -> Result<ImportPlan> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.open_import_plan(_owner, _id)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
     pub fn organization_import_comparison_start(
         &self,
         _input: ImportComparisonInput,

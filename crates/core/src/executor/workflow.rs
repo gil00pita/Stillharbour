@@ -2,6 +2,8 @@
 //! preparation/copy engine, after a separate exact session approval.
 mod import_bundles;
 mod import_comparison;
+mod import_execution;
+mod import_planning;
 #[cfg(test)]
 pub(in crate::executor) use import_comparison::compare_fixture;
 mod recovery;
@@ -63,6 +65,7 @@ pub(crate) struct CopyWorkflow {
     sessions: Mutex<BTreeMap<String, Option<Arc<Session>>>>,
     recovery: recovery::Sessions,
     comparisons: import_comparison::Comparisons,
+    import_runs: import_execution::Runs,
     approvals: Approvals,
     gate: JobScheduler,
     active: Mutex<Option<Active>>,
@@ -291,6 +294,7 @@ impl CopyWorkflow {
             sessions: Mutex::new(BTreeMap::new()),
             recovery: Default::default(),
             comparisons: Default::default(),
+            import_runs: Default::default(),
             approvals: Approvals::new(),
             gate: JobScheduler::new(1)?,
             active: Mutex::new(None),
@@ -899,6 +903,7 @@ impl CopyWorkflow {
     }
     pub(crate) fn cancel_root(&self, root: &str) -> Result<bool> {
         let comparison = self.comparisons.root(root, true)?;
+        let import = self.import_runs.root(root, true)?;
         let active = self
             .active
             .lock()
@@ -907,7 +912,7 @@ impl CopyWorkflow {
             active.cancel.store(true, Ordering::Release);
             return Ok(true);
         }
-        Ok(comparison)
+        Ok(comparison || import)
     }
     pub(crate) fn has_active_root(&self, root: &str) -> Result<bool> {
         Ok(self
@@ -916,7 +921,8 @@ impl CopyWorkflow {
             .map_err(|_| failed("Copy job state is unavailable."))?
             .as_ref()
             .is_some_and(|active| active.root == root)
-            || self.comparisons.root(root, false)?)
+            || self.comparisons.root(root, false)?
+            || self.import_runs.root(root, false)?)
     }
     pub(crate) fn io_status(&self) -> Result<CopyIoStatus> {
         let io = PacedIo::shared();
