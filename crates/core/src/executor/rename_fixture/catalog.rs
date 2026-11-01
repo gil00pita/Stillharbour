@@ -300,7 +300,6 @@ fn catalog_exit(phase: &str) {
     }
 }
 
-#[cfg(test)]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct ReopenScope {
@@ -309,7 +308,6 @@ pub(super) struct ReopenScope {
     root: String,
     assets: BTreeMap<String, String>,
 }
-#[cfg(test)]
 impl GeneratedCatalog {
     pub(super) fn reopen_scope(&self, fixture: &Fixture) -> Result<ReopenScope> {
         let container = root(&fixture.run.path().canonicalize()?)?;

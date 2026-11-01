@@ -57,6 +57,8 @@ Inject failure after every journal/copy/publish/catalog stage. Exercise source c
 
 ## Gate
 
+Owned reconstruction continuation, 2026-11-01 (ADR-0068): explicitly retire and reopen the generated native session through a shared typed cold decoder, with fresh approvals, immutable record evidence and retained cleanup ownership. Validation is pending. This advances runtime reconstruction inside the application; application-process discovery and remaining M2 gates still precede M3.
+
 Retained original-history continuation, 2026-11-01 (ADR-0067): add read-only Jobs review of bounded saved paths and attempts with defensive catalog/graph validation. Current locations remain unchecked and no approval or execution is restored. General runtime mutation adoption and the remaining M2 gates stay open; actual validation results follow in the implementation log.
 
 Current aggregate acceptance evidence and remaining qualifications are indexed in [M2 validation](../docs/M2_VALIDATION.md). Earlier dated continuation notes retain their historical scope.

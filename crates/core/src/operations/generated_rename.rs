@@ -8,6 +8,7 @@ use ts_rs::TS;
 pub enum GeneratedRenameRequest {
     Create {},
     Inspect {},
+    ReopenRetained {},
     ReviewReverse {},
     Approve { plan_id: String, acknowledged: bool },
     Start { plan_id: String, ticket: String },

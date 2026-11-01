@@ -1,36 +1,10 @@
-//! Real child exits over a durable, bounded generated scope. These helpers are
-//! test-only; no desktop IPC accepts or adopts this file or an arbitrary path.
+//! Real child exits using the same typed recovery decoder as native reopening.
+//! Only the parent owns cleanup; no renderer path or approval is imported.
 use super::*;
-use serde::{Deserialize, Serialize};
 use std::{
-    io::{Read, Write},
     path::{Path, PathBuf},
     time::{Duration, Instant},
 };
-
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct OriginalScope {
-    object: super::super::super::Object,
-    version: super::super::super::Object,
-    modified: SystemTime,
-    bytes: u64,
-    readonly: bool,
-    created: Option<SystemTime>,
-}
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Scope {
-    policy: String,
-    forward: Plan,
-    active: Plan,
-    reverse: bool,
-    source: super::super::super::Object,
-    versions: super::super::super::Object,
-    originals: BTreeMap<String, OriginalScope>,
-    probes: Vec<super::super::super::Object>,
-    catalog: super::super::catalog::ReopenScope,
-}
 const PHASES: [&str; 6] = [
     "before_staging",
     "after_staging",
@@ -39,73 +13,10 @@ const PHASES: [&str; 6] = [
     "after_receipt",
     "after_commit",
 ];
-fn write_owned(path: &Path, name: &str, bytes: &[u8]) {
-    let mut file = std::fs::OpenOptions::new()
-        .create_new(true)
-        .write(true)
-        .open(path.join(name))
-        .unwrap();
-    file.write_all(bytes).unwrap();
-    file.sync_all().unwrap();
-}
-fn bounded(parent: &File, name: &str, limit: u64) -> Vec<u8> {
-    let file = native::read(parent, name).unwrap();
-    assert_eq!(filesystem::identity(&file).unwrap().links, 1);
-    let mut bytes = Vec::new();
-    file.take(limit + 1).read_to_end(&mut bytes).unwrap();
-    assert!(bytes.len() as u64 <= limit);
-    bytes
-}
 fn save(session: &GeneratedRenameSession) {
-    let scope = Scope {
-        policy: "generated-rename-cold-v1".into(),
-        forward: session.fixture.plan.clone(),
-        active: session.active.clone(),
-        reverse: session.reverse,
-        source: session.fixture.source_root.clone(),
-        versions: session.fixture.version_root.clone(),
-        originals: session
-            .fixture
-            .originals
-            .iter()
-            .map(|(id, original)| {
-                (
-                    id.clone(),
-                    OriginalScope {
-                        object: super::super::super::Object {
-                            volume: original.identity.volume,
-                            file: original.identity.file,
-                        },
-                        version: super::super::super::Object {
-                            volume: original.version.volume,
-                            file: original.version.file,
-                        },
-                        modified: original.modified,
-                        bytes: original.bytes,
-                        readonly: original.readonly,
-                        created: original.created,
-                    },
-                )
-            })
-            .collect(),
-        probes: session.fixture.probes.clone(),
-        catalog: session.catalog.reopen_scope(&session.fixture).unwrap(),
-    };
-    let bytes = serde_json::to_vec(&scope).unwrap();
-    assert!(bytes.len() <= 128 * 1024);
-    write_owned(
-        session.fixture.run.path(),
-        "catalog-child-owner",
-        session.fixture.plan.id.as_bytes(),
-    );
-    write_owned(
-        session.fixture.run.path(),
-        "catalog-child-scope.json",
-        &bytes,
-    );
+    super::recovery_scope::save(session, "catalog-child-scope.json").unwrap();
 }
 fn reopen(path: &Path, token: &str) -> GeneratedRenameSession {
-    uuid::Uuid::parse_str(token).unwrap();
     let path = path.canonicalize().unwrap();
     assert!(path.starts_with(std::env::temp_dir().canonicalize().unwrap()));
     assert!(
@@ -115,125 +26,13 @@ fn reopen(path: &Path, token: &str) -> GeneratedRenameSession {
             .unwrap()
             .starts_with("stillharbour-rename-fixture-")
     );
-    let container = root(&path).unwrap();
-    assert_eq!(
-        bounded(container.leaf(), "catalog-child-owner", 36),
-        token.as_bytes()
-    );
-    let scope: Scope = serde_json::from_slice(&bounded(
-        container.leaf(),
+    super::recovery_scope::reopen(
+        &path,
+        token,
         "catalog-child-scope.json",
-        128 * 1024,
-    ))
-    .unwrap();
-    assert_eq!(scope.policy, "generated-rename-cold-v1");
-    assert_eq!(scope.forward.id, token);
-    assert_eq!(scope.forward.members.len(), MEMBERS.len());
-    assert_eq!(scope.active.members.len(), MEMBERS.len());
-    assert_eq!(scope.originals.len(), MEMBERS.len());
-    assert_eq!(scope.active.root_id, scope.forward.root_id);
-    assert!(scope.probes.len() <= 64);
-    for plan in [&scope.forward, &scope.active] {
-        let canonical = graph::build(
-            plan.id.clone(),
-            plan.members.clone(),
-            plan.name_facts.clone(),
-        )
-        .unwrap();
-        assert_eq!(
-            serde_json::to_vec(&canonical).unwrap(),
-            serde_json::to_vec(plan).unwrap()
-        );
-        assert!(plan.issues.is_empty());
-    }
-    let directory = root(&path.join("originals")).unwrap();
-    let versions = root(&path.join("retained")).unwrap();
-    assert!(scope.source.matches(directory.leaf()).unwrap());
-    assert!(scope.versions.matches(versions.leaf()).unwrap());
-    let mut seen = std::collections::BTreeSet::new();
-    let mut originals = BTreeMap::new();
-    for member in &scope.forward.members {
-        let index = MEMBERS
-            .iter()
-            .position(|(before, after)| member.before == *before && member.after == *after)
-            .unwrap();
-        assert!(seen.insert(index));
-        let active = scope
-            .active
-            .members
-            .iter()
-            .find(|active| active.id == member.id)
-            .unwrap();
-        assert_eq!(
-            (&active.before, &active.after),
-            if scope.reverse {
-                (&member.after, &member.before)
-            } else {
-                (&member.before, &member.after)
-            }
-        );
-        let retained = &scope.originals[&member.id];
-        let expected = payload(index);
-        assert_eq!(retained.bytes, expected.len() as u64);
-        let version = native::read(versions.leaf(), &member.id).unwrap();
-        assert!(retained.version.matches(&version).unwrap());
-        assert_eq!(
-            bounded(versions.leaf(), &member.id, retained.bytes),
-            expected.as_bytes()
-        );
-        originals.insert(
-            member.id.clone(),
-            Original {
-                identity: FileIdentity {
-                    volume: retained.object.volume,
-                    file: retained.object.file,
-                    links: 1,
-                },
-                version: FileIdentity {
-                    volume: retained.version.volume,
-                    file: retained.version.file,
-                    links: 1,
-                },
-                modified: retained.modified,
-                bytes: retained.bytes,
-                readonly: retained.readonly,
-                created: retained.created,
-            },
-        );
-    }
-    for (index, object) in scope.probes.iter().enumerate() {
-        let file = native::read(directory.leaf(), &format!(".stillharbour-probe-{index}")).unwrap();
-        assert!(object.matches(&file).unwrap());
-        assert_eq!(file.metadata().unwrap().len(), 0);
-        assert_eq!(filesystem::identity(&file).unwrap().links, 1);
-    }
-    let fixture = Fixture {
-        run: Run::Child(path),
-        root_id: scope.forward.root_id.clone(),
-        source_root: scope.source,
-        version_root: scope.versions,
-        originals,
-        probes: scope.probes,
-        plan: scope.forward,
-    };
-    let journal = fixture.journal(&scope.active).unwrap();
-    let positions = fixture
-        .locations(&scope.active, directory.leaf(), &journal)
-        .unwrap();
-    fixture
-        .verify(directory.leaf(), versions.leaf(), &positions)
-        .unwrap();
-    drop(journal);
-    let catalog = super::super::catalog::GeneratedCatalog::reopen(&fixture, scope.catalog).unwrap();
-    let session = GeneratedRenameSession {
-        catalog,
-        fixture,
-        active: scope.active,
-        reverse: scope.reverse,
-        approvals: approval::Approvals::new(),
-    };
-    session.inspect().unwrap();
-    session
+        Run::Child(path.clone()),
+    )
+    .unwrap()
 }
 fn approve(session: &mut GeneratedRenameSession) -> GeneratedRenameReview {
     let view = session.inspect().unwrap();

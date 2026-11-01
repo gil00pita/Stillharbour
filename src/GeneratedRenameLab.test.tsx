@@ -283,3 +283,90 @@ it('retires a late worker response when its dialog closes without sending an imp
     expect.objectContaining({ request: expect.objectContaining({ kind: 'stop' }) }),
   );
 });
+
+it('reopens an owned scope without retaining the previous approval or acknowledgment', async () => {
+  workerInvoke.mockResolvedValue({
+    scopeCreated: true,
+    busy: false,
+    stopRequested: false,
+    completedMoves: 0,
+    totalMoves: 0,
+    job: null,
+    error: null,
+  });
+  requestInvoke
+    .mockResolvedValueOnce(review({ state: 'needs_continuation', completedSteps: 1 }))
+    .mockResolvedValueOnce(
+      review({ state: 'needs_continuation', completedSteps: 1, ticket: 'unused-ticket' }),
+    )
+    .mockResolvedValueOnce(review({ state: 'needs_continuation', completedSteps: 1 }));
+  render(<GeneratedRenameLab />);
+  open();
+  await screen.findByText('Rename · needs_continuation · 1 / 10 journaled steps');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve generated targets' }));
+  await screen.findByRole('button', { name: 'Run reviewed generated rename' });
+  fireEvent.click(screen.getByRole('button', { name: 'Reopen owned generated scope' }));
+  await waitFor(() =>
+    expect(requestInvoke).toHaveBeenLastCalledWith('test_generated_rename', {
+      request: { kind: 'reopen_retained' },
+    }),
+  );
+  expect(
+    screen.queryByRole('button', { name: 'Run reviewed generated rename' }),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Approve generated targets' })).toBeDisabled();
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
+});
+
+it('keeps fresh acknowledgment when an older busy poll arrives after owned reopening', async () => {
+  const idle: GeneratedWorkerStatus = {
+    scopeCreated: true,
+    busy: false,
+    stopRequested: false,
+    completedMoves: 0,
+    totalMoves: 0,
+    job: null,
+    error: null,
+  };
+  let lateStatus!: (value: GeneratedWorkerStatus) => void;
+  let reopenResult!: (value: GeneratedRenameReview) => void;
+  workerInvoke
+    .mockResolvedValue(idle)
+    .mockResolvedValueOnce(idle)
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          lateStatus = done;
+        }),
+    );
+  requestInvoke
+    .mockResolvedValue(review({ state: 'needs_continuation', completedSteps: 1 }))
+    .mockResolvedValueOnce(review({ state: 'needs_continuation', completedSteps: 1 }))
+    .mockResolvedValueOnce(
+      review({ state: 'needs_continuation', completedSteps: 1, ticket: 'unused-ticket' }),
+    )
+    .mockImplementationOnce(
+      () =>
+        new Promise((done) => {
+          reopenResult = done;
+        }),
+    );
+  render(<GeneratedRenameLab />);
+  open();
+  await screen.findByText('Rename · needs_continuation · 1 / 10 journaled steps');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve generated targets' }));
+  await screen.findByRole('button', { name: 'Run reviewed generated rename' });
+  fireEvent.click(screen.getByRole('button', { name: 'Reopen owned generated scope' }));
+  await waitFor(() => expect(workerInvoke).toHaveBeenCalledTimes(2));
+  await act(async () => reopenResult(review({ state: 'needs_continuation', completedSteps: 1 })));
+  await waitFor(() => expect(screen.getByRole('checkbox')).toBeEnabled());
+  fireEvent.click(screen.getByRole('checkbox'));
+  await act(async () => lateStatus({ ...idle, busy: true }));
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, 650));
+  });
+  expect(screen.getByRole('checkbox')).toBeChecked();
+  expect(requestInvoke).toHaveBeenCalledTimes(3);
+});

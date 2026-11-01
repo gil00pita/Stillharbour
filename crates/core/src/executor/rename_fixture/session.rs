@@ -5,6 +5,8 @@ use crate::operations::generated_rename::*;
 #[cfg(test)]
 #[path = "coordination_tests.rs"]
 mod coordination_tests;
+#[path = "recovery_scope.rs"]
+pub(super) mod recovery_scope;
 #[cfg(test)]
 #[path = "restart_tests.rs"]
 mod restart_tests;
@@ -34,6 +36,9 @@ impl GeneratedRenameSession {
                 "A generated session already exists. Inspect its retained state.",
             )),
             GeneratedRenameRequest::Inspect {} => self.inspect(),
+            GeneratedRenameRequest::ReopenRetained {} => Err(failed(
+                "Retire and reopen the owned scope through its controller.",
+            )),
             GeneratedRenameRequest::ReviewReverse {} => {
                 if self.reverse || self.inspect()?.state != GeneratedRenameState::Completed {
                     return Err(failed(

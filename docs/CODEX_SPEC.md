@@ -311,6 +311,8 @@ Only application-created empty directories may be automatically tidied after suc
 
 ## 10. Safe operation executor and recovery
 
+M2 generated reopening continuation, 2026-11-01 (ADR-0068): an explicit instrumented action retains only its owned directory capability and immutable evidence digest, retires the live session/catalog/approvals and reconstructs native state through the same typed decoder as the real child-exit tests. Fresh review and separate approval follow; no caller path or imported authority is accepted. This restarts the actor/session within the application, not the operating-system process. General application-process discovery, independent recovery and production mutation remain gated.
+
 M2 history review continuation, 2026-11-01 (ADR-0067): Jobs can request a bounded retained organization plan by job UUID. The backend validates its payload hash, catalog/root/job relationship and canonical pure graph; saved paths render as historical text with current locations explicitly unchecked. The review grants no approval or mutation capability. The instrumented generated lab uses the same validator and review over its owned catalog. This advances recovery discovery, not general runtime mutation adoption or independent recovery. Production original mutation and duplicate quarantine remain gated.
 
 Implement this subsystem before enabling any original-file mutation. The planner is pure over a recorded snapshot of inputs; validation and execution are separate services.

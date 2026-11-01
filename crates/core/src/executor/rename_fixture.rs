@@ -58,7 +58,7 @@ struct ExecutionScope<'a> {
     lease: crate::jobs::operation_locks::Lease,
 }
 enum Run {
-    Owned(tempfile::TempDir),
+    Owned(std::sync::Arc<tempfile::TempDir>),
     #[cfg(test)]
     Child(std::path::PathBuf),
 }
@@ -254,7 +254,7 @@ impl Fixture {
         facts.root_revision = source_native::revision(parent)?;
         let plan = graph::build(id, members, facts)?;
         let result = Self {
-            run: Run::Owned(run),
+            run: Run::Owned(std::sync::Arc::new(run)),
             root_id,
             source_root: super::Object::of(parent)?,
             version_root: super::Object::of(versions.leaf())?,

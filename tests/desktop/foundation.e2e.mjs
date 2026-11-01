@@ -1566,6 +1566,27 @@ describe('native read-only library', () => {
         await browser.saveScreenshot(
           `.context/screenshots/m2-generated-stopped-${process.platform}.png`,
         );
+        const reopen = await $('button=Reopen owned generated scope');
+        await reopen.scrollIntoView();
+        await reopen.click();
+        await browser.waitUntil(
+          async () => {
+            const status = await browser.tauri.execute(async ({ core }) =>
+              core.invoke('test_generated_rename_worker', { request: { kind: 'status' } }),
+            );
+            return !status.busy && status.scopeCreated && status.job === null;
+          },
+          { timeout: 10000, timeoutMsg: 'The owned generated scope did not reopen.' },
+        );
+        const reopened = await read({ kind: 'inspect' });
+        assert.equal(reopened.planId, stopped.planId);
+        assert.equal(reopened.digest, stopped.digest);
+        assert.equal(reopened.completedSteps, 1);
+        assert.equal(reopened.ticket, null);
+        assert.deepEqual(reopened.members, stopped.members);
+        assert.deepEqual(reopened.jobs, stopped.jobs);
+        states.push(reopened);
+        assert.equal(await $('button=Approve generated targets').isEnabled(), false);
         const fresh = await scope.$('input[type="checkbox"]');
         await fresh.scrollIntoView();
         await fresh.click();

@@ -81,7 +81,7 @@ export function GeneratedRenameLab() {
     };
   }, [open]);
   async function request(value: GeneratedRenameRequest) {
-    const id = ++generation.current;
+    let id = ++generation.current;
     setBusy(true);
     setError(null);
     setAcknowledged(false);
@@ -91,6 +91,18 @@ export function GeneratedRenameLab() {
         request: value,
       });
       if (generation.current === id) setReview(result);
+      if (value.kind === 'reopen_retained' && generation.current === id) {
+        const status = await invoke<GeneratedWorkerStatus>('test_generated_rename_worker', {
+          request: { kind: 'status' },
+        });
+        if (generation.current !== id) return;
+        // Retire every poll started during reconstruction before making the
+        // fresh acknowledgment available. A late busy observation must not
+        // manufacture another finished transition and clear that choice.
+        id = ++generation.current;
+        workerWasBusy.current = status.busy;
+        setWorker(status);
+      }
       if (value.kind === 'start' && generation.current === id) {
         const status = await invoke<GeneratedWorkerStatus>('test_generated_rename_worker', {
           request: { kind: 'status' },
@@ -187,7 +199,7 @@ export function GeneratedRenameLab() {
           </section>
         )}
         <fieldset disabled={busy || stopping || worker?.busy}>
-          {!review && (
+          {!review && !worker?.scopeCreated && (
             <button onClick={() => void request({ kind: 'create' })}>
               Create generated rename fixture
             </button>
@@ -195,6 +207,11 @@ export function GeneratedRenameLab() {
           <button onClick={() => void request({ kind: 'inspect' })}>
             Inspect retained rename state
           </button>
+          {worker?.scopeCreated && (
+            <button onClick={() => void request({ kind: 'reopen_retained' })}>
+              Reopen owned generated scope
+            </button>
+          )}
           {review && (
             <>
               <p role="status">

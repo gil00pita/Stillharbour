@@ -1,5 +1,7 @@
 # Development
 
+The desktop-test generated rename lab can explicitly reopen its owned retained scope (ADR-0068). This retires the live catalog/session and approvals, then revalidates the exact retained evidence and current native objects before another review. It accepts no renderer path. Existing real child-exit tests use the same decoder. The action does not restart the application process or enable adoption of a real library.
+
 Current M2 acceptance evidence and remaining qualifications are indexed in [M2_VALIDATION.md](M2_VALIDATION.md); dated implementation-log entries retain exact checkpoint outcomes.
 
 Jobs offers catalog-only retained organization-plan history by validated job UUID (ADR-0067). It shows saved paths and recorded attempts without checking current files or granting execution approval. The native-test generated lab uses the same review through a desktop-test-only history command; production permissions remain narrow. Native artifacts include bounded generated `gallery/**/multi-source-*.json` receipts alongside screenshots and existing preservation reports.
