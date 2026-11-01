@@ -77,6 +77,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ImportPlanInput::decl(&config),
         ImportSkipFile::decl(&config),
         ImportPlan::decl(&config),
+        ImportCopyReceipt::decl(&config),
         ImportSkipApprovalInput::decl(&config),
         ImportSkipApproval::decl(&config),
         ImportSkipStartInput::decl(&config),

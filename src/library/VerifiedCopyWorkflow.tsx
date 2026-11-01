@@ -9,7 +9,10 @@ import type {
   CopyEffectMatch,
   ExistingCopyEffect,
   CopyPreparationReopened,
+  ImportPlan,
+  ImportCopyReceipt,
 } from '../bindings';
+import { validateImportCopyReview, validateImportCopyReceipt } from './importPlanValidation';
 import { errorMessage, library, libraryData, pickDirectory } from '../ipc';
 import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
 import { copyJobActive } from './copyJobs';
@@ -31,14 +34,18 @@ function validateReview(value: CopyActionReview, plan: string, manifest: string)
 }
 type PreparedReview = { review: CopyActionReview; selection: DirectorySelection };
 function validateReopened(value: CopyPreparationReopened, job: CopyWorkflowJob) {
+  if (value.importPlan) validateImportCopyReview(value.review, value.manifest, value.importPlan);
+  const files = value.importPlan
+    ? value.manifest.files.filter((file) => value.importPlan!.copyFileIds.includes(file.id))
+    : value.manifest.files;
   if (
     value.jobId !== job.id ||
     value.manifest.planId !== job.planId ||
     value.review.sourceRootId !== job.sourceRootId ||
     value.review.action !== 'copy_files' ||
     value.review.files.length !== job.totalFiles ||
-    value.manifest.files.length !== job.totalFiles ||
-    value.manifest.files.some((file, index) => {
+    files.length !== job.totalFiles ||
+    files.some((file, index) => {
       const observed = value.review.files[index];
       return (
         !observed ||
@@ -55,9 +62,13 @@ function validateReopened(value: CopyPreparationReopened, job: CopyWorkflowJob) 
 export function VerifiedCopyWorkflow({
   manifest,
   initial,
+  importPlan,
+  onActivityChange,
 }: {
   manifest: CopyManifest;
   initial?: PreparedReview;
+  importPlan?: ImportPlan;
+  onActivityChange?: (active: boolean) => void;
 }) {
   const [selection, setSelection] = useState<DirectorySelection | null>(initial?.selection ?? null);
   const [existing, setExisting] = useState<CopyEffectMatch | null>(null);
@@ -71,6 +82,8 @@ export function VerifiedCopyWorkflow({
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [page, setPage] = useState(0);
   const [readyRetry, setReadyRetry] = useState(0);
+  const [receipt, setReceipt] = useState<ImportCopyReceipt | null>(null);
+  const [receiptRetry, setReceiptRetry] = useState(0);
   const epoch = useRef(0);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(
@@ -83,6 +96,50 @@ export function VerifiedCopyWorkflow({
     if (review) heading.current?.focus();
   }, [review]);
   const running = job !== null && copyJobActive(job);
+  useEffect(() => {
+    onActivityChange?.(busy || running);
+    return () => onActivityChange?.(false);
+  }, [busy, running, onActivityChange]);
+  const lifetime = useRef({ review, job });
+  useEffect(() => {
+    lifetime.current = { review, job };
+  }, [review, job]);
+  useEffect(
+    () => () => {
+      if (!importPlan) return;
+      const current = lifetime.current;
+      if (current.job && copyJobActive(current.job))
+        void library({ kind: 'organization_copy_cancel', job_id: current.job.id }).catch(() => {});
+      else if (current.review)
+        void library({ kind: 'organization_copy_discard', review_id: current.review.id }).catch(
+          () => {},
+        );
+    },
+    [importPlan],
+  );
+  useEffect(() => {
+    if (!importPlan || !job || job.state !== 'completed_verified') return;
+    let active = true;
+    libraryData(
+      { kind: 'organization_import_copy_receipt', job_id: job.id },
+      'organization_import_copy_receipt',
+    )
+      .then((value) => {
+        if (!active) return;
+        if (!value)
+          throw new Error(
+            'No completed import receipt is available. Retain output and review job history.',
+          );
+        validateImportCopyReceipt(value, importPlan, job);
+        setReceipt(value);
+      })
+      .catch((error) => {
+        if (active) setError(errorMessage(error));
+      });
+    return () => {
+      active = false;
+    };
+  }, [importPlan, job, receiptRetry]);
   const jobId = job?.id;
   const selectionId = selection?.id;
   useEffect(() => {
@@ -126,6 +183,7 @@ export function VerifiedCopyWorkflow({
       .then((value) => {
         if (!active) return;
         validateReview(value, manifest.planId, manifest.id);
+        if (importPlan) validateImportCopyReview(value, manifest, importPlan);
         if (value.id !== preparedReview || value.action !== 'copy_files')
           throw new Error('The prepared copy review does not match its native job.');
         setReview(value);
@@ -146,6 +204,8 @@ export function VerifiedCopyWorkflow({
     selectionId,
     manifest.planId,
     manifest.id,
+    manifest,
+    importPlan,
     readyRetry,
   ]);
   async function create() {
@@ -168,56 +228,70 @@ export function VerifiedCopyWorkflow({
         throw new Error(
           'The selected folder identity cannot be verified. Choose a supported local destination.',
         );
-      const matched = await libraryData(
-        {
-          kind: 'organization_copy_effect_match',
-          plan_id: manifest.planId,
-          manifest_id: manifest.id,
-          selection_id: chosen.id,
-        },
-        'organization_copy_effect_match',
-      );
-      if (epoch.current !== token) return;
-      if (
-        matched.planId !== manifest.planId ||
-        matched.manifestId !== manifest.id ||
-        !/^[a-f0-9]{64}$/.test(matched.digest) ||
-        matched.existing.length > 64 ||
-        matched.existing.some(
-          (entry) =>
-            !entry.outputFolder.startsWith('Stillharbour organized ') ||
-            (entry.job && entry.job.planId !== entry.planId),
+      if (!importPlan) {
+        const matched = await libraryData(
+          {
+            kind: 'organization_copy_effect_match',
+            plan_id: manifest.planId,
+            manifest_id: manifest.id,
+            selection_id: chosen.id,
+          },
+          'organization_copy_effect_match',
+        );
+        if (epoch.current !== token) return;
+        if (
+          matched.planId !== manifest.planId ||
+          matched.manifestId !== manifest.id ||
+          !/^[a-f0-9]{64}$/.test(matched.digest) ||
+          matched.existing.length > 64 ||
+          matched.existing.some(
+            (entry) =>
+              !entry.outputFolder.startsWith('Stillharbour organized ') ||
+              (entry.job && entry.job.planId !== entry.planId),
+          )
         )
-      )
-        throw new Error('Existing copy history does not match this saved scope.');
-      if (!matched.canReuseReview) {
-        if (!matched.existing.length)
-          throw new Error('Existing output history is incomplete. Reopen the saved plan.');
-        setExisting(matched);
-        setSelection(chosen);
-        return;
+          throw new Error('Existing copy history does not match this saved scope.');
+        if (!matched.canReuseReview) {
+          if (!matched.existing.length)
+            throw new Error('Existing output history is incomplete. Reopen the saved plan.');
+          setExisting(matched);
+          setSelection(chosen);
+          return;
+        }
+        if (
+          matched.existing.length &&
+          (matched.existing.length !== 1 ||
+            matched.existing[0]!.planId !== manifest.planId ||
+            matched.existing[0]!.manifestId !== manifest.id ||
+            matched.existing[0]!.preparationRecorded ||
+            matched.existing[0]!.job)
+        )
+          throw new Error('Existing preparation must be inspected before continuing.');
+        setExisting(null);
       }
-      if (
-        matched.existing.length &&
-        (matched.existing.length !== 1 ||
-          matched.existing[0]!.planId !== manifest.planId ||
-          matched.existing[0]!.manifestId !== manifest.id ||
-          matched.existing[0]!.preparationRecorded ||
-          matched.existing[0]!.job)
-      )
-        throw new Error('Existing preparation must be inspected before continuing.');
-      setExisting(null);
       const value = await libraryData(
-        {
-          kind: 'organization_copy_review_create',
-          plan_id: manifest.planId,
-          manifest_id: manifest.id,
-          selection_id: chosen.id,
-        },
+        importPlan
+          ? {
+              kind: 'organization_import_copy_review',
+              plan_id: manifest.planId,
+              import_plan_id: importPlan.id,
+              selection_id: chosen.id,
+            }
+          : {
+              kind: 'organization_copy_review_create',
+              plan_id: manifest.planId,
+              manifest_id: manifest.id,
+              selection_id: chosen.id,
+            },
         'organization_copy_review',
       );
-      if (epoch.current !== token) return;
       validateReview(value, manifest.planId, manifest.id);
+      if (importPlan) validateImportCopyReview(value, manifest, importPlan);
+      if (epoch.current !== token) {
+        if (importPlan)
+          void library({ kind: 'organization_copy_discard', review_id: value.id }).catch(() => {});
+        return;
+      }
       setSelection(chosen);
       setReview(value);
       setApproval(null);
@@ -254,6 +328,13 @@ export function VerifiedCopyWorkflow({
         return;
       }
       validateReopened(value, job);
+      if (
+        importPlan &&
+        (!value.importPlan ||
+          value.importPlan.id !== importPlan.id ||
+          value.importPlan.digest !== importPlan.digest)
+      )
+        throw new Error('The reopened preparation belongs to different import decisions.');
       validateReview(value.review, manifest.planId, manifest.id);
       setSelection(chosen);
       setReview(value.review);
@@ -285,9 +366,13 @@ export function VerifiedCopyWorkflow({
         },
         'organization_copy_approval',
       );
-      if (epoch.current !== token) return;
       if (value.reviewId !== review.id || value.action !== review.action)
         throw new Error('The approval belongs to another review. Review again.');
+      if (epoch.current !== token) {
+        if (importPlan)
+          void library({ kind: 'organization_copy_discard', review_id: review.id }).catch(() => {});
+        return;
+      }
       setApproval(value);
     } catch (error) {
       if (epoch.current === token) setError(errorMessage(error));
@@ -311,13 +396,17 @@ export function VerifiedCopyWorkflow({
         },
         'organization_copy_job',
       );
-      if (epoch.current !== token) return;
       if (
         value.reviewId !== review.id ||
         value.planId !== manifest.planId ||
         value.action !== review.action
       )
         throw new Error('The queued job belongs to another review. Check Jobs before retrying.');
+      if (epoch.current !== token) {
+        if (importPlan)
+          void library({ kind: 'organization_copy_cancel', job_id: value.id }).catch(() => {});
+        return;
+      }
       setJob(value);
       setInspection(null);
     } catch (error) {
@@ -362,6 +451,13 @@ export function VerifiedCopyWorkflow({
       aria-busy={busy}
     >
       <h3>Prepare a verified copy</h3>
+      {importPlan && (
+        <p>
+          {importPlan.copyFileIds.length} new files will be copied. Every selected existing member
+          is freshly byte-compared before and after each action. Existing files and originals remain
+          in place.
+        </p>
+      )}
       <p>
         Confirm the saved destination using the native picker. Review the new output folder before
         preparing names. Preparation creates empty staged names; copying needs a separate approval.
@@ -373,6 +469,19 @@ export function VerifiedCopyWorkflow({
         </button>
       )}
       {unavailable && <p role="status">{unavailable}</p>}
+      {receipt && (
+        <p role="status">
+          Import recorded: {receipt.copiedFileIds.length} new{' '}
+          {receipt.copiedFileIds.length === 1 ? 'file' : 'files'} copied and{' '}
+          {receipt.skippedFiles.length} existing{' '}
+          {receipt.skippedFiles.length === 1 ? 'file' : 'files'} freshly verified. Sources retained.
+        </p>
+      )}
+      {importPlan && job?.state === 'completed_verified' && !receipt && (
+        <button type="button" onClick={() => setReceiptRetry((old) => old + 1)}>
+          Reload import receipt
+        </button>
+      )}
       {existing && (
         <section aria-label="Existing copy output history">
           <h4>Existing output for this mapping</h4>
@@ -413,7 +522,7 @@ export function VerifiedCopyWorkflow({
             </strong>
           </p>
           <p>
-            {review.files.length} selected files ·{' '}
+            {review.files.length} selected {review.files.length === 1 ? 'file' : 'files'} ·{' '}
             {BigInt(review.assessment.capacity.logicalBytes).toLocaleString()} bytes. Sources
             retained; no independent backup is provided.
           </p>
@@ -651,6 +760,7 @@ export function ReopenPreparedCopy({ job }: { job: CopyWorkflowJob }) {
           key={opened.review.id}
           manifest={opened.manifest}
           initial={{ review: opened.review, selection: opened.selection }}
+          {...(opened.importPlan ? { importPlan: opened.importPlan } : {})}
         />
       ) : (
         <button type="button" disabled={busy} onClick={() => void reopen()}>

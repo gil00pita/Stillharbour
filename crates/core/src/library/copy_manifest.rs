@@ -99,7 +99,7 @@ impl Library {
         plan_id: String,
         manifest_id: String,
     ) -> Result<crate::operations::CopyAssessment> {
-        self.assess_copy_scope(plan_id, manifest_id, true)
+        self.assess_copy_scope(plan_id, manifest_id, true, None)
     }
     #[cfg(any(test, feature = "copy-workflow"))]
     pub(crate) fn organization_copy_prepared_assessment(
@@ -107,13 +107,24 @@ impl Library {
         plan_id: String,
         manifest_id: String,
     ) -> Result<crate::operations::CopyAssessment> {
-        self.assess_copy_scope(plan_id, manifest_id, false)
+        self.assess_copy_scope(plan_id, manifest_id, false, None)
+    }
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(crate) fn organization_import_copy_assessment(
+        &self,
+        plan_id: String,
+        manifest_id: String,
+        copy_ids: Vec<String>,
+        original_targets: bool,
+    ) -> Result<crate::operations::CopyAssessment> {
+        self.assess_copy_scope(plan_id, manifest_id, original_targets, Some(copy_ids))
     }
     fn assess_copy_scope(
         &self,
         plan_id: String,
         manifest_id: String,
         original_targets: bool,
+        copy_ids: Option<Vec<String>>,
     ) -> Result<crate::operations::CopyAssessment> {
         validate_id(&plan_id)?;
         validate_id(&manifest_id)?;
@@ -126,7 +137,7 @@ impl Library {
             ))
         })?;
         // Reobserve exactly the explicitly retained decisions, not a latest scope.
-        let fresh = self.organization_copy_manifest(CopyManifestInput {
+        let mut fresh = self.organization_copy_manifest(CopyManifestInput {
             plan_id: plan_id.clone(),
             bundle_confirmation_ids: manifest.view.bundle_confirmation_ids.clone(),
         })?;
@@ -187,6 +198,26 @@ impl Library {
             }
             Ok(())
         })?;
+        if let Some(ids) = copy_ids {
+            let selected = ids.iter().collect::<BTreeSet<_>>();
+            if selected.is_empty() || selected.len() != ids.len() {
+                return Err(invalid(
+                    "Import capacity needs a nonempty exact file subset.",
+                ));
+            }
+            fresh.files.retain(|file| selected.contains(&file.id));
+            if fresh.files.len() != ids.len() {
+                return Err(changed());
+            }
+            fresh.selected_bytes = fresh
+                .files
+                .iter()
+                .try_fold(0u128, |total, file| {
+                    let bytes = file.bytes.parse::<u128>().map_err(|_| changed())?;
+                    total.checked_add(bytes).ok_or_else(changed)
+                })?
+                .to_string();
+        }
         let mut report = crate::operations::copy_assessment::assess(
             &fresh,
             stats.allocation_granularity(),

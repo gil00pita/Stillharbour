@@ -4,6 +4,7 @@ mod import_bundles;
 mod import_comparison;
 mod import_execution;
 pub(in crate::executor) mod import_planning;
+mod import_receipts;
 #[cfg(test)]
 pub(in crate::executor) use import_comparison::compare_fixture;
 mod recovery;
@@ -422,17 +423,47 @@ impl CopyWorkflow {
         }
         Ok(())
     }
+    fn assess_sources(
+        &self,
+        library: &Library,
+        source: &Snapshot,
+        original_targets: bool,
+    ) -> Result<CopyAssessment> {
+        if source.import_selection.is_some() {
+            let snapshot = source.clone();
+            self.catalog.call(move |db| snapshot.validate(db))?;
+            library.organization_import_copy_assessment(
+                source.owner_id.clone(),
+                source.manifest_id.clone(),
+                source.files.iter().map(|file| file.id.clone()).collect(),
+                original_targets,
+            )
+        } else if original_targets {
+            library
+                .organization_copy_assessment(source.owner_id.clone(), source.manifest_id.clone())
+        } else {
+            library.organization_copy_prepared_assessment(
+                source.owner_id.clone(),
+                source.manifest_id.clone(),
+            )
+        }
+    }
+    fn current_sources(&self, source: &Snapshot) -> Result<Snapshot> {
+        match &source.import_selection {
+            Some(selection) => {
+                self.import_copy_sources(source.owner_id.clone(), selection.id.clone())
+            }
+            None => Snapshot::build(
+                &self.catalog,
+                source.owner_id.clone(),
+                source.manifest_id.clone(),
+            ),
+        }
+    }
     fn fresh(&self, library: &Library, session: &Session) -> Result<CopyAssessment> {
         let source = session.namespace.sources();
-        let assessment = library.organization_copy_prepared_assessment(
-            source.owner_id.clone(),
-            source.manifest_id.clone(),
-        )?;
-        let current = Snapshot::build(
-            &self.catalog,
-            source.owner_id.clone(),
-            source.manifest_id.clone(),
-        )?;
+        let assessment = self.assess_sources(library, source, false)?;
+        let current = self.current_sources(source)?;
         if serde_json::to_vec(&current).ok() != serde_json::to_vec(source).ok() {
             return Err(failed(
                 "The reviewed native source scope changed. Build a fresh review.",
@@ -576,8 +607,31 @@ impl CopyWorkflow {
     ) -> Result<CopyActionReview> {
         let (identity, volume) = selected_identity;
         crate::operations::validate_id(&selection)?;
-        let (assessment, sources, effect, previous) =
+        let (assessment, sources, _, _) =
             self.match_effect(library, owner, manifest, &selection, &identity, &volume)?;
+        self.bind_review(assessment, sources, selection, path, (identity, volume))
+    }
+    fn bind_review(
+        &self,
+        assessment: CopyAssessment,
+        sources: Snapshot,
+        selection: String,
+        path: PathBuf,
+        selected_identity: (FileIdentity, String),
+    ) -> Result<CopyActionReview> {
+        crate::operations::validate_id(&selection)?;
+        let (identity, volume) = selected_identity;
+        let selected = native::open_root(&path, Some(&identity))?;
+        if !sources.destination.matches(&selected)?
+            || native::volume_token(&selected)? != sources.destination_volume
+            || volume != sources.destination_volume
+        {
+            return Err(failed(
+                "Select the saved import plan's actual destination folder.",
+            ));
+        }
+        drop(selected);
+        let (effect, previous) = super::effects::Effect::lookup(&self.catalog, &sources)?;
         let token = if previous.is_empty() {
             uuid::Uuid::new_v4().to_string()
         } else if previous.len() == 1
@@ -641,6 +695,23 @@ impl CopyWorkflow {
         }
         result
     }
+    pub(crate) fn create_import_review(
+        &self,
+        library: &Library,
+        owner: String,
+        import: String,
+        selection: String,
+        path: PathBuf,
+        selected_identity: (FileIdentity, String),
+    ) -> Result<CopyActionReview> {
+        library.ensure_work_admission()?;
+        let sources = self.import_copy_sources(owner, import)?;
+        let assessment = self.assess_sources(library, &sources, true)?;
+        if let Some(checker) = self.copy_keeper_check(&sources)? {
+            checker.scopes(self)?;
+        }
+        self.bind_review(assessment, sources, selection, path, selected_identity)
+    }
     pub(crate) fn get_review(
         &self,
         library: &Library,
@@ -652,10 +723,7 @@ impl CopyWorkflow {
     ) -> Result<CopyActionReview> {
         let session = self.session(&id)?;
         Self::check_selection(&session, &selection, &path, &identity, &volume)?;
-        let assessment = library.organization_copy_prepared_assessment(
-            session.namespace.sources().owner_id.clone(),
-            session.namespace.sources().manifest_id.clone(),
-        )?;
+        let assessment = self.assess_sources(library, session.namespace.sources(), false)?;
         self.view(&session, assessment)
     }
     pub(crate) fn approve(
@@ -838,6 +906,7 @@ impl CopyWorkflow {
                     let outcome=ready.execute_approved(CopyInputs{source_root:scope.directory(0).leaf(),destination:&root,io:&io,cancel:&cancel,validate_scope:&validate},&selection,proof,None,Some(&progress))?;
                     let verified=ready.verified_files()?;
                     if outcome==CopyOutcome::CompletedVerified && let Some(checker)=&keepers && matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok((CopyJobState::CanceledWithPartialCopies,verified,None,"Existing-bundle recheck canceled; retain completed copies for review.".into()));}
+                    if outcome==CopyOutcome::CompletedVerified { this.record_import_copy(session.namespace.sources(),&job_id,keeper_stats.bytes_read)?; }
                     Ok(match outcome {
                         CopyOutcome::CompletedVerified=>(CopyJobState::CompletedVerified,verified,None,"All selected file bytes were copied and fully compared. Originals remain; filesystem metadata fidelity limits still apply.".into()),
                         CopyOutcome::CanceledWithPartialCopies=>(CopyJobState::CanceledWithPartialCopies,verified,None,"Canceled at a safe boundary. Retain published outputs and partial stages for inspection.".into()),

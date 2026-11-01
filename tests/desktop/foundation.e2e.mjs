@@ -252,11 +252,11 @@ async function verifyAllExistingImport(sourceRootId, destination, evidence, outp
         },
       })
     ).data.plan;
-    async function openDraft() {
+    async function openDraft(targetId = draft.id) {
       await $('button=Close saved plans').click();
       await $('button=Saved plans').click();
       const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
-      const index = plans.findIndex((plan) => plan.id === draft.id);
+      const index = plans.findIndex((plan) => plan.id === targetId);
       assert.ok(index >= 0);
       await browser.waitUntil(
         async () => (await $$('.organization-preview li button')).length === plans.length,
@@ -430,6 +430,15 @@ async function verifyAllExistingImport(sourceRootId, destination, evidence, outp
     );
     await $('p*=Import recorded: 2 existing files freshly compared').scrollIntoView();
     await browser.saveScreenshot(`.context/screenshots/m2-import-skip-${process.platform}.png`);
+    await verifyMixedImport(
+      sourceRootId,
+      destination,
+      fixture.job.rootId,
+      primary[0],
+      openDraft,
+      evidence,
+      after,
+    );
   } finally {
     const finished = await browser.tauri.execute(async ({ core }) =>
       core.invoke('test_performance', { action: 'import_skip_finish', rows: null }),
@@ -441,6 +450,220 @@ async function verifyAllExistingImport(sourceRootId, destination, evidence, outp
       JSON.stringify(finished),
     );
   }
+}
+async function verifyMixedImport(
+  sourceRootId,
+  destination,
+  keeperRootId,
+  existingAssetId,
+  openDraft,
+  evidence,
+  before,
+) {
+  const query = {
+    rootId: sourceRootId,
+    folder: '',
+    name: 'Generated-01.png',
+    fromDate: '',
+    throughDate: '',
+    minBytes: '',
+    maxBytes: '',
+    extension: '',
+    favoritesOnly: false,
+    tag: '',
+    sort: 'capture',
+    includeMissing: false,
+  };
+  const packed = (await native({ kind: 'query', query, cursor: null, limit: 24 })).data;
+  const added = packed.rows.find(
+    (row) => row[3].replaceAll('\\', '/') === 'Woodland/Generated-01.png',
+  );
+  assert.ok(added, 'a distinct generated PNG must be indexed');
+  const assetIds = [existingAssetId, added[0]];
+  const template = {
+    pattern: 'Mixed imports/{original_stem}.{ext}',
+    event: '',
+    missingDate: 'undated',
+  };
+  const preview = (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
+    .data;
+  const draft = (
+    await native({
+      kind: 'organization_plan_create',
+      selection_id: destination.id,
+      draft: {
+        assetIds,
+        template,
+        previewFingerprint: preview.fingerprint,
+        templateReference: null,
+      },
+    })
+  ).data.plan;
+  const confirmations = [];
+  for (const row of preview.rows) {
+    const inventory = (
+      await native({
+        kind: 'organization_bundle_inventory',
+        asset_id: row.assetId,
+        source_revision: row.sourceRevision,
+      })
+    ).data;
+    assert.equal(inventory.inventoryComplete, true);
+    assert.equal(inventory.truncated, false);
+    confirmations.push(
+      (
+        await native({
+          kind: 'organization_bundle_confirm',
+          input: {
+            planId: draft.id,
+            assetId: row.assetId,
+            sourceRevision: row.sourceRevision,
+            inventoryFingerprint: inventory.fingerprint,
+            companionIds: inventory.entries
+              .filter(
+                (entry) => entry.selectable && !['primary', 'additional'].includes(entry.relation),
+              )
+              .map((entry) => entry.id)
+              .sort(),
+            reviewedAllEntries: true,
+          },
+        })
+      ).data.id,
+    );
+  }
+  const manifest = (
+    await native({
+      kind: 'organization_copy_manifest',
+      input: { planId: draft.id, bundleConfirmationIds: confirmations },
+    })
+  ).data;
+  assert.equal(manifest.files.length, 3);
+  let comparison = (
+    await native({
+      kind: 'organization_import_comparison_start',
+      input: { planId: draft.id, manifestId: manifest.id, scopeRootIds: [keeperRootId] },
+    })
+  ).data;
+  await browser.waitUntil(
+    async () => {
+      comparison = (
+        await native({ kind: 'organization_import_comparison_job', job_id: comparison.id })
+      ).data;
+      return !['queued', 'running', 'cancel_requested'].includes(comparison.state);
+    },
+    { timeout: 30000 },
+  );
+  assert.equal(comparison.state, 'completed');
+  const plan = (
+    await native({
+      kind: 'organization_import_plan_create',
+      input: {
+        comparisonJobId: comparison.id,
+        choices: comparison.report.bundles.map((bundle) => ({
+          fileId: bundle.fileIds[0],
+          existingGroupId: bundle.existingGroups[0]?.id ?? null,
+        })),
+      },
+    })
+  ).data;
+  assert.equal(plan.copyFileIds.length, 1);
+  assert.equal(plan.skipFiles.length, 2);
+  await openDraft(draft.id);
+  await $('button=Check retained import history').scrollIntoView();
+  await $('button=Check retained import history').click();
+  const saved = await $('button*=Review retained import: 1 copy / 2 existing');
+  await saved.waitForExist();
+  await saved.scrollIntoView();
+  await saved.click();
+  const workflow = await $('section[aria-label="Verified organization copy"]');
+  await workflow.waitForExist();
+  await workflow.$('button=Choose destination and review preparation').scrollIntoView();
+  await workflow.$('button=Choose destination and review preparation').click();
+  await workflow.$('h4=Output preparation review').waitForExist();
+  assert.equal((await workflow.$$('tbody tr')).length, 1);
+  await workflow.$('button=Approve output preparation').scrollIntoView();
+  await workflow.$('button=Approve output preparation').click();
+  await workflow.$('button=Start output preparation').waitForExist();
+  await workflow.$('button=Start output preparation').click();
+  await workflow.$('h4=Prepared copy review').waitForExist({ timeout: 30000 });
+  await workflow.$('button=Choose destination and reopen prepared review').scrollIntoView();
+  await workflow.$('button=Choose destination and reopen prepared review').click();
+  await browser.waitUntil(async () => (await workflow.getAttribute('aria-busy')) === 'false');
+  assert.equal((await workflow.$$('tbody tr')).length, 1);
+  assert.equal((await workflow.$$('button=Start verified copy')).length, 0);
+  assert.equal(await workflow.$('button=Approve byte-verified copy').isEnabled(), false);
+  await workflow.$('label*=I understand that file bytes').scrollIntoView();
+  await workflow.$('label*=I understand that file bytes').$('input').click();
+  await workflow.$('button=Approve byte-verified copy').click();
+  await workflow.$('button=Start verified copy').waitForExist();
+  await workflow.$('button=Start verified copy').click();
+  await browser.waitUntil(
+    async () =>
+      (await workflow.getText()).includes(
+        'Import recorded: 1 new file copied and 2 existing files freshly verified.',
+      ),
+    { timeout: 30000 },
+  );
+  const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+    (job) => job.planId === draft.id,
+  );
+  const job = jobs.find((job) => job.action === 'copy_files');
+  assert.equal(job.state, 'completed_verified');
+  assert.equal(job.verifiedFiles, 1);
+  const receipt = (await native({ kind: 'organization_import_copy_receipt', job_id: job.id })).data;
+  assert.equal(receipt.importPlanId, plan.id);
+  assert.deepEqual(receipt.copiedFileIds, plan.copyFileIds);
+  assert.deepEqual(receipt.skippedFiles, plan.skipFiles);
+  const expectedRead =
+    4n *
+    manifest.files
+      .filter((file) => plan.skipFiles.some((skip) => skip.fileId === file.id))
+      .reduce((total, file) => total + BigInt(file.bytes), 0n);
+  assert.equal(BigInt(receipt.keeperBytesRead), expectedRead);
+  const after = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+  );
+  assert.equal(after.neighborUnchanged, true);
+  assert.equal(after.files.length, before.files.length + 1);
+  for (const file of before.files)
+    assert.deepEqual(
+      after.files.find((current) => current.relativePath === file.relativePath),
+      file,
+    );
+  assert(after.files.every((file) => file.matchesGeneratedSourceBytes));
+  const preservation = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'import_skip_verify', rows: null }),
+  );
+  assert.equal(preservation.comparisonVerifiedEntries, 2);
+  await writeFile(
+    `${evidence}/import-mixed-execution-${process.platform}.json`,
+    JSON.stringify({
+      manifest,
+      plan,
+      jobs,
+      receipt,
+      expectedRead: expectedRead.toString(),
+      preservation,
+      before,
+      after,
+    }),
+  );
+  await workflow.$('p*=Import recorded:').scrollIntoView();
+  await browser.saveScreenshot(`.context/screenshots/m2-import-mixed-${process.platform}.png`);
+  await openDraft(draft.id);
+  assert.equal((await $$('button=Start verified copy')).length, 0);
+  await $('button=Check retained import history').scrollIntoView();
+  await $('button=Check retained import history').click();
+  await $('button*=Review retained import: 1 copy / 2 existing').waitForExist();
+  await $('button*=Review retained import: 1 copy / 2 existing').click();
+  await $('button=Review saved import decisions').scrollIntoView();
+  await $('button=Review saved import decisions').click();
+  await $('p*=Completed import: 1 new file copied / 2 existing files verified').waitForExist();
+  assert.equal((await $$('button=Start verified copy')).length, 0);
+  assert.deepEqual(
+    (await native({ kind: 'organization_import_copy_receipt', job_id: job.id })).data,
+    receipt,
+  );
 }
 async function reviewEquivalentDraft(original, destination, evidence, audit) {
   // Recreate the user's selected mapping through real ID-only IPC. Draft UUIDs

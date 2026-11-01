@@ -1,4 +1,63 @@
-import type { CopyManifest, ImportComparisonJob, ImportPlan, ImportSession } from '../bindings';
+import type {
+  CopyManifest,
+  CopyActionReview,
+  CopyWorkflowJob,
+  ImportCopyReceipt,
+  ImportComparisonJob,
+  ImportPlan,
+  ImportSession,
+} from '../bindings';
+
+export function validateImportCopyReview(
+  review: CopyActionReview,
+  manifest: CopyManifest,
+  plan: ImportPlan,
+) {
+  validateImportPlan(plan, manifest);
+  const expected = manifest.files.filter((file) => plan.copyFileIds.includes(file.id));
+  if (
+    !expected.length ||
+    review.sourceRootId !== plan.sourceRootId ||
+    review.planId !== plan.planId ||
+    review.manifestId !== manifest.id ||
+    review.assessment.manifestDigest !== manifest.digest ||
+    expected.length !== review.files.length ||
+    expected.some((file, index) => {
+      const actual = review.files[index];
+      return (
+        !actual ||
+        actual.id !== file.id ||
+        actual.bytes !== file.bytes ||
+        actual.targetPath !== `${review.outputFolder}/${file.targetRelativePath}`
+      );
+    }) ||
+    review.assessment.capacity.logicalBytes !==
+      expected.reduce((total, file) => total + BigInt(file.bytes), 0n).toString()
+  )
+    throw new Error('The import copy review differs from the exact saved new-file decisions.');
+}
+export function validateImportCopyReceipt(
+  receipt: ImportCopyReceipt,
+  plan: ImportPlan,
+  job: CopyWorkflowJob,
+) {
+  if (
+    job.state !== 'completed_verified' ||
+    receipt.jobId !== job.id ||
+    receipt.copyReviewId !== job.reviewId ||
+    receipt.planId !== plan.planId ||
+    receipt.manifestId !== plan.manifestId ||
+    receipt.importPlanId !== plan.id ||
+    receipt.importDigest !== plan.digest ||
+    !receipt.sourcesRetained ||
+    !receipt.verifiedAt ||
+    !/^\d{1,39}$/.test(receipt.keeperBytesRead) ||
+    receipt.copiedFileIds.length !== job.totalFiles ||
+    JSON.stringify(receipt.copiedFileIds) !== JSON.stringify(plan.copyFileIds) ||
+    JSON.stringify(receipt.skippedFiles) !== JSON.stringify(plan.skipFiles)
+  )
+    throw new Error('The completed import receipt does not match this job and saved decisions.');
+}
 
 export const digest = (value: string) => /^[a-f0-9]{64}$/.test(value);
 export const running = (job: ImportSession) =>

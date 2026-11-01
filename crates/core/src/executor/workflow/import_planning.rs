@@ -375,7 +375,6 @@ pub(in crate::executor) fn validate_projection(db: &Connection, snapshot: &Snaps
     Ok(())
 }
 impl CopyWorkflow {
-    #[cfg(test)]
     pub(in crate::executor) fn import_copy_sources(
         &self,
         owner: String,

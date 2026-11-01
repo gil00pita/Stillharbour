@@ -14,6 +14,37 @@ fn unavailable() -> AppError {
     )
 }
 impl Library {
+    pub fn organization_import_copy_review(
+        &self,
+        _owner: String,
+        _import: String,
+        _selection: String,
+        _path: PathBuf,
+        _identity: (FileIdentity, String),
+    ) -> Result<CopyActionReview> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow
+                .create_import_review(self, _owner, _import, _selection, _path, _identity)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
+    pub fn organization_import_copy_receipt(
+        &self,
+        _job: String,
+    ) -> Result<Option<ImportCopyReceipt>> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow.import_copy_receipt(_job)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
     pub fn organization_import_saved_plans(
         &self,
         _owner: String,

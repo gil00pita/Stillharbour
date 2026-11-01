@@ -217,6 +217,7 @@ async fn library_request(
         | LibraryRequest::OrganizationCopyPreparationReopen { selection_id, .. }
         | LibraryRequest::OrganizationCopyEffectMatch { selection_id, .. }
         | LibraryRequest::OrganizationCopyReviewCreate { selection_id, .. }
+        | LibraryRequest::OrganizationImportCopyReview { selection_id, .. }
         | LibraryRequest::OrganizationCopyReview { selection_id, .. }
         | LibraryRequest::OrganizationCopyApprove { selection_id, .. }
         | LibraryRequest::OrganizationCopyStart { selection_id, .. }
@@ -231,6 +232,34 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationImportCopyReceipt { job_id } => {
+                LibraryResponse::OrganizationImportCopyReceipt(
+                    library
+                        .organization_import_copy_receipt(job_id)?
+                        .map(Box::new),
+                )
+            }
+            LibraryRequest::OrganizationImportCopyReview {
+                plan_id,
+                import_plan_id,
+                ..
+            } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved import destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyReview(Box::new(
+                    library.organization_import_copy_review(
+                        plan_id,
+                        import_plan_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
             LibraryRequest::OrganizationImportSavedPlans { plan_id } => {
                 LibraryResponse::OrganizationImportSavedPlans(
                     library.organization_import_saved_plans(plan_id)?,

@@ -1,6 +1,6 @@
 # ADR-0049 — Shared admission and fresh keeper checks for import copies
 
-Date: 2026-11-01. Status: private M2 implementation; complete checks and Windows native regression pass; own macOS CI pending.
+Date: 2026-11-01. Status: private M2 implementation; complete checks and Windows/macOS native regression pass in CI run 41260412572.
 
 ## Decision
 

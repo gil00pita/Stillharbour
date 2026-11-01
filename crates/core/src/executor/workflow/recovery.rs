@@ -125,15 +125,8 @@ impl CopyWorkflow {
         session: &RecoverySession,
     ) -> Result<CopyAssessment> {
         let source = &session.sources;
-        let mut assessment = library.organization_copy_prepared_assessment(
-            source.owner_id.clone(),
-            source.manifest_id.clone(),
-        )?;
-        let snapshot = Snapshot::build(
-            &self.catalog,
-            source.owner_id.clone(),
-            source.manifest_id.clone(),
-        )?;
+        let mut assessment = self.assess_sources(library, source, false)?;
+        let snapshot = self.current_sources(source)?;
         if serde_json::to_vec(&snapshot).ok() != serde_json::to_vec(source).ok() {
             return Err(failed(
                 "Continuation source scope changed. Review it again.",
@@ -203,10 +196,7 @@ impl CopyWorkflow {
                 sources,
                 namespace,
             } = self.retained_copy(job_id, &path, &selected.0, &selected.1)?;
-            let mut assessment = library.organization_copy_prepared_assessment(
-                sources.owner_id.clone(),
-                sources.manifest_id.clone(),
-            )?;
+            let mut assessment = self.assess_sources(library, &sources, false)?;
             let scope = sources.open_scope(&self.catalog, Access::Read)?;
             let inventory = journal.recovery_inventory(scope.directory(1).leaf())?;
             let output =
@@ -424,6 +414,7 @@ impl CopyWorkflow {
                 let io=PacedIo::shared();
                 let outcome=session.journal.resume_approved(CopyInputs{source_root:scope.directory(0).leaf(),destination:&output,io:&io,cancel:&cancel,validate_scope:&validate},&selection,session.review.clone(),proof,None,Some(&progress))?;
                 if outcome==CopyOutcome::CompletedVerified && let Some(checker)=&keepers && matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok(CopyOutcome::CanceledWithPartialCopies);}
+                if outcome==CopyOutcome::CompletedVerified {this.record_import_copy(&session.sources,&job_id,keeper_stats.bytes_read)?;}
                 Ok(outcome)
             })();
             let current=operation_jobs::load(&this.catalog,job_id.clone());
@@ -589,11 +580,18 @@ impl CopyWorkflow {
                 "Close unused copy reviews before reopening preparation.",
             ));
         }
+        let import_plan = match &session.namespace.sources().import_selection {
+            Some(selection) => {
+                Some(self.open_import_plan(view.plan_id.clone(), selection.id.clone())?)
+            }
+            None => None,
+        };
         sessions.insert(session.namespace.id().into(), Some(session));
         Ok(CopyPreparationReopened {
             job_id,
             manifest,
             review: view,
+            import_plan,
         })
     }
 }

@@ -7,11 +7,19 @@ import type {
   ImportPlan,
   ImportSession,
   ImportSkipApproval,
+  ImportCopyReceipt,
 } from '../bindings';
 import { errorMessage, library, libraryData } from '../ipc';
 import { CopyIoControls } from './CopyJobProgress';
+import { VerifiedCopyWorkflow } from './VerifiedCopyWorkflow';
 
-import { digest, running, validateImportPlan, validateSession } from './importPlanValidation';
+import {
+  digest,
+  running,
+  validateImportPlan,
+  validateSession,
+  validateImportCopyReceipt,
+} from './importPlanValidation';
 
 export function ImportPlanReview({
   manifest,
@@ -30,6 +38,8 @@ export function ImportPlanReview({
   const [job, setJob] = useState<ImportSession | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copyActive, setCopyActive] = useState(false);
+  const [copyReceipts, setCopyReceipts] = useState<ImportCopyReceipt[]>([]);
   const [capability, setCapability] = useState<{ available: boolean; reason: string } | null>(
     comparison ? { available: true, reason: '' } : null,
   );
@@ -162,7 +172,28 @@ export function ImportPlanReview({
       )
     )
       throw new Error('Import history does not match this confirmed manifest.');
-    if (epoch.current === token) setHistory(value);
+    const receipts: ImportCopyReceipt[] = [];
+    if (plan?.copyFileIds.length) {
+      const status = await libraryData({ kind: 'status' }, 'status');
+      const jobs = status.copyJobs ?? [];
+      if (jobs.length > 32) throw new Error('Copy job history exceeds its review bound.');
+      for (const job of jobs.filter(
+        (job) => job.planId === manifest.planId && job.state === 'completed_verified',
+      )) {
+        const receipt = await libraryData(
+          { kind: 'organization_import_copy_receipt', job_id: job.id },
+          'organization_import_copy_receipt',
+        );
+        if (receipt?.importPlanId === plan.id) {
+          validateImportCopyReceipt(receipt, plan, job);
+          receipts.push(receipt);
+        }
+      }
+    }
+    if (epoch.current === token) {
+      setHistory(value);
+      setCopyReceipts(receipts);
+    }
   }
   async function open(token: number, id: string, session?: ImportSession) {
     const next = await libraryData(
@@ -261,7 +292,7 @@ export function ImportPlanReview({
         grants no approval.
       </p>
       {bundles && (
-        <fieldset disabled={pending || active}>
+        <fieldset disabled={pending || active || copyActive}>
           <legend>Choose each whole bundle</legend>
           {bundles.map((bundle) => (
             <label key={bundle.fileIds[0]}>
@@ -300,7 +331,7 @@ export function ImportPlanReview({
       {!capability?.available && <p>{capability?.reason ?? 'Checking import availability…'}</p>}
       <button
         type="button"
-        disabled={pending || active || capability?.available !== true}
+        disabled={pending || active || copyActive || capability?.available !== true}
         onClick={() => void work(readHistory)}
       >
         Review saved import decisions
@@ -312,7 +343,7 @@ export function ImportPlanReview({
             <p key={saved.id}>
               <button
                 type="button"
-                disabled={pending || active}
+                disabled={pending || active || copyActive}
                 onClick={() => void work((token) => open(token, saved.id))}
               >
                 Open import plan: {saved.copyFiles} copy / {saved.skipFiles} existing ·{' '}
@@ -324,7 +355,7 @@ export function ImportPlanReview({
             <p key={session.id}>
               <button
                 type="button"
-                disabled={pending || active}
+                disabled={pending || active || copyActive}
                 onClick={() => void work((token) => open(token, session.importPlanId, session))}
               >
                 Review import attempt: {session.state.replaceAll('_', ' ')} · {session.createdAt}
@@ -332,6 +363,15 @@ export function ImportPlanReview({
             </p>
           ))}
           {!history.plans.length && <p>No import decisions are retained for this manifest.</p>}
+          {copyReceipts.map((receipt) => (
+            <p key={receipt.jobId}>
+              Completed import: {receipt.copiedFileIds.length} new{' '}
+              {receipt.copiedFileIds.length === 1 ? 'file' : 'files'} copied /{' '}
+              {receipt.skippedFiles.length} existing{' '}
+              {receipt.skippedFiles.length === 1 ? 'file' : 'files'} verified · {receipt.verifiedAt}
+              . Sources retained; no approval restored.
+            </p>
+          ))}
         </div>
       )}
       {plan && (
@@ -371,7 +411,7 @@ export function ImportPlanReview({
                 <input
                   type="checkbox"
                   checked={ack}
-                  disabled={pending || active || capability?.available !== true}
+                  disabled={pending || active || copyActive || capability?.available !== true}
                   onChange={(event) => {
                     setAck(event.target.checked);
                     setApproval(null);
@@ -388,7 +428,7 @@ export function ImportPlanReview({
               </label>
               <button
                 type="button"
-                disabled={!ack || pending || active || capability?.available !== true}
+                disabled={!ack || pending || active || copyActive || capability?.available !== true}
                 onClick={() => void work(approve)}
               >
                 Approve existing-bundle import
@@ -396,18 +436,22 @@ export function ImportPlanReview({
               {approval && (
                 <button
                   type="button"
-                  disabled={pending || active || capability?.available !== true}
+                  disabled={pending || active || copyActive || capability?.available !== true}
                   onClick={() => void work(start)}
                 >
                   Verify and record skipped import
                 </button>
               )}
             </>
+          ) : capability?.available === true ? (
+            <VerifiedCopyWorkflow
+              key={plan.id}
+              manifest={manifest}
+              importPlan={plan}
+              onActivityChange={setCopyActive}
+            />
           ) : (
-            <p>
-              Copying new members in a mixed import is not enabled yet. This saved plan has not
-              copied or skipped any files.
-            </p>
+            <p>Verified import copying is unavailable in this build.</p>
           )}
         </>
       )}

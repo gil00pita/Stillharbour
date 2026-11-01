@@ -559,6 +559,14 @@ pub enum LibraryRequest {
         plan_id: String,
         import_plan_id: String,
     },
+    OrganizationImportCopyReview {
+        plan_id: String,
+        import_plan_id: String,
+        selection_id: String,
+    },
+    OrganizationImportCopyReceipt {
+        job_id: String,
+    },
     OrganizationImportPlanRelease {
         plan_id: String,
         import_plan_id: String,
@@ -754,6 +762,7 @@ pub enum LibraryResponse {
     OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),
     OrganizationImportComparisonJob(Box<crate::operations::ImportComparisonJob>),
     OrganizationImportPlan(Box<crate::operations::ImportPlan>),
+    OrganizationImportCopyReceipt(Option<Box<crate::operations::ImportCopyReceipt>>),
     OrganizationImportSkipApproval(crate::operations::ImportSkipApproval),
     OrganizationImportSession(Box<crate::operations::ImportSession>),
     OrganizationImportHistory(Box<crate::operations::ImportHistory>),

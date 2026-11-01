@@ -199,4 +199,7 @@ pub struct CopyPreparationReopened {
     pub job_id: String,
     pub manifest: super::CopyManifest,
     pub review: CopyActionReview,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub import_plan: Option<super::ImportPlan>,
 }

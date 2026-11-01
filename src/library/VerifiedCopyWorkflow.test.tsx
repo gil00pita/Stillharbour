@@ -1,6 +1,13 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
-import type { CopyActionReview, CopyManifest, CopyWorkflowJob, LibraryRequest } from '../bindings';
+import type {
+  CopyActionReview,
+  CopyActionApproval,
+  CopyManifest,
+  CopyWorkflowJob,
+  ImportPlan,
+  LibraryRequest,
+} from '../bindings';
 import { library, libraryData, pickDirectory } from '../ipc';
 import { VerifiedCopyWorkflow, ReopenPreparedCopy } from './VerifiedCopyWorkflow';
 vi.mock('../ipc', async (original) => ({
@@ -378,4 +385,257 @@ it('discards a late preparation response after the job view closes', async () =>
   await waitFor(() =>
     expect(library).toHaveBeenCalledWith({ kind: 'organization_copy_discard', review_id: 'copy' }),
   );
+});
+
+const mixedManifest: CopyManifest = {
+  ...manifest,
+  selectedBytes: '43',
+  files: [
+    {
+      id: 'photo',
+      rootId: 'root',
+      sourceName: 'photo.JPG',
+      sourceRevision: 'a'.repeat(64),
+      targetRelativePath: 'after/photo.JPG',
+      bytes: '42',
+      bundleAssetIds: ['new-photo'],
+    },
+    {
+      id: 'existing',
+      rootId: 'root',
+      sourceName: 'existing.JPG',
+      sourceRevision: 'a'.repeat(64),
+      targetRelativePath: 'after/existing.JPG',
+      bytes: '1',
+      bundleAssetIds: ['existing-photo'],
+    },
+  ],
+};
+const mixedPlan: ImportPlan = {
+  id: 'import',
+  planId: 'plan',
+  manifestId: 'manifest',
+  manifestDigest: manifest.digest,
+  digest: 'a'.repeat(64),
+  createdAt: 'now',
+  sourceRootId: 'root',
+  scopeRootIds: ['keeper-root'],
+  choices: [
+    { fileId: 'photo', existingGroupId: null },
+    { fileId: 'existing', existingGroupId: 'b'.repeat(64) },
+  ],
+  copyFileIds: ['photo'],
+  skipFiles: [
+    {
+      fileId: 'existing',
+      keeperAssetId: 'keeper',
+      keeperRootId: 'keeper-root',
+      keeperRelativePath: 'old.JPG',
+      digest: 'c'.repeat(64),
+      sameNativeObject: false,
+    },
+  ],
+  sourcesRetained: true,
+  executionAvailable: false,
+};
+it.each([false, true])(
+  'uses exact import review and requires matching receipt (foreign receipt: %s)',
+  async (foreign) => {
+    vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) => {
+      switch (request.kind) {
+        case 'organization_copy_capabilities':
+          return { available: true, reason: 'Sources retained' };
+        case 'organization_import_copy_review':
+          return preparation;
+        case 'organization_copy_review':
+          return copy;
+        case 'organization_copy_approve':
+          return {
+            id: `approval-${request.input.action}`,
+            reviewId: request.input.reviewId,
+            action: request.input.action,
+            expiresInSeconds: 600,
+          };
+        case 'organization_copy_start':
+          return job(
+            request.input.reviewId === 'preparation' ? 'prepare_names' : 'copy_files',
+            true,
+          );
+        case 'organization_import_copy_receipt':
+          return {
+            jobId: 'copy-job',
+            planId: 'plan',
+            manifestId: 'manifest',
+            importPlanId: foreign ? 'foreign' : 'import',
+            importDigest: mixedPlan.digest,
+            copyReviewId: 'copy',
+            copiedFileIds: ['photo'],
+            skippedFiles: mixedPlan.skipFiles,
+            keeperBytesRead: '4',
+            verifiedAt: 'now',
+            sourcesRetained: true,
+          };
+        default:
+          throw new Error(`Unexpected request: ${request.kind}`);
+      }
+    });
+    render(<VerifiedCopyWorkflow manifest={mixedManifest} importPlan={mixedPlan} />);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Choose destination and review preparation' }),
+    );
+    await screen.findByRole('heading', { name: 'Output preparation review' });
+    expect(libraryData).toHaveBeenCalledWith(
+      {
+        kind: 'organization_import_copy_review',
+        plan_id: 'plan',
+        import_plan_id: 'import',
+        selection_id: 'native-selection',
+      },
+      'organization_copy_review',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Approve output preparation' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Start output preparation' }));
+    await screen.findByRole('heading', { name: 'Prepared copy review' });
+    expect(screen.getByRole('button', { name: 'Approve byte-verified copy' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'Approve byte-verified copy' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Start verified copy' }));
+    if (foreign) {
+      await screen.findByText(
+        'The completed import receipt does not match this job and saved decisions.',
+      );
+      expect(screen.queryByText(/^Import recorded:/)).not.toBeInTheDocument();
+    } else
+      await screen.findByText(
+        'Import recorded: 1 new file copied and 1 existing file freshly verified. Sources retained.',
+      );
+    expect(
+      vi
+        .mocked(libraryData)
+        .mock.calls.some(
+          ([request]) =>
+            request.kind === 'organization_copy_effect_match' ||
+            request.kind === 'organization_copy_review_create',
+        ),
+    ).toBe(false);
+  },
+);
+it('rejects an imported review containing a skipped file before exposing approval', async () => {
+  vi.mocked(libraryData)
+    .mockResolvedValueOnce({ available: true, reason: 'test' })
+    .mockResolvedValueOnce({
+      ...preparation,
+      files: [...preparation.files, { ...preparation.files[0]!, id: 'existing' }],
+    });
+  render(<VerifiedCopyWorkflow manifest={mixedManifest} importPlan={mixedPlan} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose destination and review preparation' }),
+  );
+  await screen.findByText(
+    'The import copy review differs from the exact saved new-file decisions.',
+  );
+  expect(
+    screen.queryByRole('button', { name: 'Approve output preparation' }),
+  ).not.toBeInTheDocument();
+});
+
+it.each(['review', 'approval', 'start'] as const)(
+  'releases a late mixed-import %s response after closing',
+  async (phase) => {
+    let resolve!: (value: CopyActionReview | CopyActionApproval | CopyWorkflowJob) => void;
+    vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) => {
+      if (request.kind === 'organization_copy_capabilities')
+        return { available: true, reason: 'test' };
+      if (request.kind === 'organization_import_copy_review')
+        return new Promise((done) => {
+          resolve = done;
+        });
+      if (request.kind === 'organization_copy_approve')
+        return phase === 'approval'
+          ? new Promise((done) => {
+              resolve = done;
+            })
+          : {
+              id: 'approval',
+              reviewId: 'preparation',
+              action: 'prepare_names',
+              expiresInSeconds: 600,
+            };
+      if (request.kind === 'organization_copy_start')
+        return new Promise((done) => {
+          resolve = done;
+        });
+      throw new Error(`Unexpected request: ${request.kind}`);
+    });
+    const view = render(
+      <VerifiedCopyWorkflow
+        manifest={mixedManifest}
+        importPlan={mixedPlan}
+        {...(phase === 'review'
+          ? {}
+          : {
+              initial: {
+                review: preparation,
+                selection: {
+                  id: 'native-selection',
+                  displayPath: 'Chosen destination',
+                  identityAvailable: true,
+                },
+              },
+            })}
+      />,
+    );
+    if (phase === 'review')
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Choose destination and review preparation' }),
+      );
+    else {
+      fireEvent.click(screen.getByRole('button', { name: 'Approve output preparation' }));
+      if (phase === 'start')
+        fireEvent.click(await screen.findByRole('button', { name: 'Start output preparation' }));
+    }
+    await waitFor(() => expect(resolve).toBeTypeOf('function'));
+    view.unmount();
+    vi.mocked(library).mockClear();
+    await act(async () =>
+      resolve(
+        phase === 'review'
+          ? preparation
+          : phase === 'approval'
+            ? {
+                id: 'approval',
+                reviewId: 'preparation',
+                action: 'prepare_names',
+                expiresInSeconds: 600,
+              }
+            : job('prepare_names', false),
+      ),
+    );
+    await waitFor(() =>
+      expect(library).toHaveBeenCalledWith(
+        phase === 'start'
+          ? { kind: 'organization_copy_cancel', job_id: 'prepare-job' }
+          : { kind: 'organization_copy_discard', review_id: 'preparation' },
+      ),
+    );
+  },
+);
+
+it('reopens a prepared mixed import using its full manifest and exact saved subset', async () => {
+  vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) => {
+    if (request.kind === 'organization_copy_capabilities')
+      return { available: true, reason: 'test' };
+    if (request.kind === 'organization_copy_preparation_reopen')
+      return { jobId: 'prepare-job', manifest: mixedManifest, review: copy, importPlan: mixedPlan };
+    throw new Error(`Unexpected request: ${request.kind}`);
+  });
+  render(<ReopenPreparedCopy job={job('prepare_names', true)} />);
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Choose destination and reopen preparation' }),
+  );
+  await screen.findByRole('heading', { name: 'Prepared copy review' });
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
+  expect(screen.getByRole('button', { name: 'Approve byte-verified copy' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Start verified copy' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/^Import recorded:/)).not.toBeInTheDocument();
 });

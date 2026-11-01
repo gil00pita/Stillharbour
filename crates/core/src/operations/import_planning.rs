@@ -42,6 +42,21 @@ pub struct ImportPlan {
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportCopyReceipt {
+    pub job_id: String,
+    pub plan_id: String,
+    pub manifest_id: String,
+    pub import_plan_id: String,
+    pub import_digest: String,
+    pub copy_review_id: String,
+    pub copied_file_ids: Vec<String>,
+    pub skipped_files: Vec<ImportSkipFile>,
+    pub keeper_bytes_read: String,
+    pub verified_at: String,
+    pub sources_retained: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportSkipApprovalInput {
     pub plan_id: String,
     pub import_plan_id: String,
