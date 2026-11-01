@@ -2,7 +2,7 @@
 
 ## Objective
 
-M4A read-only implementation is complete for exact-head Windows/macOS acceptance validation. See [M4A_VALIDATION.md](../docs/M4A_VALIDATION.md) for the requirement matrix and [IMPLEMENTATION_LOG.md](../docs/IMPLEMENTATION_LOG.md) for actual results. Complete the checks and inspect native receipts before marking the gate accepted. M4B–D and real-library mutations remain separately gated.
+M4A read-only implementation and Windows/macOS native validation are complete at tested head 90acf91 (CI 41356788575). See [M4A_VALIDATION.md](../docs/M4A_VALIDATION.md) for the requirement matrix and [IMPLEMENTATION_LOG.md](../docs/IMPLEMENTATION_LOG.md) for actual results. Both platform receipts and screenshots have been inspected; stop at this review gate before M4B. M4B–D and real-library mutations remain separately gated.
 
 Policy 3/schema 12 add immutable bounded observation history, destination-edited context, an immutable nonexecutable review descriptor, explicit superseding profile rebind, potential companion relationships and ID-bound side-by-side decoder previews. Original and destination trees remain unchanged.
 
@@ -10,7 +10,7 @@ Provide genuine snapshot backup/restore plus a distinct readable Safe copy / one
 
 ## Prerequisites and references
 
-Current continuation: policy-2 conservative name/type conflict blocking, full-report category totals/filter paging and observed entry details. Validate generated case/type conflict byte preservation, Unicode/ancestor policy fixtures, matching rows beyond page one and actual native filter/inspector UI. The read-only gaps are closed by ADR-0075; require the exact-head native platform/failure evidence in M4A_VALIDATION.md. Prospective write-name preparation and transfer/fidelity/recovery gates remain M4B–D.
+Current continuation: policy-2 conservative name/type conflict blocking, full-report category totals/filter paging and observed entry details. Validate generated case/type conflict byte preservation, Unicode/ancestor policy fixtures, matching rows beyond page one and actual native filter/inspector UI. The read-only gaps are closed by ADR-0075; the exact-head native platform/failure evidence is recorded in M4A_VALIDATION.md. Prospective write-name preparation and transfer/fidelity/recovery gates remain M4B–D.
 
 M1 catalog and M2 coordination/execution contracts; docs/CODEX_SPEC.md section 13; acceptance AC-066 through AC-073, AC-081 and AC-084.
 

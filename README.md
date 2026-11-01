@@ -22,7 +22,7 @@ A local-first photo library that keeps your originals in ordinary folders.
 - **Browse your collection.** A chronological photo canvas, uniform grid, text-only list, folder explorer and date navigation, with filename search and filters.
 - **Keep a local catalog.** Save multiple nonoverlapping photo folders, configure scan filters, follow background jobs, and retain indexed records and available cached previews when a root goes offline.
 - **Inspect and annotate.** View metadata and date provenance; add favourites, ratings and tags individually or in batches without rewriting originals or sidecars.
-- **Compare backup scope.** Review the base library against a separate destination dataset using quick or full-byte comparison, and save immutable comparison profiles for later reopening. This read-only M4A increment cannot copy, replace or establish recovery evidence. See [M4 status](docs/M4_BACKUP_SYNC.md).
+- **Compare backup scope.** Review the base library against a separate destination dataset using quick or full-byte comparison, save immutable comparison profiles, review historical destination edits and inspect read-only previews. This read-only M4A increment cannot copy, replace or establish recovery evidence. See [M4 status](docs/M4_BACKUP_SYNC.md).
 - **Look closer.** Navigate photos with zoom, pan, filmstrip and Info, or visually compare 2–4 selected photos. Comparison does not establish duplicate equality.
 - **Plan organization.** Select up to 240 individual photos and try date, event and sequence templates. Save immutable template versions with up to four validated examples and destination-bound drafts; review existing target conflicts and selected source folders. Reopen Saved plans and view or save new JSON/CSV review files. Future-name checks, complete companion bundles, execution, import and undo remain pending. Originals stay in place.
 
@@ -100,7 +100,7 @@ Work proceeds through reviewed milestones. Individual later slices, such as macO
 | [M1 — Read-only library](tasks/M1_READ_ONLY_LIBRARY.md)                      | Implemented native browsing and catalog annotations; platform and performance gates remain                                                     |
 | [M2 — Organization and import](tasks/M2_SAFE_OPERATIONS.md)                  | In progress: previews, companion review, destination preflight, saved template versions and immutable drafts; execution/import/undo gates open |
 | [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Read-only Duplicates, Integrity and Storage; production quarantine awaits M4 recovery                                                          |
-| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | Started: read-only M4A comparison; copy, snapshots and restore remain gated                                                                    |
+| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | M4A complete and natively validated; copy, snapshots and restore remain gated                                                                  |
 | [M5 — Maps, metadata and formats](tasks/M5_MAP_METADATA_FORMATS.md)          | macOS format-preview slice implemented; maps and remaining scope pending                                                                       |
 | [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | Pending packaging, signing and target-platform acceptance                                                                                      |
 

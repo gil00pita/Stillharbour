@@ -2,7 +2,7 @@
 
 Date: 2026-11-01
 
-Status: implemented; platform acceptance is recorded in M4A_VALIDATION.md after actual checks.
+Status: implemented and natively validated on Windows/macOS at 90acf91; actual acceptance evidence is recorded in M4A_VALIDATION.md. Owner review and M4B authorization remain separate.
 
 Use catalog schema 12 for immutable comparison observations. The existing retained-snapshot transaction migrates schema 11 without changing catalog/root IDs or profile format 1. Store at most 32 observations, each bounded to 16 MiB and 10,000 destination records. Retain existing observations when full and disclose that the new observation was not saved. Quick/incomplete/failed/canceled runs never replace a complete observation. Validate imported records defensively and never deserialize approvals or executable paths from history.
 
