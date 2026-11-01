@@ -1,4 +1,5 @@
 use stillharbour_core::{
+    backup::comparison::*,
     contract::*,
     domain::{AppError, ErrorCode},
     inspection::model::*,
@@ -18,6 +19,19 @@ use ts_rs::TS;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ts_rs::Config::default();
     let declarations = [
+        SyncProfile::decl(&config),
+        ComparisonEntryKind::decl(&config),
+        ComparisonSide::decl(&config),
+        ComparisonSummary::decl(&config),
+        CompareMode::decl(&config),
+        ComparisonCategory::decl(&config),
+        SyncProposal::decl(&config),
+        DestinationCapability::decl(&config),
+        SyncIssue::decl(&config),
+        ComparisonEntry::decl(&config),
+        ComparisonState::decl(&config),
+        ComparisonRun::decl(&config),
+        ComparisonPage::decl(&config),
         ContentAlgorithm::decl(&config),
         MatchMode::decl(&config),
         RuleLogic::decl(&config),

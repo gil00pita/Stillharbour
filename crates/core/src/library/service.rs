@@ -85,6 +85,7 @@ impl Drop for MaintenanceGuard<'_> {
 }
 
 pub struct Library {
+    pub(super) comparisons: super::backup_compare::CompareJobs,
     pub(super) inspections: Arc<super::inspection_jobs::InspectionJobs>,
     monitor: Mutex<Option<super::monitor::Monitor>>,
     cache_cleanup: super::cache_cleanup::CacheCleanup,
@@ -267,6 +268,15 @@ impl Library {
             MaintenanceTarget::Library { root_id } => {
                 uuid::Uuid::parse_str(root_id).map_err(|_| invalid("Invalid library identity."))?;
                 self.validate_root_id(root_id.clone())?;
+                if self.backup_comparison_latest()?.is_some_and(|run| {
+                    run.state == crate::backup::comparison::ComparisonState::Comparing
+                        && run.source_root_id == *root_id
+                }) {
+                    return Err(AppError::new(
+                        ErrorCode::Busy,
+                        "Cancel the active Backup & Sync comparison before removing its source library.",
+                    ));
+                }
                 if self.inspections.root_busy(&self.catalog, root_id)? {
                     return Err(AppError::new(
                         ErrorCode::Busy,
@@ -442,6 +452,7 @@ impl Library {
         super::operation_jobs::recover(&catalog)?;
         super::inspection_store::recover(&catalog)?;
         let library = Arc::new(Self {
+            comparisons: super::backup_compare::CompareJobs::default(),
             inspections: Arc::new(super::inspection_jobs::InspectionJobs::default()),
             #[cfg(any(test, feature = "copy-workflow"))]
             copy_workflow: crate::executor::CopyWorkflow::new(
@@ -893,6 +904,7 @@ impl Library {
         Err(invalid("This scan is no longer running."))
     }
     pub fn cancel_all(&self) {
+        self.comparisons.stop();
         if let Ok(active) = self.original_cancel.lock()
             && let Some(cancel) = active.as_ref()
         {
@@ -1547,6 +1559,7 @@ impl Library {
 }
 impl Drop for Library {
     fn drop(&mut self) {
+        self.comparisons.stop();
         if let Ok(state) = self.monitor.lock()
             && let Some(monitor) = state.as_ref()
         {

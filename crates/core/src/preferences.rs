@@ -184,7 +184,7 @@ mod tests {
     fn defaults_are_valid_and_roundtrip_without_filesystem_mutation() {
         let settings = AppPreferences::default();
         settings.validate().unwrap();
-        assert_eq!(settings.scan_filter.extensions.len(), 33);
+        assert_eq!(settings.scan_filter.extensions.len(), 34);
         let encoded = serde_json::to_vec(&settings).unwrap();
         assert_eq!(
             serde_json::from_slice::<AppPreferences>(&encoded).unwrap(),
@@ -209,7 +209,7 @@ mod tests {
         let data = tempfile::tempdir().unwrap();
         let store = PreferencesStore::new(data.path()).unwrap();
         let mut settings = store.get().unwrap();
-        assert_eq!(settings.scan_filter.extensions.len(), 33);
+        assert_eq!(settings.scan_filter.extensions.len(), 34);
         settings.root_mode = RootMode::Referenced;
         settings.gallery_view = GalleryView::List;
         settings.scan_filter.include_hidden_files = true;

@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Default photo-file discovery preset, not a decoder-support promise.
+/// Default media discovery preset (legacy constant name), not a decoder promise.
 pub const DEFAULT_PHOTO_EXTENSIONS: &[&str] = &[
     "jpg", "jpeg", "jfif", "heic", "heif", "hif", "png", "tif", "tiff", "webp", "avif", "gif",
     "bmp", "dng", "cr3", "cr2", "crw", "nef", "nrw", "arw", "sr2", "srf", "raf", "orf", "rw2",
-    "raw", "pef", "srw", "x3f", "3fr", "fff", "iiq", "rwl",
+    "raw", "pef", "srw", "x3f", "3fr", "fff", "iiq", "rwl", "mp4",
 ];
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
@@ -495,6 +495,33 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    BackupProfiles {},
+    BackupProfileSave {
+        selection_id: String,
+        label: String,
+    },
+    BackupProfileCompare {
+        profile_id: String,
+        mode: crate::backup::comparison::CompareMode,
+    },
+    BackupComparisonLatest {},
+    BackupCompareStart {
+        selection_id: String,
+        mode: crate::backup::comparison::CompareMode,
+    },
+    BackupComparison {
+        run_id: String,
+    },
+    BackupComparisonPage {
+        run_id: String,
+        offset: u32,
+        #[serde(default)]
+        #[ts(optional)]
+        category: Option<crate::backup::comparison::ComparisonCategory>,
+    },
+    BackupCompareCancel {
+        run_id: String,
+    },
     InspectionIssues {
         job_id: String,
         after: Option<String>,
@@ -851,6 +878,11 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    BackupProfiles(Vec<crate::backup::comparison::SyncProfile>),
+    BackupProfile(crate::backup::comparison::SyncProfile),
+    BackupComparisonLatest(Option<crate::backup::comparison::ComparisonRun>),
+    BackupComparison(crate::backup::comparison::ComparisonRun),
+    BackupComparisonPage(crate::backup::comparison::ComparisonPage),
     InspectionIssues(crate::inspection::model::InspectionIssuePage),
     InspectionKeeperLatest(Option<Box<crate::inspection::KeeperReview>>),
     InspectionKeeperReview(crate::inspection::KeeperReview),

@@ -43,6 +43,8 @@ struct Foundation {
     #[cfg(feature = "desktop-test")]
     destination_fixture: Mutex<Option<tempfile::TempDir>>,
     #[cfg(feature = "desktop-test")]
+    backup_destination_fixture: Mutex<Option<tempfile::TempDir>>,
+    #[cfg(feature = "desktop-test")]
     managed_destination_fixture: Mutex<Option<(tempfile::TempDir, Option<String>)>>,
     #[cfg(feature = "desktop-test")]
     multisource_fixture: Mutex<Option<MultiSourceFixture>>,
@@ -224,7 +226,9 @@ async fn library_request(
         ));
     }
     let selection = match &request {
-        LibraryRequest::SaveAndScan { selection_id, .. }
+        LibraryRequest::BackupProfileSave { selection_id, .. }
+        | LibraryRequest::BackupCompareStart { selection_id, .. }
+        | LibraryRequest::SaveAndScan { selection_id, .. }
         | LibraryRequest::OrganizationPlanSaveExport { selection_id, .. }
         | LibraryRequest::OrganizationPlanCreate { selection_id, .. }
         | LibraryRequest::OrganizationDestination { selection_id, .. }
@@ -247,6 +251,50 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::BackupProfiles {} => {
+                LibraryResponse::BackupProfiles(library.backup_profiles()?)
+            }
+            LibraryRequest::BackupProfileCompare { profile_id, mode } => {
+                LibraryResponse::BackupComparison(library.backup_profile_compare(profile_id, mode)?)
+            }
+            LibraryRequest::BackupProfileSave { label, .. } => {
+                let selection = selection.ok_or_else(|| {
+                    AppError::new(ErrorCode::InvalidInput, "Choose a profile destination.")
+                })?;
+                let identity = selected_identity(&selection)?;
+                LibraryResponse::BackupProfile(library.backup_profile_save(
+                    selection.path,
+                    identity,
+                    label,
+                )?)
+            }
+            LibraryRequest::BackupComparisonLatest {} => {
+                LibraryResponse::BackupComparisonLatest(library.backup_comparison_latest()?)
+            }
+            LibraryRequest::BackupCompareStart { mode, .. } => {
+                let selection = selection.ok_or_else(|| {
+                    AppError::new(ErrorCode::InvalidInput, "Choose a comparison destination.")
+                })?;
+                let identity = selected_identity(&selection)?;
+                LibraryResponse::BackupComparison(library.backup_compare_start(
+                    selection.path,
+                    identity,
+                    mode,
+                )?)
+            }
+            LibraryRequest::BackupComparison { run_id } => {
+                LibraryResponse::BackupComparison(library.backup_comparison(run_id)?)
+            }
+            LibraryRequest::BackupComparisonPage {
+                run_id,
+                offset,
+                category,
+            } => LibraryResponse::BackupComparisonPage(
+                library.backup_comparison_page_filtered(run_id, offset, category)?,
+            ),
+            LibraryRequest::BackupCompareCancel { run_id } => {
+                LibraryResponse::BackupComparison(library.backup_compare_cancel(run_id)?)
+            }
             LibraryRequest::OrganizationImportDestinationSet {
                 catalog_id,
                 root_id,
@@ -1407,7 +1455,9 @@ async fn test_performance(
                 serde_json::json!({"rootRemoved":true,"neighborPreserved":true,"destinationFilesChanged":false}),
             )
         }
-        "organization_destination_fixture" | "organization_export_fixture" => {
+        "organization_destination_fixture"
+        | "organization_export_fixture"
+        | "backup_destination_fixture" => {
             if state
                 .fixture
                 .lock()
@@ -1420,7 +1470,9 @@ async fn test_performance(
                 ));
             }
             let is_export = action == "organization_export_fixture";
-            let mut owned = if is_export {
+            let mut owned = if action == "backup_destination_fixture" {
+                &state.backup_destination_fixture
+            } else if is_export {
                 &state.export_fixture
             } else {
                 &state.destination_fixture
@@ -1462,9 +1514,13 @@ async fn test_performance(
                 serde_json::json!({"id":id, "displayPath":"Generated destination fixture", "identityAvailable":true}),
             )
         }
-        "organization_destination_verify" | "organization_export_verify" => {
+        "organization_destination_verify"
+        | "organization_export_verify"
+        | "backup_destination_verify" => {
             let is_export = action == "organization_export_verify";
-            let owned = if is_export {
+            let owned = if action == "backup_destination_verify" {
+                &state.backup_destination_fixture
+            } else if is_export {
                 &state.export_fixture
             } else {
                 &state.destination_fixture
@@ -2003,6 +2059,8 @@ fn main() {
                 fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 destination_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                backup_destination_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 managed_destination_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]

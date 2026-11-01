@@ -1,5 +1,11 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0074](decisions/ADR-0074-comparison-conflicts-and-review.md) adds conservative native-name/type conflict blocking and full-report category filtering with observed entry details to M4A. Policy 2 reviews remain read-only; schema 11 and profile version 1 are unchanged. Native naming, fidelity, historical baseline and recovery gates remain open.
+
+[ADR-0073](decisions/ADR-0073-saved-comparison-profiles.md) continues M4A with immutable catalog-scoped comparison profiles and schema 11. Reopening pins the original root/destination and grants no transfer/recovery permission. The owner's 2026-11-01 scan revision also adds `.mp4` to the built-in preset (34 suffixes); saved filters and decoder/playback gates remain intact.
+
+[ADR-0072](decisions/ADR-0072-read-only-backup-comparison.md) starts M4A with native read-only comparison of the fixed base library and a separate catalog/root destination namespace. Session reviews grant no copy/replacement/recovery permission. [Current M4 scope](M4_BACKUP_SYNC.md) retains all approval and preservation gates.
+
 [ADR-0055](decisions/ADR-0055-explicit-filename-stem-case.md) adds an explicit proposed filename-stem case choice, with exact extensions/directories and legacy Preserve identity. Nondefault saved-template policy metadata is versioned; execution and preservation gates remain unchanged.
 
 [ADR-0054](decisions/ADR-0054-fixture-relocation-and-restoration.md) adds fixture-gated same-volume directory-to-directory relocation and retained companion restoration. Duplicate-removal authority, incomplete-state continuation and production mutation gates remain separate.

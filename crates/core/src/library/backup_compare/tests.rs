@@ -1,0 +1,742 @@
+use super::*;
+use crate::{
+    catalog::Catalog,
+    library::{
+        LibraryOptions, WorkerPaths,
+        model::{RootMode, ScanFilter},
+    },
+};
+use std::time::{Duration, Instant};
+
+#[test]
+fn comparison_directory_link_counts_do_not_replace_native_object_identity() {
+    let a = FileIdentity {
+        volume: 2,
+        file: 3,
+        links: 1,
+    };
+    assert!(same_directory(
+        &a,
+        &FileIdentity {
+            links: 8,
+            ..a.clone()
+        }
+    ));
+    assert!(!same_directory(
+        &a,
+        &FileIdentity {
+            file: 4,
+            ..a.clone()
+        }
+    ));
+    assert!(!same_directory(
+        &a,
+        &FileIdentity {
+            volume: 5,
+            ..a.clone()
+        }
+    ));
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_profiles_reopen_with_native_bindings_and_no_approval() {
+    let f = Fixture::new();
+    std::fs::write(f.source.join("original.mp4"), b"preserved fixture bytes").unwrap();
+    let handle = native::open_root(&f.destination, None).unwrap();
+    let profile = f
+        .library
+        .backup_profile_save(
+            f.destination.clone(),
+            (
+                filesystem::identity(&handle).unwrap(),
+                native::volume_token(&handle).unwrap(),
+            ),
+            "Generated comparison".into(),
+        )
+        .unwrap();
+    let path = f
+        .library
+        .options
+        .data_directory
+        .join("Fixture.stillharbour");
+    let options = f.library.options.clone();
+    let Fixture {
+        library,
+        _owned,
+        source,
+        destination,
+        ..
+    } = f;
+    drop(library);
+    let reopened = Library::new(Arc::new(Catalog::open(path).unwrap()), options).unwrap();
+    let profiles = reopened.backup_profiles().unwrap();
+    assert_eq!(profiles.len(), 1);
+    assert_eq!(profiles[0].id, profile.id);
+    let run = reopened
+        .backup_profile_compare(profile.id.clone(), CompareMode::Verified)
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(15);
+    loop {
+        let result = reopened.backup_comparison(run.id.clone()).unwrap();
+        if result.state != ComparisonState::Comparing {
+            assert_eq!(
+                result.state,
+                ComparisonState::NeedsReview,
+                "{}",
+                result.message
+            );
+            assert_eq!(result.profile_id.as_deref(), Some(profile.id.as_str()));
+            assert!(!result.capabilities.execution_available);
+            break;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(
+        std::fs::read(source.join("original.mp4")).unwrap(),
+        b"preserved fixture bytes"
+    );
+    assert_eq!(std::fs::read_dir(destination).unwrap().count(), 0);
+    drop(reopened);
+    drop(_owned);
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_profile_never_follows_a_changed_base_or_relinked_source() {
+    let f = Fixture::new();
+    let destination = native::open_root(&f.destination, None).unwrap();
+    let expected = (
+        filesystem::identity(&destination).unwrap(),
+        native::volume_token(&destination).unwrap(),
+    );
+    assert!(
+        f.library
+            .backup_profile_save(f.destination.clone(), expected.clone(), "\n".into())
+            .is_err()
+    );
+    let profile = f
+        .library
+        .backup_profile_save(f.destination.clone(), expected, "Pinned source".into())
+        .unwrap();
+    let other_path = f.source.parent().unwrap().join("other-source");
+    std::fs::create_dir(&other_path).unwrap();
+    let other_file = native::open_root(&other_path, None).unwrap();
+    let other = store::add_root(
+        &f.library.catalog,
+        other_path.clone(),
+        filesystem::identity(&other_file).unwrap(),
+        native::volume_token(&other_file).unwrap(),
+        "New base".into(),
+        RootMode::Referenced,
+        ScanFilter::default(),
+    )
+    .unwrap();
+    let root_id = f.root.clone();
+    let new_id = other.clone();
+    f.library
+        .catalog
+        .call(move |db| {
+            db.execute("UPDATE roots SET is_base=0 WHERE id=?", [root_id])?;
+            db.execute("UPDATE roots SET is_base=1 WHERE id=?", [new_id])?;
+            Ok(())
+        })
+        .unwrap();
+    let run = f
+        .library
+        .backup_profile_compare(profile.id.clone(), CompareMode::Verified)
+        .unwrap();
+    assert_eq!(run.source_root_id, f.root);
+    assert_eq!(f.wait(&run.id).state, ComparisonState::NeedsReview);
+    let id = f.root.clone();
+    let native_path = native::encode_path(&other_path);
+    f.library
+        .catalog
+        .call(move |db| {
+            db.execute(
+                "UPDATE roots SET native_path=? WHERE id=?",
+                rusqlite::params![native_path, id],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        f.library
+            .backup_profile_compare(profile.id.clone(), CompareMode::Verified)
+            .is_err()
+    );
+    let id = profile.id.clone();
+    f.library
+        .catalog
+        .call(move |db| {
+            assert!(
+                db.execute(
+                    "UPDATE backup_sync_profiles SET record='{}' WHERE id=?",
+                    [&id]
+                )
+                .is_err()
+            );
+            assert!(
+                db.execute("DELETE FROM backup_sync_profiles WHERE id=?", [&id])
+                    .is_err()
+            );
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        f.library
+            .backup_profile_compare(uuid::Uuid::new_v4().to_string(), CompareMode::Verified)
+            .is_err()
+    );
+    assert_eq!(
+        f.library.backup_profiles().unwrap()[0].source_root_id,
+        f.root
+    );
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_profile_refuses_a_reused_destination_path_without_writing() {
+    let f = Fixture::new();
+    let handle = native::open_root(&f.destination, None).unwrap();
+    let profile = f
+        .library
+        .backup_profile_save(
+            f.destination.clone(),
+            (
+                filesystem::identity(&handle).unwrap(),
+                native::volume_token(&handle).unwrap(),
+            ),
+            "Destination identity".into(),
+        )
+        .unwrap();
+    drop(handle);
+    let boundary = f._owned.path().canonicalize().unwrap();
+    let retained = f.destination.with_file_name("retained-destination");
+    assert!(
+        f.destination.starts_with(&boundary)
+            && retained.starts_with(&boundary)
+            && !retained.exists()
+    );
+    std::fs::rename(&f.destination, &retained).unwrap();
+    std::fs::create_dir(&f.destination).unwrap();
+    std::fs::write(
+        f.destination.join("neighbor"),
+        b"retain replacement neighbor",
+    )
+    .unwrap();
+    assert!(
+        f.library
+            .backup_profile_compare(profile.id, CompareMode::Verified)
+            .is_err()
+    );
+    assert_eq!(
+        std::fs::read(f.destination.join("neighbor")).unwrap(),
+        b"retain replacement neighbor"
+    );
+    assert_eq!(std::fs::read_dir(retained).unwrap().count(), 0);
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_profiles_bound_admission_without_replacing_saved_bindings() {
+    let f = Fixture::new();
+    let file = native::open_root(&f.destination, None).unwrap();
+    let expected = (
+        filesystem::identity(&file).unwrap(),
+        native::volume_token(&file).unwrap(),
+    );
+    let mut ids = Vec::new();
+    for index in 0..32 {
+        ids.push(
+            f.library
+                .backup_profile_save(
+                    f.destination.clone(),
+                    expected.clone(),
+                    format!("Profile {index}"),
+                )
+                .unwrap()
+                .id,
+        );
+    }
+    assert!(
+        f.library
+            .backup_profile_save(f.destination.clone(), expected, "Not admitted".into())
+            .is_err()
+    );
+    assert_eq!(
+        f.library
+            .backup_profiles()
+            .unwrap()
+            .iter()
+            .map(|p| p.id.clone())
+            .collect::<Vec<_>>(),
+        ids
+    );
+    assert_eq!(std::fs::read_dir(&f.destination).unwrap().count(), 0);
+}
+
+#[test]
+fn comparison_fills_short_reads_and_obeys_cancellation() {
+    struct Short(std::io::Cursor<Vec<u8>>);
+    impl std::io::Read for Short {
+        fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+            let n = bytes.len().min(3);
+            std::io::Read::read(&mut self.0, &mut bytes[..n])
+        }
+    }
+    let mut file = Short(std::io::Cursor::new(b"complete bytes".to_vec()));
+    let mut buffer = [0; 64];
+    let mut count = 0;
+    let cancel = AtomicBool::new(false);
+    assert_eq!(
+        fill(&mut file, &mut buffer, &cancel, &mut count).unwrap(),
+        14
+    );
+    assert_eq!(&buffer[..14], b"complete bytes");
+    assert_eq!(count, 14);
+    cancel.store(true, Ordering::Release);
+    assert!(fill(&mut file, &mut buffer, &cancel, &mut count).is_err());
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_blocks_native_aliases_and_file_directory_conflicts_without_reading_them() {
+    let f = Fixture::new();
+    let dataset = f.dataset();
+    assert!(dataset.starts_with(f._owned.path().canonicalize().unwrap()));
+    std::fs::create_dir_all(dataset.join("parent")).unwrap();
+    for (path, bytes) in [
+        (f.source.join("Clip.MP4"), b"source bytes".as_slice()),
+        (dataset.join("clip.mp4"), b"destination bytes"),
+        (f.source.join("parent"), b"source parent file"),
+        (dataset.join("parent/child.xmp"), b"destination child"),
+    ] {
+        std::fs::write(path, bytes).unwrap();
+    }
+    let started = f.start(CompareMode::Verified);
+    let result = f.wait(&started.id);
+    assert_eq!(
+        result.state,
+        ComparisonState::Incomplete,
+        "{}",
+        result.message
+    );
+    assert_eq!(result.policy_version, 2);
+    assert!(result.plan_digest.is_none());
+    assert_eq!(result.bytes_read, "0");
+    assert_eq!(result.summary.as_ref().unwrap().blocked, 4);
+    let page = f.library.backup_comparison_page(started.id, 0).unwrap();
+    assert_eq!(page.entries.len(), 4);
+    assert!(
+        page.entries
+            .iter()
+            .all(|r| r.category == ComparisonCategory::Blocked
+                && r.proposal == SyncProposal::Blocked)
+    );
+    let parent = page
+        .entries
+        .iter()
+        .find(|r| r.display_path == "parent")
+        .unwrap();
+    assert_eq!(parent.source_kind, Some(ComparisonEntryKind::File));
+    assert_eq!(
+        parent.destination_kind,
+        Some(ComparisonEntryKind::Directory)
+    );
+    assert_eq!(
+        std::fs::read(f.source.join("Clip.MP4")).unwrap(),
+        b"source bytes"
+    );
+    assert_eq!(
+        std::fs::read(dataset.join("clip.mp4")).unwrap(),
+        b"destination bytes"
+    );
+    assert_eq!(
+        std::fs::read(f.source.join("parent")).unwrap(),
+        b"source parent file"
+    );
+    assert_eq!(
+        std::fs::read(dataset.join("parent/child.xmp")).unwrap(),
+        b"destination child"
+    );
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_filters_the_whole_report_with_filtered_offsets_and_summary() {
+    let f = Fixture::new();
+    let dataset = f.dataset();
+    std::fs::create_dir_all(&dataset).unwrap();
+    for n in 0..205 {
+        std::fs::write(f.source.join(format!("source-{n:03}.bin")), b"source").unwrap();
+        std::fs::write(dataset.join(format!("destination-{n:03}.xmp")), b"retain").unwrap();
+    }
+    let run = f.start(CompareMode::Quick);
+    let result = f.wait(&run.id);
+    assert_eq!(result.state, ComparisonState::NeedsReview);
+    let summary = result.summary.unwrap();
+    assert_eq!(summary.source_only, 205);
+    assert_eq!(summary.destination_only, 205);
+    let page = f
+        .library
+        .backup_comparison_page_filtered(run.id.clone(), 0, Some(ComparisonCategory::SourceOnly))
+        .unwrap();
+    assert_eq!(page.total, Some(205));
+    assert_eq!(page.entries.len(), 200);
+    assert_eq!(page.next_offset, Some(200));
+    assert!(
+        page.entries
+            .iter()
+            .all(|r| r.category == ComparisonCategory::SourceOnly)
+    );
+    let last = f
+        .library
+        .backup_comparison_page_filtered(run.id.clone(), 200, Some(ComparisonCategory::SourceOnly))
+        .unwrap();
+    assert_eq!(last.entries.len(), 5);
+    assert_eq!(last.next_offset, None);
+    assert_ne!(page.entries[0].id, last.entries[0].id);
+    let empty = f
+        .library
+        .backup_comparison_page_filtered(run.id.clone(), 0, Some(ComparisonCategory::Blocked))
+        .unwrap();
+    assert_eq!(empty.total, Some(0));
+    assert!(empty.entries.is_empty());
+    assert!(
+        f.library
+            .backup_comparison_page_filtered(run.id, 206, Some(ComparisonCategory::SourceOnly))
+            .is_err()
+    );
+    assert_eq!(std::fs::read_dir(f.source).unwrap().count(), 205);
+    assert_eq!(std::fs::read_dir(dataset).unwrap().count(), 205);
+}
+
+#[cfg(any(windows, target_os = "macos"))]
+struct Fixture {
+    _owned: tempfile::TempDir,
+    library: Arc<Library>,
+    source: PathBuf,
+    destination: PathBuf,
+    root: String,
+}
+#[cfg(any(windows, target_os = "macos"))]
+impl Fixture {
+    fn new() -> Self {
+        let owned = tempfile::tempdir().unwrap();
+        let parent = owned.path().canonicalize().unwrap();
+        let source = parent.join("source");
+        let destination = parent.join("destination");
+        let data = parent.join("data");
+        for p in [&source, &destination, &data] {
+            std::fs::create_dir(p).unwrap();
+        }
+        let catalog = Arc::new(Catalog::open(data.join("Fixture.stillharbour")).unwrap());
+        let library = Library::new(
+            catalog.clone(),
+            LibraryOptions {
+                data_directory: data.clone(),
+                workers: WorkerPaths {
+                    executable: std::env::current_exe().unwrap(),
+                    exiftool: None,
+                    working_directory: data.join("worker"),
+                },
+            },
+        )
+        .unwrap();
+        let file = native::open_root(&source, None).unwrap();
+        let root = store::add_root(
+            &catalog,
+            source.clone(),
+            filesystem::identity(&file).unwrap(),
+            native::volume_token(&file).unwrap(),
+            "Generated base".into(),
+            RootMode::Referenced,
+            ScanFilter {
+                extensions: vec!["notindexed".into()],
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        Self {
+            _owned: owned,
+            library,
+            source,
+            destination,
+            root,
+        }
+    }
+    fn dataset(&self) -> PathBuf {
+        self.destination
+            .join(".stillharbour-copy")
+            .join(self.library.catalog.summary().unwrap().id)
+            .join(&self.root)
+    }
+    fn start(&self, mode: CompareMode) -> ComparisonRun {
+        let file = native::open_root(&self.destination, None).unwrap();
+        self.library
+            .backup_compare_start(
+                self.destination.clone(),
+                (
+                    filesystem::identity(&file).unwrap(),
+                    native::volume_token(&file).unwrap(),
+                ),
+                mode,
+            )
+            .unwrap()
+    }
+    fn wait(&self, id: &str) -> ComparisonRun {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            let run = self.library.backup_comparison(id.into()).unwrap();
+            if run.state != ComparisonState::Comparing {
+                return run;
+            }
+            assert!(Instant::now() < deadline, "comparison deadline");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_inventories_hidden_unknown_companions_and_never_creates_a_dataset() {
+    let f = Fixture::new();
+    for (name, bytes) in [
+        (".hidden.xmp", b"xmp".as_slice()),
+        ("unknown.bin", b"unknown"),
+        ("broken.jpg", b"not an image"),
+    ] {
+        std::fs::write(f.source.join(name), bytes).unwrap();
+    }
+    std::fs::write(
+        f.destination.join("destination-only.txt"),
+        b"retain outside dataset",
+    )
+    .unwrap();
+    let run = f.start(CompareMode::Verified);
+    let result = f.wait(&run.id);
+    assert_eq!(
+        result.state,
+        ComparisonState::NeedsReview,
+        "{}",
+        result.message
+    );
+    assert_eq!(result.source_root_id, f.root);
+    assert_eq!(result.entries, 3);
+    assert_eq!(result.bytes_read, "0");
+    assert!(result.plan_digest.is_some());
+    assert!(!result.capabilities.execution_available);
+    assert!(!f.dataset().exists());
+    assert_eq!(
+        std::fs::read(f.destination.join("destination-only.txt")).unwrap(),
+        b"retain outside dataset"
+    );
+    assert!(
+        f.library
+            .backup_comparison_page(run.id, 0)
+            .unwrap()
+            .entries
+            .iter()
+            .all(|e| e.category == ComparisonCategory::SourceOnly)
+    );
+    assert_eq!(
+        std::fs::read(f.source.join("broken.jpg")).unwrap(),
+        b"not an image"
+    );
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_quick_is_unverified_and_full_bytes_detect_restored_time_edits() {
+    let f = Fixture::new();
+    let dataset = f.dataset();
+    std::fs::create_dir_all(&dataset).unwrap();
+    for (name, a, b) in [
+        ("same.bin", b"same".as_slice(), b"same".as_slice()),
+        ("edited.bin", b"left", b"edit"),
+    ] {
+        std::fs::write(f.source.join(name), a).unwrap();
+        std::fs::write(dataset.join(name), b).unwrap();
+        let time = std::fs::metadata(f.source.join(name))
+            .unwrap()
+            .modified()
+            .unwrap();
+        File::options()
+            .write(true)
+            .open(dataset.join(name))
+            .unwrap()
+            .set_times(std::fs::FileTimes::new().set_modified(time))
+            .unwrap();
+    }
+    std::fs::write(dataset.join("keep.bin"), b"unique destination").unwrap();
+    let quick = f.start(CompareMode::Quick);
+    assert_eq!(f.wait(&quick.id).state, ComparisonState::NeedsReview);
+    let rows = f
+        .library
+        .backup_comparison_page(quick.id, 0)
+        .unwrap()
+        .entries;
+    assert_eq!(
+        rows.iter()
+            .find(|r| r.display_path == "edited.bin")
+            .unwrap()
+            .category,
+        ComparisonCategory::AppearsUnchangedUnverified
+    );
+    let verified = f.start(CompareMode::Verified);
+    let report = f.wait(&verified.id);
+    assert_eq!(
+        report.state,
+        ComparisonState::NeedsReview,
+        "{}",
+        report.message
+    );
+    let rows = f
+        .library
+        .backup_comparison_page(verified.id.clone(), 0)
+        .unwrap()
+        .entries;
+    assert_eq!(
+        rows.iter()
+            .find(|r| r.display_path == "same.bin")
+            .unwrap()
+            .category,
+        ComparisonCategory::VerifiedEqual
+    );
+    assert_eq!(
+        rows.iter()
+            .find(|r| r.display_path == "edited.bin")
+            .unwrap()
+            .category,
+        ComparisonCategory::DifferentContent
+    );
+    assert_eq!(
+        rows.iter()
+            .find(|r| r.display_path == "keep.bin")
+            .unwrap()
+            .proposal,
+        SyncProposal::KeepDestination
+    );
+    assert_eq!(
+        std::fs::read(dataset.join("keep.bin")).unwrap(),
+        b"unique destination"
+    );
+    assert_eq!(std::fs::read(f.source.join("edited.bin")).unwrap(), b"left");
+    assert!(f.library.backup_compare_cancel("foreign".into()).is_err());
+    assert!(f.library.backup_comparison_page(verified.id, 1000).is_err());
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_cancellation_rejects_overlap_and_retains_both_trees() {
+    let f = Fixture::new();
+    let dataset = f.dataset();
+    std::fs::create_dir_all(&dataset).unwrap();
+    let bytes = vec![19; 8 * 1024 * 1024];
+    std::fs::write(f.source.join("large.bin"), &bytes).unwrap();
+    std::fs::write(dataset.join("large.bin"), &bytes).unwrap();
+    let run = f.start(CompareMode::Verified);
+    let file = native::open_root(&f.destination, None).unwrap();
+    assert_eq!(
+        f.library
+            .backup_compare_start(
+                f.destination.clone(),
+                (
+                    filesystem::identity(&file).unwrap(),
+                    native::volume_token(&file).unwrap()
+                ),
+                CompareMode::Quick
+            )
+            .unwrap_err()
+            .code,
+        ErrorCode::Busy
+    );
+    assert!(f.library.backup_compare_cancel("foreign".into()).is_err());
+    f.library.backup_compare_cancel(run.id.clone()).unwrap();
+    let stopped = f.wait(&run.id);
+    assert_eq!(
+        stopped.state,
+        ComparisonState::Canceled,
+        "{}",
+        stopped.message
+    );
+    assert!(stopped.plan_digest.is_none());
+    assert_eq!(std::fs::read(f.source.join("large.bin")).unwrap(), bytes);
+    assert_eq!(std::fs::read(dataset.join("large.bin")).unwrap(), bytes);
+    let next = f.start(CompareMode::Quick);
+    assert_eq!(f.wait(&next.id).state, ComparisonState::NeedsReview);
+    assert!(f.library.backup_comparison(run.id).is_err());
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn comparison_rejects_overlaps_changed_identity_and_owned_writer_leases() {
+    let f = Fixture::new();
+    let file = native::open_root(&f.source, None).unwrap();
+    let identity = filesystem::identity(&file).unwrap();
+    let volume = native::volume_token(&file).unwrap();
+    assert!(
+        f.library
+            .backup_compare_start(f.source.clone(), (identity, volume), CompareMode::Verified)
+            .is_err()
+    );
+    let file = native::open_root(&f.destination, None).unwrap();
+    let mut identity = filesystem::identity(&file).unwrap();
+    identity.file += 1;
+    assert!(
+        f.library
+            .backup_compare_start(
+                f.destination.clone(),
+                (identity, native::volume_token(&file).unwrap()),
+                CompareMode::Verified
+            )
+            .is_err()
+    );
+    let lease = Registry::shared()
+        .try_acquire(vec![Scope::new(
+            DirectoryChain::open(&f.source).unwrap(),
+            Access::Write,
+        )])
+        .unwrap();
+    let file = native::open_root(&f.destination, None).unwrap();
+    assert!(
+        f.library
+            .backup_compare_start(
+                f.destination.clone(),
+                (
+                    filesystem::identity(&file).unwrap(),
+                    native::volume_token(&file).unwrap()
+                ),
+                CompareMode::Verified
+            )
+            .is_err()
+    );
+    drop(lease);
+    let run = f.start(CompareMode::Verified);
+    assert_eq!(f.wait(&run.id).state, ComparisonState::NeedsReview);
+}
+
+#[test]
+#[cfg(target_os = "macos")]
+fn comparison_does_not_follow_links_and_marks_inventory_incomplete() {
+    use std::os::unix::fs::symlink;
+    let owned = tempfile::tempdir().unwrap();
+    let path = owned.path().canonicalize().unwrap();
+    std::fs::write(path.join("preserved"), b"valuable").unwrap();
+    symlink(path.join("preserved"), path.join("link")).unwrap();
+    let file = native::open_root(&path, None).unwrap();
+    let root = Binding {
+        path,
+        identity: filesystem::identity(&file).unwrap(),
+        volume: native::volume_token(&file).unwrap(),
+    };
+    let mut inventory = Inventory::default();
+    inventory
+        .walk(&root, Path::new(""), &AtomicBool::new(false), 0)
+        .unwrap();
+    assert!(inventory.incomplete);
+    assert_eq!(inventory.files.len(), 1);
+    assert_eq!(inventory.issues.len(), 1);
+}

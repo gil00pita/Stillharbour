@@ -506,6 +506,36 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
 }
 
 #[test]
+fn default_media_scan_keeps_uppercase_mp4_with_unsupported_content() {
+    let source = tempfile::tempdir().unwrap();
+    let data = tempfile::tempdir().unwrap();
+    let bytes = b"generated unsupported MP4 bytes; preserve unchanged";
+    fs::write(source.path().join("clip.MP4"), bytes).unwrap();
+    let (_catalog, library) = open(data.path());
+    let job = library
+        .register(
+            source.path().to_owned(),
+            None,
+            "Generated MP4 default".into(),
+            RootMode::Referenced,
+            ScanFilter {
+                extensions: DEFAULT_PHOTO_EXTENSIONS
+                    .iter()
+                    .map(|e| e.to_string())
+                    .collect(),
+                ..ScanFilter::default()
+            },
+        )
+        .unwrap();
+    wait(&library, &job.id);
+    let page = library.query(AssetQuery::default(), None, 240).unwrap();
+    assert_eq!(page.total, 1);
+    assert_eq!(page.assets[0].name, "clip.MP4");
+    settle(&library);
+    assert_eq!(fs::read(source.path().join("clip.MP4")).unwrap(), bytes);
+}
+
+#[test]
 fn missing_and_replaced_ntfs_roots_retain_inventory_and_require_identity_match() {
     let fixture = tempfile::tempdir().unwrap();
     let source = fixture.path().join("source");

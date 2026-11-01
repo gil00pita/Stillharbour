@@ -12,6 +12,140 @@ async function native(request) {
     request,
   );
 }
+async function reviewBackupComparison(evidence, existingPicker) {
+  const destination = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'backup_destination_fixture', rows: null }),
+  );
+  const picker = existingPicker ?? (await browser.tauri.mock('foundation_request'));
+  try {
+    await picker.mockReturnValue({ kind: 'directory', data: destination });
+    await $('button[aria-label="Backup & Sync"]').click();
+    await $('.backup-workspace').waitForDisplayed();
+    assert.equal(await $('button=Start safe sync').isEnabled(), false);
+    await $('button=Choose destination').click();
+    await browser.waitUntil(async () => $('button=Compare').isEnabled());
+    await $('input[maxlength="80"]').setValue('Generated native comparison');
+    await $('button=Save comparison profile').click();
+    let profile;
+    await browser.waitUntil(async () => {
+      const profiles = (await native({ kind: 'backup_profiles' })).data;
+      profile = profiles.find((value) => value.label === 'Generated native comparison');
+      return Boolean(profile);
+    });
+    await browser.waitUntil(async () =>
+      browser.execute(
+        (id) =>
+          document.querySelector('section[aria-label="Saved comparisons"] select')?.value === id,
+        profile.id,
+      ),
+    );
+    await $('button=Compare').click();
+    let run;
+    await browser.waitUntil(
+      async () => {
+        run = (await native({ kind: 'backup_comparison_latest' })).data;
+        return run && run.state !== 'comparing';
+      },
+      { timeout: 30000, interval: 100, timeoutMsg: 'M4A native comparison did not finish' },
+    );
+    assert.equal(run.state, 'needs_review', run.message);
+    assert.equal(run.mode, 'verified');
+    assert.equal(run.profileId, profile.id);
+    assert.equal(run.capabilities.executionAvailable, false);
+    assert.equal(run.capabilities.independentRecoveryVerified, false);
+    assert.ok(run.planDigest);
+    const page = (await native({ kind: 'backup_comparison_page', run_id: run.id, offset: 0 })).data;
+    assert.ok(page.entries.length > 20);
+    assert.ok(page.entries.every((entry) => entry.category === 'source_only'));
+    assert.ok(page.entries.some((entry) => entry.displayPath.endsWith('.xmp')));
+    await $('.backup-table tbody tr:first-child').waitForDisplayed();
+    const rows = await $$('.backup-table tbody tr');
+    assert.equal(rows.length, page.entries.length);
+    assert.equal(run.summary.sourceOnly, page.entries.length);
+    await $('.backup-table tbody tr:first-child button').click();
+    await $('section[aria-label="Entry details"]').waitForDisplayed();
+    assert.ok(
+      (await $('section[aria-label="Entry details"]').getText()).includes(
+        page.entries[0].displayPath,
+      ),
+    );
+    await changeSizeUnit(
+      'Finding filter',
+      'blocked',
+      'section[aria-label="Comparison review"] select',
+    );
+    await browser.waitUntil(async () =>
+      (await $('section[aria-label="Comparison review"]').getText()).includes('Entries 0–0 of 0'),
+    );
+    assert.equal(await $('section[aria-label="Entry details"]').isExisting(), false);
+    await changeSizeUnit(
+      'Finding filter',
+      'source_only',
+      'section[aria-label="Comparison review"] select',
+    );
+    await $('.backup-table tbody tr:first-child').waitForDisplayed();
+    assert.equal((await $$('.backup-table tbody tr')).length, page.entries.length);
+    await $('button[aria-label="Photos"]').click();
+    await $('button[aria-label="Backup & Sync"]').click();
+    await browser.waitUntil(async () =>
+      browser.execute(
+        (id) =>
+          [...document.querySelectorAll('section[aria-label="Saved comparisons"] option')].some(
+            (option) => option.value === id,
+          ),
+        profile.id,
+      ),
+    );
+    await changeSizeUnit(
+      'Saved comparison',
+      profile.id,
+      'section[aria-label="Saved comparisons"] select',
+    );
+    await browser.waitUntil(async () => $('button=Compare').isEnabled());
+    await $('button=Compare').click();
+    let reopened;
+    await browser.waitUntil(async () => {
+      reopened = (await native({ kind: 'backup_comparison_latest' })).data;
+      return reopened && reopened.id !== run.id && reopened.state !== 'comparing';
+    });
+    assert.equal(reopened.state, 'needs_review', reopened.message);
+    assert.equal(reopened.profileId, profile.id);
+    assert.equal(reopened.sourceRootId, run.sourceRootId);
+    assert.equal(reopened.datasetDisplayPath, run.datasetDisplayPath);
+    await browser.waitUntil(
+      async () =>
+        (await $('section[aria-label="Comparison review"] h3').getText()) === 'needs review',
+      { timeout: 10000, timeoutMsg: 'Reopened profile result did not reach the native review UI' },
+    );
+    const source = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_library_fixture', { verify: true }),
+    );
+    const target = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'backup_destination_verify', rows: null }),
+    );
+    assert.equal(target.unchanged, true);
+    for (const [name, width, height] of [
+      ['desktop', 1180, 780],
+      ['minimum', 660, 560],
+    ]) {
+      await browser.setWindowSize(width, height);
+      assert.equal(
+        await browser.execute(() => document.documentElement.scrollWidth <= innerWidth),
+        true,
+      );
+      await browser.saveScreenshot(`.context/screenshots/m4a-${process.platform}-${name}.png`);
+    }
+    await writeFile(
+      `${evidence}/m4a-comparison.json`,
+      JSON.stringify({ profile, run, reopened, page, source, target }),
+    );
+  } finally {
+    if (!existingPicker) await picker.mockRestore();
+    await browser.setWindowSize(1180, 780);
+    await $('button[aria-label="Photos"]').click();
+    await browser.waitUntil(async () => (await $$('.asset')).length > 0);
+  }
+}
 async function reviewReadOnlyInspections(evidence) {
   if (await $('button[aria-label="Expand navigation"]').isExisting())
     await $('button[aria-label="Expand navigation"]').click();
@@ -1265,6 +1399,51 @@ async function reviewEquivalentDraft(original, destination, evidence, audit) {
   await verifyAllExistingImport(compiled.files[0].rootId, destination, evidence, audit);
   await $('button=Close saved plans').click();
 }
+async function pauseResumePreparation(receipt) {
+  const before = (await native({ kind: 'status' })).data;
+  const job = before.jobs.find((job) => job.kind === 'thumbnails' && job.state === 'running');
+  assert.ok(job, 'Held thumbnail job must be running before banner pause');
+  const banner = await $('.preparation-banner');
+  const counts = ({ discovered, indexed, skipped, errors, totalFiles, processedFiles }) => ({
+    discovered,
+    indexed,
+    skipped,
+    errors,
+    totalFiles,
+    processedFiles,
+  });
+  await banner.$('button=Pause previews').click();
+  await browser.waitUntil(
+    async () => (await native({ kind: 'job_details', job_id: job.id })).data.job.state === 'paused',
+    { timeout: 10000, timeoutMsg: 'Banner pause never reached the native job boundary' },
+  );
+  const paused = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(paused.id, job.id);
+  assert.deepEqual(counts(paused), counts(job));
+  await browser.waitUntil(
+    async () =>
+      (await $('.preparation-banner .preparation-summary').getText()) === 'Preparation paused',
+  );
+  await banner.$('button=Resume job').waitForEnabled();
+  await browser.saveScreenshot(
+    `.context/screenshots/initial-previews-paused${process.platform === 'darwin' ? '' : '-win32'}.png`,
+  );
+  const stillPaused = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(stillPaused.state, 'paused');
+  assert.deepEqual(counts(stillPaused), counts(paused));
+  await banner.$('button=Resume job').click();
+  await browser.waitUntil(
+    async () =>
+      (await native({ kind: 'job_details', job_id: job.id })).data.job.state === 'running',
+    { timeout: 10000, timeoutMsg: 'Banner resume did not resume the original native job' },
+  );
+  const resumed = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(resumed.id, job.id);
+  assert.deepEqual(counts(resumed), counts(job));
+  const after = (await native({ kind: 'status' })).data;
+  assert.deepEqual(after.jobs.map(({ id }) => id).sort(), before.jobs.map(({ id }) => id).sort());
+  await writeFile(receipt, JSON.stringify({ before: job, paused, stillPaused, resumed }));
+}
 async function pauseResumeJob(receipt) {
   const before = (await native({ kind: 'status' })).data;
   const job = before.jobs.find((job) => job.kind === 'thumbnails' && job.state === 'running');
@@ -1557,19 +1736,20 @@ async function assertPhotoCheckboxOnTop(id) {
   }, id);
   assert.deepEqual(hit, { onTop: true, visible: true });
 }
-async function changeSizeUnit(label, unit) {
+async function changeSizeUnit(label, unit, selector = `select[aria-label="${label}"]`) {
   // The embedded driver's option click only calls option.click(), which does
   // not perform a native select change in WKWebView. Exercise its change event.
   await browser.execute(
-    (label, unit) => {
-      const select = document.querySelector(`select[aria-label="${label}"]`);
+    (selector, unit) => {
+      const select = document.querySelector(selector);
+      if (!select) throw new Error(`Select control is unavailable: ${selector}`);
       select.value = unit;
       select.dispatchEvent(new Event('change', { bubbles: true }));
     },
-    label,
+    selector,
     unit,
   );
-  assert.equal(await $(`select[aria-label="${label}"]`).getValue(), unit);
+  assert.equal(await $(selector).getValue(), unit);
 }
 async function openFilters() {
   await $('button[aria-controls="library-filter-panel"]').click();
@@ -1599,7 +1779,7 @@ async function explorerLayoutReady() {
 const observations = {};
 let generatedSelection;
 const expectedExtensions =
-  'jpg jpeg jfif heic heif hif png tif tiff webp avif gif bmp dng cr3 cr2 crw nef nrw arw sr2 srf raf orf rw2 raw pef srw x3f 3fr fff iiq rwl'.split(
+  'jpg jpeg jfif heic heif hif png tif tiff webp avif gif bmp dng cr3 cr2 crw nef nrw arw sr2 srf raf orf rw2 raw pef srw x3f 3fr fff iiq rwl mp4'.split(
     ' ',
   );
 describe('native read-only library', () => {
@@ -1610,7 +1790,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 10);
+    assert.equal(status.data.catalogSchema, 11);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -1889,7 +2069,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 10);
+      assert.equal(receipt.catalogJournal.catalogSchema, 11);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',
@@ -2153,6 +2333,7 @@ describe('native read-only library', () => {
             await writeFile(`${evidence}/windows-banner-${name}.json`, JSON.stringify(layout));
             await browser.saveScreenshot(`.context/screenshots/windows-banner-${name}.png`);
           }
+          await pauseResumePreparation(`${evidence}/windows-preparation-pause.json`);
           await pauseResumeJob(`${evidence}/windows-job-pause.json`);
           await reviewRemovalStopsJobs(`${evidence}/windows-removal-stopped-jobs.json`);
         } finally {
@@ -2220,6 +2401,7 @@ describe('native read-only library', () => {
         }
         await browser.setWindowSize(1180, 780);
         await reviewReadOnlyInspections(evidence);
+        await reviewBackupComparison(evidence, picker);
         const tile = (await $$('.asset'))[0];
         await tile.moveTo();
         await tile.$('.asset-check').click();
@@ -3086,15 +3268,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         });
         await browser.saveScreenshot(`.context/screenshots/initial-previews-${name}.png`);
       }
-      await $('.preparation-banner button').click();
-      await browser.waitUntil(async () =>
-        (await $('.preparation-banner'))
-          .getText()
-          .then((text) => text.includes('Preview preparation paused')),
-      );
-      assert.equal(await $('.preparation-banner button').getText(), 'Resume previews');
-      await browser.saveScreenshot('.context/screenshots/initial-previews-paused.png');
-      await native({ kind: 'generate_thumbnails', root_id: root.id });
+      await pauseResumePreparation(`${evidence}/preparation-pause.json`);
       await pauseResumeJob(`${evidence}/job-pause.json`);
       await reviewRemovalStopsJobs(`${evidence}/removal-stopped-jobs.json`);
       observations.initialPreparation = {
@@ -5504,6 +5678,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
   it('reviews native duplicate, integrity and storage jobs without changing generated originals', async function () {
     this.timeout(180000);
     await reviewReadOnlyInspections(evidence);
+    await reviewBackupComparison(evidence);
   });
   it('clears previews and confirms library removal without changing generated originals', async () => {
     await $('button[aria-label="Settings"]').click();

@@ -2,9 +2,15 @@
 
 ## Objective
 
+Started 2026-11-01: the initial M4A read-only comparison increment is documented in [M4_BACKUP_SYNC.md](../docs/M4_BACKUP_SYNC.md). M4A acceptance remains open; this does not authorize M4B–D or real-library mutations. Record executed checks and remaining review/profile/native gaps before the next approval gate.
+
+Next increment: schema-11 immutable saved comparison profiles retain catalog/root/native source/destination bindings. Reopen only through fresh native comparison, with no default-root fallback or execution approval. Validate retained schema-10 snapshots, migration rollback/process exits, fixed-source/relinked-root/reused-destination fixtures and actual profile save/reopen UI. In-place rebind review, historical comparison baselines and the remaining M4A gates stay open.
+
 Provide genuine snapshot backup/restore plus a distinct readable Safe copy / one-way sync workflow. Select the base library automatically; the user selects the destination. Do not disguise destructive mirroring as backup.
 
 ## Prerequisites and references
+
+Current continuation: policy-2 conservative name/type conflict blocking, full-report category totals/filter paging and observed entry details. Validate generated case/type conflict byte preservation, Unicode/ancestor policy fixtures, matching rows beyond page one and actual native filter/inspector UI. Keep native destination name preparation, companion completeness, visual media review, historical baselines and both-platform failure evidence open before M4A acceptance (ADR-0074).
 
 M1 catalog and M2 coordination/execution contracts; docs/CODEX_SPEC.md section 13; acceptance AC-066 through AC-073, AC-081 and AC-084.
 
