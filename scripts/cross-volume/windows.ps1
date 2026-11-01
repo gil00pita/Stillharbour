@@ -21,6 +21,26 @@ function Assert-OwnedImage {
   }
   if(!$ancestor){throw 'The image is not beneath the intended workspace.'}
 }
+function Assert-VirtualDiskCharacteristics($disk) {
+  $bus=$disk.CimInstanceProperties['BusType']
+  if(!$bus -or $bus.CimType -ne [Microsoft.Management.Infrastructure.CimType]::UInt16){throw 'The disk lacks the expected raw CIM bus type.'}
+  if($disk.CimSystemProperties.ClassName -ne 'MSFT_Disk' -or $disk.IsBoot -or $disk.IsSystem -or $disk.Size -ne 512MB -or [uint16]$bus.Value -notin @(14,15)){throw 'Refusing a disk without the exact disposable virtual-disk characteristics.'}
+}
+function Test-DiskCharacteristics {
+  $cases=@(@(15,$false,512MB,$true),@(14,$false,512MB,$true),@(7,$false,512MB,$false),@(17,$false,512MB,$false),@(15,$true,512MB,$false),@(15,$false,1GB,$false))
+  foreach($case in $cases){
+    $sample=[Microsoft.Management.Infrastructure.CimInstance]::new('MSFT_Disk','root/Microsoft/Windows/Storage')
+    $sample.CimInstanceProperties.Add([Microsoft.Management.Infrastructure.CimProperty]::Create('BusType',[uint16]$case[0],[Microsoft.Management.Infrastructure.CimType]::UInt16,[Microsoft.Management.Infrastructure.CimFlags]::None))
+    $sample.CimInstanceProperties.Add([Microsoft.Management.Infrastructure.CimProperty]::Create('IsBoot',[bool]$case[1],[Microsoft.Management.Infrastructure.CimType]::Boolean,[Microsoft.Management.Infrastructure.CimFlags]::None))
+    $sample.CimInstanceProperties.Add([Microsoft.Management.Infrastructure.CimProperty]::Create('IsSystem',$false,[Microsoft.Management.Infrastructure.CimType]::Boolean,[Microsoft.Management.Infrastructure.CimFlags]::None))
+    $sample.CimInstanceProperties.Add([Microsoft.Management.Infrastructure.CimProperty]::Create('Size',[uint64]$case[2],[Microsoft.Management.Infrastructure.CimType]::UInt64,[Microsoft.Management.Infrastructure.CimFlags]::None))
+    $accepted=$false
+    try{Assert-VirtualDiskCharacteristics $sample;$accepted=$true}catch{if($case[3]){throw}}
+    if($accepted -ne $case[3]){throw 'The virtual-disk metadata guard accepted an unexpected disk.'}
+    $sample.Dispose()
+  }
+  $report.diskMetadataGuardCases=$cases.Count
+}
 function Get-OwnedDisk {
   Assert-OwnedImage
   $diskImage=Get-DiskImage -ImagePath $image
@@ -28,7 +48,7 @@ function Get-OwnedDisk {
   $disks=@($diskImage|Get-Disk)
   if($disks.Count -ne 1){throw 'The image did not resolve to exactly one owned disk.'}
   $disk=$disks[0]
-  if($disk.IsBoot -or $disk.IsSystem -or $disk.Size -ne 512MB -or [int]$disk.BusType -notin @(14,15)){throw 'Refusing a disk without the exact disposable virtual-disk characteristics.'}
+  Assert-VirtualDiskCharacteristics $disk
   return $disk
 }
 try {
@@ -38,6 +58,7 @@ try {
   $stream=[IO.File]::OpenRead($diskpart)
   $hasher=[Security.Cryptography.SHA256]::Create()
   try{$report.tools.diskpartSha256=([BitConverter]::ToString($hasher.ComputeHash($stream))).Replace('-','').ToLowerInvariant()}finally{$hasher.Dispose();$stream.Dispose()}
+  Test-DiskCharacteristics
   if($PreflightOnly){$report.status=if($admin){'preflight_available'}else{'unavailable_requires_administrator'};Save-Report;$report|ConvertTo-Json;exit 0}
   if(!$admin){$report.status='unavailable_requires_administrator';throw 'Windows virtual disk tests require an administrator runner; no volume test was executed.'}
   $probePath=[IO.Path]::GetFullPath($Probe)

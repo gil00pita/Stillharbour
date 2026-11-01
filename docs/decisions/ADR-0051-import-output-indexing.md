@@ -1,6 +1,6 @@
 # ADR-0051 — Explicit discovery of completed import outputs
 
-Date: 2026-11-01. Status: M2 continuation; complete checks and Windows native indexing pass; own macOS CI pending.
+Date: 2026-11-01. Status: M2 continuation; Windows native indexing passes 41263692858; corrected macOS fixture teardown and full native suite pass 41265781031.
 
 ## Decision
 

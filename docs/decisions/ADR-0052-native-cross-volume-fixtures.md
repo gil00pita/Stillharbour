@@ -1,6 +1,6 @@
 # ADR-0052 — Owned native cross-volume fixture harness
 
-Date: 2026-11-01. Status: implementation in progress; mounted-volume evidence pending.
+Date: 2026-11-01. Status: macOS native mounted-volume checks pass in CI 41265781031; Windows raw-CIM guard correction requires new CI.
 
 ## Decision
 
@@ -17,3 +17,5 @@ The application-core probe runs actual separate preparation/copy approvals and j
 Run `npm run native:cross-volume -- --preflight` for capability reporting only. Run `npm run native:cross-volume` on native CI; unavailable creation/mounting is a failure, never a skipped pass. The workflow uploads JSON/log/help evidence and excludes disk images. Local generated negative tests reject same-volume parents, foreign IDs/images and unknown record fields without creating copy fixtures. Existing production defaults, schema, application IDs and real-library mutation gates remain unchanged.
 
 Use the installed helper's own help and the primary sources recorded in SOURCES.md. Actual local/CI outcomes follow in IMPLEMENTATION_LOG.md. M2's remaining target-root/multi-root/case-cycle/undo and native failure gates still precede M3.
+
+Windows CI exposes the adapted BusType property as display text. Validate the underlying UInt16 CIM property, retaining the exact virtual-bus whitelist and system/boot/size checks. Six client-only CIM cases cover accepted virtual disks and rejected physical/system characteristics without mounting anything. The first Windows run stops at this guard before initialization/format and detaches its owned image; it is not a passing cross-volume result.
