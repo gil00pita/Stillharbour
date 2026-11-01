@@ -57,6 +57,8 @@ Inject failure after every journal/copy/publish/catalog stage. Exercise source c
 
 ## Gate
 
+Current aggregate acceptance evidence and remaining qualifications are indexed in [M2 validation](../docs/M2_VALIDATION.md). Earlier dated continuation notes retain their historical scope.
+
 Applicable AC-023 through AC-039, AC-081, AC-082 and AC-084 pass. A source-preserving generated import and reviewed same-volume organization work through real UI/IPC on target systems. Any unverified safety primitive keeps original mutation disabled. Record evidence before proceeding to the owner's subsequently authorized M3 continuation; do not skip this prerequisite gate.
 
 ## Version 1.1 preservation gate

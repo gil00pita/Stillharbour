@@ -1,5 +1,7 @@
 # Stillharbour - Acceptance and failure-injection test backlog
 
+The current aggregate M2 evidence and remaining qualifications are indexed in [M2_VALIDATION.md](M2_VALIDATION.md). AC-034 now has a generated five-member import regression across JPEG, opaque RAW/motion data, XMP and filename adjustment sidecars. A differing RAW blocks whole-bundle skipping; actual separately approved copying preserves all five members and the unselected unknown neighbor. This is byte-preservation evidence, not decoder or provider-pair recognition support. Actual local/target outcomes belong in the implementation log.
+
 These are required test specifications, not claims that tests currently exist or pass. Assign each ID to a real test and record execution evidence during implementation. Use generated/disposable fixtures. For native behavior, run on both Windows and macOS; do not substitute a browser mock or a Linux container.
 
 ## 1. User-requirement traceability

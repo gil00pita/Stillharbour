@@ -1,5 +1,7 @@
 # Development
 
+Current M2 acceptance evidence and remaining qualifications are indexed in [M2_VALIDATION.md](M2_VALIDATION.md); dated implementation-log entries retain exact checkpoint outcomes.
+
 M1 implements the read-only library on macOS Apple Silicon and a bounded Windows local NTFS scan/preview slice (see ADR-0021). Read [M1 validation](M1_VALIDATION.md) and [ADR-0002](decisions/ADR-0002-read-only-library.md) for behavior, limits and platform gates. Original-file mutations and production backup remain unavailable.
 
 Install Node 24 or newer compatible Node, npm 11.16.0, Rust via rustup, and the [native Tauri prerequisites](https://v2.tauri.app/start/prerequisites/). The repo pins Rust 1.99.1 with rustfmt/clippy. This session installed rustup without editing shell profiles; Node scripts explicitly include `~/.cargo/bin` in child PATH.

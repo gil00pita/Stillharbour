@@ -25,6 +25,9 @@ const EVENT_PHASE: &str = "copy_execution_event_v1";
 const MAX_RECORD: usize = 65_536;
 const MAX_EVENT: usize = 8192;
 #[cfg(test)]
+#[path = "catalog_journal/import_bundle_tests.rs"]
+mod import_bundle_tests;
+#[cfg(test)]
 #[path = "catalog_journal/import_partition_tests.rs"]
 mod import_partition_tests;
 #[cfg(test)]
