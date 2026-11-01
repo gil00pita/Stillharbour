@@ -8,6 +8,7 @@ import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
 import { copyJobActive } from './copyJobs';
 import { RetainedCopyInspection } from './RetainedCopyInspection';
 import { ReopenPreparedCopy } from './VerifiedCopyWorkflow';
+import { OriginalJobProgress } from './OriginalJobProgress';
 
 export function JobsDropdown({
   status,
@@ -33,7 +34,11 @@ export function JobsDropdown({
     ) ?? [];
   const copyJobs = status?.copyJobs ?? [];
   const activeCopies = copyJobs.filter(copyJobActive);
-  const activeCount = active.length + activeCopies.length;
+  const originalJobs = status?.originalJobs ?? [];
+  const activeCount =
+    active.length +
+    activeCopies.length +
+    originalJobs.filter((job) => job.state === 'queued' || job.state === 'running').length;
   useLayoutEffect(() => {
     if (!open) return;
     function place() {
@@ -179,6 +184,9 @@ export function JobsDropdown({
                     </div>
                   ))}
                 <LibraryChanges status={status} />
+                {originalJobs.map((job) => (
+                  <OriginalJobProgress key={job.id} job={job} />
+                ))}
                 {recent.length > 0 && (
                   <details className="recent-jobs">
                     <summary>Recent jobs ({recent.length})</summary>

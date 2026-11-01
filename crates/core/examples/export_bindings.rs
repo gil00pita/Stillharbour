@@ -3,6 +3,7 @@ use stillharbour_core::{
     domain::{AppError, ErrorCode},
     library::model::*,
     operations::generated_rename::*,
+    operations::original_jobs::*,
     operations::*,
     organization::*,
     preferences::*,
@@ -12,6 +13,9 @@ use ts_rs::TS;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ts_rs::Config::default();
     let declarations = [
+        OriginalJobKind::decl(&config),
+        OriginalJobState::decl(&config),
+        OriginalOperationJob::decl(&config),
         GeneratedRenameRequest::decl(&config),
         GeneratedRenameState::decl(&config),
         GeneratedRenameMember::decl(&config),

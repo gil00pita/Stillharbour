@@ -429,6 +429,7 @@ impl Library {
         fs::create_dir_all(options.data_directory.join("thumbnails"))?;
         fs::create_dir_all(&options.workers.working_directory)?;
         let recovery = store::recover_jobs(&catalog)?;
+        super::original_jobs::recover(&catalog)?;
         super::operation_jobs::recover(&catalog)?;
         let library = Arc::new(Self {
             #[cfg(any(test, feature = "copy-workflow"))]
@@ -935,6 +936,7 @@ impl Library {
             })
             .transpose()?;
         Ok(LibraryStatus {
+            original_jobs: Some(super::original_jobs::list(&self.catalog)?),
             copy_jobs: Some(super::operation_jobs::list(&self.catalog)?),
             monitoring,
             roots: store::roots(&self.catalog)?

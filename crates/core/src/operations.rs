@@ -10,6 +10,7 @@ pub(crate) mod copy_assessment;
 pub(crate) mod copy_manifest;
 pub(crate) mod copy_workflow;
 pub mod generated_rename;
+pub mod original_jobs;
 #[cfg(any(test, feature = "fixture-probes"))]
 pub(crate) mod rename_graph;
 pub use copy_assessment::{

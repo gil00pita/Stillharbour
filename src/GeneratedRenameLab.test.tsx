@@ -15,6 +15,7 @@ function review(patch: Partial<GeneratedRenameReview> = {}): GeneratedRenameRevi
     totalSteps: 10,
     pendingIntent: false,
     catalogCommitted: patch.state === 'completed',
+    jobs: [],
     members: [
       {
         id: 'member',

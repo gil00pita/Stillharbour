@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import type { GeneratedRenameRequest, GeneratedRenameReview } from './bindings';
 import { errorMessage } from './ipc';
+import { OriginalJobProgress } from './library/OriginalJobProgress';
 
 export function GeneratedRenameLab() {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -96,6 +97,14 @@ export function GeneratedRenameLab() {
                   Native movement is complete. Fresh approval checks the files and commits catalog
                   paths without repeating moves.
                 </p>
+              )}
+              {review.jobs.length > 0 && (
+                <section aria-label="Durable organization jobs">
+                  <h3>Durable organization jobs</h3>
+                  {review.jobs.map((job) => (
+                    <OriginalJobProgress key={job.id} job={job} />
+                  ))}
+                </section>
               )}
               <table aria-label="Generated rename targets">
                 <thead>

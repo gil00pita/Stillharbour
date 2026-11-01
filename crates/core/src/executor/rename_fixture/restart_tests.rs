@@ -387,6 +387,19 @@ fn generated_catalog_process_exit_reopens_cold_without_approval_or_blind_native_
                 }
             );
             assert!(inspected.ticket.is_none());
+            let job = inspected
+                .jobs
+                .iter()
+                .find(|job| job.plan_id == inspected.plan_id)
+                .unwrap();
+            assert_eq!(
+                job.state,
+                if phase == "after_commit" {
+                    crate::operations::original_jobs::OriginalJobState::CompletedVerified
+                } else {
+                    crate::operations::original_jobs::OriginalJobState::NeedsRecovery
+                }
+            );
             assert!(
                 inspected
                     .members
@@ -407,6 +420,10 @@ fn generated_catalog_process_exit_reopens_cold_without_approval_or_blind_native_
             let done = recovered.inspect().unwrap();
             assert_eq!(done.state, GeneratedRenameState::Completed);
             assert!(done.catalog_committed);
+            assert!(done.jobs.iter().any(|job| job.plan_id == done.plan_id
+                && job.state
+                    == crate::operations::original_jobs::OriginalJobState::CompletedVerified
+                && job.verified_moves == 10));
             assert!(
                 done.members
                     .iter()

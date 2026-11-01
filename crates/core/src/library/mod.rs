@@ -12,6 +12,7 @@ mod monitor;
 pub(crate) mod operation_jobs;
 pub(crate) mod operation_store;
 mod organization;
+pub(crate) mod original_jobs;
 mod review_export;
 pub use service::original::{ORIGINAL_IMAGE_POLICY, OriginalImage};
 pub mod native;

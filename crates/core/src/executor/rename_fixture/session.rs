@@ -44,6 +44,8 @@ impl GeneratedRenameSession {
                     ));
                 }
                 self.fixture.journal(&reverse)?;
+                self.catalog
+                    .retain_plan(&reverse, Some(self.fixture.plan.id.clone()))?;
                 self.active = reverse;
                 self.reverse = true;
                 self.inspect()
@@ -73,14 +75,31 @@ impl GeneratedRenameSession {
                 if plan_id != view.plan_id || view.state == GeneratedRenameState::Completed {
                     return Err(failed("This generated-file plan is no longer executable."));
                 }
-                // The closed engine performs its own fresh native validation
-                // and narrow worker authorization after this reviewed grant.
-                if !self.fixture.execute(&self.active, None)? {
-                    return Err(failed(
-                        "The generated operation stopped. Inspect before continuing.",
-                    ));
+                let job = crate::library::original_jobs::create(
+                    &self.catalog.db,
+                    self.active.id.clone(),
+                )?;
+                let outcome = (|| {
+                    crate::library::original_jobs::transition(
+                        &self.catalog.db,
+                        job.id.clone(),
+                        crate::operations::original_jobs::OriginalJobState::Running,
+                        "Checking and moving generated native objects.".into(),
+                    )?;
+                    if !self.fixture.execute(&self.active, None)? {
+                        return Err(failed(
+                            "The generated operation stopped. Inspect before continuing.",
+                        ));
+                    }
+                    self.commit_catalog(job.id.clone())
+                })();
+                if let Err(error) = outcome {
+                    let recovery = crate::library::original_jobs::transition(&self.catalog.db, job.id, crate::operations::original_jobs::OriginalJobState::NeedsRecovery, "The operation stopped. Inspect current native and catalog facts before approving a retry.".into());
+                    if let Err(recovery_error) = recovery {
+                        return Err(failed("The operation stopped and its durable job outcome could not be recorded. Inspect retained files and history.").caused_by(format!("{error}; {recovery_error}")));
+                    }
+                    return Err(error);
                 }
-                self.commit_catalog()?;
                 self.inspect()
             }
         }
@@ -93,7 +112,7 @@ impl GeneratedRenameSession {
             self.fixture.root_id.clone(),
         )
     }
-    fn commit_catalog(&self) -> Result<()> {
+    fn commit_catalog(&self, job_id: String) -> Result<()> {
         let path = self.fixture.run.path().canonicalize()?;
         let directory = root(&path.join("originals"))?;
         let versions = root(&path.join("retained"))?;
@@ -111,7 +130,8 @@ impl GeneratedRenameSession {
         let revisions = self
             .fixture
             .verify(directory.leaf(), versions.leaf(), &locations)?;
-        self.catalog.commit(&self.fixture, &self.active, revisions)
+        self.catalog
+            .commit(&self.fixture, &self.active, revisions, job_id)
     }
     fn inspect(&self) -> Result<GeneratedRenameReview> {
         let path = self.fixture.run.path().canonicalize()?;
@@ -137,6 +157,7 @@ impl GeneratedRenameSession {
                 "Catalog completion has no complete native movement proof.",
             ));
         }
+        let jobs = crate::library::original_jobs::list(&self.catalog.db)?;
         let digest = blake3::hash(
             &serde_json::to_vec(&(
                 "generated-rename-review-v1",
@@ -148,6 +169,7 @@ impl GeneratedRenameSession {
                 revisions,
                 &catalog.rows,
                 catalog.committed,
+                &jobs,
                 source_native::revision(directory.leaf())?,
             ))
             .map_err(|error| failed("Cannot fingerprint generated review.").caused_by(error))?,
@@ -173,6 +195,7 @@ impl GeneratedRenameSession {
             total_steps: self.active.steps.len() as u32,
             pending_intent: pending,
             catalog_committed: catalog.committed,
+            jobs,
             members: self
                 .active
                 .members
@@ -337,6 +360,85 @@ mod tests {
             .unwrap()
     }
     #[test]
+    fn generated_review_jobs_keep_immutable_plans_and_cannot_invent_verified_completion() {
+        use crate::{library::original_jobs as jobs, operations::original_jobs::OriginalJobState};
+        let session = GeneratedRenameSession::create().unwrap();
+        let job = jobs::create(&session.catalog.db, session.active.id.clone()).unwrap();
+        assert!(
+            jobs::transition(
+                &session.catalog.db,
+                job.id.clone(),
+                OriginalJobState::CompletedVerified,
+                "invalid shortcut".into()
+            )
+            .is_err()
+        );
+        let id = job.id.clone();
+        session
+            .catalog
+            .db
+            .call(move |db| {
+                assert!(
+                    db.execute("UPDATE original_operation_plans SET payload='{}'", [])
+                        .is_err()
+                );
+                assert!(
+                    db.execute("DELETE FROM original_operation_plans", [])
+                        .is_err()
+                );
+                assert!(
+                    db.execute(
+                        "UPDATE original_operation_jobs SET state='completed_verified' WHERE id=?",
+                        [&id]
+                    )
+                    .is_err()
+                );
+                assert!(
+                    db.execute("UPDATE original_operation_events SET payload='{}'", [])
+                        .is_err()
+                );
+                assert!(
+                    db.execute("DELETE FROM original_operation_events", [])
+                        .is_err()
+                );
+                Ok(())
+            })
+            .unwrap();
+        jobs::transition(
+            &session.catalog.db,
+            job.id.clone(),
+            OriginalJobState::Running,
+            "worker admission".into(),
+        )
+        .unwrap();
+        let wrong = uuid();
+        let id = job.id.clone();
+        assert!(
+            session
+                .catalog
+                .db
+                .call(move |db| {
+                    let tx = db.transaction()?;
+                    jobs::finish_verified_db(&tx, &id, &wrong, 10)?;
+                    tx.commit()?;
+                    Ok(())
+                })
+                .is_err()
+        );
+        jobs::recover(&session.catalog.db).unwrap();
+        let view = session.inspect().unwrap();
+        assert_eq!(view.completed_steps, 0);
+        assert!(
+            view.members
+                .iter()
+                .all(|member| member.observed == member.before)
+        );
+        assert_eq!(view.jobs.len(), 1);
+        assert_eq!(view.jobs[0].state, OriginalJobState::NeedsRecovery);
+        assert_eq!(view.jobs[0].verified_moves, 0);
+        assert!(view.ticket.is_none());
+    }
+    #[test]
     fn generated_review_catalog_root_path_rebinding_cannot_adopt_another_scope() {
         let mut session = GeneratedRenameSession::create().unwrap();
         let approved = grant(&mut session);
@@ -371,6 +473,7 @@ mod tests {
         for boundary in [
             "BEFORE UPDATE OF relative_path ON assets",
             "BEFORE INSERT ON job_events WHEN NEW.job_id LIKE 'generated-rename-catalog:%'",
+            "BEFORE INSERT ON original_operation_events WHEN NEW.state='completed_verified'",
         ] {
             let mut session = GeneratedRenameSession::create().unwrap();
             let initial = session.inspect().unwrap();

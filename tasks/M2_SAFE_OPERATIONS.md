@@ -6,11 +6,11 @@ Enable safe operations only after immutable planning, no-clobber execution and c
 
 ## Current authorized work — 2026-11-01
 
-The owner authorized continuing M2 and then M3 without stopping at intermediate checkpoints, and pushing those checkpoints to draft PR #9. M2 remains unfinished; M3 has not started. Experimental work includes retained single-root copy planning, approvals/jobs, native staged copying/continuation, mixed whole-bundle import and explicit referenced output indexing. Generated rename/undo now has actual instrumented UI review/approval and atomic path commits in its own actual Catalog (ADR-0053–0057). ADR-0058 develops strict test-only cold recovery across twelve actual catalog process exits; focused and full local checks pass (twelve actual exits plus malformed-scope admission); checkpoint CI remains pending. Real-library original mutations and duplicate quarantine remain disabled.
+The owner authorized continuing M2 and then M3 without stopping at intermediate checkpoints, and pushing those checkpoints to draft PR #9. M2 remains unfinished; M3 has not started. Experimental work includes retained single-root copy planning, approvals/jobs, native staged copying/continuation, mixed whole-bundle import and explicit referenced output indexing. Generated rename/undo has actual instrumented UI review/approval, atomic path commits and schema-7 durable organization attempts/events in its own actual Catalog (ADR-0053–0059); schema-7 full local/Windows native checks pass and its target CI remains pending. ADR-0058 develops strict test-only cold recovery across twelve actual catalog process exits; focused and full local checks pass (twelve actual exits plus malformed-scope admission); checkpoint CI remains pending. Real-library original mutations and duplicate quarantine remain disabled.
 
-Complete Windows/macOS CI passes checkpoints 8415096 (41273367880), 8b7891c (41274810329) and 1f8846b (41275768949), including strict generated VHDX/APFS probes. Checkpoint dfcc529 adds catalog commits and has its own CI pending. Local retained fixture versions cannot waive independent recovery.
+Complete Windows/macOS CI passes checkpoints 8415096 (41273367880), 8b7891c (41274810329) and 1f8846b (41275768949), including strict generated VHDX/APFS probes. Checkpoint dfcc529 adds catalog commits and passes complete CI 41276882411. Checkpoint 5869d19 adds actual cold process-exit recovery; complete Windows/macOS CI 41278148486 passes. Local retained fixture versions cannot waive independent recovery.
 
-Remaining gate work includes general application original-organization/undo and durable jobs/restart discovery, multi-root/target-root policies, full case/Unicode/native failures and the other required acceptance scenarios. Test-only marked-scope reconstruction is not production adoption. Record actual results before advancing to M3.
+Remaining gate work includes general application original-organization/undo worker queue/control, watcher reconciliation and restart discovery, multi-root/target-root policies, full case/Unicode/native failures and the other required acceptance scenarios. Test-only marked-scope reconstruction is not production adoption. Record actual results before advancing to M3.
 
 ## Historical planning progression — 2026-10-30 onward
 
@@ -135,3 +135,6 @@ Generated catalog continuation, 2026-11-01: ADR-0057 connects the rename lab to 
 
 
 Generated catalog exit continuation, 2026-11-01: ADR-0058 adds a test-only twelve-case real child-exit matrix across native-to-catalog transaction boundaries, bounded strict cold reconstruction and fresh-approved no-move retry. Validation is running. Production restart discovery/adoption, general application jobs/root organization, multi-root policies and remaining M2 gates remain open before M3.
+
+
+Organization jobs continuation, 2026-11-01: ADR-0059 develops schema-7 separate immutable organization plans and durable attempts/events. Copy-plan/job semantics remain unchanged. Terminal job verification commits atomically with paths/receipt; interrupted history needs fresh review and never resumes I/O. Typed status, Jobs and the generated dialog display actual states. Migration/full/native validation is running. General original-worker queue/control, watcher reconciliation, library integration and remaining M2 gates still precede M3.

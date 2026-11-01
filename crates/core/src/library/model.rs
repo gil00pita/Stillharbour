@@ -138,6 +138,9 @@ pub struct LibraryChangePage {
 pub struct LibraryStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub original_jobs: Option<Vec<crate::operations::original_jobs::OriginalOperationJob>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub copy_jobs: Option<Vec<crate::operations::CopyWorkflowJob>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]

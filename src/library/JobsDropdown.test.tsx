@@ -39,6 +39,39 @@ function open() {
   fireEvent.click(screen.getByRole('button', { name: 'Jobs' }));
   return screen.getByRole('dialog', { name: 'Jobs' });
 }
+it('includes durable generated organization jobs without exposing a replay control', () => {
+  render(
+    <JobsDropdown
+      status={{
+        ...status,
+        jobs: [],
+        originalJobs: [
+          {
+            id: 'organization',
+            planId: 'plan',
+            sourceRootId: 'root',
+            kind: 'undo',
+            state: 'needs_recovery',
+            totalMoves: 10,
+            verifiedMoves: 0,
+            startedAt: 'now',
+            updatedAt: 'now',
+            message: 'Inspect current files; approval was not restored.',
+            generatedFixtureOnly: true,
+          },
+        ],
+      }}
+      onRefresh={refresh}
+    />,
+  );
+  const panel = open();
+  expect(within(panel).getByText('Undo organization · Generated fixture')).toBeInTheDocument();
+  expect(within(panel).getByText('Needs recovery review')).toBeInTheDocument();
+  expect(
+    within(panel).queryByRole('button', { name: /resume|retry|start/i }),
+  ).not.toBeInTheDocument();
+  expect(library).not.toHaveBeenCalled();
+});
 
 it('lists every active job with truthful counts and stopping state; keeps history secondary', () => {
   render(

@@ -118,14 +118,25 @@ impl GeneratedCatalog {
             })?;
             assets.insert(member.id.clone(), asset);
         }
-        Ok(Self {
+        let result = Self {
             db,
             root_id,
             volume,
             source: fixture.source_root.clone(),
             source_path: paths::encode_path(&path.join("originals")),
             assets,
-        })
+        };
+        result.retain_plan(&fixture.plan, None)?;
+        Ok(result)
+    }
+    pub(super) fn retain_plan(&self, plan: &Plan, reverse_of: Option<String>) -> Result<()> {
+        crate::library::original_jobs::retain_plan(
+            &self.db,
+            self.root_id.clone(),
+            (self.source.volume, self.source.file),
+            plan.clone(),
+            reverse_of,
+        )
     }
     fn rows(&self) -> Result<Vec<Row>> {
         let assets = self.assets.clone();
@@ -225,6 +236,7 @@ impl GeneratedCatalog {
         fixture: &Fixture,
         plan: &Plan,
         revisions: BTreeMap<String, String>,
+        job_id: String,
     ) -> Result<()> {
         let before = self.observe(fixture, plan, &revisions)?;
         if before.committed {
@@ -269,6 +281,7 @@ impl GeneratedCatalog {
             #[cfg(test)]
             catalog_exit("before_receipt");
             tx.execute("INSERT INTO job_events(job_id,state) VALUES(?,?)", params![stream(&plan.id),payload])?;
+            crate::library::original_jobs::finish_verified_db(&tx, &job_id, &plan.id, plan.steps.len() as u32)?;
             tx.execute("UPDATE library_state SET revision=revision+1 WHERE singleton=1", [])?;
             #[cfg(test)]
             catalog_exit("after_receipt");
@@ -354,6 +367,7 @@ impl GeneratedCatalog {
         {
             return Err(failed("The retained generated catalog changed identity."));
         }
+        crate::library::original_jobs::recover(&db)?;
         Ok(Self {
             db,
             root_id: scope.root,

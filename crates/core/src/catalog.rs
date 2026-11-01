@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: u32 = 6;
+pub const SCHEMA_VERSION: u32 = 7;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
@@ -500,6 +500,9 @@ mod tests {
         assert_eq!(Catalog::open(path).unwrap().summary().unwrap().id, id);
     }
 
+    fn strip_original_job_schema(db: &Connection) -> rusqlite::Result<()> {
+        db.execute_batch("DROP TABLE original_operation_events; DROP TABLE original_operation_jobs; DROP TABLE original_operation_plans;")
+    }
     fn legacy_fixture(path: &Path) -> String {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
@@ -514,6 +517,7 @@ mod tests {
             .unwrap();
         drop(catalog);
         let db = Connection::open(path).unwrap();
+        strip_original_job_schema(&db).unwrap();
         db.execute_batch("DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;DROP TABLE operation_jobs; DROP TABLE operation_journal; DROP TABLE organization_plans; DROP TABLE organization_templates; PRAGMA user_version=2;").unwrap();
         id
     }
@@ -658,6 +662,7 @@ mod tests {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
         catalog.call(|db| {
+            strip_original_job_schema(db)?;
             db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;DROP INDEX operation_journal_scope;DROP INDEX operation_copy_stream;DROP TABLE operation_jobs;PRAGMA user_version=3;")?;Ok(())
         }).unwrap();
         drop(catalog);
@@ -666,16 +671,132 @@ mod tests {
     fn legacy_four_fixture(path: &Path) -> String {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
-        catalog.call(|db|{db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;DROP TABLE operation_jobs;PRAGMA user_version=4;")?;Ok(())}).unwrap();
+        catalog.call(|db|{strip_original_job_schema(db)?;db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;DROP TABLE operation_jobs;PRAGMA user_version=4;")?;Ok(())}).unwrap();
         drop(catalog);
         id
     }
     fn legacy_five_fixture(path: &Path) -> String {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
-        catalog.call(|db|{db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;PRAGMA user_version=5;")?;Ok(())}).unwrap();
+        catalog.call(|db|{strip_original_job_schema(db)?;db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');DROP INDEX operation_copy_effect_group;DROP INDEX operation_copy_effect_candidate;DROP INDEX operation_copy_effect_lookup;PRAGMA user_version=5;")?;Ok(())}).unwrap();
         drop(catalog);
         id
+    }
+    fn legacy_six_fixture(path: &Path) -> String {
+        let catalog = Catalog::open(path.to_owned()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        catalog.call(|db| {
+            strip_original_job_schema(db)?;
+            db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data'); PRAGMA user_version=6;")?;
+            let filter = serde_json::to_string(&crate::library::model::ScanFilter::default()).unwrap();
+            db.execute("INSERT INTO roots(id,label,native_path,display_path,mode,is_base,platform,volume,device,inode,availability,filter) VALUES('327d8c01-938e-4c13-8514-91f848e2eabc','Offline metadata fixture',X'00','Generated offline observation','referenced',1,'fixture','retained-volume','1','2','offline',?)", [filter])?;
+            Ok(())
+        }).unwrap();
+        drop(catalog);
+        id
+    }
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn organization_job_migration_retains_v6_identity_roots_and_history_and_rolls_back_collision() {
+        let owned = tempfile::tempdir().unwrap();
+        for collision in [false, true] {
+            let path = owned.path().join(if collision {
+                "collision.stillharbour"
+            } else {
+                "migrated.stillharbour"
+            });
+            let id = legacy_six_fixture(&path);
+            if collision {
+                let db = Connection::open(&path).unwrap();
+                db.execute_batch("CREATE TABLE original_operation_jobs_recent(value TEXT); INSERT INTO original_operation_jobs_recent VALUES('preserve collision');").unwrap();
+                assert!(Catalog::open(path.clone()).is_err());
+                assert_eq!(summary(&db).unwrap().schema, 6);
+                assert_eq!(db.query_row("SELECT count(*) FROM sqlite_schema WHERE name IN ('original_operation_plans','original_operation_jobs','original_operation_events')", [], |row| row.get::<_,i64>(0)).unwrap(), 0);
+                assert_eq!(
+                    db.query_row(
+                        "SELECT value FROM original_operation_jobs_recent",
+                        [],
+                        |row| row.get::<_, String>(0)
+                    )
+                    .unwrap(),
+                    "preserve collision"
+                );
+            } else {
+                let migrated = Catalog::open(path.clone()).unwrap();
+                assert_eq!(migrated.summary().unwrap().id, id);
+                assert_eq!(migrated.summary().unwrap().schema, SCHEMA_VERSION);
+                migrated
+                    .call(|db| {
+                        assert_eq!(
+                            db.query_row(
+                                "SELECT count(*) FROM original_operation_jobs",
+                                [],
+                                |row| row.get::<_, i64>(0)
+                            )?,
+                            0
+                        );
+                        assert_eq!(
+                            db.query_row("SELECT id FROM roots", [], |row| row
+                                .get::<_, String>(0))?,
+                            "327d8c01-938e-4c13-8514-91f848e2eabc"
+                        );
+                        assert_eq!(
+                            db.query_row("SELECT native_path FROM roots", [], |row| row
+                                .get::<_, Vec<u8>>(0))?,
+                            vec![0]
+                        );
+                        assert_eq!(
+                            db.query_row(
+                                "SELECT state FROM job_events WHERE sequence=1",
+                                [],
+                                |row| row.get::<_, String>(0)
+                            )?,
+                            "retained user data"
+                        );
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+            let snapshot = std::fs::read_dir(owned.path())
+                .unwrap()
+                .map(|entry| entry.unwrap().path())
+                .filter(|path| {
+                    path.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("pre-migration-v6-")
+                })
+                .find(|path| {
+                    let db = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                        .unwrap();
+                    summary(&db).unwrap().id == id
+                })
+                .unwrap();
+            let retained =
+                Connection::open_with_flags(snapshot, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            assert_eq!(summary(&retained).unwrap().schema, 6);
+            assert_eq!(summary(&retained).unwrap().id, id);
+            assert_eq!(
+                retained
+                    .query_row("SELECT state FROM job_events WHERE sequence=1", [], |row| {
+                        row.get::<_, String>(0)
+                    })
+                    .unwrap(),
+                "retained user data"
+            );
+            assert_eq!(
+                retained
+                    .query_row("SELECT id FROM roots", [], |row| row.get::<_, String>(0))
+                    .unwrap(),
+                "327d8c01-938e-4c13-8514-91f848e2eabc"
+            );
+            assert_eq!(
+                retained
+                    .query_row("PRAGMA integrity_check", [], |row| row.get::<_, String>(0))
+                    .unwrap(),
+                "ok"
+            );
+        }
     }
     #[test]
     #[cfg(any(windows, target_os = "macos"))]
@@ -833,7 +954,7 @@ mod tests {
     #[test]
     #[cfg(any(windows, target_os = "macos"))]
     fn process_exit_during_migration_retains_a_consistent_catalog_and_backup() {
-        for (version, stage) in [2, 3, 4, 5].into_iter().flat_map(|version| {
+        for (version, stage) in [2, 3, 4, 5, 6].into_iter().flat_map(|version| {
             ["after_snapshot", "before_commit", "after_commit"].map(|stage| (version, stage))
         }) {
             let owned = tempfile::Builder::new()
@@ -849,8 +970,10 @@ mod tests {
                 legacy_three_fixture(&path)
             } else if version == 4 {
                 legacy_four_fixture(&path)
-            } else {
+            } else if version == 5 {
                 legacy_five_fixture(&path)
+            } else {
+                legacy_six_fixture(&path)
             };
             let mut child = std::process::Command::new(std::env::current_exe().unwrap())
                 .args([

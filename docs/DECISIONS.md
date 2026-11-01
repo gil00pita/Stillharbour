@@ -298,3 +298,6 @@ The owner continued to M2 and selected organization templates/previews as the pr
 
 
 [ADR-0058](decisions/ADR-0058-generated-catalog-process-exits.md) adds real child exits at six native-to-catalog transaction boundaries in both directions, bounded cold reconstruction and SQLite reopen. Approval is never reconstructed; pre-commit recovery needs fresh approval and adds no native moves. This remains test-only generated-scope evidence.
+
+
+[ADR-0059](decisions/ADR-0059-organization-job-history.md) introduces schema-7 immutable generated organization plans, durable job attempts and protected events, retaining copy-job semantics. Native/catalog verification and terminal job evidence commit together; interrupted history never restores approval or native work. General original-worker orchestration remains open.

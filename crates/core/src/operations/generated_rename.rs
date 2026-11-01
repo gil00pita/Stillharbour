@@ -41,6 +41,7 @@ pub struct GeneratedRenameReview {
     pub total_steps: u32,
     pub pending_intent: bool,
     pub catalog_committed: bool,
+    pub jobs: Vec<super::original_jobs::OriginalOperationJob>,
     pub members: Vec<GeneratedRenameMember>,
     pub ticket: Option<String>,
     pub production_authorization: bool,

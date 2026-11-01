@@ -106,6 +106,10 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
         super::operation_store::migrate_effects(&tx)?;
         tx.pragma_update(None, "user_version", 6)?;
     }
+    if current < 7 {
+        super::original_jobs::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 7)?;
+    }
     #[cfg(test)]
     crate::catalog::migration_test_exit("before_commit");
     tx.commit()?;

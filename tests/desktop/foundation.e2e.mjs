@@ -1281,7 +1281,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 6);
+    assert.equal(status.data.catalogSchema, 7);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -1372,6 +1372,14 @@ describe('native read-only library', () => {
       assert.ok(completed.members.every((member) => member.observed === member.after));
       assert.equal(completed.ticket, null);
       assert.equal(completed.catalogCommitted, true);
+      const job = completed.jobs.find((job) => job.planId === completed.planId);
+      assert.ok(job);
+      assert.equal(job.state, 'completed_verified');
+      assert.equal(job.kind, reverse ? 'undo' : 'rename');
+      assert.equal(job.generatedFixtureOnly, true);
+      assert.equal(job.verifiedMoves, 10);
+      assert.equal(job.totalMoves, 10);
+      await $('section[aria-label="Durable organization jobs"]').waitForDisplayed();
       assert.ok(
         completed.members.every(
           (member) =>
@@ -1446,7 +1454,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 6);
+      assert.equal(receipt.catalogJournal.catalogSchema, 7);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',
