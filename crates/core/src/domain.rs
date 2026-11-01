@@ -27,6 +27,9 @@ pub struct AppError {
     #[serde(skip)]
     #[ts(skip)]
     pub cause: Option<String>,
+    #[serde(skip)]
+    #[ts(skip)]
+    pub(crate) io_kind: Option<std::io::ErrorKind>,
 }
 
 impl AppError {
@@ -35,6 +38,7 @@ impl AppError {
             code,
             message: message.into(),
             cause: None,
+            io_kind: None,
         }
     }
 
@@ -46,7 +50,9 @@ impl AppError {
 
 impl From<std::io::Error> for AppError {
     fn from(error: std::io::Error) -> Self {
-        Self::new(ErrorCode::Io, "The local filesystem operation failed.").caused_by(error)
+        let mut result = Self::new(ErrorCode::Io, "The local filesystem operation failed.");
+        result.io_kind = Some(error.kind());
+        result.caused_by(error)
     }
 }
 

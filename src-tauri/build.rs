@@ -7,6 +7,9 @@ fn main() {
                 "test_library_fixture",
                 "test_scroll_catalog",
                 "test_performance",
+                "test_generated_rename",
+                "test_generated_rename_history",
+                "test_generated_rename_worker",
             ]
         } else {
             &["foundation_request", "library_request"]

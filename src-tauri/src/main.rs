@@ -24,14 +24,44 @@ struct NativeSelection {
     identity: Option<FileIdentity>,
     volume: Option<String>,
 }
+#[cfg(feature = "desktop-test")]
+struct MultiSourceFixture {
+    sources: Vec<stillharbour_core::library_fixture::LibraryFixture>,
+    destination: tempfile::TempDir,
+    registered: usize,
+    keeper: Option<stillharbour_core::library_fixture::LibraryFixture>,
+    keeper_root: Option<String>,
+}
 
 struct Foundation {
+    #[cfg(feature = "desktop-test")]
+    rename_fixture: stillharbour_core::executor::GeneratedRenameController,
     #[cfg(feature = "desktop-test")]
     _test_data: tempfile::TempDir,
     #[cfg(feature = "desktop-test")]
     fixture: Mutex<Option<stillharbour_core::library_fixture::LibraryFixture>>,
     #[cfg(feature = "desktop-test")]
     destination_fixture: Mutex<Option<tempfile::TempDir>>,
+    #[cfg(feature = "desktop-test")]
+    managed_destination_fixture: Mutex<Option<(tempfile::TempDir, Option<String>)>>,
+    #[cfg(feature = "desktop-test")]
+    multisource_fixture: Mutex<Option<MultiSourceFixture>>,
+    #[cfg(feature = "desktop-test")]
+    comparison_fixture: Mutex<
+        Option<(
+            stillharbour_core::library_fixture::LibraryFixture,
+            Option<String>,
+        )>,
+    >,
+    #[cfg(feature = "desktop-test")]
+    import_skip_fixture: Mutex<
+        Option<(
+            stillharbour_core::library_fixture::LibraryFixture,
+            Option<String>,
+        )>,
+    >,
+    #[cfg(feature = "desktop-test")]
+    export_fixture: Mutex<Option<tempfile::TempDir>>,
     _catalog: Arc<Catalog>,
     preferences: Arc<stillharbour_core::preferences::PreferencesStore>,
     library: Arc<Library>,
@@ -195,22 +225,409 @@ async fn library_request(
     }
     let selection = match &request {
         LibraryRequest::SaveAndScan { selection_id, .. }
+        | LibraryRequest::OrganizationPlanSaveExport { selection_id, .. }
         | LibraryRequest::OrganizationPlanCreate { selection_id, .. }
         | LibraryRequest::OrganizationDestination { selection_id, .. }
+        | LibraryRequest::OrganizationCopyPreparationReopen { selection_id, .. }
+        | LibraryRequest::OrganizationCopyEffectMatch { selection_id, .. }
+        | LibraryRequest::OrganizationCopyReviewCreate { selection_id, .. }
+        | LibraryRequest::OrganizationImportCopyReview { selection_id, .. }
+        | LibraryRequest::OrganizationImportIndexOutput { selection_id, .. }
+        | LibraryRequest::OrganizationCopyReview { selection_id, .. }
+        | LibraryRequest::OrganizationCopyApprove { selection_id, .. }
+        | LibraryRequest::OrganizationCopyStart { selection_id, .. }
+        | LibraryRequest::OrganizationCopyInspect { selection_id, .. }
+        | LibraryRequest::OrganizationCopyRecoveryInspect { selection_id, .. }
+        | LibraryRequest::OrganizationCopyContinuationReview { selection_id, .. }
+        | LibraryRequest::OrganizationCopyContinuationApprove { selection_id, .. }
+        | LibraryRequest::OrganizationCopyContinuationStart { selection_id, .. }
         | LibraryRequest::Relink { selection_id, .. } => Some(selected(&state, selection_id)?),
         _ => None,
     };
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationImportDestinationSet {
+                catalog_id,
+                root_id,
+            } => LibraryResponse::OrganizationImportDestination(
+                library.set_import_destination(catalog_id, root_id)?,
+            ),
+            LibraryRequest::OrganizationImportIndexOutput { job_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the original import destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationImportOutputIndex(Box::new(
+                    library.organization_import_index_output(
+                        job_id,
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationImportCopyReceipt { job_id } => {
+                LibraryResponse::OrganizationImportCopyReceipt(
+                    library
+                        .organization_import_copy_receipt(job_id)?
+                        .map(Box::new),
+                )
+            }
+            LibraryRequest::OrganizationImportCopyReview {
+                plan_id,
+                import_plan_id,
+                ..
+            } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved import destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyReview(Box::new(
+                    library.organization_import_copy_review(
+                        plan_id,
+                        import_plan_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationImportSavedPlans { plan_id } => {
+                LibraryResponse::OrganizationImportSavedPlans(
+                    library.organization_import_saved_plans(plan_id)?,
+                )
+            }
+            LibraryRequest::OrganizationImportPlanRelease {
+                plan_id,
+                import_plan_id,
+            } => {
+                library.organization_import_plan_release(plan_id, import_plan_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationImportHistory {
+                plan_id,
+                manifest_id,
+            } => LibraryResponse::OrganizationImportHistory(Box::new(
+                library.organization_import_history(plan_id, manifest_id)?,
+            )),
+            LibraryRequest::OrganizationImportSkipApprove { input } => {
+                LibraryResponse::OrganizationImportSkipApproval(
+                    library.organization_import_skip_approve(input)?,
+                )
+            }
+            LibraryRequest::OrganizationImportSkipStart { input } => {
+                LibraryResponse::OrganizationImportSession(Box::new(
+                    library.organization_import_skip_start(input)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportSession {
+                plan_id,
+                session_id,
+            } => LibraryResponse::OrganizationImportSession(Box::new(
+                library.organization_import_session(plan_id, session_id)?,
+            )),
+            LibraryRequest::OrganizationImportSessionCancel {
+                plan_id,
+                session_id,
+            } => LibraryResponse::OrganizationImportSession(Box::new(
+                library.organization_import_session_cancel(plan_id, session_id)?,
+            )),
+            LibraryRequest::OrganizationImportSessionDiscard {
+                plan_id,
+                session_id,
+            } => {
+                library.organization_import_session_discard(plan_id, session_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationImportPlanCreate { input } => {
+                LibraryResponse::OrganizationImportPlan(Box::new(
+                    library.organization_import_plan_create(input)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportPlanOpen {
+                plan_id,
+                import_plan_id,
+            } => LibraryResponse::OrganizationImportPlan(Box::new(
+                library.organization_import_plan_open(plan_id, import_plan_id)?,
+            )),
+            LibraryRequest::OrganizationImportComparisonStart { input } => {
+                LibraryResponse::OrganizationImportComparisonJob(Box::new(
+                    library.organization_import_comparison_start(input)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportComparisonJob { job_id } => {
+                LibraryResponse::OrganizationImportComparisonJob(Box::new(
+                    library.organization_import_comparison_job(job_id)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportComparisonCancel { job_id } => {
+                LibraryResponse::OrganizationImportComparisonJob(Box::new(
+                    library.organization_import_comparison_cancel(job_id)?,
+                ))
+            }
+            LibraryRequest::OrganizationImportComparisonDiscard { job_id } => {
+                library.organization_import_comparison_discard(job_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationCopyCapabilities {} => {
+                LibraryResponse::OrganizationCopyCapabilities(
+                    library.organization_copy_capabilities(),
+                )
+            }
+            LibraryRequest::OrganizationCopyPreparationReopen { job_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyPreparationReopened(Box::new(
+                    library.organization_copy_preparation_reopen(
+                        job_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationCopyEffectMatch {
+                plan_id,
+                manifest_id,
+                source_root_id,
+                ..
+            } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyEffectMatch(
+                    library.organization_copy_effect_match_for_root(
+                        plan_id,
+                        manifest_id,
+                        source_root_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                )
+            }
+            LibraryRequest::OrganizationCopyReviewCreate {
+                plan_id,
+                manifest_id,
+                source_root_id,
+                ..
+            } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyReview(Box::new(
+                    library.organization_copy_review_create_for_root(
+                        plan_id,
+                        manifest_id,
+                        source_root_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationCopyReview { review_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyReview(Box::new(
+                    library.organization_copy_review(
+                        review_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationCopyApprove { input, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyApproval(library.organization_copy_approve(
+                    input,
+                    chosen.id.clone(),
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
+            LibraryRequest::OrganizationCopyStart { input, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyJob(library.organization_copy_start(
+                    input,
+                    chosen.id.clone(),
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
+            LibraryRequest::OrganizationCopyJob { job_id } => {
+                LibraryResponse::OrganizationCopyJob(library.organization_copy_job(job_id)?)
+            }
+            LibraryRequest::OrganizationOriginalHistory { job_id } => {
+                LibraryResponse::OrganizationOriginalHistory(
+                    library.organization_original_history(job_id)?,
+                )
+            }
+            LibraryRequest::OrganizationCopyCancel { job_id } => {
+                LibraryResponse::OrganizationCopyJob(library.organization_copy_cancel(job_id)?)
+            }
+            LibraryRequest::OrganizationCopyIo {} => {
+                LibraryResponse::OrganizationCopyIo(library.organization_copy_io()?)
+            }
+            LibraryRequest::OrganizationCopySetIo {
+                aggregate_bytes_per_second,
+                byte_io_paused,
+            } => LibraryResponse::OrganizationCopyIo(
+                library.organization_copy_set_io(aggregate_bytes_per_second, byte_io_paused)?,
+            ),
+            LibraryRequest::OrganizationCopyDiscard { review_id } => {
+                library.organization_copy_discard(review_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationCopyContinuationReview { job_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the retained destination again.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyContinuationReview(Box::new(
+                    library.organization_copy_continuation_review(
+                        job_id,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
+            LibraryRequest::OrganizationCopyContinuationApprove { input, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the retained destination again.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyApproval(
+                    library.organization_copy_continuation_approve(
+                        input,
+                        chosen.id.clone(),
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                )
+            }
+            LibraryRequest::OrganizationCopyContinuationStart { input, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the retained destination again.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyJob(library.organization_copy_continuation_start(
+                    input,
+                    chosen.id.clone(),
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
+            LibraryRequest::OrganizationCopyContinuationDiscard { review_id } => {
+                library.organization_copy_continuation_discard(review_id)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::OrganizationCopyRecoveryInspect { job_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the retained destination with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyRecoveryInspection(
+                    library.organization_copy_recovery_inspect(
+                        job_id,
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                )
+            }
+            LibraryRequest::OrganizationCopyInspect { review_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the saved destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationCopyInspection(library.organization_copy_inspect(
+                    review_id,
+                    chosen.id.clone(),
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
             LibraryRequest::OrganizationTemplates {} => {
                 LibraryResponse::OrganizationTemplates(library.organization_templates()?)
             }
+            LibraryRequest::OrganizationBundleInventory {
+                asset_id,
+                source_revision,
+            } => LibraryResponse::OrganizationBundleInventory(
+                library.organization_bundle_inventory(asset_id, source_revision)?,
+            ),
             LibraryRequest::OrganizationTemplateSave { save } => {
                 LibraryResponse::OrganizationTemplate(library.organization_template_save(save)?)
             }
+            LibraryRequest::OrganizationBundleConfirm { input } => {
+                LibraryResponse::OrganizationBundleConfirmation(
+                    library.organization_bundle_confirm(input)?,
+                )
+            }
+            LibraryRequest::OrganizationCopyManifest { input } => {
+                LibraryResponse::OrganizationCopyManifest(
+                    library.organization_copy_manifest(input)?,
+                )
+            }
+            LibraryRequest::OrganizationCopyManifestOpen {
+                plan_id,
+                manifest_id,
+            } => LibraryResponse::OrganizationCopyManifest(
+                library.organization_copy_manifest_open(plan_id, manifest_id)?,
+            ),
+            LibraryRequest::OrganizationCopyAssessment {
+                plan_id,
+                manifest_id,
+            } => LibraryResponse::OrganizationCopyAssessment(
+                library.organization_copy_assessment(plan_id, manifest_id)?,
+            ),
             LibraryRequest::OrganizationPlans { before } => {
                 LibraryResponse::OrganizationPlans(library.organization_plans(before)?)
+            }
+            LibraryRequest::OrganizationBundleReviews { plan_id, asset_id } => {
+                LibraryResponse::OrganizationBundleReviews(
+                    library.organization_bundle_reviews(plan_id, asset_id)?,
+                )
             }
             LibraryRequest::OrganizationPlan { plan_id } => {
                 LibraryResponse::OrganizationPlan(Box::new(library.organization_plan(plan_id)?))
@@ -218,6 +635,21 @@ async fn library_request(
             LibraryRequest::OrganizationPlanExport { plan_id, format } => {
                 LibraryResponse::OrganizationPlanExport(
                     library.organization_plan_export(plan_id, format)?,
+                )
+            }
+            LibraryRequest::OrganizationPlanSaveExport {
+                plan_id, format, ..
+            } => {
+                let selection = selection.as_ref().ok_or_else(|| {
+                    AppError::new(ErrorCode::InvalidInput, "Choose an export folder again.")
+                })?;
+                LibraryResponse::OrganizationPlanExportSaved(
+                    library.organization_plan_save_export(
+                        plan_id,
+                        format,
+                        selection.path.clone(),
+                        selected_identity(selection)?,
+                    )?,
                 )
             }
             LibraryRequest::OrganizationPlanCreate { draft, .. } => {
@@ -234,6 +666,7 @@ async fn library_request(
                 )?))
             }
             LibraryRequest::OrganizationDestination {
+                destination_root_id,
                 asset_ids,
                 template,
                 preview_fingerprint,
@@ -245,13 +678,16 @@ async fn library_request(
                         "Choose a destination folder again.",
                     )
                 })?;
-                LibraryResponse::OrganizationDestination(library.organization_destination(
-                    asset_ids,
-                    template,
-                    preview_fingerprint,
-                    selection.path.clone(),
-                    selected_identity(selection)?,
-                )?)
+                LibraryResponse::OrganizationDestination(
+                    library.organization_destination_for_root(
+                        asset_ids,
+                        template,
+                        preview_fingerprint,
+                        selection.path.clone(),
+                        selected_identity(selection)?,
+                        destination_root_id,
+                    )?,
+                )
             }
             LibraryRequest::OrganizationCompanions { asset_id } => {
                 LibraryResponse::OrganizationCompanions(library.organization_companions(asset_id)?)
@@ -292,6 +728,54 @@ async fn library_request(
             } => {
                 LibraryResponse::Page(library.seek_asset(query, asset_id, position, limit)?.into())
             }
+            LibraryRequest::InspectionIssues { job_id, after } => {
+                LibraryResponse::InspectionIssues(library.inspection_issues(job_id, after)?)
+            }
+            LibraryRequest::InspectionKeeperLatest { job_id, group_id } => {
+                LibraryResponse::InspectionKeeperLatest(
+                    library
+                        .inspection_keeper_latest(job_id, group_id)?
+                        .map(Box::new),
+                )
+            }
+            LibraryRequest::InspectionKeeperReview { input } => {
+                LibraryResponse::InspectionKeeperReview(library.inspection_keeper_review(input)?)
+            }
+            LibraryRequest::InspectionStart { input } => {
+                LibraryResponse::InspectionJob(Box::new(library.inspection_start(input)?))
+            }
+            LibraryRequest::InspectionJob { job_id } => {
+                LibraryResponse::InspectionJob(Box::new(library.inspection_job(job_id)?))
+            }
+            LibraryRequest::InspectionJobs {} => {
+                LibraryResponse::InspectionJobs(library.inspection_jobs()?)
+            }
+            LibraryRequest::InspectionCancel { job_id } => {
+                LibraryResponse::InspectionJob(Box::new(library.inspection_cancel(job_id)?))
+            }
+            LibraryRequest::InspectionFindings { job_id, after } => {
+                LibraryResponse::InspectionFindings(library.inspection_findings(job_id, after)?)
+            }
+            LibraryRequest::InspectionGroups { job_id, after } => {
+                LibraryResponse::InspectionGroups(library.inspection_groups(job_id, after)?)
+            }
+            LibraryRequest::InspectionGroupMembers {
+                job_id,
+                group_id,
+                after,
+            } => LibraryResponse::InspectionFindings(
+                library.inspection_group_members(job_id, group_id, after)?,
+            ),
+            LibraryRequest::InspectionReport { job_id } => {
+                LibraryResponse::InspectionReport(library.inspection_report(job_id)?.map(Box::new))
+            }
+            LibraryRequest::InspectionFolders {
+                job_id,
+                parent_id,
+                after,
+            } => LibraryResponse::InspectionFolders(
+                library.inspection_folders(job_id, parent_id, after)?,
+            ),
             LibraryRequest::Status {} => LibraryResponse::Status(library.status()?),
             LibraryRequest::SaveAndScan {
                 label,
@@ -317,6 +801,15 @@ async fn library_request(
             LibraryRequest::GenerateThumbnails { root_id } => {
                 LibraryResponse::Job(library.generate_thumbnails(root_id)?)
             }
+            LibraryRequest::Pause { job_id } => {
+                library.set_paused(job_id, true)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::Resume { job_id } => {
+                library.set_paused(job_id, false)?;
+                LibraryResponse::Done
+            }
+            LibraryRequest::Retry { job_id } => LibraryResponse::Job(library.retry(job_id)?),
             LibraryRequest::Cancel { job_id } => {
                 library.cancel(job_id)?;
                 LibraryResponse::Done
@@ -461,12 +954,78 @@ fn test_library_fixture(
             volume: Some(volume),
         });
     *fixture = Some(generated);
-    Ok(serde_json::to_value(DirectorySelection {
+    serde_json::to_value(DirectorySelection {
         id,
         display_path: "Generated test library · 18 images and safety fixtures".into(),
         identity_available: true,
     })
-    .map_err(|e| AppError::new(ErrorCode::WorkerFailed, "Test response failed.").caused_by(e))?)
+    .map_err(|e| AppError::new(ErrorCode::WorkerFailed, "Test response failed.").caused_by(e))
+}
+
+#[cfg(feature = "desktop-test")]
+#[tauri::command]
+async fn test_generated_rename(
+    window: tauri::WebviewWindow,
+    state: State<'_, Foundation>,
+    request: stillharbour_core::operations::generated_rename::GeneratedRenameRequest,
+) -> Result<stillharbour_core::operations::generated_rename::GeneratedRenameReview> {
+    if window.label() != "main" {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Invalid generated-fixture window.",
+        ));
+    }
+    let controller = state.rename_fixture.clone();
+    tokio::task::spawn_blocking(move || controller.request(request))
+        .await
+        .map_err(|error| {
+            AppError::new(ErrorCode::WorkerFailed, "Generated review worker stopped.")
+                .caused_by(error)
+        })?
+}
+
+#[cfg(feature = "desktop-test")]
+#[tauri::command]
+async fn test_generated_rename_history(
+    window: tauri::WebviewWindow,
+    state: State<'_, Foundation>,
+    job_id: String,
+) -> Result<stillharbour_core::operations::original_jobs::OriginalOperationHistory> {
+    if window.label() != "main" {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Invalid generated-history window.",
+        ));
+    }
+    let controller = state.rename_fixture.clone();
+    tokio::task::spawn_blocking(move || controller.history(job_id))
+        .await
+        .map_err(|error| {
+            AppError::new(ErrorCode::WorkerFailed, "Generated history review failed.")
+                .caused_by(error)
+        })?
+}
+
+#[cfg(feature = "desktop-test")]
+#[tauri::command]
+async fn test_generated_rename_worker(
+    window: tauri::WebviewWindow,
+    state: State<'_, Foundation>,
+    request: stillharbour_core::operations::generated_rename::GeneratedWorkerRequest,
+) -> Result<stillharbour_core::operations::generated_rename::GeneratedWorkerStatus> {
+    if window.label() != "main" {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Invalid generated-worker window.",
+        ));
+    }
+    let controller = state.rename_fixture.clone();
+    tokio::task::spawn_blocking(move || controller.worker(request))
+        .await
+        .map_err(|error| {
+            AppError::new(ErrorCode::WorkerFailed, "Generated worker status failed.")
+                .caused_by(error)
+        })?
 }
 
 #[cfg(feature = "desktop-test")]
@@ -484,7 +1043,371 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
-        "organization_destination_fixture" => {
+        "organization_rename_arm_hold" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The generated hold accepts no supplied scope.",
+                ));
+            }
+            state.rename_fixture.arm_native_hold()?;
+            Ok(
+                serde_json::json!({"scope":"generated-rename-only","afterMoves":1,"timeoutSeconds":15}),
+            )
+        }
+        "organization_destination_reselect" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Owned destination selection accepts no supplied scope.",
+                ));
+            }
+            let owned = state.destination_fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
+            })?;
+            let directory = owned.as_ref().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate a destination fixture first.",
+                )
+            })?;
+            let path = directory.path().to_owned();
+            let file = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&file)?;
+            let volume = stillharbour_core::library::native::volume_token(&file)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state
+                .selection
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Selection unavailable."))? =
+                Some(NativeSelection {
+                    id: id.clone(),
+                    path,
+                    identity: Some(identity),
+                    volume: Some(volume),
+                });
+            Ok(
+                serde_json::json!({"id":id,"displayPath":"Generated destination fixture","identityAvailable":true}),
+            )
+        }
+        "organization_destination_audit" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Owned destination audit accepts no supplied scope.",
+                ));
+            }
+            let fixture = state
+                .fixture
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Fixture unavailable."))?;
+            let fixture = fixture.as_ref().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate an owned source fixture first.",
+                )
+            })?;
+            let destination = state.destination_fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
+            })?;
+            fixture.audit_generated_outputs(
+                destination
+                    .as_ref()
+                    .ok_or_else(|| {
+                        AppError::new(
+                            ErrorCode::InvalidInput,
+                            "Generate an owned destination fixture first.",
+                        )
+                    })?
+                    .path(),
+            )
+        }
+        "organization_name_preparation_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The owned name-preparation fixture accepts no supplied scope.",
+                ));
+            }
+            tokio::task::spawn_blocking(stillharbour_core::executor::run_preparation_fixture_probe)
+                .await
+                .map_err(|error| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "The owned name-preparation worker failed.",
+                    )
+                    .caused_by(error)
+                })?
+        }
+        "organization_copy_executor_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The owned executor fixture accepts no supplied scope.",
+                ));
+            }
+            tokio::task::spawn_blocking(stillharbour_core::executor::run_fixture_probe)
+                .await
+                .map_err(|error| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "The owned executor fixture worker failed.",
+                    )
+                    .caused_by(error)
+                })?
+        }
+        "organization_multisource_fixture"
+        | "organization_multisource_next"
+        | "organization_multisource_keeper"
+        | "organization_multisource_audit" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generated multi-source fixture accepts no supplied scope.",
+                ));
+            }
+            let mut owned = state.multisource_fixture.lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated multi-source fixture unavailable.",
+                )
+            })?;
+            if action == "organization_multisource_audit" {
+                let fixture = owned.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Create the generated multi-source fixture first.",
+                    )
+                })?;
+                let audits = fixture
+                    .sources
+                    .iter()
+                    .map(|source| source.audit_generated_outputs(fixture.destination.path()))
+                    .collect::<Result<Vec<_>>>()?;
+                let keeper = fixture
+                    .keeper
+                    .as_ref()
+                    .map(|keeper| keeper.verify_unchanged())
+                    .transpose()?;
+                return Ok(
+                    serde_json::json!({"scope":"constructor-owned-generated-only","audits":audits,"keeperVerifiedFiles":keeper,"productionAuthorization":false}),
+                );
+            }
+            if action == "organization_multisource_fixture" && owned.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated multi-source fixture already exists.",
+                ));
+            }
+            if action == "organization_multisource_fixture" {
+                let sources = (0..2)
+                    .map(|_| stillharbour_core::library_fixture::LibraryFixture::generate())
+                    .collect::<Result<Vec<_>>>()?;
+                let destination = tempfile::Builder::new()
+                    .prefix("stillharbour-multisource-destination-test-")
+                    .tempdir()?;
+                std::fs::write(
+                    destination.path().join("destination-only.txt"),
+                    b"retained destination",
+                )?;
+                *owned = Some(MultiSourceFixture {
+                    sources,
+                    destination,
+                    registered: 0,
+                    keeper: None,
+                    keeper_root: None,
+                });
+            }
+            let fixture = owned.as_mut().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated multi-source fixture unavailable.",
+                )
+            })?;
+            let mut jobs = Vec::new();
+            if action == "organization_multisource_keeper" {
+                if fixture.registered != 2 || fixture.keeper_root.is_some() {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Register both generated sources once before creating their comparison keeper.",
+                    ));
+                }
+                if fixture.keeper.is_none() {
+                    fixture.keeper = Some(fixture.sources[0].coherent_import_copy()?);
+                }
+                let keeper = fixture.keeper.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "Generated comparison keeper unavailable.",
+                    )
+                })?;
+                let handle = filesystem::open_directory_readonly(keeper.path())?;
+                let identity = filesystem::identity(&handle)?;
+                let volume = stillharbour_core::library::native::volume_token(&handle)?;
+                let job = state.library.register_verified(
+                    keeper.path().to_owned(),
+                    (identity, volume),
+                    "Generated multi-source import keeper".into(),
+                    RootMode::Referenced,
+                    ScanFilter::default(),
+                )?;
+                fixture.keeper_root = Some(job.root_id.clone());
+                jobs.push(job);
+            }
+            if action == "organization_multisource_next" {
+                let index = fixture.registered;
+                let source = fixture.sources.get(index).ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::Conflict,
+                        "Both generated source libraries are already registered.",
+                    )
+                })?;
+                source.verify_unchanged()?;
+                let handle = filesystem::open_directory_readonly(source.path())?;
+                let identity = filesystem::identity(&handle)?;
+                let volume = stillharbour_core::library::native::volume_token(&handle)?;
+                let job = state.library.register_verified(
+                    source.path().to_owned(),
+                    (identity, volume),
+                    format!("Generated source partition {}", index + 1),
+                    RootMode::Managed,
+                    ScanFilter::default(),
+                )?;
+                fixture.registered += 1;
+                jobs.push(job);
+            }
+            let path = fixture.destination.path().to_owned();
+            let handle = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&handle)?;
+            let volume = stillharbour_core::library::native::volume_token(&handle)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state.selection.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Generated selection unavailable.")
+            })? = Some(NativeSelection {
+                id: id.clone(),
+                path,
+                identity: Some(identity),
+                volume: Some(volume),
+            });
+            Ok(
+                serde_json::json!({"jobs":jobs,"selection":{"id":id,"displayPath":"Generated multi-source destination","identityAvailable":true}}),
+            )
+        }
+        "organization_managed_destination_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generated destination accepts no supplied scope.",
+                ));
+            }
+            let mut owned = state.managed_destination_fixture.lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated managed destination unavailable.",
+                )
+            })?;
+            if owned.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated managed destination already exists.",
+                ));
+            }
+            let directory = tempfile::Builder::new()
+                .prefix("stillharbour-managed-destination-test-")
+                .tempdir()?;
+            std::fs::write(
+                directory.path().join("destination-only.txt"),
+                b"retained managed destination",
+            )?;
+            let path = directory.path().to_owned();
+            let handle = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&handle)?;
+            let volume = stillharbour_core::library::native::volume_token(&handle)?;
+            drop(handle);
+            let job = state.library.register_verified(
+                path.clone(),
+                (identity.clone(), volume.clone()),
+                "Generated managed copies destination".into(),
+                RootMode::Managed,
+                ScanFilter {
+                    extensions: DEFAULT_PHOTO_EXTENSIONS
+                        .iter()
+                        .map(|value| (*value).into())
+                        .collect(),
+                    ..ScanFilter::default()
+                },
+            )?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state.selection.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Generated selection unavailable.")
+            })? = Some(NativeSelection {
+                id: id.clone(),
+                path,
+                identity: Some(identity),
+                volume: Some(volume),
+            });
+            *owned = Some((directory, Some(job.root_id.clone())));
+            Ok(
+                serde_json::json!({"rootId":job.root_id,"jobId":job.id,"selection":{"id":id,"displayPath":"Generated managed copies destination","identityAvailable":true}}),
+            )
+        }
+        "organization_managed_destination_audit_remove" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generated destination accepts no supplied scope.",
+                ));
+            }
+            let mut owned = state.managed_destination_fixture.lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated managed destination unavailable.",
+                )
+            })?;
+            let (directory, id) = owned.as_mut().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Create the generated managed destination first.",
+                )
+            })?;
+            let root_id = id.clone().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated destination was already removed.",
+                )
+            })?;
+            if std::fs::read(directory.path().join("destination-only.txt"))?
+                != b"retained managed destination"
+                || std::fs::read_dir(directory.path())?
+                    .take(2)
+                    .collect::<std::io::Result<Vec<_>>>()?
+                    .len()
+                    != 1
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated destination changed during read-only review.",
+                ));
+            }
+            stillharbour_core::library::destination_fixture::remove_empty_registration(
+                &state.library,
+                root_id,
+                directory.path(),
+            )?;
+            *id = None;
+            if std::fs::read(directory.path().join("destination-only.txt"))?
+                != b"retained managed destination"
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated destination neighbor was not retained.",
+                ));
+            }
+            Ok(
+                serde_json::json!({"rootRemoved":true,"neighborPreserved":true,"destinationFilesChanged":false}),
+            )
+        }
+        "organization_destination_fixture" | "organization_export_fixture" => {
             if state
                 .fixture
                 .lock()
@@ -496,7 +1419,14 @@ async fn test_performance(
                     "Generate an owned library fixture first.",
                 ));
             }
-            let mut owned = state.destination_fixture.lock().map_err(|_| {
+            let is_export = action == "organization_export_fixture";
+            let mut owned = if is_export {
+                &state.export_fixture
+            } else {
+                &state.destination_fixture
+            }
+            .lock()
+            .map_err(|_| {
                 AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
             })?;
             if owned.is_some() {
@@ -532,8 +1462,15 @@ async fn test_performance(
                 serde_json::json!({"id":id, "displayPath":"Generated destination fixture", "identityAvailable":true}),
             )
         }
-        "organization_destination_verify" => {
-            let owned = state.destination_fixture.lock().map_err(|_| {
+        "organization_destination_verify" | "organization_export_verify" => {
+            let is_export = action == "organization_export_verify";
+            let owned = if is_export {
+                &state.export_fixture
+            } else {
+                &state.destination_fixture
+            }
+            .lock()
+            .map_err(|_| {
                 AppError::new(ErrorCode::WorkerFailed, "Destination fixture unavailable.")
             })?;
             let directory = owned.as_ref().ok_or_else(|| {
@@ -543,8 +1480,32 @@ async fn test_performance(
                 )
             })?;
             let unchanged = std::fs::read(directory.path().join("destination-only.txt"))?
-                == b"retained destination"
-                && std::fs::read_dir(directory.path())?.count() == 1;
+                == b"retained destination";
+            if is_export {
+                if !unchanged {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "The generated export neighbor changed.",
+                    ));
+                }
+                let mut exports = Vec::new();
+                for entry in std::fs::read_dir(directory.path())? {
+                    let entry = entry?;
+                    if entry.file_name() == "destination-only.txt" {
+                        continue;
+                    }
+                    if !entry.file_type()?.is_file() || entry.metadata()?.len() > 16 * 1024 * 1024 {
+                        return Err(AppError::new(
+                            ErrorCode::Conflict,
+                            "Unexpected generated export entry.",
+                        ));
+                    }
+                    let text = std::fs::read_to_string(entry.path())?;
+                    exports.push(serde_json::json!({"filename":entry.file_name().to_string_lossy(),"bytes":text.len().to_string(),"text":text}));
+                }
+                return Ok(serde_json::json!({"neighborUnchanged":true,"exports":exports}));
+            }
+            let unchanged = unchanged && std::fs::read_dir(directory.path())?.count() == 1;
             if !unchanged {
                 return Err(AppError::new(
                     ErrorCode::Conflict,
@@ -590,6 +1551,152 @@ async fn test_performance(
             state.library.start_monitoring()?;
             Ok(serde_json::json!({"started":true}))
         }
+        "import_comparison_fixture"
+        | "import_comparison_verify"
+        | "import_comparison_finish"
+        | "import_skip_fixture"
+        | "import_skip_verify"
+        | "import_skip_finish" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Owned comparison fixtures accept no supplied scope.",
+                ));
+            }
+            let source = state.fixture.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Owned source fixture unavailable.")
+            })?;
+            let source = source.as_ref().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate the source fixture first.",
+                )
+            })?;
+            let source_count = source.verify_unchanged()?;
+            let skip_fixture = action.starts_with("import_skip_");
+            let mut comparison = if skip_fixture {
+                &state.import_skip_fixture
+            } else {
+                &state.comparison_fixture
+            }
+            .lock()
+            .map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Comparison fixture unavailable.")
+            })?;
+            if action == "import_comparison_fixture" || action == "import_skip_fixture" {
+                if comparison.is_some() {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Comparison fixture already exists.",
+                    ));
+                }
+                *comparison = Some((
+                    if skip_fixture {
+                        source.coherent_import_copy()?
+                    } else {
+                        source.renamed_comparison_copy()?
+                    },
+                    None,
+                ));
+                let (fixture, root_id) = comparison.as_mut().ok_or_else(|| {
+                    AppError::new(ErrorCode::WorkerFailed, "Comparison fixture unavailable.")
+                })?;
+                let path = fixture.path().to_owned();
+                let handle = stillharbour_core::library::native::open_root(&path, None)?;
+                let identity = filesystem::identity(&handle)?;
+                let volume = stillharbour_core::library::native::volume_token(&handle)?;
+                drop(handle);
+                let job = state.library.register_verified(
+                    path,
+                    (identity, volume),
+                    if skip_fixture {
+                        "Complete existing import bundle fixture".into()
+                    } else {
+                        "Existing import comparison fixture".into()
+                    },
+                    stillharbour_core::library::model::RootMode::Referenced,
+                    stillharbour_core::library::model::ScanFilter::default(),
+                )?;
+                *root_id = Some(job.root_id.clone());
+                return Ok(
+                    serde_json::json!({"job":job,"sourceVerifiedEntries":source_count,"comparisonVerifiedEntries":fixture.verify_unchanged()?}),
+                );
+            }
+            let (fixture, root_id) = comparison.as_mut().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Create the owned comparison fixture first.",
+                )
+            })?;
+            let compared = fixture.verify_unchanged()?;
+            if action == "import_comparison_finish" || action == "import_skip_finish" {
+                let root = root_id
+                    .as_ref()
+                    .ok_or_else(|| {
+                        AppError::new(
+                            ErrorCode::InvalidInput,
+                            "No registered comparison root remains.",
+                        )
+                    })?
+                    .clone();
+                #[cfg(windows)]
+                {
+                    return Ok(
+                        serde_json::json!({"retainedRoot":root,"catalogRegistrationRetained":true,"reason":"Windows cache cleanup still requires its native validation gate.","sourceVerifiedEntries":source_count,"comparisonVerifiedEntries":compared,"sourceFilesRemoved":false}),
+                    );
+                }
+                #[cfg(not(windows))]
+                {
+                    let preview = state.library.prepare_maintenance(
+                        stillharbour_core::library::model::MaintenanceTarget::Library {
+                            root_id: root.clone(),
+                        },
+                    )?;
+                    state.library.apply_maintenance(preview.id)?;
+                    *root_id = None;
+                    fixture.verify_unchanged()?;
+                    source.verify_unchanged()?;
+                    return Ok(
+                        serde_json::json!({"removedRoot":root,"sourceVerifiedEntries":source_count,"comparisonVerifiedEntries":compared,"sourceFilesRemoved":false}),
+                    );
+                }
+            }
+            Ok(
+                serde_json::json!({"sourceVerifiedEntries":source_count,"comparisonVerifiedEntries":compared,"rootId":root_id}),
+            )
+        }
+        "fixture_reselect" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Owned source selection accepts no supplied scope.",
+                ));
+            }
+            let fixture = state
+                .fixture
+                .lock()
+                .map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Fixture unavailable."))?;
+            let fixture = fixture
+                .as_ref()
+                .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "Generate fixture first."))?;
+            fixture.verify_unchanged()?;
+            let path = fixture.path().to_owned();
+            let file = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&file)?;
+            let volume = stillharbour_core::library::native::volume_token(&file)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state.selection.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Fixture selection unavailable.")
+            })? = Some(NativeSelection {
+                id: id.clone(),
+                path,
+                identity: Some(identity),
+                volume: Some(volume),
+            });
+            Ok(
+                serde_json::json!({"id":id,"displayPath":"Generated source fixture","identityAvailable":true}),
+            )
+        }
         "fixture_location" => {
             let fixture = state
                 .fixture
@@ -634,6 +1741,17 @@ async fn test_performance(
 
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
+    if args.get(1).is_some_and(|arg| arg == "--inspection-worker") {
+        let result = if args.len() == 5 {
+            stillharbour_core::inspection::decoder::worker(&args[2], &args[3], &args[4])
+        } else {
+            Err(AppError::new(
+                ErrorCode::InvalidInput,
+                "Invalid inspection worker arguments.",
+            ))
+        };
+        std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
     if args
         .get(1)
         .is_some_and(|arg| arg == "--media-worker-file-v2" || arg == "--media-worker-stdin-v2")
@@ -723,6 +1841,9 @@ fn main() {
         library_request,
         test_library_fixture,
         test_scroll_catalog,
+        test_generated_rename,
+        test_generated_rename_history,
+        test_generated_rename_worker,
         test_performance
     ]);
     #[cfg(not(feature = "desktop-test"))]
@@ -877,9 +1998,21 @@ fn main() {
                 #[cfg(feature = "desktop-test")]
                 _test_data: test_data,
                 #[cfg(feature = "desktop-test")]
+                rename_fixture: stillharbour_core::executor::GeneratedRenameController::default(),
+                #[cfg(feature = "desktop-test")]
                 fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 destination_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                managed_destination_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                multisource_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                comparison_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                import_skip_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                export_fixture: Mutex::new(None),
                 _catalog: catalog,
                 preferences: Arc::new(stillharbour_core::preferences::PreferencesStore::new(
                     &data,

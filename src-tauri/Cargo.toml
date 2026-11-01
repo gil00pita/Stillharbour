@@ -22,7 +22,8 @@ tauri-plugin-wdio-webdriver = { version = "=1.5.1", optional = true }
 
 [features]
 default = []
-desktop-test = ["dep:tempfile", "stillharbour-core/fixture-probes", "dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
+copy-workflow = ["stillharbour-core/copy-workflow"]
+desktop-test = ["copy-workflow", "dep:tempfile", "stillharbour-core/fixture-probes", "dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 
 [lints]
 workspace = true

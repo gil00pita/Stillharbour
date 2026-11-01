@@ -5,9 +5,14 @@ run('cargo', [
   '--workspace',
   '--all-targets',
   '--features',
-  'stillharbour-core/fixture-probes',
+  'stillharbour-core/fixture-probes,stillharbour-core/copy-workflow',
   '--',
   '-D',
   'warnings',
 ]);
-run('cargo', ['test', '--workspace', '--features', 'stillharbour-core/fixture-probes']);
+run('cargo', [
+  'test',
+  '--workspace',
+  '--features',
+  'stillharbour-core/fixture-probes,stillharbour-core/copy-workflow',
+]);

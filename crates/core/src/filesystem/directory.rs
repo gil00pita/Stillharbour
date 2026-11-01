@@ -125,6 +125,9 @@ impl DirectoryChain {
     pub(crate) fn identity(&self) -> &FileIdentity {
         self.identities.last().expect("nonempty directory chain")
     }
+    pub(crate) fn identities(&self) -> &[FileIdentity] {
+        &self.identities
+    }
     pub(crate) fn overlaps(&self, other: &Self) -> bool {
         let same = |a: &FileIdentity, b: &FileIdentity| a.volume == b.volume && a.file == b.file;
         self.identities.iter().any(|id| same(id, other.identity()))

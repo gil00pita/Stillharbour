@@ -80,3 +80,30 @@ P1 primary API checks (2026-10-28): [INDEXED BY](https://www.sqlite.org/lang_ind
 [Antin Harasymiv, Building the Google Photos Web UI, Google Design](https://medium.com/google-design/google-photos-45b714dfbed1) is the owner's primary engineering reference for alternative row-break evaluation and bounded rendering/resize work. Stillharbour reuses its own layout/virtualizer; the article's product-specific timings and frame-rate claims are not Stillharbour measurements. The implemented subset and independent validation are in [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md).
 
 Windows CI portability checks (2026-10-28): [Rust slice::as_chunks](https://doc.rust-lang.org/std/primitive.slice.html#method.as_chunks) defines fixed-size arrays plus a remainder (stable since1.88, below the pinned1.99 toolchain), used to reject incomplete UTF-16 units without truncation. [Microsoft file/path naming rules](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file) exclude quotes and control characters from ordinary Win32 filenames; generated physical Windows tests therefore retain Unicode/percent/leading-hyphen coverage without inventing support for illegal names. Hostile Unix-name tests remain intact.
+
+## Retained append review - 2026-10-31
+
+[Microsoft NtCreateFile](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntcreatefile) documents file access/sharing and append rights; [FlushFileBuffers](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-flushfilebuffers) documents its write-access requirement. The Windows fixture continuation keeps the existing native writable no-write/delete-sharing handle and explicitly seeks to the verified end; it does not claim append-only access. [rustix 1.1.6 OFlags](https://docs.rs/rustix/1.1.6/rustix/fs/struct.OFlags.html) supplies the pinned Unix APPEND/NOFOLLOW flags. No dependency version changes; target-platform execution evidence remains required.
+
+## Native cross-volume fixture references (ADR-0052)
+
+- [Microsoft Mount-DiskImage](https://learn.microsoft.com/powershell/module/storage/mount-diskimage): image-path mounting and Windows VHD administrator requirement; no Hyper-V dependency is assumed for the Storage adapter.
+- [Microsoft Get-DiskImage](https://learn.microsoft.com/powershell/module/storage/get-diskimage): derive the image's disk/partition/volume objects from its exact image path.
+- [Microsoft DiskPart](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/diskpart): the test helper restricts its script to creation of the new named image; initialization/format use validated Storage objects.
+- [Apple disk image guidance](https://support.apple.com/guide/disk-utility/create-a-disk-image-dskutl11888/mac): APFS image choices and the installed hdiutil manual. The macOS harness records installed create-help output and OS/helper provenance; native execution remains the API/behavior gate.
+- [Microsoft MSFT_Disk class](https://learn.microsoft.com/en-us/windows-hardware/drivers/storage/msft-disk): the underlying CIM BusType field is UInt16; PowerShell may adapt its display property to text.
+
+## Native rename primitive references — 2026-11-01
+
+- [Microsoft FILE_RENAME_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information): destination-directory handle and replacement flag semantics for the existing held-file rename primitive. Existing-target refusal requires replacement disabled.
+- [Apple XNU rename manual](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/rename.2): source/destination directory-relative operations and filesystem-dependent RENAME_EXCL refusal. The current fixture uses bounded leaves and held ordinary directories. API documentation does not replace the actual Windows/macOS preservation and recovery tests.
+
+## M3 read-only comparison APIs — 2026-11-01
+
+- [RustCrypto SHA-2 0.11.1](https://docs.rs/sha2/0.11.1/sha2/): incremental Digest interface for standard SHA-256 output.
+- [RustCrypto SHA-1 0.11.0](https://docs.rs/sha1/0.11.0/sha1/) and [MD5 0.11.0](https://docs.rs/md-5/0.11.0/md5/): compatibility-only algorithms; their documented collision limitations reinforce the separate full-byte comparator.
+- [Unicode normalization 0.1.26](https://docs.rs/unicode-normalization/0.1.26/unicode_normalization/): explicit NFC comparison keys; this does not rename originals or establish native filesystem equivalence.
+
+- M3 actual-volume capacity uses existing pinned fs2 0.4.3 `statvfs` / `FsStats` (native adapter source inspected locally): https://docs.rs/fs2/0.4.3/fs2/fn.statvfs.html and https://docs.rs/fs2/0.4.3/fs2/struct.FsStats.html. Capacity is an observation, not a reservation or physical reclaim estimate.
+
+- PNG policy-v2 review: W3C PNG Third Edition, sections 5.3–5.5 and 11.3.3 (including registered XMP text keyword): https://www.w3.org/TR/png-3/. Validate CRCs with existing `crc32fast` 1.5.3; exact pinned source/API/license inspected in the local Cargo registry because the version-specific docs page was unavailable. API overview: https://docs.rs/crc32fast/1.5.0/crc32fast/fn.hash.html. No bespoke CRC implementation or new source package.

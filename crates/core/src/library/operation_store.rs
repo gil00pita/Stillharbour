@@ -33,6 +33,10 @@ pub(crate) fn migrate(db: &Connection) -> Result<()> {
     "#)?;
     Ok(())
 }
+pub(crate) fn migrate_effects(db: &Connection) -> Result<()> {
+    db.execute_batch("CREATE UNIQUE INDEX operation_copy_effect_group ON operation_journal(item_id) WHERE phase='copy_effect_group_v1'; CREATE UNIQUE INDEX operation_copy_effect_candidate ON operation_journal(plan_id,item_id) WHERE phase='copy_effect_candidate_v1'; CREATE INDEX operation_copy_effect_lookup ON operation_journal(json_extract(evidence,'$.effect_digest'),sequence) WHERE phase='copy_effect_candidate_v1';")?;
+    Ok(())
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -56,6 +60,27 @@ impl StoredPlan {
         .to_hex()
         .to_string())
     }
+}
+/// A retained destination ID is a policy binding, never a replacement for the
+/// native directory/volume checks or a grant over another catalog's roots.
+pub(crate) fn validate_destination_root(db: &Connection, plan: &StoredPlan) -> Result<()> {
+    if let Some(id) = &plan.view.destination_root_id {
+        validate_id(id)?;
+        let valid: bool = db.query_row("SELECT EXISTS(SELECT 1 FROM roots WHERE id=?1 AND mode='managed' AND availability IN ('online','scanning') AND device=?2 AND inode=?3 AND volume=?4)", params![id,plan.destination_device.to_string(),plan.destination_file.to_string(),plan.destination_volume], |row| row.get(0))?;
+        if !valid {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The destination library grant, availability or native identity changed. Retain outputs and review again.",
+            ));
+        }
+        super::original_jobs::require_reconciled_root_db(db, id)?;
+        if plan.sources.iter().any(|source| &source.root_id == id) {
+            return Err(invalid(
+                "A selected source cannot also be the destination library.",
+            ));
+        }
+    }
+    Ok(())
 }
 fn encode<T: Serialize>(value: &T) -> Result<String> {
     serde_json::to_string(value)
@@ -93,12 +118,13 @@ impl Library {
         path: PathBuf,
         expected: (FileIdentity, String),
     ) -> Result<OrganizationPlanDetail> {
-        let destination = self.organization_destination(
+        let destination = self.organization_destination_for_root(
             input.asset_ids.clone(),
             input.template.clone(),
             input.preview_fingerprint.clone(),
             path.clone(),
             expected.clone(),
+            input.destination_root_id.clone(),
         )?;
         let ids = input.asset_ids.clone();
         let (revision, sources) = self
@@ -116,6 +142,7 @@ impl Library {
         let catalog_id = self.catalog.summary()?.id;
         let mut record = StoredPlan {
             view: OrganizationPlan {
+                destination_root_id: input.destination_root_id,
                 id: uuid::Uuid::new_v4().to_string(),
                 policy: PLAN_POLICY.into(),
                 created_at: store::now(),
@@ -152,6 +179,26 @@ impl Library {
     pub fn organization_plan(&self, id: String) -> Result<OrganizationPlanDetail> {
         validate_id(&id)?;
         let stored = self.catalog.call(move |db| load(db, &id))?;
+        let destination_stale = if stored.view.destination_root_id.is_some() {
+            let checked = stored.clone();
+            match self
+                .catalog
+                .call(move |db| validate_destination_root(db, &checked))
+            {
+                Ok(()) => false,
+                Err(error)
+                    if matches!(
+                        error.code,
+                        ErrorCode::Conflict | ErrorCode::Busy | ErrorCode::InvalidInput
+                    ) =>
+                {
+                    true
+                }
+                Err(error) => return Err(error),
+            }
+        } else {
+            false
+        };
         let current = self.organization_preview(
             stored.sources.iter().map(|s| s.id.clone()).collect(),
             stored.view.preview.template.clone(),
@@ -165,7 +212,7 @@ impl Library {
         };
         Ok(OrganizationPlanDetail {
             plan: stored.view,
-            stale,
+            stale: stale || destination_stale,
         })
     }
     pub fn organization_plans(&self, before: Option<String>) -> Result<OrganizationPlanPage> {
@@ -196,6 +243,7 @@ impl Library {
 }
 
 fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplate> {
+    validate_template_save(&save)?;
     let tx = db.transaction()?;
     let (id, version) = if let Some(previous) = save.previous {
         let latest: Option<u32> = tx.query_row(
@@ -223,21 +271,51 @@ fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplat
         }
         (uuid::Uuid::new_v4().to_string(), 1)
     };
+    let stem_case = save.template.filename_stem_case.unwrap_or_default();
     let result = SavedTemplate {
         reference: TemplateRef { id, version },
         name: save.name.trim().into(),
         description: save.description,
         created_at: store::now(),
         template: save.template,
-        policies: TemplatePolicies::default(),
+        policies: TemplatePolicies {
+            schema_version: if stem_case == organization::FilenameStemCase::Preserve {
+                1
+            } else {
+                2
+            },
+            filename_case_policy: match stem_case {
+                organization::FilenameStemCase::Preserve => "preserve",
+                organization::FilenameStemCase::Lowercase => "lowercase_stem",
+                organization::FilenameStemCase::Uppercase => "uppercase_stem",
+            }
+            .into(),
+            sample_inputs: save
+                .samples
+                .iter()
+                .map(encode)
+                .collect::<Result<Vec<_>>>()?,
+            sample_outputs: save
+                .samples
+                .iter()
+                .map(|s| s.expected_target.clone())
+                .collect(),
+            ..TemplatePolicies::default()
+        },
     };
+    let payload = encode(&result)?;
+    if payload.len() > 8192 {
+        return Err(invalid(
+            "The saved template and examples must fit within 8,192 bytes.",
+        ));
+    }
     tx.execute(
         "INSERT INTO organization_templates VALUES(?1,?2,?3,?4)",
         params![
             result.reference.id,
             result.reference.version,
             result.created_at,
-            encode(&result)?
+            payload
         ],
     )?;
     tx.commit()?;
@@ -246,6 +324,7 @@ fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplat
 
 fn insert_plan(db: &mut Connection, plan: &StoredPlan, revision: &str) -> Result<()> {
     let tx = db.transaction()?;
+    validate_destination_root(&tx, plan)?;
     let actual: i64 = tx.query_row(
         "SELECT revision FROM library_state WHERE singleton=1",
         [],
@@ -307,7 +386,7 @@ fn insert_plan(db: &mut Connection, plan: &StoredPlan, revision: &str) -> Result
     tx.commit()?;
     Ok(())
 }
-pub(crate) fn load(db: &mut Connection, id: &str) -> Result<StoredPlan> {
+pub(crate) fn load(db: &Connection, id: &str) -> Result<StoredPlan> {
     let (catalog,digest,payload):(String,String,String)=db.query_row("SELECT catalog_id,digest,payload FROM organization_plans WHERE id=? AND length(payload)<=8388608",[id],|r|Ok((r.get(0)?,r.get(1)?,r.get(2)?))).optional()?.ok_or_else(||invalid("The saved plan was not found or exceeds its supported size."))?;
     let current: String = db.query_row(
         "SELECT uuid FROM catalog_identity WHERE singleton=1",
@@ -373,12 +452,14 @@ mod tests {
                 pattern: "{original_stem}.{ext}".into(),
                 event: String::new(),
                 missing_date: MissingDatePolicy::Block,
+                filename_stem_case: None,
             },
             sources.clone(),
         )
         .unwrap();
         let mut record = StoredPlan {
             view: OrganizationPlan {
+                destination_root_id: None,
                 id: uuid::Uuid::new_v4().to_string(),
                 policy: PLAN_POLICY.into(),
                 created_at: store::now(),
@@ -404,6 +485,17 @@ mod tests {
             destination_file: 2,
         };
         record.view.digest = record.digest().unwrap();
+        // A pre-component schema-3 row must round-trip with an identical
+        // immutable digest. Missing presentation data is not a migration.
+        let mut legacy = record.clone();
+        for row in &mut legacy.view.preview.rows {
+            row.source_components = None;
+        }
+        legacy.view.digest = legacy.digest().unwrap();
+        let legacy_json = encode(&legacy).unwrap();
+        assert!(!legacy_json.contains("sourceComponents"));
+        let decoded_legacy: StoredPlan = decode(&legacy_json, MAX_PLAN_BYTES).unwrap();
+        assert_eq!(decoded_legacy.digest().unwrap(), legacy.view.digest);
         assert!(insert_plan(&mut db, &record, "2").is_err());
         assert_eq!(
             db.query_row("SELECT count(*) FROM organization_plans", [], |r| r
@@ -413,7 +505,7 @@ mod tests {
         );
         insert_plan(&mut db, &record, "1").unwrap();
         assert_eq!(
-            load(&mut db, &record.view.id).unwrap().view.digest,
+            load(&db, &record.view.id).unwrap().view.digest,
             record.view.digest
         );
         assert!(
@@ -428,7 +520,7 @@ mod tests {
         );
         db.execute("UPDATE catalog_identity SET uuid='other-catalog'", [])
             .unwrap();
-        assert!(load(&mut db, &record.view.id).is_err());
+        assert!(load(&db, &record.view.id).is_err());
         db.execute("UPDATE catalog_identity SET uuid='fixture-catalog'", [])
             .unwrap();
         // Simulate a damaged/imported catalog only inside this in-memory fixture.
@@ -440,13 +532,14 @@ mod tests {
             [encode(&record).unwrap()],
         )
         .unwrap();
-        assert!(load(&mut db, &record.view.id).is_err());
+        assert!(load(&db, &record.view.id).is_err());
     }
     #[test]
     fn template_versions_compare_and_swap_and_cannot_be_rewritten() {
         let mut db = Connection::open_in_memory().unwrap();
         migrate(&db).unwrap();
         let input = TemplateSave {
+            samples: Vec::new(),
             previous: None,
             name: "Retained".into(),
             description: String::new(),
@@ -454,13 +547,19 @@ mod tests {
                 pattern: "{original_stem}.{ext}".into(),
                 event: String::new(),
                 missing_date: MissingDatePolicy::Block,
+                filename_stem_case: None,
             },
         };
         let first = save_template(&mut db, input.clone()).unwrap();
+        assert_eq!(first.policies.schema_version, 1);
+        assert_eq!(first.policies.filename_case_policy, "preserve");
         let mut next = input;
         next.previous = Some(first.reference.clone());
         next.template.pattern = "copy/{original_stem}.{ext}".into();
+        next.template.filename_stem_case = Some(organization::FilenameStemCase::Lowercase);
         let second = save_template(&mut db, next.clone()).unwrap();
+        assert_eq!(second.policies.schema_version, 2);
+        assert_eq!(second.policies.filename_case_policy, "lowercase_stem");
         assert_eq!(second.reference.version, 2);
         assert_eq!(
             save_template(&mut db, next).unwrap_err().code,
@@ -487,12 +586,115 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
+        assert!(!old.contains("filenameStemCase"));
         assert_eq!(
             decode::<SavedTemplate>(&old, 8192)
                 .unwrap()
                 .template
                 .pattern,
             first.template.pattern
+        );
+    }
+
+    #[test]
+    fn template_examples_are_validated_before_append_and_retained_with_the_version() {
+        let mut db = Connection::open_in_memory().unwrap();
+        migrate(&db).unwrap();
+        let mut input = TemplateSave {
+            previous: None,
+            name: "Examples".into(),
+            description: String::new(),
+            template: OrganizationTemplate {
+                pattern: "{original_stem}.{ext}".into(),
+                event: String::new(),
+                missing_date: MissingDatePolicy::Block,
+                filename_stem_case: None,
+            },
+            samples: vec![crate::organization::TemplateSample {
+                relative_path: "Family/Photo.JPG".into(),
+                capture: None,
+                sequence: 1,
+                expected_target: "wrong.JPG".into(),
+            }],
+        };
+        assert_eq!(
+            save_template(&mut db, input.clone()).unwrap_err().code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM organization_templates", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            0
+        );
+        input.samples[0].expected_target = "Photo.JPG".into();
+        let saved = save_template(&mut db, input.clone()).unwrap();
+        assert_eq!(saved.policies.sample_outputs, ["Photo.JPG"]);
+        let sample: crate::organization::TemplateSample =
+            serde_json::from_str(&saved.policies.sample_inputs[0]).unwrap();
+        assert_eq!(sample.relative_path, "Family/Photo.JPG");
+        input.previous = Some(saved.reference.clone());
+        input.template.pattern = "copy/{original_stem}.{ext}".into();
+        assert!(save_template(&mut db, input).is_err());
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM organization_templates", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            1
+        );
+        let payload: String = db
+            .query_row("SELECT payload FROM organization_templates", [], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        let retained = decode::<SavedTemplate>(&payload, 8192).unwrap();
+        assert_eq!(
+            retained.policies.sample_inputs,
+            saved.policies.sample_inputs
+        );
+        assert_eq!(
+            retained.policies.sample_outputs,
+            saved.policies.sample_outputs
+        );
+    }
+
+    #[test]
+    fn template_examples_obey_total_encoded_payload_limit_and_legacy_requests() {
+        let mut db = Connection::open_in_memory().unwrap();
+        migrate(&db).unwrap();
+        let mut input: TemplateSave = serde_json::from_value(serde_json::json!({
+            "previous": null, "name": "Legacy", "description": "",
+            "template": {"pattern": "{original_stem}.{ext}", "event": "", "missingDate": "block"}
+        }))
+        .unwrap();
+        assert!(input.samples.is_empty());
+        let legacy = save_template(&mut db, input.clone()).unwrap();
+        assert!(legacy.policies.sample_inputs.is_empty());
+        let folders = format!("{}/", "a".repeat(200)).repeat(4);
+        input.template.pattern = format!("{folders}{{original_stem}}.{{ext}}");
+        input.description = "d".repeat(1024);
+        input.template.event = "e".repeat(512);
+        input.samples = vec![
+            crate::organization::TemplateSample {
+                relative_path: "Family/Photo.JPG".into(),
+                capture: None,
+                sequence: 1,
+                expected_target: format!("{folders}Photo.JPG"),
+            };
+            4
+        ];
+        // Each input and resolved output fits its individual bounds, but the
+        // immutable payload also includes four paired outputs and JSON escaping.
+        validate_template_save(&input).unwrap();
+        assert_eq!(
+            save_template(&mut db, input).unwrap_err().code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM organization_templates", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            1
         );
     }
 }

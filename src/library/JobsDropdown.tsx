@@ -4,6 +4,13 @@ import type { JobDetail, LibraryStatus, ScanJob } from '../bindings';
 import { errorMessage, library, libraryData } from '../ipc';
 import { ScanJobProgress } from './ScanJobProgress';
 import { LibraryChanges } from './LibraryChanges';
+import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
+import { copyJobActive } from './copyJobs';
+import { RetainedCopyInspection } from './RetainedCopyInspection';
+import { ReopenPreparedCopy } from './VerifiedCopyWorkflow';
+import { OriginalJobProgress } from './OriginalJobProgress';
+import { OriginalHistoryReview } from './OriginalHistoryReview';
+import { InspectionJobProgress } from '../inspection/InspectionJobProgress';
 
 export function JobsDropdown({
   status,
@@ -18,15 +25,24 @@ export function JobsDropdown({
   const id = useId();
   const [position, setPosition] = useState({ top: 64, right: 16, maxHeight: 400 });
   const active =
-    status?.jobs.filter(
-      (job) =>
-        job.state === 'queued' || job.state === 'running' || job.state === 'cancel_requested',
+    status?.jobs.filter((job) =>
+      ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(job.state),
     ) ?? [];
   const recent =
     status?.jobs.filter(
       (job) =>
-        job.state !== 'queued' && job.state !== 'running' && job.state !== 'cancel_requested',
+        !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(job.state),
     ) ?? [];
+  const copyJobs = status?.copyJobs ?? [];
+  const activeCopies = copyJobs.filter(copyJobActive);
+  const originalJobs = status?.originalJobs ?? [];
+  const inspections = status?.inspectionJobs ?? [];
+  const activeCount =
+    inspections.filter((job) => ['queued', 'running', 'cancel_requested'].includes(job.state))
+      .length +
+    active.length +
+    activeCopies.length +
+    originalJobs.filter((job) => job.state === 'queued' || job.state === 'running').length;
   useLayoutEffect(() => {
     if (!open) return;
     function place() {
@@ -51,7 +67,7 @@ export function JobsDropdown({
         setOpen(false);
     }
     function escape(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || panel.current?.querySelector('dialog[open]')) return;
       event.preventDefault();
       event.stopPropagation();
       setOpen(false);
@@ -105,15 +121,15 @@ export function JobsDropdown({
             strokeLinejoin="round"
           />
         </svg>
-        {active.length > 0 && (
+        {activeCount > 0 && (
           <span className="jobs-count" aria-hidden="true">
-            {active.length}
+            {activeCount}
           </span>
         )}
       </button>
       <span id={`${id}-status`} className="screen-reader-status" role="status">
         {status
-          ? `${active.length} running ${active.length === 1 ? 'job' : 'jobs'}`
+          ? `${activeCount} running ${activeCount === 1 ? 'job' : 'jobs'}`
           : 'Connecting to jobs'}
       </span>
       {open &&
@@ -148,13 +164,39 @@ export function JobsDropdown({
             ) : (
               <>
                 <p className="help">
-                  {active.length
-                    ? `${active.length} running ${active.length === 1 ? 'job' : 'jobs'}`
+                  {activeCount
+                    ? `${activeCount} running ${activeCount === 1 ? 'job' : 'jobs'}`
                     : 'No running jobs.'}
                 </p>
                 <ThumbnailJobAction status={status} onRefresh={onRefresh} />
                 {entries(active)}
+                {activeCopies.map((job) => (
+                  <CopyJobProgress key={job.id} job={job} onRefresh={onRefresh} />
+                ))}
+                {activeCopies.some((job) => job.action === 'copy_files') && <CopyIoControls />}
+                {copyJobs
+                  .filter((job) => !copyJobActive(job))
+                  .map((job) => (
+                    <div key={job.id}>
+                      <CopyJobProgress job={job} onRefresh={onRefresh} />
+                      {job.action === 'prepare_names' && !job.readyReviewId && (
+                        <ReopenPreparedCopy job={job} />
+                      )}
+                      {(job.action === 'copy_files' || job.readyReviewId) && (
+                        <RetainedCopyInspection job={job} onRefresh={onRefresh} />
+                      )}
+                    </div>
+                  ))}
+                {inspections.map((job) => (
+                  <InspectionJobProgress key={job.id} job={job} onRefresh={onRefresh} />
+                ))}
                 <LibraryChanges status={status} />
+                {originalJobs.map((job) => (
+                  <div key={job.id}>
+                    <OriginalJobProgress job={job} />
+                    <OriginalHistoryReview job={job} />
+                  </div>
+                ))}
                 {recent.length > 0 && (
                   <details className="recent-jobs">
                     <summary>Recent jobs ({recent.length})</summary>
@@ -183,7 +225,10 @@ function JobEntry({
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
-  const [canceling, setCanceling] = useState(false);
+  const [pendingAction, setPendingAction] = useState<
+    'cancel' | 'pause' | 'resume' | 'retry' | null
+  >(null);
+  const canceling = pendingAction !== null;
   const detailId = useId();
   useEffect(() => {
     if (!expanded) return;
@@ -198,17 +243,17 @@ function JobEntry({
     return () => {
       active = false;
     };
-  }, [expanded, job.id]);
-  async function cancel() {
-    setCanceling(true);
+  }, [expanded, job.id, job.skipped, job.errors, job.state]);
+  async function action(kind: 'cancel' | 'pause' | 'resume' | 'retry') {
+    setPendingAction(kind);
     setCancelError(null);
     try {
-      await library({ kind: 'cancel', job_id: job.id });
+      await library({ kind, job_id: job.id });
       await onRefresh();
     } catch (error) {
       setCancelError(errorMessage(error));
     } finally {
-      setCanceling(false);
+      setPendingAction(null);
     }
   }
   return (
@@ -235,12 +280,39 @@ function JobEntry({
         >
           {expanded ? 'Hide details' : 'Details'}
         </button>
-        {['queued', 'running', 'cancel_requested'].includes(job.state) && (
+        {['queued', 'running', 'pause_requested', 'paused'].includes(job.state) && (
           <button
-            disabled={canceling || job.state === 'cancel_requested'}
-            onClick={() => void cancel()}
+            disabled={canceling || job.state === 'pause_requested'}
+            onClick={() => void action(job.state === 'paused' ? 'resume' : 'pause')}
           >
-            {canceling || job.state === 'cancel_requested'
+            {pendingAction === 'resume'
+              ? 'Resuming…'
+              : pendingAction === 'pause'
+                ? 'Pausing…'
+                : job.state === 'paused'
+                  ? 'Resume'
+                  : job.state === 'pause_requested'
+                    ? 'Pausing…'
+                    : 'Pause'}
+          </button>
+        )}
+        {!['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+          job.state,
+        ) && (
+          <button disabled={canceling} onClick={() => void action('retry')}>
+            {pendingAction === 'retry'
+              ? 'Retrying…'
+              : `Retry ${job.kind === 'thumbnails' ? 'thumbnails' : 'scan'}`}
+          </button>
+        )}
+        {['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+          job.state,
+        ) && (
+          <button
+            disabled={pendingAction === 'cancel' || job.state === 'cancel_requested'}
+            onClick={() => void action('cancel')}
+          >
+            {pendingAction === 'cancel' || job.state === 'cancel_requested'
               ? 'Stopping…'
               : job.kind === 'thumbnails'
                 ? 'Cancel thumbnails'
@@ -348,13 +420,20 @@ function JobDetails({
       ) : !detail ? (
         <p role="status">Loading job details…</p>
       ) : detail.issues.length ? (
-        <ul>
-          {Array.from(new Set(detail.issues)).map((issue) => (
-            <li key={issue}>
-              <bdi>{issue}</bdi>
-            </li>
-          ))}
-        </ul>
+        <>
+          <p className="help">
+            Skip reasons and failures (up to 200 entries). Retry scans the saved scope again,
+            reusing unchanged metadata. Change scan settings to include intentionally excluded
+            files. Cached thumbnails are reused.
+          </p>
+          <ul>
+            {Array.from(new Set(detail.issues)).map((issue) => (
+              <li key={issue}>
+                <bdi>{issue}</bdi>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : (
         <p>No file issues recorded.</p>
       )}

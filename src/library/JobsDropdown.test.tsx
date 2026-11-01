@@ -39,6 +39,39 @@ function open() {
   fireEvent.click(screen.getByRole('button', { name: 'Jobs' }));
   return screen.getByRole('dialog', { name: 'Jobs' });
 }
+it('includes durable generated organization jobs without exposing a replay control', () => {
+  render(
+    <JobsDropdown
+      status={{
+        ...status,
+        jobs: [],
+        originalJobs: [
+          {
+            id: 'organization',
+            planId: 'plan',
+            sourceRootId: 'root',
+            kind: 'undo',
+            state: 'needs_recovery',
+            totalMoves: 10,
+            verifiedMoves: 0,
+            startedAt: 'now',
+            updatedAt: 'now',
+            message: 'Inspect current files; approval was not restored.',
+            generatedFixtureOnly: true,
+          },
+        ],
+      }}
+      onRefresh={refresh}
+    />,
+  );
+  const panel = open();
+  expect(within(panel).getByText('Undo organization · Generated fixture')).toBeInTheDocument();
+  expect(within(panel).getByText('Needs recovery review')).toBeInTheDocument();
+  expect(
+    within(panel).queryByRole('button', { name: /resume|retry|start/i }),
+  ).not.toBeInTheDocument();
+  expect(library).not.toHaveBeenCalled();
+});
 
 it('lists every active job with truthful counts and stopping state; keeps history secondary', () => {
   render(
@@ -166,4 +199,87 @@ it('starts a separate thumbnail job for a selected saved library and exposes thu
   );
   fireEvent.click(screen.getByRole('button', { name: 'Cancel thumbnails' }));
   await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'cancel', job_id: job.id }));
+});
+
+it('shows and cancels a durable inspection outside its results screen', async () => {
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_cancel')
+      return {
+        id: 'inspection',
+        input: { rootIds: ['root'], scope: 'all_eligible_files', task: { kind: 'storage' } },
+        state: 'cancel_requested',
+        startedAt: '2026-11-01',
+        updatedAt: '2026-11-01',
+        finishedAt: null,
+        filesObserved: 5,
+        filesChecked: 2,
+        bytesRead: '100',
+        issues: 0,
+        limited: false,
+        message: 'Stopping inspection',
+      };
+    if (request.kind === 'changes') return { changes: [], nextBefore: null };
+    throw new Error('Unexpected request');
+  });
+  render(
+    <JobsDropdown
+      status={{
+        ...status,
+        jobs: [],
+        inspectionJobs: [
+          {
+            id: 'inspection',
+            input: { rootIds: ['root'], scope: 'all_eligible_files', task: { kind: 'storage' } },
+            state: 'running',
+            startedAt: '2026-11-01',
+            updatedAt: '2026-11-01',
+            finishedAt: null,
+            filesObserved: 5,
+            filesChecked: 2,
+            bytesRead: '100',
+            issues: 0,
+            limited: false,
+            message: 'Inspecting generated files',
+          },
+        ],
+      }}
+      onRefresh={refresh}
+    />,
+  );
+  const panel = open();
+  expect(within(panel).getByText('Inspecting generated files')).toBeVisible();
+  fireEvent.click(within(panel).getByRole('button', { name: 'Cancel inspection' }));
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenCalledWith(
+      { kind: 'inspection_cancel', job_id: 'inspection' },
+      'inspection_job',
+    ),
+  );
+  await waitFor(() => expect(refresh).toHaveBeenCalled());
+});
+
+it('pauses and resumes the same job and retries terminal work by native identity', async () => {
+  const { rerender } = render(<JobsDropdown status={status} onRefresh={refresh} />);
+  open();
+  fireEvent.click(screen.getByRole('button', { name: 'Pause' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'pause', job_id: job.id }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  rerender(
+    <JobsDropdown
+      status={{ ...status, jobs: [{ ...job, state: 'paused' }] }}
+      onRefresh={refresh}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'resume', job_id: job.id }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
+  rerender(
+    <JobsDropdown
+      status={{ ...status, jobs: [{ ...job, state: 'partial' }] }}
+      onRefresh={refresh}
+    />,
+  );
+  fireEvent.click(screen.getByText('Recent jobs (1)'));
+  fireEvent.click(screen.getByRole('button', { name: 'Retry scan' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'retry', job_id: job.id }));
 });

@@ -5,17 +5,36 @@ import type {
   OrganizationPreview,
   OrganizationPlanDetail,
   TemplateRef,
+  OrganizationTargetState,
+  LibraryRoot,
+  ImportDestinationPreference,
 } from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
 
+const targetLabels: Record<OrganizationTargetState, string> = {
+  unoccupied_observed: 'No existing target observed',
+  occupied: 'Target already exists — retained',
+  ancestor_not_directory: 'A parent name is occupied by a file',
+  unsupported_ancestor: 'A parent or package cannot be used',
+  preview_blocked: 'Blocked in the template preview',
+};
+export type DestinationRootOption = Pick<LibraryRoot, 'id' | 'label'> &
+  Partial<Pick<LibraryRoot, 'mode' | 'availability'>>;
+
 export function OrganizationDestination({
+  catalogId = null,
+  preferredImportRoot = null,
   preview,
   revision,
   templateReference = null,
+  roots = [],
 }: {
+  catalogId?: string | null;
+  preferredImportRoot?: ImportDestinationPreference | null;
   preview: OrganizationPreview;
   revision: string;
   templateReference?: TemplateRef | null;
+  roots?: DestinationRootOption[];
 }) {
   const requestId = useRef(0);
   const [selection, setSelection] = useState<DirectorySelection | null>(null);
@@ -23,6 +42,21 @@ export function OrganizationDestination({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<OrganizationPlanDetail | null>(null);
+  const preferredId =
+    catalogId && preferredImportRoot?.catalogId === catalogId
+      ? (preferredImportRoot.rootId ?? '')
+      : '';
+  const [destinationRootId, setDestinationRootId] = useState(preferredId);
+  const selectedRoot = roots.find((root) => root.id === destinationRootId);
+  const destinationProblem = !destinationRootId
+    ? null
+    : preview.rows.some((row) => row.rootId === destinationRootId)
+      ? 'The preferred or selected destination is also a selected source. Choose a different destination.'
+      : !selectedRoot || selectedRoot.availability !== 'online'
+        ? 'The preferred or selected destination is unavailable. Reconnect it or explicitly choose another destination.'
+        : selectedRoot.mode !== 'managed'
+          ? 'The preferred or selected destination is read-only. Choose an authorized managed destination.'
+          : null;
   useEffect(
     () => () => {
       requestId.current += 1;
@@ -35,7 +69,7 @@ export function OrganizationDestination({
       (BigInt(review.catalogRevision) < BigInt(revision) ||
         review.previewFingerprint !== preview.fingerprint));
   async function check(choose: boolean) {
-    if (busy || stale) return;
+    if (busy || stale || destinationProblem) return;
     const id = ++requestId.current;
     setBusy(true);
     setError(null);
@@ -56,6 +90,7 @@ export function OrganizationDestination({
           asset_ids: preview.rows.map((row) => row.assetId),
           template: preview.template,
           preview_fingerprint: preview.fingerprint,
+          ...(destinationRootId ? { destination_root_id: destinationRootId } : {}),
         },
         'organization_destination',
       );
@@ -70,7 +105,7 @@ export function OrganizationDestination({
     }
   }
   async function save() {
-    if (!selection || !review || stale || busy || saved) return;
+    if (!selection || !review || stale || busy || saved || destinationProblem) return;
     const id = ++requestId.current;
     setBusy(true);
     setError(null);
@@ -84,6 +119,7 @@ export function OrganizationDestination({
             template: preview.template,
             previewFingerprint: preview.fingerprint,
             templateReference,
+            ...(destinationRootId ? { destinationRootId } : {}),
           },
         },
         'organization_plan',
@@ -102,11 +138,62 @@ export function OrganizationDestination({
       aria-busy={busy}
     >
       <h3>Destination for organized copies</h3>
+      <label>
+        Destination library policy
+        <select
+          aria-label="Destination library policy"
+          disabled={busy || stale}
+          value={destinationRootId}
+          onChange={(event) => {
+            requestId.current += 1;
+            setDestinationRootId(event.target.value);
+            setSelection(null);
+            setReview(null);
+            setSaved(null);
+            setError(null);
+          }}
+        >
+          <option value="">Separate destination folder</option>
+          {destinationRootId && !selectedRoot && (
+            <option value={destinationRootId} disabled>
+              Unavailable preferred destination
+            </option>
+          )}
+          {roots.map((root) => {
+            const source = preview.rows.some((row) => row.rootId === root.id);
+            const reason = source
+              ? 'selected source'
+              : root.mode !== 'managed'
+                ? 'read-only'
+                : root.availability !== 'online'
+                  ? 'unavailable'
+                  : null;
+            return (
+              <option key={root.id} value={root.id} disabled={reason !== null}>
+                {root.label}
+                {reason ? ` — ${reason}` : ''}
+              </option>
+            );
+          })}
+        </select>
+      </label>
+      {preferredId && destinationRootId === preferredId && (
+        <p className="help">
+          Saved preferred import destination for this catalog. This does not approve copying.
+        </p>
+      )}
+      {destinationProblem && <p role="status">{destinationProblem}</p>}
       <p>
-        Choose an existing folder outside every indexed library. Checking it leaves both folders
-        unchanged.
+        {destinationRootId
+          ? 'Choose the selected managed library’s root itself with the folder picker. Existing files are retained; new copies require a separately reviewed output namespace.'
+          : 'Choose an existing folder outside every indexed library.'}{' '}
+        Checking it leaves both folders unchanged.
       </p>
-      <button type="button" disabled={busy || stale} onClick={() => void check(true)}>
+      <button
+        type="button"
+        disabled={busy || stale || !!destinationProblem}
+        onClick={() => void check(true)}
+      >
         {busy ? 'Checking destination…' : 'Choose destination'}
       </button>
       {selection && (
@@ -114,7 +201,11 @@ export function OrganizationDestination({
           <p>
             <bdi>{review?.destinationPath ?? selection.displayPath}</bdi>
           </p>
-          <button type="button" disabled={busy || stale} onClick={() => void check(false)}>
+          <button
+            type="button"
+            disabled={busy || stale || !!destinationProblem}
+            onClick={() => void check(false)}
+          >
             Check destination again
           </button>
         </>
@@ -132,7 +223,46 @@ export function OrganizationDestination({
       {review && !stale && (
         <>
           <p role="status">Destination identity and indexed-root overlap checked.</p>
-          <button type="button" disabled={busy || saved !== null} onClick={() => void save()}>
+          <p>
+            {BigInt(review.availableBytes).toLocaleString()} bytes available of{' '}
+            {BigInt(review.totalBytes).toLocaleString()} total at review time. Selected photo bytes:{' '}
+            {BigInt(preview.selectedBytes).toLocaleString()}. Companions, staging, retained versions
+            and metadata reserves are not included; space is not reserved.
+          </p>
+          <div className="organization-table">
+            <table>
+              <caption>Existing target review</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Proposed relative path</th>
+                  <th scope="col">Observation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {review.targets.map((target) => (
+                  <tr key={target.assetId}>
+                    <td>
+                      <bdi>{target.targetRelativePath ?? 'No proposed target'}</bdi>
+                    </td>
+                    <td>
+                      {targetLabels[target.state]}
+                      {target.blockingComponent && (
+                        <>
+                          <br />
+                          <bdi>{target.blockingComponent}</bdi>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <button
+            type="button"
+            disabled={busy || saved !== null || !!destinationProblem}
+            onClick={() => void save()}
+          >
             Save plan draft
           </button>
         </>
@@ -143,9 +273,10 @@ export function OrganizationDestination({
         </p>
       )}
       <p className="help">
-        Existing target names, case and Unicode rules, companion inventory, capacity and metadata
-        fidelity still need review. Saving retains a draft without reserving target names. Copying
-        remains unavailable.
+        Native lookup checks existing entries without following links. Missing parent folders and
+        names are observations, not reservations. Equivalence between future case/Unicode names,
+        complete companions, full space requirements and metadata fidelity still need review. Saving
+        retains a draft without reserving target names. Copying remains unavailable.
       </p>
     </section>
   );

@@ -81,6 +81,7 @@ struct RootWatch {
     seen: u64,
     pending: Pending,
     attached: Instant,
+    deferred: Option<String>,
 }
 impl RootWatch {
     fn new(now: Instant) -> Self {
@@ -92,6 +93,7 @@ impl RootWatch {
             seen: 0,
             pending: Pending::new(now),
             attached: now - FALLBACK,
+            deferred: None,
         }
     }
     fn attach(&mut self, path: &Path, managed: PathBuf, now: Instant) {
@@ -197,7 +199,11 @@ fn run(owner: Weak<Library>, state: Monitor, managed: PathBuf) {
                         && !job.id.starts_with("thumbnail:")
                         && !matches!(
                             job.state.as_str(),
-                            "queued" | "running" | "cancel_requested"
+                            "queued"
+                                | "running"
+                                | "cancel_requested"
+                                | "paused"
+                                | "pause_requested"
                         )
                 })
                 .map(|job| job.id.clone());
@@ -220,6 +226,7 @@ fn run(owner: Weak<Library>, state: Monitor, managed: PathBuf) {
                 }
                 entry.watcher = None;
                 entry.binding = Some(binding);
+                entry.deferred = None;
                 entry.attached = now - FALLBACK;
                 entry.pending.changed(now);
             }
@@ -246,15 +253,23 @@ fn run(owner: Weak<Library>, state: Monitor, managed: PathBuf) {
             let native = entry.watcher.is_some() && !entry.signal.failed.load(Ordering::Relaxed);
             views.push(RootMonitor {
                 root_id: root.id.clone(),
-                mode: if native { "watching" } else { "periodic" }.into(),
-                message: if root.availability == "scanning" {
-                    "Updating library contents…"
+                mode: if entry.deferred.is_some() {
+                    "deferred"
                 } else if native {
-                    "Watching for changes; safety reconciliation every 5 minutes."
+                    "watching"
                 } else {
-                    "Native notifications unavailable; checking every 30 seconds."
+                    "periodic"
                 }
                 .into(),
+                message: if let Some(message) = &entry.deferred {
+                    message.clone()
+                } else if root.availability == "scanning" {
+                    "Updating library contents…".into()
+                } else if native {
+                    "Watching for changes; safety reconciliation every 5 minutes.".into()
+                } else {
+                    "Native notifications unavailable; checking every 30 seconds.".into()
+                },
             });
         }
         if let Ok(mut target) = state.views.lock() {
@@ -280,14 +295,22 @@ fn run(owner: Weak<Library>, state: Monitor, managed: PathBuf) {
                 };
                 match library.scan(id.clone(), root.filter.clone()) {
                     Ok(_) => {
-                        roots.get_mut(id).unwrap().pending.started(now);
-                        cursor = (index + 1) % ids.len();
+                        let entry = roots.get_mut(id).unwrap();
+                        entry.pending.started(now);
+                        entry.deferred = None;
                     }
-                    Err(error) if error.code == ErrorCode::Busy => {}
+                    Err(error) if error.code == ErrorCode::Busy => {
+                        roots.get_mut(id).unwrap().deferred = Some(error.message);
+                    }
                     Err(_) => {
-                        roots.get_mut(id).unwrap().pending.started(now);
+                        let entry = roots.get_mut(id).unwrap();
+                        entry.pending.started(now);
+                        entry.deferred = None;
                     }
                 }
+                // A stopped original plan may remain Busy until human review.
+                // Retain its invalidation without starving unrelated roots.
+                cursor = (index + 1) % ids.len();
                 break;
             }
         }

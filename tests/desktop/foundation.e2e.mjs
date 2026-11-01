@@ -12,13 +12,1293 @@ async function native(request) {
     request,
   );
 }
+async function reviewReadOnlyInspections(evidence) {
+  if (await $('button[aria-label="Expand navigation"]').isExisting())
+    await $('button[aria-label="Expand navigation"]').click();
+  const receipts = [];
+  for (const [section, label] of [
+    ['Storage', 'Start storage inspection'],
+    ['Duplicates', 'Start duplicate inspection'],
+    ['Integrity', 'Start quick header check'],
+  ]) {
+    await $(`button[aria-label="${section}"]`).click();
+    await $('.inspection-controls').waitForDisplayed();
+    if (section === 'Integrity') await changeSizeUnit('Integrity mode', 'quick');
+    const before = (await native({ kind: 'inspection_jobs' })).data.map((job) => job.id);
+    await $(`button=${label}`).click();
+    let job;
+    await browser.waitUntil(
+      async () => {
+        const jobs = (await native({ kind: 'inspection_jobs' })).data;
+        job = jobs.find((job) => !before.includes(job.id));
+        return job && !['queued', 'running', 'cancel_requested'].includes(job.state);
+      },
+      { timeout: 45000, interval: 200, timeoutMsg: `${section} native inspection did not finish` },
+    );
+    assert.ok(['completed', 'partial'].includes(job.state), job.message);
+    await $('section[aria-label="Inspected files"] tbody tr:first-child').waitForDisplayed();
+    const report = (await native({ kind: 'inspection_report', job_id: job.id })).data;
+    const files = (await native({ kind: 'inspection_findings', job_id: job.id, after: null })).data;
+    assert.ok(files.rows.length > 0);
+    const bytes = files.rows.map((row) => BigInt(row.bytes));
+    assert.ok(bytes.every((value, index) => index === 0 || value <= bytes[index - 1]));
+    assert.equal(report.storage.quarantineFreedBytes, '0');
+    assert.equal(report.storage.reclaimablePhysicalBytes, null);
+    await browser.waitUntil(async () =>
+      browser.execute(
+        () =>
+          document
+            .querySelector('.inspection-job')
+            ?.textContent.includes('Re-run to check current files') &&
+          document.querySelectorAll('.inspection-job progress').length === 0,
+      ),
+    );
+    await browser.saveScreenshot(
+      `.context/screenshots/m3-${section.toLowerCase()}-${process.platform}.png`,
+    );
+    const displayedRows = await browser.execute(() =>
+      [...document.querySelectorAll('section[aria-label="Inspected files"] tbody tr')].map(
+        (row) => ({
+          name: row.querySelector('th > span').textContent,
+          bytes: row.children[1].textContent.replace(/\D/g, ''),
+          content: row.children[4].textContent,
+        }),
+      ),
+    );
+    assert.deepEqual(
+      displayedRows.map(({ name, bytes }) => ({ name, bytes })),
+      files.rows.map(({ name, bytes }) => ({ name, bytes })),
+    );
+    assert.ok(
+      displayedRows.every((row, index) =>
+        row.content.includes(files.rows[index].content.replaceAll('_', ' ')),
+      ),
+    );
+    await $('section[aria-label="Inspected files"] h2').scrollIntoView({ block: 'start' });
+    await browser.saveScreenshot(
+      `.context/screenshots/m3-${section.toLowerCase()}-results-${process.platform}.png`,
+    );
+    let folderEvidence = null;
+    if (section === 'Storage') {
+      await $('.inspection-storage').scrollIntoView({ block: 'start' });
+      assert.equal(
+        (await $('.inspection-metrics > div:first-child dd').getText()).replace(/\D/g, ''),
+        report.storage.total.logicalBytes,
+      );
+      const scope = (
+        await native({
+          kind: 'inspection_folders',
+          job_id: job.id,
+          parent_id: 'scope',
+          after: null,
+        })
+      ).data;
+      const tiles = await $$('.inspection-map button:not(:disabled)');
+      assert.ok(tiles.length > 0);
+      await tiles[0].click();
+      await browser.waitUntil(
+        async () => (await $$('.inspection-breadcrumbs button')).length === 2,
+      );
+      const folder = (
+        await native({
+          kind: 'inspection_folders',
+          job_id: job.id,
+          parent_id: scope.rows[0].id,
+          after: null,
+        })
+      ).data;
+      await browser.waitUntil(async () =>
+        (await $('.inspection-storage table caption').getText()).includes(folder.parent.name),
+      );
+      const shown = await browser.execute(() => {
+        const row = document.querySelector('.inspection-storage table tbody tr');
+        return {
+          files: row.children[1].textContent.replace(/\D/g, ''),
+          bytes: row.children[2].textContent.replace(/\D/g, ''),
+        };
+      });
+      assert.deepEqual(shown, {
+        files: String(folder.parent.files),
+        bytes: folder.parent.logicalBytes,
+      });
+      await $('.inspection-map').scrollIntoView({ block: 'center' });
+      await browser.saveScreenshot(`.context/screenshots/m3-storage-zoom-${process.platform}.png`);
+      folderEvidence = { scope, folder, shown };
+    }
+    receipts.push({ job, report, firstPage: files, displayedRows, folderEvidence });
+  }
+  await writeFile(
+    `${evidence}/m3-inspections-${process.platform}.json`,
+    JSON.stringify({ productionAuthorization: false, receipts }),
+  );
+  await $('button[aria-label="Photos"]').click();
+  await browser.waitUntil(async () => (await $$('.asset')).length > 0, {
+    timeout: 15000,
+    timeoutMsg: 'Generated gallery did not return after inspection review',
+  });
+}
+
+async function ownedOperationReceipt() {
+  const token = randomUUID();
+  // DirectEvalClient has its own 30-second limit, independent of WebDriver's
+  // script timeout. Start once, then poll short evaluations within our bound.
+  await browser.tauri.execute(({ core }, token) => {
+    if (window.__stillharbourOwnedOperationProbe) throw new Error('Owned fixture already running');
+    const state = { token, status: 'pending' };
+    window.__stillharbourOwnedOperationProbe = state;
+    core
+      .invoke('test_performance', { action: 'organization_copy_executor_fixture', rows: null })
+      .then(
+        (value) => {
+          if (window.__stillharbourOwnedOperationProbe === state)
+            Object.assign(state, { status: 'done', value });
+        },
+        (error) => {
+          if (window.__stillharbourOwnedOperationProbe === state)
+            Object.assign(state, { status: 'failed', error });
+        },
+      );
+    return true;
+  }, token);
+  try {
+    await browser.waitUntil(
+      async () =>
+        browser.execute((token) => {
+          const state = window.__stillharbourOwnedOperationProbe;
+          return state?.token === token && state.status !== 'pending';
+        }, token),
+      {
+        timeout: 120000,
+        interval: 100,
+        timeoutMsg: 'Owned native fixture did not finish within 120 seconds',
+      },
+    );
+    const result = await browser.execute((token) => {
+      const state = window.__stillharbourOwnedOperationProbe;
+      if (state?.token !== token) throw new Error('Owned fixture receipt scope changed');
+      return state;
+    }, token);
+    assert.equal(result.status, 'done', JSON.stringify(result.error));
+    return result.value;
+  } finally {
+    await browser.execute((token) => {
+      if (window.__stillharbourOwnedOperationProbe?.token === token)
+        delete window.__stillharbourOwnedOperationProbe;
+    }, token);
+  }
+}
+async function reviewFilenameStemCase(assetIds, evidence) {
+  const template = {
+    pattern: '{capture:%Y}/{capture:%Y-%m-%d}/{original_stem}.{ext}',
+    event: '',
+    missingDate: 'undated',
+    filenameStemCase: 'uppercase',
+  };
+  const expected = (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
+    .data;
+  await changeSizeUnit('Filename stem case', 'uppercase');
+  await $('button=Build preview').click();
+  await $('.organization-table tbody tr:first-child').waitForDisplayed();
+  const shown = await browser.execute(() =>
+    [...document.querySelectorAll('.organization-table tbody tr')].map(
+      (row) => row.querySelectorAll('td')[1].textContent,
+    ),
+  );
+  assert.deepEqual(
+    shown,
+    expected.rows.map((row) => row.targetRelativePath ?? 'No valid target'),
+  );
+  assert.equal(expected.template.filenameStemCase, 'uppercase');
+  for (const row of expected.rows.filter((row) => row.targetRelativePath)) {
+    const sourceLeaf = row.sourcePath.split(/[\\/]/).at(-1);
+    const targetLeaf = row.targetRelativePath.split('/').at(-1);
+    assert.equal(targetLeaf.split('.').at(-1), sourceLeaf.split('.').at(-1));
+    assert.equal(
+      targetLeaf.slice(0, targetLeaf.lastIndexOf('.')),
+      targetLeaf.slice(0, targetLeaf.lastIndexOf('.')).toUpperCase(),
+    );
+  }
+  await writeFile(
+    `${evidence}/filename-stem-case-${process.platform}.json`,
+    JSON.stringify(expected),
+  );
+  await browser.saveScreenshot(
+    `.context/screenshots/m2-filename-stem-case-${process.platform}.png`,
+  );
+  await changeSizeUnit('Filename stem case', 'preserve');
+  assert.equal(await $('.organization-table').isExisting(), false);
+}
+async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
+  const generated = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', {
+      action: 'organization_managed_destination_fixture',
+      rows: null,
+    }),
+  );
+  const picker = existingPicker ?? (await browser.tauri.mock('foundation_request'));
+  try {
+    await picker.mockReturnValue({ kind: 'directory', data: generated.selection });
+    await browser.waitUntil(
+      async () => {
+        const status = (await native({ kind: 'status' })).data;
+        return (
+          status.roots.some(
+            (root) => root.id === generated.rootId && root.availability === 'online',
+          ) && status.jobs.some((job) => job.id === generated.jobId && job.state === 'completed')
+        );
+      },
+      { timeout: 15000, timeoutMsg: 'Generated managed root scan did not settle' },
+    );
+    await $('button=Build preview').click();
+    const policy = await $('select[aria-label="Destination library policy"]');
+    await browser.waitUntil(
+      async () => policy.$(`option[value="${generated.rootId}"]`).isExisting(),
+      { timeout: 15000 },
+    );
+    await changeSizeUnit('Destination library policy', generated.rootId);
+    await $('button=Choose destination').scrollIntoView();
+    await $('button=Choose destination').click();
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() =>
+          document
+            .querySelector('section[aria-label="Organization destination"] [role="status"]')
+            ?.textContent?.includes('identity and indexed-root overlap checked'),
+        ),
+      { timeout: 15000 },
+    );
+    assert.equal(await $('button=Save plan draft').isEnabled(), true);
+    await browser.saveScreenshot(
+      `.context/screenshots/m2-managed-destination-${process.platform}.png`,
+    );
+    const observation = await browser.execute(
+      () => document.querySelector('section[aria-label="Organization destination"]').textContent,
+    );
+    assert.ok(observation.includes('Generated managed copies destination'));
+    await changeSizeUnit('Destination library policy', '');
+    assert.equal(await $('button=Save plan draft').isExisting(), false);
+    let audit;
+    await browser.waitUntil(
+      async () => {
+        const observed = await browser.tauri.execute(async ({ core }) => {
+          try {
+            return {
+              audit: await core.invoke('test_performance', {
+                action: 'organization_managed_destination_audit_remove',
+                rows: null,
+              }),
+            };
+          } catch (error) {
+            return { error };
+          }
+        });
+        if (observed.error) {
+          if (observed.error.code === 'busy') return false;
+          throw new Error(observed.error.message ?? JSON.stringify(observed.error));
+        }
+        audit = observed.audit;
+        return true;
+      },
+      {
+        timeout: 15000,
+        interval: 100,
+        timeoutMsg: 'Generated empty destination did not release its scan',
+      },
+    );
+    assert.deepEqual(audit, {
+      rootRemoved: true,
+      neighborPreserved: true,
+      destinationFilesChanged: false,
+    });
+    await writeFile(
+      `${evidence}/managed-destination-${process.platform}.json`,
+      JSON.stringify({
+        rootId: generated.rootId,
+        reviewed: true,
+        policyChangeRetiredReview: true,
+        audit,
+      }),
+    );
+  } finally {
+    if (!existingPicker) await picker.mockRestore();
+  }
+}
+async function preferredImportDestinationPreference(evidence) {
+  const before = (await native({ kind: 'status' })).data;
+  const root = before.roots.find((root) => root.mode === 'managed');
+  assert.ok(root, 'A generated managed root is required');
+  const context = before.importDestination;
+  assert.ok(context?.catalogId);
+  const globalBefore = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('foundation_request', { request: { kind: 'get_preferences' } }),
+  );
+  await $('button[aria-label="Settings"]').click();
+  const select = await $('select[aria-label="Preferred import destination"]');
+  await select.waitForEnabled();
+  await select.scrollIntoView();
+  await changeSizeUnit('Preferred import destination', root.id);
+  await $('button=Save import destination').click();
+  await browser.waitUntil(
+    async () =>
+      browser.execute(() =>
+        document
+          .querySelector('form[aria-label="Import destination preference"] [role="status"]')
+          ?.textContent?.includes('Import destination saved'),
+      ),
+    { timeout: 15000 },
+  );
+  const saved = (await native({ kind: 'status' })).data;
+  assert.deepEqual(saved.importDestination, { catalogId: context.catalogId, rootId: root.id });
+  const rootBindings = (status) =>
+    status.roots
+      .map((root) => ({ id: root.id, mode: root.mode, isBase: root.isBase }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  assert.deepEqual(rootBindings(saved), rootBindings(before));
+  const wrong = await browser.tauri.execute(async ({ core }, catalogId) => {
+    try {
+      await core.invoke('library_request', {
+        request: {
+          kind: 'organization_import_destination_set',
+          catalog_id: catalogId,
+          root_id: null,
+        },
+      });
+      return null;
+    } catch (error) {
+      return error;
+    }
+  }, randomUUID());
+  assert.equal(wrong.code, 'CONFLICT');
+  assert.deepEqual(
+    (await native({ kind: 'status' })).data.importDestination,
+    saved.importDestination,
+  );
+  await browser.saveScreenshot(`.context/screenshots/m2-preferred-import-${process.platform}.png`);
+  await changeSizeUnit('Preferred import destination', '');
+  await $('button=Save import destination').click();
+  await browser.waitUntil(
+    async () => (await native({ kind: 'status' })).data.importDestination.rootId === null,
+    { timeout: 15000 },
+  );
+  const globalAfter = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('foundation_request', { request: { kind: 'get_preferences' } }),
+  );
+  assert.deepEqual(globalAfter, globalBefore);
+  const proof = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_library_fixture', { verify: true }),
+  );
+  assert.ok(proof.verifiedFiles > 20);
+  await writeFile(
+    `${evidence}/preferred-import-${process.platform}.json`,
+    JSON.stringify({
+      saved: saved.importDestination,
+      cleared: true,
+      rootBindingsUnchanged: true,
+      globalPreferencesUnchanged: true,
+      verifiedSourceFiles: proof.verifiedFiles,
+    }),
+  );
+}
+async function reopenPreparedReview(original, destination, evidence) {
+  const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+    (job) => job.planId === original.id,
+  );
+  const prepared = jobs.find((job) => job.action === 'prepare_names' && job.state === 'prepared');
+  assert.ok(prepared?.readyReviewId);
+  const before = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+  );
+  assert.ok(before.files.length > 0);
+  assert.ok(
+    before.files.every((file) => file.bytes === '0' && file.relativePath.endsWith('.partial')),
+  );
+  await native({ kind: 'organization_copy_discard', review_id: prepared.readyReviewId });
+  await $('button=Choose destination and reopen prepared review').scrollIntoView();
+  await $('button=Choose destination and reopen prepared review').click();
+  await browser.waitUntil(
+    async () => !(await $('button=Choose destination and reopen prepared review').isExisting()),
+  );
+  await $('h4=Prepared copy review').waitForDisplayed();
+  assert.equal(await $('button=Approve byte-verified copy').isEnabled(), false);
+  assert.equal((await $$('button=Start verified copy')).length, 0);
+  const reopened = (
+    await native({
+      kind: 'organization_copy_review',
+      review_id: prepared.readyReviewId,
+      selection_id: destination.id,
+    })
+  ).data;
+  assert.equal(reopened.id, prepared.readyReviewId);
+  assert.equal(reopened.action, 'copy_files');
+  assert.equal(reopened.planId, original.id);
+  const after = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+  );
+  assert.deepEqual(after, before);
+  assert.deepEqual(
+    (await native({ kind: 'status' })).data.copyJobs.filter((job) => job.planId === original.id),
+    jobs,
+  );
+  await writeFile(
+    `${evidence}/prepared-review-reopened-${process.platform}.json`,
+    JSON.stringify({
+      jobId: prepared.id,
+      reopenedReview: reopened,
+      unchangedEmptyStages: after,
+      newApprovalRequired: true,
+    }),
+  );
+  await browser.saveScreenshot(
+    `.context/screenshots/m2-prepared-review-reopened-${process.platform}.png`,
+  );
+}
+async function compareGeneratedImportScope(manifest, evidence, outputAudit) {
+  const fixture = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'import_comparison_fixture', rows: null }),
+  );
+  try {
+    let scanned;
+    await browser.waitUntil(
+      async () => {
+        scanned = (await native({ kind: 'status' })).data.jobs.find(
+          (job) => job.id === fixture.job.id,
+        );
+        return !!scanned && !['queued', 'running', 'cancel_requested'].includes(scanned.state);
+      },
+      { timeout: 60000 },
+    );
+    assert.ok(['completed', 'partial'].includes(scanned.state), JSON.stringify(scanned));
+    await $('button=Choose indexed comparison scope').scrollIntoView();
+    await $('button=Choose indexed comparison scope').click();
+    const scope = await $('section[aria-label="Import byte comparison"] fieldset');
+    await scope.waitForDisplayed();
+    const label = await $('section[aria-label="Import byte comparison"]').$(
+      'label*=Existing import comparison fixture',
+    );
+    await label.scrollIntoView();
+    await label.$('input').click();
+    await browser.execute(() => {
+      window.__stillharbourImportComparisonRequests = [];
+      window.addEventListener('stillharbour:test-library-request', (event) => {
+        if (
+          event.detail.kind === 'organization_import_comparison_job' &&
+          window.__stillharbourImportComparisonRequests.length < 32
+        )
+          window.__stillharbourImportComparisonRequests.push(event.detail.job_id);
+      });
+    });
+    await $('button=Start read-only comparison').scrollIntoView();
+    await $('button=Start read-only comparison').click();
+    await $('h4=Observed file comparison').waitForDisplayed({ timeout: 30000 });
+    const requests = await browser.execute(
+      () => window.__stillharbourImportComparisonRequests ?? [],
+    );
+    let finalJob;
+    // Observe the actual ID-only request rather than inventing a result/ID.
+    assert.ok(requests.length > 0);
+    await browser.waitUntil(async () => {
+      finalJob = (
+        await native({ kind: 'organization_import_comparison_job', job_id: requests.at(-1) })
+      ).data;
+      return ['completed', 'completed_with_issues', 'failed', 'canceled'].includes(finalJob.state);
+    });
+    assert.ok(
+      ['completed', 'completed_with_issues'].includes(finalJob.state),
+      JSON.stringify(finalJob.error),
+    );
+    assert.equal(finalJob.planId, manifest.planId);
+    assert.equal(finalJob.manifestId, manifest.id);
+    assert.equal(finalJob.report.mutationAuthorized, false);
+    assert.equal(finalJob.report.bundleReviewRequired, true);
+    assert.equal(finalJob.report.files.length, manifest.files.length);
+    assert.deepEqual(
+      finalJob.report.bundles.flatMap((bundle) => bundle.fileIds).sort(),
+      manifest.files.map((file) => file.id).sort(),
+    );
+    if (!finalJob.report.allScopeAvailable) {
+      assert.ok(
+        finalJob.report.bundles.every((bundle) => bundle.disposition === 'needs_attention'),
+      );
+    }
+    const bundleSummary = await $('summary*=Whole-bundle import observations');
+    await bundleSummary.waitForExist();
+    await bundleSummary.click();
+    assert.ok(finalJob.report.files.some((file) => file.matches.length > 0));
+    assert.ok(
+      finalJob.report.files
+        .flatMap((file) => file.matches)
+        .every((match) => match.relativePath.includes('existing-') && !match.sameNativeObject),
+    );
+    const verification = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'import_comparison_verify', rows: null }),
+    );
+    assert.equal(verification.sourceVerifiedEntries, fixture.sourceVerifiedEntries);
+    assert.equal(verification.comparisonVerifiedEntries, fixture.comparisonVerifiedEntries);
+    const after = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+    );
+    assert.deepEqual(after, outputAudit);
+    await writeFile(
+      `${evidence}/import-byte-comparison-${process.platform}.json`,
+      JSON.stringify({
+        scan: scanned,
+        comparison: finalJob,
+        preservation: verification,
+        unchangedOutputAudit: after,
+      }),
+    );
+    await browser.saveScreenshot(
+      `.context/screenshots/m2-import-byte-comparison-${process.platform}.png`,
+    );
+  } finally {
+    const removed = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'import_comparison_finish', rows: null }),
+    );
+    if (process.platform === 'win32') {
+      assert.equal(removed.retainedRoot, fixture.job.rootId);
+      assert.equal(removed.catalogRegistrationRetained, true);
+    } else assert.equal(removed.removedRoot, fixture.job.rootId);
+    assert.equal(removed.sourceFilesRemoved, false);
+    await writeFile(
+      `${evidence}/import-comparison-root-state-${process.platform}.json`,
+      JSON.stringify(removed),
+    );
+  }
+}
+async function verifyAllExistingImport(sourceRootId, destination, evidence, outputAudit) {
+  const fixture = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'import_skip_fixture', rows: null }),
+  );
+  try {
+    let scanned;
+    await browser.waitUntil(
+      async () => {
+        scanned = (await native({ kind: 'status' })).data.jobs.find(
+          (job) => job.id === fixture.job.id,
+        );
+        return scanned && !['queued', 'running', 'cancel_requested'].includes(scanned.state);
+      },
+      { timeout: 60000 },
+    );
+    assert.equal(scanned.state, 'completed', JSON.stringify(scanned));
+    let preparation;
+    await browser.waitUntil(
+      async () => {
+        preparation = (await native({ kind: 'status' })).data.jobs.find(
+          (job) => job.id === `thumbnail:initial:${fixture.job.rootId}`,
+        );
+        return (
+          preparation && ['completed', 'partial', 'failed', 'canceled'].includes(preparation.state)
+        );
+      },
+      { timeout: 60000 },
+    );
+    assert.equal(preparation.state, 'completed', JSON.stringify(preparation));
+    const packed = (
+      await native({
+        kind: 'query',
+        query: {
+          rootId: sourceRootId,
+          folder: '',
+          name: 'Generated-00.jpg',
+          fromDate: '',
+          throughDate: '',
+          minBytes: '',
+          maxBytes: '',
+          extension: '',
+          favoritesOnly: false,
+          tag: '',
+          sort: 'capture',
+          includeMissing: false,
+        },
+        cursor: null,
+        limit: 24,
+      })
+    ).data;
+    const primary = packed.rows.find(
+      (row) => row[3].replaceAll('\\', '/') === 'Coast/Generated-00.jpg',
+    );
+    assert.ok(primary, 'owned generated photo is actually indexed');
+    const template = {
+      pattern: 'Imports/{original_stem}.{ext}',
+      event: '',
+      missingDate: 'undated',
+    };
+    const preview = (
+      await native({ kind: 'organization_preview', asset_ids: [primary[0]], template })
+    ).data;
+    const draft = (
+      await native({
+        kind: 'organization_plan_create',
+        selection_id: destination.id,
+        draft: {
+          assetIds: [primary[0]],
+          template,
+          previewFingerprint: preview.fingerprint,
+          templateReference: null,
+        },
+      })
+    ).data.plan;
+    async function openDraft(targetId = draft.id) {
+      await $('button=Close saved plans').click();
+      await $('button=Saved plans').click();
+      const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
+      const index = plans.findIndex((plan) => plan.id === targetId);
+      assert.ok(index >= 0);
+      await browser.waitUntil(
+        async () => (await $$('.organization-preview li button')).length === plans.length,
+      );
+      await (await $$('.organization-preview li button'))[index].click();
+    }
+    await openDraft();
+    const opened = (await native({ kind: 'organization_plan', plan_id: draft.id })).data;
+    await writeFile(
+      `${evidence}/import-skip-preflight-${process.platform}.json`,
+      JSON.stringify({ scan: scanned, preparation, draft, opened }),
+    );
+    assert.equal(
+      opened.stale,
+      false,
+      'Complete native preparation must settle before the saved import draft is reviewed.',
+    );
+    await $('button=Review all companion filenames').scrollIntoView();
+    await $('button=Review all companion filenames').click();
+    await $('button=Read all filenames').waitForDisplayed();
+    await $('button=Read all filenames').click();
+    await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+    await $('label*=I reviewed all filenames').scrollIntoView();
+    await $('label*=I reviewed all filenames').click();
+    await $('button=Save companion review').click();
+    await $('section[aria-label="Retained companion decision"] [role="status"]').waitForDisplayed();
+    await $('button=Close companion inventory').click();
+    async function compile() {
+      await $('button=Compile copy review').scrollIntoView();
+      await $('button=Compile copy review').click();
+      await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+    }
+    await compile();
+    const decisions = (
+      await native({ kind: 'organization_bundle_reviews', plan_id: draft.id, asset_id: primary[0] })
+    ).data;
+    const manifest = (
+      await native({
+        kind: 'organization_copy_manifest',
+        input: { planId: draft.id, bundleConfirmationIds: [decisions[0].id] },
+      })
+    ).data;
+    assert.equal(manifest.files.length, 2);
+    await $('button=Choose indexed comparison scope').scrollIntoView();
+    await $('button=Choose indexed comparison scope').click();
+    const label = await $('label*=Complete existing import bundle fixture');
+    await label.scrollIntoView();
+    await label.$('input').click();
+    await $('button=Start read-only comparison').scrollIntoView();
+    await $('button=Start read-only comparison').click();
+    const choice = await $('select[aria-label^="Import choice for"]');
+    await choice.waitForExist({ timeout: 30000 });
+    const options = await choice.$$('option');
+    const values = [];
+    for (let index = 0; index < options.length; index++)
+      values.push(await options[index].getAttribute('value'));
+    const group = values.find((value) => /^[a-f0-9]{64}$/.test(value));
+    assert.ok(group);
+    await choice.scrollIntoView();
+    await changeSizeUnit(await choice.getAttribute('aria-label'), group);
+    await $('button=Save import decisions').waitForEnabled();
+    await $('button=Save import decisions').click();
+    const section = await $('section[aria-label="Import decisions"]');
+    await browser.waitUntil(async () =>
+      (await section.getText()).includes('Saved import plan: 0 files to copy · 2 existing files'),
+    );
+    async function execute() {
+      const ack = await $('label*=I understand sources remain');
+      await ack.scrollIntoView();
+      await ack.$('input').click();
+      assert.equal((await $$('button=Verify and record skipped import')).length, 0);
+      await $('button=Approve existing-bundle import').click();
+      const start = await $('button=Verify and record skipped import');
+      await start.waitForDisplayed();
+      await start.click();
+      await browser.waitUntil(
+        async () =>
+          (await $('section[aria-label="Import decisions"]').getText()).includes(
+            'Import recorded: 2 existing files freshly compared',
+          ),
+        { timeout: 30000 },
+      );
+    }
+    await execute();
+    const first = (
+      await native({
+        kind: 'organization_import_history',
+        plan_id: draft.id,
+        manifest_id: manifest.id,
+      })
+    ).data;
+    assert.equal(first.plans.length, 1);
+    assert.equal(first.sessions.length, 1);
+    const receipt = first.sessions[0];
+    assert.equal(receipt.state, 'completed');
+    assert.equal(receipt.verifiedFiles, 2);
+    assert.equal(receipt.outputCreated, false);
+    assert.equal(receipt.sourcesRetained, true);
+    const expectedRead = 2n * manifest.files.reduce((sum, file) => sum + BigInt(file.bytes), 0n);
+    assert.equal(BigInt(receipt.bytesRead), expectedRead);
+    await writeFile(
+      `${evidence}/import-skip-first-${process.platform}.json`,
+      JSON.stringify({ manifest, history: first, expectedRead: expectedRead.toString() }),
+    );
+    await native({
+      kind: 'organization_import_session_discard',
+      plan_id: draft.id,
+      session_id: receipt.id,
+    });
+    await openDraft();
+    await $('button=Check retained import history').scrollIntoView();
+    await $('button=Check retained import history').click();
+    const retainedImport = await $('button*=Review retained import: 0 copy / 2 existing');
+    await retainedImport.waitForExist();
+    await retainedImport.scrollIntoView();
+    await retainedImport.click();
+    await $('button=Review saved import decisions').waitForEnabled();
+    await $('button=Review saved import decisions').scrollIntoView();
+    await $('button=Review saved import decisions').click();
+    const history = await $('button*=Review import attempt: completed');
+    await history.waitForExist();
+    await history.scrollIntoView();
+    await history.click();
+    await browser.waitUntil(async () =>
+      (await $('section[aria-label="Import decisions"]').getText()).includes(
+        'Import recorded: 2 existing files freshly compared',
+      ),
+    );
+    assert.equal(await $('label*=I understand sources remain').$('input').isSelected(), false);
+    assert.equal((await $$('button=Verify and record skipped import')).length, 0);
+    const restored = (
+      await native({
+        kind: 'organization_import_history',
+        plan_id: draft.id,
+        manifest_id: manifest.id,
+      })
+    ).data;
+    assert.equal(restored.sessions.length, 1);
+    await execute();
+    const retried = (
+      await native({
+        kind: 'organization_import_history',
+        plan_id: draft.id,
+        manifest_id: manifest.id,
+      })
+    ).data;
+    assert.equal(retried.sessions.length, 2);
+    assert.equal(BigInt(retried.sessions[0].bytesRead), expectedRead);
+    assert.notEqual(retried.sessions[0].id, receipt.id);
+    const verification = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'import_skip_verify', rows: null }),
+    );
+    assert.equal(verification.sourceVerifiedEntries, fixture.sourceVerifiedEntries);
+    assert.equal(verification.comparisonVerifiedEntries, 2);
+    const after = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+    );
+    assert.deepEqual(after, outputAudit);
+    await writeFile(
+      `${evidence}/import-skip-execution-${process.platform}.json`,
+      JSON.stringify({
+        scan: scanned,
+        manifest,
+        first,
+        restored,
+        retried,
+        expectedRead: expectedRead.toString(),
+        preservation: verification,
+        unchangedOutputAudit: after,
+      }),
+    );
+    await $('p*=Import recorded: 2 existing files freshly compared').scrollIntoView();
+    await browser.saveScreenshot(`.context/screenshots/m2-import-skip-${process.platform}.png`);
+    await verifyMixedImport(
+      sourceRootId,
+      destination,
+      fixture.job.rootId,
+      primary[0],
+      openDraft,
+      evidence,
+      after,
+    );
+  } finally {
+    const finished = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'import_skip_finish', rows: null }),
+    );
+    assert.equal(finished.sourceFilesRemoved, false);
+    if (process.platform === 'win32') assert.equal(finished.catalogRegistrationRetained, true);
+    await writeFile(
+      `${evidence}/import-skip-root-state-${process.platform}.json`,
+      JSON.stringify(finished),
+    );
+  }
+}
+async function verifyMixedImport(
+  sourceRootId,
+  destination,
+  keeperRootId,
+  existingAssetId,
+  openDraft,
+  evidence,
+  before,
+) {
+  const query = {
+    rootId: sourceRootId,
+    folder: '',
+    name: 'Generated-01.png',
+    fromDate: '',
+    throughDate: '',
+    minBytes: '',
+    maxBytes: '',
+    extension: '',
+    favoritesOnly: false,
+    tag: '',
+    sort: 'capture',
+    includeMissing: false,
+  };
+  const packed = (await native({ kind: 'query', query, cursor: null, limit: 24 })).data;
+  const added = packed.rows.find(
+    (row) => row[3].replaceAll('\\', '/') === 'Woodland/Generated-01.png',
+  );
+  assert.ok(added, 'a distinct generated PNG must be indexed');
+  const assetIds = [existingAssetId, added[0]];
+  const template = {
+    pattern: 'Mixed imports/{original_stem}.{ext}',
+    event: '',
+    missingDate: 'undated',
+  };
+  const preview = (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
+    .data;
+  const draft = (
+    await native({
+      kind: 'organization_plan_create',
+      selection_id: destination.id,
+      draft: {
+        assetIds,
+        template,
+        previewFingerprint: preview.fingerprint,
+        templateReference: null,
+      },
+    })
+  ).data.plan;
+  const confirmations = [];
+  for (const row of preview.rows) {
+    const inventory = (
+      await native({
+        kind: 'organization_bundle_inventory',
+        asset_id: row.assetId,
+        source_revision: row.sourceRevision,
+      })
+    ).data;
+    assert.equal(inventory.inventoryComplete, true);
+    assert.equal(inventory.truncated, false);
+    confirmations.push(
+      (
+        await native({
+          kind: 'organization_bundle_confirm',
+          input: {
+            planId: draft.id,
+            assetId: row.assetId,
+            sourceRevision: row.sourceRevision,
+            inventoryFingerprint: inventory.fingerprint,
+            companionIds: inventory.entries
+              .filter(
+                (entry) => entry.selectable && !['primary', 'additional'].includes(entry.relation),
+              )
+              .map((entry) => entry.id)
+              .sort(),
+            reviewedAllEntries: true,
+          },
+        })
+      ).data.id,
+    );
+  }
+  const manifest = (
+    await native({
+      kind: 'organization_copy_manifest',
+      input: { planId: draft.id, bundleConfirmationIds: confirmations },
+    })
+  ).data;
+  assert.equal(manifest.files.length, 3);
+  let comparison = (
+    await native({
+      kind: 'organization_import_comparison_start',
+      input: { planId: draft.id, manifestId: manifest.id, scopeRootIds: [keeperRootId] },
+    })
+  ).data;
+  await browser.waitUntil(
+    async () => {
+      comparison = (
+        await native({ kind: 'organization_import_comparison_job', job_id: comparison.id })
+      ).data;
+      return !['queued', 'running', 'cancel_requested'].includes(comparison.state);
+    },
+    { timeout: 30000 },
+  );
+  assert.equal(comparison.state, 'completed');
+  const plan = (
+    await native({
+      kind: 'organization_import_plan_create',
+      input: {
+        comparisonJobId: comparison.id,
+        choices: comparison.report.bundles.map((bundle) => ({
+          fileId: bundle.fileIds[0],
+          existingGroupId: bundle.existingGroups[0]?.id ?? null,
+        })),
+      },
+    })
+  ).data;
+  assert.equal(plan.copyFileIds.length, 1);
+  assert.equal(plan.skipFiles.length, 2);
+  await openDraft(draft.id);
+  await $('button=Check retained import history').scrollIntoView();
+  await $('button=Check retained import history').click();
+  const saved = await $('button*=Review retained import: 1 copy / 2 existing');
+  await saved.waitForExist();
+  await saved.scrollIntoView();
+  await saved.click();
+  const workflow = await $('section[aria-label="Verified organization copy"]');
+  await workflow.waitForExist();
+  await workflow.$('button=Choose destination and review preparation').scrollIntoView();
+  await workflow.$('button=Choose destination and review preparation').click();
+  await workflow.$('h4=Output preparation review').waitForExist();
+  assert.equal((await workflow.$$('tbody tr')).length, 1);
+  await workflow.$('button=Approve output preparation').scrollIntoView();
+  await workflow.$('button=Approve output preparation').click();
+  await workflow.$('button=Start output preparation').waitForExist();
+  await workflow.$('button=Start output preparation').click();
+  await workflow.$('h4=Prepared copy review').waitForExist({ timeout: 30000 });
+  await workflow.$('button=Choose destination and reopen prepared review').scrollIntoView();
+  await workflow.$('button=Choose destination and reopen prepared review').click();
+  await browser.waitUntil(async () => (await workflow.getAttribute('aria-busy')) === 'false');
+  assert.equal((await workflow.$$('tbody tr')).length, 1);
+  assert.equal((await workflow.$$('button=Start verified copy')).length, 0);
+  assert.equal(await workflow.$('button=Approve byte-verified copy').isEnabled(), false);
+  await workflow.$('label*=I understand that file bytes').scrollIntoView();
+  await workflow.$('label*=I understand that file bytes').$('input').click();
+  await workflow.$('button=Approve byte-verified copy').click();
+  await workflow.$('button=Start verified copy').waitForExist();
+  await workflow.$('button=Start verified copy').click();
+  await browser.waitUntil(
+    async () =>
+      (await workflow.getText()).includes(
+        'Import recorded: 1 new file copied and 2 existing files freshly verified.',
+      ),
+    { timeout: 30000 },
+  );
+  const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+    (job) => job.planId === draft.id,
+  );
+  const job = jobs.find((job) => job.action === 'copy_files');
+  assert.equal(job.state, 'completed_verified');
+  assert.equal(job.verifiedFiles, 1);
+  const receipt = (await native({ kind: 'organization_import_copy_receipt', job_id: job.id })).data;
+  assert.equal(receipt.importPlanId, plan.id);
+  assert.deepEqual(receipt.copiedFileIds, plan.copyFileIds);
+  assert.deepEqual(receipt.skippedFiles, plan.skipFiles);
+  const expectedRead =
+    4n *
+    manifest.files
+      .filter((file) => plan.skipFiles.some((skip) => skip.fileId === file.id))
+      .reduce((total, file) => total + BigInt(file.bytes), 0n);
+  assert.equal(BigInt(receipt.keeperBytesRead), expectedRead);
+  const after = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+  );
+  assert.equal(after.neighborUnchanged, true);
+  assert.equal(after.files.length, before.files.length + 1);
+  for (const file of before.files)
+    assert.deepEqual(
+      after.files.find((current) => current.relativePath === file.relativePath),
+      file,
+    );
+  assert(after.files.every((file) => file.matchesGeneratedSourceBytes));
+  const preservation = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'import_skip_verify', rows: null }),
+  );
+  assert.equal(preservation.comparisonVerifiedEntries, 2);
+  await writeFile(
+    `${evidence}/import-mixed-execution-${process.platform}.json`,
+    JSON.stringify({
+      manifest,
+      plan,
+      jobs,
+      receipt,
+      expectedRead: expectedRead.toString(),
+      preservation,
+      before,
+      after,
+    }),
+  );
+  await workflow.$('p*=Import recorded:').scrollIntoView();
+  await browser.saveScreenshot(`.context/screenshots/m2-import-mixed-${process.platform}.png`);
+  await openDraft(draft.id);
+  assert.equal((await $$('button=Start verified copy')).length, 0);
+  await $('button=Check retained import history').scrollIntoView();
+  await $('button=Check retained import history').click();
+  await $('button*=Review retained import: 1 copy / 2 existing').waitForExist();
+  await $('button*=Review retained import: 1 copy / 2 existing').click();
+  await $('button=Review saved import decisions').scrollIntoView();
+  await $('button=Review saved import decisions').click();
+  await $('p*=Completed import: 1 new file copied / 2 existing files verified').waitForExist();
+  assert.equal((await $$('button=Start verified copy')).length, 0);
+  assert.deepEqual(
+    (await native({ kind: 'organization_import_copy_receipt', job_id: job.id })).data,
+    receipt,
+  );
+  const addedOutput = after.files.find(
+    (file) => !before.files.some((prior) => prior.relativePath === file.relativePath),
+  );
+  await indexCompletedImportOutput(receipt, addedOutput.relativePath.split(/[/\\]/)[0], evidence);
+}
+async function indexCompletedImportOutput(receipt, outputFolder, evidence) {
+  const section = await $('section[aria-label="Index import output"]');
+  await section.waitForExist();
+  await section.$('button=Choose destination and index output').scrollIntoView();
+  await section.$('button=Choose destination and index output').click();
+  await section.$('p*=Output folder registered:').waitForExist({ timeout: 30000 });
+  await section.$('p=Scan complete').waitForExist({ timeout: 30000 });
+  const status = (await native({ kind: 'status' })).data;
+  const root = status.roots.find((root) =>
+    root.displayPath.replaceAll('\\', '/').endsWith(`/${outputFolder}`),
+  );
+  assert.ok(root);
+  assert.equal(root.mode, 'referenced');
+  assert.equal(root.fileCount, 1);
+  assert.match(outputFolder, /^Stillharbour organized [a-f0-9-]{36}$/);
+  try {
+    const scan = status.jobs.find(
+      (job) => job.rootId === root.id && !job.id.startsWith('thumbnail:'),
+    );
+    assert.equal(scan.state, 'completed');
+    assert.equal(scan.indexed, 1);
+    const query = {
+      rootId: root.id,
+      folder: '',
+      name: '',
+      fromDate: '',
+      throughDate: '',
+      minBytes: '',
+      maxBytes: '',
+      extension: '',
+      favoritesOnly: false,
+      tag: '',
+      sort: 'capture',
+      includeMissing: false,
+    };
+    const page = (await native({ kind: 'query', query, cursor: null, limit: 24 })).data;
+    assert.equal(page.rows.length, 1);
+    assert(page.rows[0][3].endsWith('Generated-01.png'));
+    const beforeRetry = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+    );
+    await section.$('button=Review output registration').scrollIntoView();
+    await section.$('button=Review output registration').click();
+    await section.$('p*=Output folder already registered:').waitForExist();
+    const retried = (await native({ kind: 'status' })).data;
+    assert.equal(retried.roots.length, status.roots.length);
+    assert.equal(
+      retried.jobs.filter((job) => job.rootId === root.id && !job.id.startsWith('thumbnail:'))
+        .length,
+      1,
+    );
+    assert.equal(
+      retried.jobs.find((job) => job.rootId === root.id && !job.id.startsWith('thumbnail:')).id,
+      scan.id,
+    );
+    const afterRetry = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+    );
+    assert.deepEqual(afterRetry, beforeRetry);
+    assert.deepEqual(
+      (await native({ kind: 'organization_import_copy_receipt', job_id: receipt.jobId })).data,
+      receipt,
+    );
+    await writeFile(
+      `${evidence}/import-output-index-${process.platform}.json`,
+      JSON.stringify({
+        root,
+        scan,
+        page,
+        receipt,
+        unchangedOutputs: afterRetry,
+        registrationRetryAddedNoRootOrScan: true,
+      }),
+    );
+    await section.scrollIntoView();
+    await browser.saveScreenshot(`.context/screenshots/m2-import-index-${process.platform}.png`);
+  } finally {
+    if (process.platform === 'darwin') {
+      await browser.waitUntil(
+        async () => {
+          const preparation = (await native({ kind: 'status' })).data.jobs.find(
+            (job) => job.id === `thumbnail:initial:${root.id}`,
+          );
+          return (
+            preparation && !['queued', 'running', 'cancel_requested'].includes(preparation.state)
+          );
+        },
+        { timeout: 30000 },
+      );
+      const beforeRemoval = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+      );
+      const preview = (
+        await native({ kind: 'prepare_maintenance', target: { kind: 'library', root_id: root.id } })
+      ).data;
+      assert.equal(preview.rootDisplayPath, root.displayPath);
+      const removed = (await native({ kind: 'apply_maintenance', plan_id: preview.id })).data;
+      assert.equal(removed.removedRootId, root.id);
+      const afterRemoval = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+      );
+      assert.deepEqual(afterRemoval, beforeRemoval);
+      await writeFile(
+        `${evidence}/import-output-root-teardown-${process.platform}.json`,
+        JSON.stringify({ removed, unchangedOutputs: afterRemoval, sourceFilesRemoved: false }),
+      );
+    }
+  }
+}
+async function reviewEquivalentDraft(original, destination, evidence, audit) {
+  // Recreate the user's selected mapping through real ID-only IPC. Draft UUIDs
+  // and approvals differ; output effect identity must remain the same.
+  const assetIds = original.preview.rows.map((row) => row.assetId);
+  const template = original.preview.template;
+  const preview = await native({ kind: 'organization_preview', asset_ids: assetIds, template });
+  const saved = await native({
+    kind: 'organization_plan_create',
+    selection_id: destination.id,
+    draft: {
+      assetIds,
+      template,
+      previewFingerprint: preview.data.fingerprint,
+      templateReference: null,
+    },
+  });
+  assert.notEqual(saved.data.plan.id, original.id);
+  for (const selector of ['button[aria-label="Close jobs"]', 'button=Close saved plans']) {
+    const buttons = await $$(selector);
+    if (buttons.length) await buttons[0].click();
+  }
+  await $('button=Saved plans').click();
+  const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
+  const index = plans.findIndex((plan) => plan.id === saved.data.plan.id);
+  assert.ok(index >= 0);
+  await browser.waitUntil(
+    async () => (await $$('.organization-preview li button')).length === plans.length,
+  );
+  await (await $$('.organization-preview li button'))[index].click();
+  await $('button=Review all companion filenames').scrollIntoView();
+  await $('button=Review all companion filenames').click();
+  await $('button=Read all filenames').waitForDisplayed();
+  await $('button=Read all filenames').click();
+  await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+  await $('label*=I reviewed all filenames').scrollIntoView();
+  await $('label*=I reviewed all filenames').click();
+  await $('button=Save companion review').click();
+  await $('section[aria-label="Retained companion decision"] [role="status"]').waitForDisplayed();
+  await $('button=Close companion inventory').click();
+  await $('button=Compile copy review').scrollIntoView();
+  await $('button=Compile copy review').click();
+  await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+  const decisions = (
+    await native({
+      kind: 'organization_bundle_reviews',
+      plan_id: saved.data.plan.id,
+      asset_id: assetIds[0],
+    })
+  ).data;
+  const compiled = (
+    await native({
+      kind: 'organization_copy_manifest',
+      input: { planId: saved.data.plan.id, bundleConfirmationIds: [decisions[0].id] },
+    })
+  ).data;
+  const matched = (
+    await native({
+      kind: 'organization_copy_effect_match',
+      plan_id: saved.data.plan.id,
+      manifest_id: compiled.id,
+      selection_id: destination.id,
+    })
+  ).data;
+  assert.equal(matched.existing.length, 1);
+  assert.equal(matched.existing[0].planId, original.id);
+  assert.equal(matched.canReuseReview, false);
+  await $('button=Choose destination and review preparation').scrollIntoView();
+  await $('button=Choose destination and review preparation').click();
+  await $('h4=Existing output for this mapping').waitForDisplayed();
+  assert.equal((await $$('button=Approve output preparation')).length, 0);
+  const inspect = await $('button=Choose original destination and inspect');
+  await inspect.scrollIntoView();
+  await inspect.click();
+  await browser.waitUntil(async () =>
+    (await $('section[aria-label="Existing copy output history"]').getText()).includes(
+      'Every selected output was freshly compared with its source.',
+    ),
+  );
+  const after = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', {
+      action: 'organization_destination_audit',
+      rows: null,
+    }),
+  );
+  assert.deepEqual(after, audit);
+  await writeFile(
+    `${evidence}/equivalent-draft-${process.platform}.json`,
+    JSON.stringify({
+      originalPlanId: original.id,
+      newPlanId: saved.data.plan.id,
+      unchangedOutputAudit: after,
+      verifiedExistingBytes: true,
+      effectMatch: matched,
+    }),
+  );
+  await browser.saveScreenshot(`.context/screenshots/m2-equivalent-draft-${process.platform}.png`);
+  await compareGeneratedImportScope(compiled, evidence, audit);
+  await verifyAllExistingImport(compiled.files[0].rootId, destination, evidence, audit);
+  await $('button=Close saved plans').click();
+}
+async function pauseResumeJob(receipt) {
+  const before = (await native({ kind: 'status' })).data;
+  const job = before.jobs.find((job) => job.kind === 'thumbnails' && job.state === 'running');
+  assert.ok(job, 'Held thumbnail job must be running');
+  await $('button[aria-label="Jobs"]').click();
+  const row = await $('.job-row[data-job-kind="thumbnails"]');
+  await row.$('button=Pause').click();
+  await browser.waitUntil(
+    async () => (await native({ kind: 'job_details', job_id: job.id })).data.job.state === 'paused',
+    { timeout: 10000 },
+  );
+  const paused = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(paused.indexed, job.indexed);
+  assert.equal(paused.discovered, job.discovered);
+  await row.$('button=Resume').waitForDisplayed();
+  await row.$('button=Resume').click();
+  await browser.waitUntil(
+    async () =>
+      (await native({ kind: 'job_details', job_id: job.id })).data.job.state === 'running',
+    { timeout: 10000 },
+  );
+  const resumed = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(resumed.id, job.id);
+  await $('button[aria-label="Close jobs"]').click();
+  await writeFile(receipt, JSON.stringify({ before: job, paused, resumed }));
+}
 async function reviewRemovalStopsJobs(receipt) {
   const before = (await native({ kind: 'status' })).data;
   const root = before.roots[0];
   assert.ok(
     before.jobs.some(
       (job) =>
-        job.rootId === root.id && ['queued', 'running', 'cancel_requested'].includes(job.state),
+        job.rootId === root.id &&
+        ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(job.state),
     ),
   );
   await $('button[aria-label="Settings"]').click();
@@ -29,7 +1309,12 @@ async function reviewRemovalStopsJobs(receipt) {
   assert.ok(
     after.jobs
       .filter((job) => job.rootId === root.id)
-      .every((job) => !['queued', 'running', 'cancel_requested'].includes(job.state)),
+      .every(
+        (job) =>
+          !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+            job.state,
+          ),
+      ),
   );
   assert.ok(after.jobs.some((job) => job.rootId === root.id && job.state === 'canceled'));
   assert.ok(
@@ -224,16 +1509,37 @@ async function assertViewerControlsOverlay() {
           );
         },
       ),
+      navigationBounds: [...document.querySelectorAll('.viewer-previous, .viewer-next')].map(
+        (button) => {
+          const bounds = button.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            bounds.left + bounds.width / 2,
+            bounds.top + bounds.height / 2,
+          );
+          return {
+            left: bounds.left,
+            top: bounds.top,
+            width: bounds.width,
+            height: bounds.height,
+            hit: hit?.className ?? null,
+          };
+        },
+      ),
     };
   });
-  assert.deepEqual(geometry, {
-    insidePhoto: true,
-    overlaysCanvas: true,
-    heartBeforeInfo: true,
-    singleRow: true,
-    buttonsReachable: true,
-    navigationReachable: true,
-  });
+  const { navigationBounds, ...checks } = geometry;
+  assert.deepEqual(
+    checks,
+    {
+      insidePhoto: true,
+      overlaysCanvas: true,
+      heartBeforeInfo: true,
+      singleRow: true,
+      buttonsReachable: true,
+      navigationReachable: true,
+    },
+    JSON.stringify(navigationBounds),
+  );
 }
 async function assertPhotoCheckboxOnTop(id) {
   // HTMLElement.click() in the embedded driver bypasses real pointer hit testing.
@@ -304,7 +1610,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 3);
+    assert.equal(status.data.catalogSchema, 10);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -344,6 +1650,405 @@ describe('native read-only library', () => {
     }
     await mkdir('.context/screenshots', { recursive: true });
     await browser.saveScreenshot('.context/screenshots/m1-onboarding.png');
+  });
+  it('reviews and separately approves generated native rename and undo through the actual UI', async function () {
+    this.timeout(120000);
+    await browser.setWindowSize(1180, 780);
+    await browser.execute(() => window.dispatchEvent(new Event('stillharbour:rename-lab')));
+    await $('button=Create generated rename fixture').waitForDisplayed();
+    await $('input[value="Organized"]').setValue('Reviewed');
+    await $('button=Review generated template targets').click();
+    const approval = await $('button=Approve generated targets');
+    await approval.waitForDisplayed();
+    assert.equal(await approval.isEnabled(), false);
+    const read = (request) =>
+      browser.tauri.execute(
+        async ({ core }, value) => core.invoke('test_generated_rename', { request: value }),
+        request,
+      );
+    const initial = await read({ kind: 'inspect' });
+    assert.equal(initial.state, 'review');
+    assert.equal(initial.completedSteps, 0);
+    assert.equal(initial.members.length, 5);
+    assert.ok(
+      initial.members.some(
+        (member) => member.before === 'Case.JPG' && member.after === 'Reviewed_003_Case.JPG',
+      ),
+    );
+    assert.ok(
+      initial.members.some(
+        (member) => member.before === 'Case.xmp' && member.after === 'Reviewed_003_Case.xmp',
+      ),
+    );
+    assert.equal(initial.catalogCommitted, false);
+    assert.equal(new Set(initial.members.map((member) => member.catalogAssetId)).size, 5);
+    assert.ok(initial.members.every((member) => member.catalogPath === member.before));
+    assert.equal(initial.productionAuthorization, false);
+    assert.equal(initial.independentRecoveryProven, false);
+    const states = [initial];
+    const hold = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_rename_arm_hold', rows: null }),
+    );
+    assert.equal(hold.scope, 'generated-rename-only');
+    assert.equal(hold.afterMoves, 1);
+    assert.equal(hold.timeoutSeconds, 15);
+    for (const reverse of [false, true]) {
+      const scope = await $('dialog[aria-labelledby="rename-lab-title"]');
+      const checkbox = await scope.$('input[type="checkbox"]');
+      assert.equal(await checkbox.isSelected(), false);
+      await checkbox.scrollIntoView();
+      await checkbox.click();
+      await $('button=Approve generated targets').click();
+      const start = await $(`button=Run reviewed generated ${reverse ? 'undo' : 'rename'}`);
+      await start.waitForDisplayed();
+      await start.click();
+      if (!reverse) {
+        const stop = await $('button=Stop after current step');
+        await stop.waitForDisplayed();
+        await browser.waitUntil(
+          async () => {
+            const status = await browser.tauri.execute(async ({ core }) =>
+              core.invoke('test_generated_rename_worker', { request: { kind: 'status' } }),
+            );
+            return status.busy && status.completedMoves === 1;
+          },
+          {
+            timeout: 10000,
+            timeoutMsg: 'The generated worker did not reach its owned durable-step hold',
+          },
+        );
+        await stop.click();
+        await browser.waitUntil(
+          async () => (await scope.$('[role="status"]').getText()).includes('needs_continuation'),
+          { timeout: 10000 },
+        );
+        const stopped = await read({ kind: 'inspect' });
+        assert.equal(stopped.completedSteps, 1);
+        assert.equal(stopped.catalogCommitted, false);
+        assert.ok(
+          stopped.members.some((member) => member.observed.startsWith('.stillharbour-rename-')),
+        );
+        assert.ok(stopped.members.every((member) => member.catalogPath === member.before));
+        assert.ok(stopped.jobs.some((job) => job.state === 'needs_recovery'));
+        states.push(stopped);
+        assert.equal(await $('button=Approve generated targets').isEnabled(), false);
+        await browser.saveScreenshot(
+          `.context/screenshots/m2-generated-stopped-${process.platform}.png`,
+        );
+        const reopen = await $('button=Reopen owned generated scope');
+        await reopen.scrollIntoView();
+        await reopen.click();
+        await browser.waitUntil(
+          async () => {
+            const status = await browser.tauri.execute(async ({ core }) =>
+              core.invoke('test_generated_rename_worker', { request: { kind: 'status' } }),
+            );
+            return !status.busy && status.scopeCreated && status.job === null;
+          },
+          { timeout: 10000, timeoutMsg: 'The owned generated scope did not reopen.' },
+        );
+        const reopened = await read({ kind: 'inspect' });
+        assert.equal(reopened.planId, stopped.planId);
+        assert.equal(reopened.digest, stopped.digest);
+        assert.equal(reopened.completedSteps, 1);
+        assert.equal(reopened.ticket, null);
+        assert.deepEqual(reopened.members, stopped.members);
+        assert.deepEqual(reopened.jobs, stopped.jobs);
+        states.push(reopened);
+        assert.equal(await $('button=Approve generated targets').isEnabled(), false);
+        const fresh = await scope.$('input[type="checkbox"]');
+        await fresh.scrollIntoView();
+        await fresh.click();
+        await $('button=Approve generated targets').click();
+        const resume = await $('button=Run reviewed generated rename');
+        await resume.waitForDisplayed();
+        await resume.click();
+      }
+      await browser.waitUntil(
+        async () => {
+          const text = await scope.$('[role="status"]').getText();
+          return text.includes('completed') && text.includes('10 / 10');
+        },
+        {
+          timeout: 45000,
+          timeoutMsg: 'The generated native rename did not reach a verified terminal state',
+        },
+      );
+      const completed = await read({ kind: 'inspect' });
+      assert.equal(completed.reverse, reverse);
+      assert.equal(completed.state, 'completed');
+      assert.ok(completed.members.every((member) => member.observed === member.after));
+      assert.equal(completed.ticket, null);
+      assert.equal(completed.catalogCommitted, true);
+      const job = completed.jobs.find((job) => job.planId === completed.planId);
+      assert.ok(job);
+      assert.equal(job.state, 'completed_verified');
+      assert.equal(job.kind, reverse ? 'undo' : 'rename');
+      assert.equal(job.generatedFixtureOnly, true);
+      assert.equal(job.verifiedMoves, 10);
+      assert.equal(job.totalMoves, 10);
+      await $('section[aria-label="Durable organization jobs"]').waitForDisplayed();
+      assert.ok(
+        completed.members.every(
+          (member) =>
+            member.catalogPath === member.observed &&
+            initial.members.some(
+              (original) =>
+                original.id === member.id && original.catalogAssetId === member.catalogAssetId,
+            ),
+        ),
+      );
+      states.push(completed);
+      await browser.saveScreenshot(
+        `.context/screenshots/m2-generated-${reverse ? 'undo' : 'rename'}-${process.platform}.png`,
+      );
+      if (!reverse) {
+        await $('button=Review generated undo').scrollIntoView();
+        await $('button=Review generated undo').click();
+        await $('button=Approve generated targets').waitForDisplayed();
+        assert.equal(await $('button=Approve generated targets').isEnabled(), false);
+        assert.equal(await $('button=Run reviewed generated undo').isExisting(), false);
+        const undo = await read({ kind: 'inspect' });
+        assert.notEqual(undo.planId, initial.planId);
+        assert.equal(undo.completedSteps, 0);
+        assert.equal(undo.ticket, null);
+        states.push(undo);
+      }
+    }
+    const restored = states.at(-1);
+    assert.ok(
+      restored.members.every((member) =>
+        initial.members.some(
+          (original) => original.id === member.id && original.before === member.observed,
+        ),
+      ),
+    );
+    const historyJob = restored.jobs[0];
+    assert.ok(historyJob);
+    const history = await browser.tauri.execute(
+      async ({ core }, jobId) => core.invoke('test_generated_rename_history', { jobId }),
+      historyJob.id,
+    );
+    assert.equal(history.job.id, historyJob.id);
+    assert.equal(history.historyOnly, true);
+    assert.equal(history.currentLocationsChecked, false);
+    assert.equal(history.executionAvailable, false);
+    assert.equal(history.members.length, restored.members.length);
+    const historyButtons = await $$('button=Review retained organization plan');
+    await historyButtons[0].scrollIntoView();
+    await historyButtons[0].click();
+    const historyDialog = await $('dialog[aria-labelledby="original-history-title"]');
+    await historyDialog.waitForDisplayed();
+    await browser.waitUntil(async () =>
+      (await historyDialog.getText()).includes(history.planDigest),
+    );
+    assert.equal((await historyDialog.$$('tbody tr')).length, history.members.length);
+    assert.match(await historyDialog.getText(), /Current file locations and contents require/);
+    assert.equal((await historyDialog.$$('button')).length, 1);
+    await browser.saveScreenshot(
+      `.context/screenshots/m2-original-history-${process.platform}.png`,
+    );
+    await $('button=Close plan history').click();
+    assert.equal(await historyDialog.isExisting(), false);
+    await mkdir('.context/generated-rename', { recursive: true });
+    await writeFile(
+      `.context/generated-rename/reviewed-${process.platform}.json`,
+      JSON.stringify({ states, history, generatedOnly: true, catalogIntegration: true }),
+    );
+    await $('button=Close fixture review').click();
+    assert.equal(await $('dialog[aria-labelledby="rename-lab-title"]').isExisting(), false);
+  });
+  it('copies and inspects only backend-owned operation fixtures through native IPC', async function () {
+    this.timeout(180000);
+    const previousTimeouts = await browser.getTimeouts();
+    await browser.setTimeout({ script: 120000 });
+    try {
+      const receipt = await ownedOperationReceipt();
+      assert.equal(receipt.scope, 'generated-temporary-only');
+      assert.equal(receipt.chunkBytes, 65_536);
+      assert.equal(receipt.burstBytes, 131_072);
+      assert.equal(receipt.nativeOs, process.platform === 'darwin' ? 'macos' : 'windows');
+      assert.equal(receipt.completed.outcome, 'completed_verified');
+      assert.equal(receipt.completed.sourcesPreserved, true);
+      assert.equal(receipt.completed.destinationNeighborPreserved, true);
+      assert.equal(receipt.completed.verifiedSourceFiles, 3);
+      assert.equal(receipt.completed.publishedOutputsVerified, 3);
+      assert.equal(receipt.completed.allOutputsByteVerified, true);
+      assert.equal(receipt.completed.retryBlocked, true);
+      assert.equal(receipt.interruptedAfterPublish.outcome, 'interrupted');
+      assert.equal(receipt.interruptedAfterPublish.sourcesPreserved, true);
+      assert.equal(receipt.interruptedAfterPublish.destinationNeighborPreserved, true);
+      assert.equal(receipt.interruptedAfterPublish.publishedOutputsVerified, 1);
+      assert.equal(receipt.interruptedAfterPublish.allOutputsByteVerified, false);
+      assert.equal(receipt.interruptedAfterPublish.retryBlocked, true);
+      assert.deepEqual(receipt.scopeLocks, {
+        incompatibleCopyBlocked: true,
+        incompatibleRecoveryBlocked: true,
+        deniedJournalEvents: 0,
+        sharedSourceReaderCoexists: true,
+        completedAfterRelease: true,
+        sourcesPreserved: true,
+      });
+      assert.equal(receipt.catalogJournal.catalogSchema, 10);
+      assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
+      assert.deepEqual(receipt.relocation, {
+        scope: 'generated-relocation-infrastructure-only',
+        nativeOs: process.platform === 'win32' ? 'windows' : 'macos',
+        quarantinedMembers: 2,
+        companionsRestoredTogether: true,
+        originalObjectsAndBytesVerified: 5,
+        planRecords: 2,
+        journalEvents: 8,
+        freshContinuationRecords: 2,
+        independentRecoveryProven: false,
+        duplicateRemovalAuthorized: false,
+        productionAuthorization: false,
+        automaticExpiry: false,
+      });
+      assert.deepEqual(receipt.duplicateReview, {
+        scope: 'constructor-owned-duplicate-bundle-only',
+        nativeOs: process.platform === 'win32' ? 'windows' : 'macos',
+        freshCompleteComponentComparisons: true,
+        independentAccessibleKeeperRetained: true,
+        companionsRestoredTogether: true,
+        quarantinedMembers: 2,
+        restoredOriginalObjects: 5,
+        quarantineFreedBytes: '0',
+        interruptedAndFreshlyContinuedBothDirections: true,
+        independentRecoveryProven: false,
+        productionAuthorization: false,
+      });
+      assert.equal(receipt.renamePlanning.nativeMutationTested, false);
+      assert.equal(receipt.renamePlanning.forward.execution_available, false);
+      assert.deepEqual(receipt.renamePlanning.forward.issues, []);
+      const { unicode, ...nativeRename } = receipt.nativeRename;
+      assert.deepEqual(nativeRename, {
+        scope: 'constructor-owned-generated-only',
+        nativeOs: process.platform === 'win32' ? 'windows' : 'macos',
+        members: 5,
+        steps: 10,
+        interruptedAfterFirstRename: true,
+        freshApprovedContinuation: true,
+        reverseSteps: 10,
+        reverseRestoredOriginalNames: true,
+        completeBytesAndModifiedTimeVerified: true,
+        originalObjectsRetained: true,
+        localRetainedVersionsOnly: true,
+        independentRecoveryProven: false,
+        productionAuthorization: false,
+      });
+      assert.equal(typeof unicode.canonicalTargetsEquivalent, 'boolean');
+      assert.deepEqual(unicode, {
+        canonicalTargetsEquivalent: unicode.canonicalTargetsEquivalent,
+        collisionBlockedBeforeMove: unicode.canonicalTargetsEquivalent,
+        distinctTargetsRoundTrip: !unicode.canonicalTargetsEquivalent,
+        companionRenameContinuedAndUndone: true,
+        allOriginalObjectsBytesAndMetadataVerified: true,
+        sourceMembers: 4,
+        productionAuthorization: false,
+      });
+      assert.equal(receipt.catalogJournal.completed.publishedVerified, 2);
+      assert.equal(receipt.catalogJournal.completed.journalEvents, 13);
+      assert.equal(receipt.catalogJournal.completed.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.completed.replayBlocked, true);
+      assert.equal(receipt.catalogJournal.interruptedAfterPublish.publishedVerified, 1);
+      assert.equal(receipt.catalogJournal.interruptedAfterPublish.journalEvents, 5);
+      assert.equal(receipt.catalogJournal.interruptedAfterPublish.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.interruptedAfterPublish.replayBlocked, true);
+      assert.equal(receipt.catalogJournal.nested.publishedVerified, 2);
+      assert.equal(receipt.catalogJournal.nested.journalEvents, 13);
+      assert.equal(receipt.catalogJournal.nested.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.nested.replayBlocked, true);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.initialPartialBytes, '65536');
+      assert.equal(receipt.catalogJournal.reviewedContinuation.interruptedEvents, 5);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.completedEvents, 13);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.publishedVerified, 2);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.originalStageObjectPublished, true);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.freshVerifiedNoOp, true);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.reviewedContinuation.executionApproval, false);
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.reviewedContinuation.preparedCopy.journalEvents,
+        13,
+      );
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.reviewedContinuation.preparedCopy
+          .samePreparedObjectsPublished,
+        2,
+      );
+      assert.equal(receipt.catalogJournal.namespacePreparation.retainedFacts, 13);
+      assert.equal(receipt.catalogJournal.namespacePreparation.reopenedCompleted, true);
+      assert.equal(receipt.catalogJournal.namespacePreparation.replayBlocked, true);
+      assert.equal(receipt.catalogJournal.namespacePreparation.sourceAndNeighborPreserved, true);
+      assert.equal(receipt.catalogJournal.namespacePreparation.executionApproval, false);
+      assert.deepEqual(receipt.catalogJournal.namespacePreparation.sessionApprovalFixture, {
+        foreignSelectionRejectedBeforeWrites: true,
+        preparationReplayBlocked: true,
+        copyReplayBlocked: true,
+      });
+      assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.journalEvents, 13);
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.preparedCopy.samePreparedObjectsPublished,
+        2,
+      );
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.preparedCopy.secondStreamBlocked,
+        true,
+      );
+      assert.equal(receipt.catalogJournal.namespacePreparation.preparedCopy.replayBlocked, true);
+      assert.deepEqual(
+        receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy.after,
+        ['published_verified', 'prepared_empty_stage'],
+      );
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy
+          .journalEvents,
+        5,
+      );
+      assert.equal(
+        receipt.catalogJournal.namespacePreparation.interruptedAfterPublish.preparedCopy
+          .samePreparedObjectsPublished,
+        1,
+      );
+      const preparation = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', {
+          action: 'organization_name_preparation_fixture',
+          rows: null,
+        }),
+      );
+      assert.equal(preparation.scope, 'generated-temporary-only');
+      assert.equal(preparation.sourcesPreserved, true);
+      assert.equal(preparation.report.executionAvailable, false);
+      assert.equal(preparation.copyFromPreparedStages.outcome, 'completed_verified');
+      assert.deepEqual(
+        preparation.copyFromPreparedStages.before,
+        Array(3).fill('prepared_empty_stage'),
+      );
+      assert.deepEqual(
+        preparation.copyFromPreparedStages.after,
+        Array(3).fill('published_verified'),
+      );
+      assert.equal(preparation.copyFromPreparedStages.samePreparedObjectsPublished, 3);
+      assert.equal(preparation.copyFromPreparedStages.sourcesPreserved, true);
+      assert.equal(preparation.copyFromPreparedStages.destinationNeighborPreserved, true);
+      assert.equal(preparation.report.rows.length, 3);
+      assert.equal(preparation.report.retainedStages, 3);
+      assert.equal(
+        preparation.report.rows.every((row) => row.state === 'prepared'),
+        true,
+      );
+      const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
+      await writeFile(
+        `${evidence}/owned-copy-executor-${process.platform}.json`,
+        JSON.stringify(receipt),
+      );
+      await writeFile(
+        `${evidence}/owned-name-preparation-${process.platform}.json`,
+        JSON.stringify(preparation),
+      );
+    } finally {
+      await browser.setTimeout({ script: previousTimeouts.script ?? 30000 });
+    }
   });
   (process.platform === 'win32' ? it : it.skip)(
     'highlights an identity-unavailable selection without starting a scan',
@@ -392,7 +2097,8 @@ describe('native read-only library', () => {
   );
   (process.platform === 'win32' ? it : it.skip)(
     'saves and scans a generated NTFS library and displays real cached previews',
-    async () => {
+    async function () {
+      this.timeout(120000);
       const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
       const selection = await browser.tauri.execute(async ({ core }) =>
         core.invoke('test_library_fixture', { verify: false }),
@@ -400,6 +2106,8 @@ describe('native read-only library', () => {
       assert.equal(selection.identityAvailable, true);
       const picker = await browser.tauri.mock('foundation_request');
       let destinationCreated = false;
+      let exportCreated = false;
+      let copyAttempted = false;
       try {
         await picker.mockReturnValue({ kind: 'directory', data: selection });
         await $('button.primary').click();
@@ -445,6 +2153,7 @@ describe('native read-only library', () => {
             await writeFile(`${evidence}/windows-banner-${name}.json`, JSON.stringify(layout));
             await browser.saveScreenshot(`.context/screenshots/windows-banner-${name}.png`);
           }
+          await pauseResumeJob(`${evidence}/windows-job-pause.json`);
           await reviewRemovalStopsJobs(`${evidence}/windows-removal-stopped-jobs.json`);
         } finally {
           await browser.tauri.execute(async ({ core }) =>
@@ -462,7 +2171,12 @@ describe('native read-only library', () => {
               status.roots.length === 1 &&
               status.roots[0].fileCount >= 18 &&
               status.jobs.some((j) => j.kind === 'thumbnails') &&
-              status.jobs.every((j) => !['queued', 'running', 'cancel_requested'].includes(j.state))
+              status.jobs.every(
+                (j) =>
+                  !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+                    j.state,
+                  ),
+              )
             );
           },
           { timeout: 25000, timeoutMsg: 'Generated Windows scan/previews did not settle' },
@@ -505,10 +2219,22 @@ describe('native read-only library', () => {
           await browser.saveScreenshot(`.context/screenshots/windows-library-${name}.png`);
         }
         await browser.setWindowSize(1180, 780);
+        await reviewReadOnlyInspections(evidence);
         const tile = (await $$('.asset'))[0];
         await tile.moveTo();
         await tile.$('.asset-check').click();
+        // Stop new viewport rendition work while reviewing immutable snapshots.
+        // Keep the selected asset; stale plans must stay disabled if inputs do
+        // change. Text list has the existing no-image-demand contract.
+        await galleryView('Text list');
         await $('button=Preview organization').click();
+        const stemCaseIds = await browser.execute(() =>
+          [...document.querySelectorAll('.asset-check:checked')].map(
+            (input) => input.closest('[data-asset-id]').dataset.assetId,
+          ),
+        );
+        await reviewFilenameStemCase(stemCaseIds, evidence);
+        await reviewManagedDestinationPolicy(evidence, picker);
         const destination = await browser.tauri.execute(async ({ core }) =>
           core.invoke('test_performance', {
             action: 'organization_destination_fixture',
@@ -527,8 +2253,32 @@ describe('native read-only library', () => {
         );
         await templateName.waitForDisplayed();
         await templateName.setValue('Generated native template');
+        await $('button=Add example').click();
+        await $('label*=Example 1 source name').$('input').setValue('Family/IMG.JPG');
+        await $('label*=Example 1 expected target').$('input').setValue('wrong.JPG');
+        await $('button=Save template').click();
+        const templateAlert = await $('section[aria-label="Saved templates"] [role="alert"]');
+        await templateAlert.waitForDisplayed();
+        assert.match(await templateAlert.getText(), /Example 1 does not match/);
+        const rejectedTemplates = await native({ kind: 'organization_templates' });
+        assert.equal(rejectedTemplates.data.length, 0);
+        await $('label*=Example 1 expected target').$('input').setValue('Undated/IMG.JPG');
         await $('button=Save template').click();
         await $('button=Use retained version').waitForDisplayed();
+        const sampleTemplates = await native({ kind: 'organization_templates' });
+        assert.equal(sampleTemplates.data.length, 1);
+        assert.deepEqual(sampleTemplates.data[0].policies.sampleOutputs, ['Undated/IMG.JPG']);
+        assert.equal(
+          JSON.parse(sampleTemplates.data[0].policies.sampleInputs[0]).relativePath,
+          'Family/IMG.JPG',
+        );
+        await writeFile(
+          `${evidence}/windows-template-examples.json`,
+          JSON.stringify(sampleTemplates.data),
+        );
+        await $('label*=Example 1 source name').scrollIntoView();
+        await browser.saveScreenshot('.context/screenshots/m2-template-examples.png');
+        await $('button=Use retained version').scrollIntoView();
         await $('button=Use retained version').click();
         for (let attempt = 0; attempt < 2; attempt++) {
           await $('button=Build preview').click();
@@ -605,8 +2355,21 @@ describe('native read-only library', () => {
         });
         assert.equal(destinationReview.data.executionAvailable, false);
         assert.equal(destinationReview.data.persisted, false);
+        assert.equal(destinationReview.data.targets.length, selectedIds.length);
+        assert.ok(
+          destinationReview.data.targets.every((target) => target.state === 'unoccupied_observed'),
+        );
+        assert.ok(BigInt(destinationReview.data.availableBytes) > 0n);
+        assert.ok(
+          BigInt(destinationReview.data.totalBytes) >=
+            BigInt(destinationReview.data.availableBytes),
+        );
         assert.equal(
-          await $('section[aria-label="Organization destination"] bdi').getText(),
+          await $$('section[aria-label="Organization destination"] tbody tr').length,
+          selectedIds.length,
+        );
+        assert.equal(
+          await $('section[aria-label="Organization destination"] > p > bdi').getText(),
           destinationReview.data.destinationPath,
         );
         await writeFile(
@@ -655,6 +2418,19 @@ describe('native read-only library', () => {
         await $('button=Refresh plans').waitForDisplayed();
         await $('.organization-preview li button').click();
         await $('section[aria-label="Saved plan detail"]').waitForDisplayed();
+        const reopenedPlan = await native({
+          kind: 'organization_plan',
+          plan_id: plan.data.plan.id,
+        });
+        await writeFile(
+          `${evidence}/windows-reopened-plan.json`,
+          JSON.stringify(reopenedPlan.data),
+        );
+        assert.equal(
+          reopenedPlan.data.stale,
+          false,
+          'Generated planning inputs changed after saving; do not bypass the stale guard',
+        );
         const afterTree = await $('.organization-trees > details:last-child > summary');
         await afterTree.scrollIntoView();
         await afterTree.click();
@@ -666,6 +2442,9 @@ describe('native read-only library', () => {
             after: after.querySelector(':scope > summary').textContent,
             expanded: after.open,
             files: after.querySelectorAll('li > bdi').length,
+            sourceNames: [
+              ...trees.querySelectorAll(':scope > details:first-of-type li > bdi[title]'),
+            ].map((element) => element.textContent),
           };
         });
         assert.equal(
@@ -674,8 +2453,91 @@ describe('native read-only library', () => {
         );
         assert.equal(treeEvidence.expanded, true);
         assert.equal(treeEvidence.files, plan.data.plan.preview.rows.length);
+        assert.deepEqual(
+          treeEvidence.sourceNames.sort(),
+          plan.data.plan.preview.rows.map((row) => row.sourceComponents.at(-1)).sort(),
+        );
         await writeFile(`${evidence}/windows-plan-trees.json`, JSON.stringify(treeEvidence));
         await browser.saveScreenshot('.context/screenshots/m2-plan-trees.png');
+        await $('button=Review all companion filenames').scrollIntoView({
+          block: 'center',
+          inline: 'center',
+          behavior: 'instant',
+        });
+        await $('button=Review all companion filenames').waitForClickable();
+        await $('button=Review all companion filenames').click();
+        await $('button=Read all filenames').waitForDisplayed();
+        await $('button=Read all filenames').click();
+        await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+        const inventory = await native({
+          kind: 'organization_bundle_inventory',
+          asset_id: plan.data.plan.preview.rows[0].assetId,
+          source_revision: plan.data.plan.preview.rows[0].sourceRevision,
+        });
+        assert.equal(inventory.data.inventoryComplete, true);
+        assert.equal(
+          (await $$('section[aria-label="Complete companion inventory"] tbody tr')).length,
+          Math.min(64, inventory.data.entries.length),
+        );
+        await $('label*=I reviewed all filenames').scrollIntoView();
+        await $('label*=I reviewed all filenames').click();
+        await $('button=Save companion review').click();
+        await $(
+          'section[aria-label="Retained companion decision"] [role="status"]',
+        ).waitForDisplayed();
+        const companionReviews = await native({
+          kind: 'organization_bundle_reviews',
+          plan_id: plan.data.plan.id,
+          asset_id: plan.data.plan.preview.rows[0].assetId,
+        });
+        assert.equal(companionReviews.data.length, 1);
+        assert.equal(companionReviews.data[0].inventoryFingerprint, inventory.data.fingerprint);
+        assert.equal(companionReviews.data[0].executionAvailable, false);
+        await writeFile(
+          `${evidence}/windows-complete-companions.json`,
+          JSON.stringify({ inventory: inventory.data, confirmation: companionReviews.data[0] }),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-complete-companions.png');
+        await $('button=Close companion inventory').click();
+        await $('button=Compile copy review').scrollIntoView();
+        await $('button=Compile copy review').click();
+        await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+        const compiledManifest = await native({
+          kind: 'organization_copy_manifest',
+          input: {
+            planId: plan.data.plan.id,
+            bundleConfirmationIds: [companionReviews.data[0].id],
+          },
+        });
+        assert.equal(compiledManifest.data.executionAvailable, false);
+        assert.equal(compiledManifest.data.files.length, companionReviews.data[0].files.length);
+        assert.deepEqual(compiledManifest.data.issues, []);
+        await writeFile(
+          `${evidence}/windows-copy-manifest.json`,
+          JSON.stringify(compiledManifest.data),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-copy-manifest.png');
+        await $('button=Check copy space and fidelity').scrollIntoView();
+        await $('button=Check copy space and fidelity').click();
+        await $('section[aria-label="Copy space and fidelity"] table').waitForDisplayed();
+        const assessment = await native({
+          kind: 'organization_copy_assessment',
+          plan_id: plan.data.plan.id,
+          manifest_id: compiledManifest.data.id,
+        });
+        assert.equal(assessment.data.manifestDigest, compiledManifest.data.digest);
+        assert.equal(assessment.data.capacity.logicalBytes, compiledManifest.data.selectedBytes);
+        assert.equal(assessment.data.capacity.spaceReserved, false);
+        assert.equal(assessment.data.sourcesRetained, true);
+        assert.equal(assessment.data.independentBackupVerified, false);
+        assert.equal(assessment.data.executionAvailable, false);
+        assert(BigInt(assessment.data.capacity.allocationUnitBytes) > 0n);
+        assert.equal(assessment.data.fidelity.length, 7);
+        await writeFile(
+          `${evidence}/windows-copy-assessment.json`,
+          JSON.stringify(assessment.data),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-copy-assessment.png');
         await $('button=View JSON export').scrollIntoView();
         await $('button=View JSON export').click();
         await $('.organization-preview textarea').waitForDisplayed();
@@ -683,9 +2545,246 @@ describe('native read-only library', () => {
         assert.equal(exported.digest, plan.data.plan.digest);
         assert.equal(exported.destination_native, undefined);
         await browser.saveScreenshot('.context/screenshots/m2-saved-plan.png');
+        const exportSelection = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_export_fixture', rows: null }),
+        );
+        exportCreated = true;
+        await picker.mockReturnValue({ kind: 'directory', data: exportSelection });
+        await $('button=Save JSON file…').scrollIntoView();
+        await $('button=Save JSON file…').click();
+        await $('section[aria-label="Saved plan detail"] [role="status"]').waitForDisplayed();
+        await $('button=Save CSV file…').scrollIntoView();
+        await $('button=Save CSV file…').click();
+        await browser.waitUntil(async () =>
+          (await $('section[aria-label="Saved plan detail"] [role="status"]').getText()).includes(
+            '.csv',
+          ),
+        );
+        const exportedFiles = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_export_verify', rows: null }),
+        );
+        assert.equal(exportedFiles.neighborUnchanged, true);
+        assert.equal(exportedFiles.exports.length, 2);
+        const savedJson = exportedFiles.exports.find((file) => file.filename.endsWith('.json'));
+        assert.deepEqual(JSON.parse(savedJson.text), exported);
+        assert.equal(savedJson.bytes, String(Buffer.byteLength(savedJson.text)));
+        const csvText = await native({
+          kind: 'organization_plan_export',
+          plan_id: plan.data.plan.id,
+          format: 'csv',
+        });
+        assert.equal(
+          exportedFiles.exports.find((file) => file.filename.endsWith('.csv')).text,
+          csvText.data.text,
+        );
+        await writeFile(
+          `${evidence}/windows-plan-export-files.json`,
+          JSON.stringify(exportedFiles),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-export-files.png');
+        const beforeCopy = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', {
+            action: 'organization_destination_verify',
+            rows: null,
+          }),
+        );
+        assert.equal(beforeCopy.unchanged, true);
+        const copySelection = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', {
+            action: 'organization_destination_reselect',
+            rows: null,
+          }),
+        );
+        await picker.mockReturnValue({ kind: 'directory', data: copySelection });
+        await $('button=Choose destination and review preparation').scrollIntoView();
+        await $('button=Choose destination and review preparation').click();
+        await $('h4=Output preparation review').waitForDisplayed();
+        await $('button=Approve output preparation').scrollIntoView();
+        await $('button=Approve output preparation').click();
+        await $('button=Start output preparation').waitForEnabled();
+        assert.equal(
+          (
+            await browser.tauri.execute(async ({ core }) =>
+              core.invoke('test_performance', {
+                action: 'organization_destination_verify',
+                rows: null,
+              }),
+            )
+          ).unchanged,
+          true,
+        );
+        copyAttempted = true;
+        await $('button=Start output preparation').click();
+        await $('h4=Prepared copy review').waitForDisplayed({ timeout: 15000 });
+        await reopenPreparedReview(plan.data.plan, copySelection, evidence);
+        assert.equal(await $('button=Approve byte-verified copy').isEnabled(), false);
+        const fidelityAck = await $(
+          'section[aria-label="Verified organization copy"] input[type="checkbox"]',
+        );
+        await fidelityAck.scrollIntoView();
+        await fidelityAck.click();
+        await $('button=Approve byte-verified copy').click();
+        await $('button=Start verified copy').waitForEnabled();
+        await $('button=Start verified copy').scrollIntoView();
+        await $('button=Start verified copy').click();
+        await $('h3=File bytes copied and verified').waitForDisplayed({ timeout: 15000 });
+        await $('button=Inspect actual output bytes').scrollIntoView();
+        await $('button=Inspect actual output bytes').click();
+        await browser.waitUntil(
+          async () =>
+            (await $('section[aria-label="Verified organization copy"]').getText()).includes(
+              'Every selected output was freshly compared with its source.',
+            ),
+          { timeout: 15000 },
+        );
+        const copyJobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+          (job) => job.planId === plan.data.plan.id,
+        );
+        assert.equal(copyJobs.filter((job) => job.state === 'prepared').length, 1);
+        assert.equal(copyJobs.filter((job) => job.state === 'completed_verified').length, 1);
+        assert.equal(
+          copyJobs.find((job) => job.state === 'completed_verified').verifiedFiles,
+          compiledManifest.data.files.length,
+        );
+        const outputAudit = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+        );
+        assert.equal(outputAudit.neighborUnchanged, true);
+        assert.equal(outputAudit.files.length, compiledManifest.data.files.length);
+        assert(
+          outputAudit.files.every(
+            (file) => file.matchesGeneratedSourceBytes && !file.relativePath.endsWith('.partial'),
+          ),
+        );
+        await writeFile(`${evidence}/windows-verified-copy-jobs.json`, JSON.stringify(copyJobs));
+        await writeFile(
+          `${evidence}/windows-verified-copy-output-audit.json`,
+          JSON.stringify(outputAudit),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-verified-copy-complete.png');
         await $('button=Close saved plans').click();
+        const completedCopy = copyJobs.find((job) => job.state === 'completed_verified');
+        await native({ kind: 'organization_copy_discard', review_id: completedCopy.reviewId });
+        await $('button[aria-label="Jobs"]').click();
+        await browser.waitUntil(
+          async () =>
+            (await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]')).length ===
+            2,
+        );
+        const retainedInspections = await $$(
+          '.jobs-dropdown section[aria-label="Retained copy inspection"]',
+        );
+        await retainedInspections[0].$('button').scrollIntoView();
+        await retainedInspections[0].$('button').click();
+        await browser.waitUntil(async () =>
+          (await retainedInspections[0].getText()).includes(
+            'Every selected output was freshly compared with its source.',
+          ),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-retained-copy-inspection.png');
+        await writeFile(
+          `${evidence}/windows-retained-copy-inspection.json`,
+          JSON.stringify(
+            (
+              await native({
+                kind: 'organization_copy_recovery_inspect',
+                job_id: completedCopy.id,
+                selection_id: copySelection.id,
+              })
+            ).data,
+          ),
+        );
+        await $('button=Review verification and continuation').scrollIntoView();
+        await $('button=Review verification and continuation').click();
+        await $('h4=Continuation review').waitForDisplayed();
+        assert.equal(await $('button=Approve verification and continuation').isEnabled(), false);
+        const continuationAck = await $(
+          '.jobs-dropdown section[aria-label="Reviewed copy continuation"] input[type="checkbox"]',
+        );
+        await continuationAck.scrollIntoView();
+        await continuationAck.click();
+        await $('button=Approve verification and continuation').scrollIntoView();
+        await $('button=Approve verification and continuation').click();
+        await $('button=Start reviewed continuation').waitForEnabled();
+        assert.deepEqual(
+          await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', {
+              action: 'organization_destination_audit',
+              rows: null,
+            }),
+          ),
+          outputAudit,
+        );
+        await $('button=Start reviewed continuation').scrollIntoView();
+        await $('button=Start reviewed continuation').click();
+        let continuationJobs;
+        await browser.waitUntil(
+          async () => {
+            continuationJobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+              (job) => job.planId === plan.data.plan.id,
+            );
+            return (
+              continuationJobs.filter((job) => job.state === 'completed_verified').length === 2 &&
+              (
+                await $('.jobs-dropdown section[aria-label="Reviewed copy continuation"]').getText()
+              ).includes('All outputs freshly byte-verified.')
+            );
+          },
+          { timeout: 15000 },
+        );
+        assert.equal(continuationJobs.length, 3);
+        assert(
+          continuationJobs
+            .filter((job) => job.state === 'completed_verified')
+            .every((job) => job.verifiedFiles === compiledManifest.data.files.length),
+        );
+        assert.deepEqual(
+          await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', {
+              action: 'organization_destination_audit',
+              rows: null,
+            }),
+          ),
+          outputAudit,
+        );
+        await writeFile(
+          `${evidence}/windows-reviewed-continuation-jobs.json`,
+          JSON.stringify(continuationJobs),
+        );
+        await browser.saveScreenshot('.context/screenshots/m2-reviewed-continuation.png');
+        await $('button[aria-label="Close jobs"]').click();
+        await reviewEquivalentDraft(plan.data.plan, copySelection, evidence, outputAudit);
+      } catch (error) {
+        await browser.saveScreenshot('.context/screenshots/windows-library-failure.png');
+        const diagnostics = await browser.execute(() => ({
+          viewport: { width: innerWidth, height: innerHeight },
+          inventoryPresent: Boolean(
+            document.querySelector('section[aria-label="Complete companion inventory"]'),
+          ),
+          alerts: [...document.querySelectorAll('.organization-preview [role="alert"]')].map(
+            (alert) => alert.textContent,
+          ),
+          reviewButtons: [...document.querySelectorAll('button')]
+            .filter((button) => button.textContent === 'Review all companion filenames')
+            .map((button) => ({
+              disabled: button.disabled,
+              rect: button.getBoundingClientRect().toJSON(),
+            })),
+        }));
+        await writeFile(`${evidence}/windows-library-failure.json`, JSON.stringify(diagnostics));
+        throw error;
       } finally {
         await picker.mockRestore();
+        if (exportCreated) {
+          const exportVerification = await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', { action: 'organization_export_verify', rows: null }),
+          );
+          await writeFile(
+            `${evidence}/windows-export-verification.json`,
+            JSON.stringify(exportVerification),
+          );
+          assert.equal(exportVerification.neighborUnchanged, true);
+        }
         const verification = await browser.tauri.execute(async ({ core }) =>
           core.invoke('test_library_fixture', { verify: true }),
         );
@@ -695,20 +2794,43 @@ describe('native read-only library', () => {
         );
         assert.ok(verification.verifiedFiles > 20);
         if (destinationCreated) {
-          const destinationVerification = await browser.tauri.execute(async ({ core }) =>
-            core.invoke('test_performance', {
-              action: 'organization_destination_verify',
-              rows: null,
-            }),
+          const destinationVerification = await browser.tauri.execute(
+            async ({ core }, copyAttempted) =>
+              core.invoke('test_performance', {
+                action: copyAttempted
+                  ? 'organization_destination_audit'
+                  : 'organization_destination_verify',
+                rows: null,
+              }),
+            copyAttempted,
           );
           await writeFile(
             `${evidence}/windows-destination-verification.json`,
             JSON.stringify(destinationVerification),
           );
-          assert.equal(destinationVerification.unchanged, true);
+          if (copyAttempted) assert.equal(destinationVerification.neighborUnchanged, true);
+          else assert.equal(destinationVerification.unchanged, true);
         }
+        const sourceSelection = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'fixture_reselect', rows: null }),
+        );
+        assert.equal(typeof sourceSelection.id, 'string');
+        const sourceLocation = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'fixture_location', rows: null }),
+        );
+        assert.equal(sourceLocation.selectionId, sourceSelection.id);
         await browser.setWindowSize(1180, 780);
       }
+    },
+  );
+  // The Windows global preferences writer remains gated. This independent
+  // catalog preference must still work through actual SQLite-backed UI/IPC.
+  (process.platform === 'win32' ? it : it.skip)(
+    'persists a catalog-scoped import destination without enabling global settings writes',
+    async function () {
+      this.timeout(30000);
+      const evidence = await createEvidenceDirectory('.context/windows-directory-selection');
+      await preferredImportDestinationPreference(evidence);
     },
   );
 });
@@ -973,6 +3095,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       assert.equal(await $('.preparation-banner button').getText(), 'Resume previews');
       await browser.saveScreenshot('.context/screenshots/initial-previews-paused.png');
       await native({ kind: 'generate_thumbnails', root_id: root.id });
+      await pauseResumeJob(`${evidence}/job-pause.json`);
       await reviewRemovalStopsJobs(`${evidence}/removal-stopped-jobs.json`);
       observations.initialPreparation = {
         total: thumbnail.discovered,
@@ -1002,7 +3125,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               .filter((job) => job.kind !== 'thumbnails')
               .every((job) => job.state === 'completed') &&
             status.data.jobs.every(
-              (job) => !['queued', 'running', 'cancel_requested'].includes(job.state),
+              (job) =>
+                !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+                  job.state,
+                ),
             )
           );
         },
@@ -1070,7 +3196,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           // enqueued. Do not mistake that observable handoff gap for all done.
           status.data.jobs.some((job) => job.kind === 'thumbnails') &&
           status.data.jobs.every(
-            (job) => !['queued', 'running', 'cancel_requested'].includes(job.state),
+            (job) =>
+              !['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+                job.state,
+              ),
           )
         );
       },
@@ -1973,6 +4102,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await $('button=Preview organization').click();
       await $('.organization-preview[open]').waitForDisplayed();
       await assertFormControlsAligned('.organization-preview');
+      await reviewFilenameStemCase(ids, evidence);
+      await reviewManagedDestinationPolicy(evidence);
       await $('button=Build preview').click();
       await $('.organization-table tbody tr:first-child').waitForDisplayed();
       assert.equal(
@@ -2081,6 +4212,240 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       );
       await writeFile(`${evidence}/organization-manifest-after.json`, JSON.stringify(after));
       assert.deepEqual(after, before);
+    }
+  });
+  it('prepares, copies and freshly continues generated outputs through the native organization UI', async function () {
+    this.timeout(120000);
+    const before = JSON.parse(
+      execFileSync('python3', ['scripts/performance/manifest.py', sourceRoot, '--lossless-stat'], {
+        encoding: 'utf8',
+      }),
+    );
+    const ids = await browser.execute(() =>
+      [...document.querySelectorAll('.asset-check:checked')].map(
+        (input) => input.closest('[data-asset-id]').dataset.assetId,
+      ),
+    );
+    assert.equal(ids.length, 2);
+    await galleryView('Text list');
+    const destination = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_destination_fixture', rows: null }),
+    );
+    const picker = await browser.tauri.mock('foundation_request');
+    await picker.mockReturnValue({ kind: 'directory', data: destination });
+    let attempted = false;
+    try {
+      const template = {
+        pattern: '{capture:%Y}/{original_stem}.{ext}',
+        event: '',
+        missingDate: 'undated',
+      };
+      const preview = await native({ kind: 'organization_preview', asset_ids: [ids[0]], template });
+      const saved = await native({
+        kind: 'organization_plan_create',
+        selection_id: destination.id,
+        draft: {
+          assetIds: [ids[0]],
+          template,
+          previewFingerprint: preview.data.fingerprint,
+          templateReference: null,
+        },
+      });
+      assert.equal(saved.data.stale, false);
+      await $('button=Saved plans').click();
+      await $('.organization-preview li button').waitForDisplayed();
+      await $('.organization-preview li button').click();
+      await $('section[aria-label="Saved plan detail"]').waitForDisplayed();
+      await $('button=Review all companion filenames').scrollIntoView();
+      await $('button=Review all companion filenames').waitForEnabled();
+      await $('button=Review all companion filenames').click();
+      await $('button=Read all filenames').waitForDisplayed();
+      await $('button=Read all filenames').click();
+      await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+      await $('label*=I reviewed all filenames').scrollIntoView();
+      await $('label*=I reviewed all filenames').click();
+      await $('button=Save companion review').click();
+      await $(
+        'section[aria-label="Retained companion decision"] [role="status"]',
+      ).waitForDisplayed();
+      await $('button=Close companion inventory').click();
+      await $('button=Compile copy review').scrollIntoView();
+      await $('button=Compile copy review').click();
+      await $('section[aria-label="Compiled copy review"] table').waitForDisplayed();
+      await $('button=Choose destination and review preparation').scrollIntoView();
+      await $('button=Choose destination and review preparation').click();
+      await $('h4=Output preparation review').waitForDisplayed();
+      await $('button=Approve output preparation').scrollIntoView();
+      await $('button=Approve output preparation').click();
+      await $('button=Start output preparation').waitForEnabled();
+      assert.equal(
+        (
+          await browser.tauri.execute(async ({ core }) =>
+            core.invoke('test_performance', {
+              action: 'organization_destination_verify',
+              rows: null,
+            }),
+          )
+        ).unchanged,
+        true,
+      );
+      attempted = true;
+      await $('button=Start output preparation').scrollIntoView();
+      await $('button=Start output preparation').click();
+      await $('h4=Prepared copy review').waitForDisplayed();
+      await reopenPreparedReview(saved.data.plan, destination, evidence);
+      assert.equal(await $('button=Approve byte-verified copy').isEnabled(), false);
+      const acknowledge = await $(
+        'section[aria-label="Verified organization copy"] input[type="checkbox"]',
+      );
+      await acknowledge.scrollIntoView();
+      await acknowledge.click();
+      await $('button=Approve byte-verified copy').scrollIntoView();
+      await $('button=Approve byte-verified copy').click();
+      await $('button=Start verified copy').waitForEnabled();
+      await $('button=Start verified copy').scrollIntoView();
+      await $('button=Start verified copy').click();
+      await $('h3=File bytes copied and verified').waitForDisplayed();
+      await $('button=Inspect actual output bytes').scrollIntoView();
+      await $('button=Inspect actual output bytes').click();
+      await browser.waitUntil(async () =>
+        (await $('section[aria-label="Verified organization copy"]').getText()).includes(
+          'Every selected output was freshly compared with its source.',
+        ),
+      );
+      const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+        (job) => job.planId === saved.data.plan.id,
+      );
+      assert.equal(jobs.filter((job) => job.state === 'prepared').length, 1);
+      const completed = jobs.find((job) => job.state === 'completed_verified');
+      assert(completed);
+      assert.equal(completed.verifiedFiles, completed.totalFiles);
+      const audit = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+      );
+      assert.equal(audit.neighborUnchanged, true);
+      assert.equal(audit.files.length, completed.totalFiles);
+      assert(
+        audit.files.every(
+          (file) => file.matchesGeneratedSourceBytes && !file.relativePath.endsWith('.partial'),
+        ),
+      );
+      await browser.saveScreenshot('.context/screenshots/macos-m2-verified-copy.png');
+      await $('button=Close saved plans').click();
+      await native({ kind: 'organization_copy_discard', review_id: completed.reviewId });
+      await $('button[aria-label="Jobs"]').click();
+      await browser.waitUntil(
+        async () =>
+          (await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]')).length === 2,
+      );
+      const retained = await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]');
+      await retained[0].$('button').scrollIntoView();
+      await retained[0].$('button').click();
+      await browser.waitUntil(async () =>
+        (await retained[0].getText()).includes(
+          'Every selected output was freshly compared with its source.',
+        ),
+      );
+      await $('button=Review verification and continuation').scrollIntoView();
+      await $('button=Review verification and continuation').click();
+      await $('h4=Continuation review').waitForDisplayed();
+      assert.equal(await $('button=Approve verification and continuation').isEnabled(), false);
+      const resumeAck = await $(
+        '.jobs-dropdown section[aria-label="Reviewed copy continuation"] input[type="checkbox"]',
+      );
+      await resumeAck.scrollIntoView();
+      await resumeAck.click();
+      await $('button=Approve verification and continuation').scrollIntoView();
+      await $('button=Approve verification and continuation').click();
+      await $('button=Start reviewed continuation').waitForEnabled();
+      await $('button=Start reviewed continuation').scrollIntoView();
+      await $('button=Start reviewed continuation').click();
+      let continued;
+      await browser.waitUntil(
+        async () => {
+          continued = (await native({ kind: 'status' })).data.copyJobs.filter(
+            (job) => job.planId === saved.data.plan.id,
+          );
+          return (
+            continued.filter((job) => job.state === 'completed_verified').length === 2 &&
+            (
+              await $('.jobs-dropdown section[aria-label="Reviewed copy continuation"]').getText()
+            ).includes('All outputs freshly byte-verified.')
+          );
+        },
+        { timeout: 15000 },
+      );
+      assert.equal(continued.length, 3);
+      assert.deepEqual(
+        await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+        ),
+        audit,
+      );
+      await writeFile(
+        `${evidence}/macos-reviewed-organization-jobs.json`,
+        JSON.stringify(continued),
+      );
+      await writeFile(
+        `${evidence}/macos-reviewed-organization-output-audit.json`,
+        JSON.stringify(audit),
+      );
+      await browser.saveScreenshot('.context/screenshots/macos-m2-reviewed-continuation.png');
+      await $('button[aria-label="Close jobs"]').click();
+      await reviewEquivalentDraft(saved.data.plan, destination, evidence, audit);
+    } catch (error) {
+      await browser.saveScreenshot('.context/screenshots/macos-m2-workflow-failure.png');
+      await writeFile(
+        `${evidence}/macos-m2-workflow-failure.json`,
+        JSON.stringify({
+          alerts: await browser.execute(() =>
+            [...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent),
+          ),
+          status: (await native({ kind: 'status' })).data,
+        }),
+      );
+      throw error;
+    } finally {
+      await picker.mockRestore();
+      for (const selector of [
+        'button=Close companion inventory',
+        'button=Close saved plans',
+        'button[aria-label="Close jobs"]',
+      ]) {
+        const buttons = await $$(selector);
+        if (buttons.length) await buttons[0].click();
+      }
+      const sourceProof = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_library_fixture', { verify: true }),
+      );
+      assert(sourceProof.verifiedFiles > 20);
+      const destinationProof = await browser.tauri.execute(
+        async ({ core }, attempted) =>
+          core.invoke('test_performance', {
+            action: attempted
+              ? 'organization_destination_audit'
+              : 'organization_destination_verify',
+            rows: null,
+          }),
+        attempted,
+      );
+      await writeFile(
+        `${evidence}/macos-m2-destination-preservation.json`,
+        JSON.stringify(destinationProof),
+      );
+      assert.equal(
+        attempted ? destinationProof.neighborUnchanged : destinationProof.unchanged,
+        true,
+      );
+      const after = JSON.parse(
+        execFileSync(
+          'python3',
+          ['scripts/performance/manifest.py', sourceRoot, '--lossless-stat'],
+          { encoding: 'utf8' },
+        ),
+      );
+      assert.deepEqual(after, before);
+      await galleryView('Timeline');
     }
   });
   it('saves catalog annotations and shows honest unsupported states', async () => {
@@ -2442,6 +4807,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     );
   });
   it('persists Settings defaults and reuses the native library-location workflow', async () => {
+    const preferenceEvidence = await createEvidenceDirectory(
+      '.context/windows-directory-selection',
+    );
+    await preferredImportDestinationPreference(preferenceEvidence);
     await $('button[aria-label="Settings"]').click();
     await $('.settings-page h1').waitForDisplayed();
     const before = (await native({ kind: 'status' })).data.roots[0];
@@ -2459,7 +4828,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await browser.waitUntil(
         async () =>
           !(await native({ kind: 'status' })).data.jobs.some((job) =>
-            ['queued', 'running', 'cancel_requested'].includes(job.state),
+            ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+              job.state,
+            ),
           ),
       );
     } finally {
@@ -2667,7 +5038,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(
       async () =>
         !(await native({ kind: 'status' })).data.jobs.some((job) =>
-          ['queued', 'running', 'cancel_requested'].includes(job.state),
+          ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+            job.state,
+          ),
         ),
     );
     const after = (await native({ kind: 'status' })).data.roots[0];
@@ -3009,7 +5382,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(
       async () =>
         !(await native({ kind: 'status' })).data.jobs.some((job) =>
-          ['queued', 'running', 'cancel_requested'].includes(job.state),
+          ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+            job.state,
+          ),
         ),
     );
     const jobs = (await native({ kind: 'status' })).data.jobs.length;
@@ -3125,6 +5500,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       removeEventListener('stillharbour:test-library-request', window.folderListener),
     );
     await browser.setWindowSize(1180, 780);
+  });
+  it('reviews native duplicate, integrity and storage jobs without changing generated originals', async function () {
+    this.timeout(180000);
+    await reviewReadOnlyInspections(evidence);
   });
   it('clears previews and confirms library removal without changing generated originals', async () => {
     await $('button[aria-label="Settings"]').click();
@@ -3253,5 +5632,482 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await $('button=Library').click();
     await $('button=Choose a folder').waitForDisplayed();
     await browser.saveScreenshot('.context/screenshots/remove-library-empty.png');
+  });
+});
+
+describe('M2 multiple source libraries — generated native fixtures', () => {
+  it('reviews and verifies two source partitions with independent approvals and jobs', async function () {
+    this.timeout(180000);
+    const evidence = await createEvidenceDirectory('.context/gallery');
+    const generated = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_multisource_fixture', rows: null }),
+    );
+    const selected = [];
+    async function registerOwned(action) {
+      let next;
+      await browser.waitUntil(
+        async () => {
+          const result = await browser.tauri.execute(async ({ core }, action) => {
+            try {
+              return {
+                value: await core.invoke('test_performance', {
+                  action,
+                  rows: null,
+                }),
+              };
+            } catch (error) {
+              return { error };
+            }
+          }, action);
+          if (result.error) {
+            assert.equal(result.error.code, 'BUSY', JSON.stringify(result.error));
+            return false;
+          }
+          next = result.value;
+          return true;
+        },
+        { timeout: 15000, interval: 150, timeoutMsg: 'The owned source scanner remained busy' },
+      );
+      assert.equal(next.jobs.length, 1);
+      return next;
+    }
+    for (let source = 0; source < 2; source += 1) {
+      const next = await registerOwned('organization_multisource_next');
+      const scan = next.jobs[0];
+      generated.jobs.push(scan);
+      generated.selection = next.selection;
+      await browser.waitUntil(
+        async () => {
+          const status = (await native({ kind: 'status' })).data;
+          const job = status.jobs.find((job) => job.id === scan.id);
+          return job && ['completed', 'partial'].includes(job.state);
+        },
+        { timeout: 60000 },
+      );
+      let asset;
+      const metadataAvailable = (await native({ kind: 'status' })).data.metadataAvailable;
+      await browser.waitUntil(
+        async () => {
+          const page = (
+            await native({
+              kind: 'query',
+              query: {
+                rootId: scan.rootId,
+                folder: '',
+                name: '',
+                fromDate: '',
+                throughDate: '',
+                minBytes: '',
+                maxBytes: '',
+                extension: '',
+                favoritesOnly: false,
+                tag: '',
+                sort: 'capture',
+                includeMissing: false,
+              },
+              cursor: null,
+              limit: 100,
+            })
+          ).data;
+          assert.equal(page.format, 1);
+          const row = page.rows.find(
+            (row) => row[3].replaceAll('\\', '/') === 'Coast/Generated-00.jpg',
+          );
+          asset = row ? { id: row[0], rootId: row[1] } : null;
+          return (
+            !!asset &&
+            (!metadataAvailable ||
+              page.rows.every((row) => !['pending', 'queued', 'running'].includes(row[20])))
+          );
+        },
+        { timeout: 30000 },
+      );
+      selected.push(asset);
+    }
+    const keeper = await registerOwned('organization_multisource_keeper');
+    generated.jobs.push(keeper.jobs[0]);
+    generated.selection = keeper.selection;
+    await browser.waitUntil(
+      async () => {
+        const job = (await native({ kind: 'status' })).data.jobs.find(
+          (job) => job.id === keeper.jobs[0].id,
+        );
+        if (job && ['failed', 'partial', 'canceled'].includes(job.state))
+          assert.fail(
+            `The generated import keeper needs a complete inventory: ${JSON.stringify(job)}`,
+          );
+        return job?.state === 'completed';
+      },
+      { timeout: 60000 },
+    );
+    await $('button[aria-label="Photos"]').waitForDisplayed({ timeout: 15000 });
+    await $('button[aria-label="Photos"]').click();
+    let stableRevision;
+    let stableSince = 0;
+    await browser.waitUntil(
+      async () => {
+        const status = (await native({ kind: 'status' })).data;
+        const jobs = status.jobs;
+        if (stableRevision !== status.revision) {
+          stableRevision = status.revision;
+          stableSince = Date.now();
+        }
+        const roots = generated.jobs.map((job) => job.rootId);
+        return (
+          roots.every((root) => jobs.some((job) => job.id === `thumbnail:initial:${root}`)) &&
+          jobs.every((job) => !['queued', 'running', 'cancel_requested'].includes(job.state)) &&
+          Date.now() - stableSince >= 3000
+        );
+      },
+      {
+        timeout: 60000,
+        timeoutMsg:
+          'Generated catalog jobs and visible preview revisions did not settle before planning',
+      },
+    );
+    const template = {
+      pattern: 'Partitions/{sequence:04}_{original_stem}.{ext}',
+      event: '',
+      missingDate: 'block',
+    };
+    const assetIds = selected.map((asset) => asset.id);
+    const preview = (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
+      .data;
+    assert.equal(preview.rows.length, 2);
+    assert.ok(preview.rows.every((row) => row.issues.length === 0));
+    const saved = (
+      await native({
+        kind: 'organization_plan_create',
+        selection_id: generated.selection.id,
+        draft: {
+          assetIds,
+          template,
+          previewFingerprint: preview.fingerprint,
+          templateReference: null,
+        },
+      })
+    ).data;
+    await $('button=Saved plans').click();
+    const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
+    const index = plans.findIndex((plan) => plan.id === saved.plan.id);
+    assert.ok(index >= 0);
+    await browser.waitUntil(
+      async () => (await $$('.organization-preview li button')).length === plans.length,
+    );
+    await (await $$('.organization-preview li button'))[index].click();
+    for (let row = 0; row < 2; row += 1) {
+      await writeFile(
+        `${evidence}/multi-source-plan-${row}-${process.platform}.json`,
+        JSON.stringify({
+          saved,
+          current: (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
+            .data,
+          reopened: (await native({ kind: 'organization_plan', plan_id: saved.plan.id })).data,
+          status: (await native({ kind: 'status' })).data,
+        }),
+      );
+      await browser.saveScreenshot(
+        `.context/screenshots/m2-multi-source-plan-${row}-${process.platform}.png`,
+      );
+      const button = (await $$('button=Review all companion filenames'))[row];
+      await button.scrollIntoView();
+      await button.waitForEnabled();
+      await button.click();
+      await browser.saveScreenshot(
+        `.context/screenshots/m2-multi-source-companion-${row}-${process.platform}.png`,
+      );
+      await writeFile(
+        `${evidence}/multi-source-dialog-${row}-${process.platform}.json`,
+        JSON.stringify(
+          await browser.execute(() => ({
+            text: document.querySelector('dialog[open]')?.textContent,
+            buttons: [...document.querySelectorAll('dialog[open] button')].map((button) => ({
+              text: button.textContent,
+              disabled: button.disabled,
+            })),
+            companion: document.querySelector('section[aria-label="Complete companion inventory"]')
+              ?.textContent,
+          })),
+        ),
+      );
+      await $('button=Read all filenames').waitForDisplayed();
+      await $('button=Read all filenames').scrollIntoView();
+      await $('button=Read all filenames').click();
+      try {
+        await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+      } catch (error) {
+        await browser.saveScreenshot(
+          `.context/screenshots/m2-multi-source-read-${row}-${process.platform}.png`,
+        );
+        await writeFile(
+          `${evidence}/multi-source-read-${row}-${process.platform}.json`,
+          JSON.stringify(
+            await browser.execute(() => ({
+              text: document.querySelector('section[aria-label="Complete companion inventory"]')
+                ?.textContent,
+              alerts: [...document.querySelectorAll('[role="alert"]')].map(
+                (element) => element.textContent,
+              ),
+            })),
+          ),
+        );
+        throw error;
+      }
+      await $('label*=I reviewed all filenames').scrollIntoView();
+      await $('label*=I reviewed all filenames').click();
+      await $('button=Save companion review').click();
+      await $(
+        'section[aria-label="Retained companion decision"] [role="status"]',
+      ).waitForDisplayed();
+      await $('button=Close companion inventory').click();
+    }
+    await $('button=Compile copy review').scrollIntoView();
+    await $('button=Compile copy review').click();
+    const rootSelect = await $('select[aria-label="Source library to copy"]');
+    await rootSelect.waitForDisplayed();
+    assert.equal(await rootSelect.getValue(), '');
+    assert.equal(await $('button=Choose destination and review preparation').isExisting(), false);
+    const reviews = [];
+    for (const asset of selected) {
+      const decisions = (
+        await native({
+          kind: 'organization_bundle_reviews',
+          plan_id: saved.plan.id,
+          asset_id: asset.id,
+        })
+      ).data;
+      assert.equal(decisions.length, 1);
+      reviews.push(decisions[0].id);
+    }
+    const manifest = (
+      await native({
+        kind: 'organization_copy_manifest',
+        input: { planId: saved.plan.id, bundleConfirmationIds: reviews },
+      })
+    ).data;
+    const picker = await browser.tauri.mock('foundation_request');
+    const folders = [];
+    try {
+      await picker.mockReturnValue({ kind: 'directory', data: generated.selection });
+      for (const asset of selected) {
+        await rootSelect.scrollIntoView();
+        await changeSizeUnit('Source library to copy', asset.rootId);
+        const expected = manifest.files.filter((file) => file.rootId === asset.rootId);
+        assert.ok(expected.length > 0);
+        await $('button=Choose destination and review preparation').scrollIntoView();
+        await $('button=Choose destination and review preparation').click();
+        await $('h4=Output preparation review').waitForDisplayed();
+        const folder = await $(
+          'section[aria-label="Verified organization copy"] strong bdi',
+        ).getText();
+        assert.ok(folder.startsWith('Stillharbour organized '));
+        const before = (await native({ kind: 'status' })).data.copyJobs.filter(
+          (job) => job.planId === saved.plan.id,
+        );
+        assert.equal(before.filter((job) => job.sourceRootId === asset.rootId).length, 0);
+        await $('button=Approve output preparation').scrollIntoView();
+        await $('button=Approve output preparation').click();
+        await $('button=Start output preparation').waitForEnabled();
+        await $('button=Start output preparation').click();
+        await $('h4=Prepared copy review').waitForDisplayed({ timeout: 30000 });
+        const ack = await $(
+          'section[aria-label="Verified organization copy"] input[type="checkbox"]',
+        );
+        await ack.scrollIntoView();
+        await ack.click();
+        await $('button=Approve byte-verified copy').waitForEnabled();
+        await $('button=Approve byte-verified copy').click();
+        await $('button=Start verified copy').waitForEnabled();
+        await $('button=Start verified copy').click();
+        await $('h3=File bytes copied and verified').waitForDisplayed({ timeout: 30000 });
+        await $('button=Inspect actual output bytes').scrollIntoView();
+        await $('button=Inspect actual output bytes').click();
+        await browser.waitUntil(
+          async () =>
+            (await $('section[aria-label="Verified organization copy"]').getText()).includes(
+              'Every selected output was freshly compared with its source.',
+            ),
+          { timeout: 30000 },
+        );
+        const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+          (job) => job.planId === saved.plan.id && job.sourceRootId === asset.rootId,
+        );
+        assert.equal(jobs.filter((job) => job.state === 'prepared').length, 1);
+        const copied = jobs.filter((job) => job.state === 'completed_verified');
+        assert.equal(copied.length, 1);
+        assert.equal(copied[0].verifiedFiles, expected.length);
+        folders.push(folder);
+      }
+      assert.equal(new Set(folders).size, 2);
+      const audit = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_multisource_audit', rows: null }),
+      );
+      assert.equal(audit.audits.length, 2);
+      for (let root = 0; root < 2; root += 1) {
+        assert.equal(audit.audits[root].neighborUnchanged, true);
+        assert.ok(audit.audits[root].sourceVerifiedFiles > 20);
+        const files = audit.audits[root].files.filter((file) =>
+          file.relativePath.replaceAll('\\', '/').startsWith(`${folders[root]}/`),
+        );
+        assert.equal(
+          files.length,
+          manifest.files.filter((file) => file.rootId === selected[root].rootId).length,
+        );
+        assert.ok(files.every((file) => file.matchesGeneratedSourceBytes));
+      }
+      await writeFile(
+        `${evidence}/multi-source-${process.platform}.json`,
+        JSON.stringify({
+          planId: saved.plan.id,
+          roots: selected.map((asset) => asset.rootId),
+          folders,
+          manifest,
+          audit,
+          jobs: (await native({ kind: 'status' })).data.copyJobs.filter(
+            (job) => job.planId === saved.plan.id,
+          ),
+        }),
+      );
+      await rootSelect.scrollIntoView();
+      await browser.saveScreenshot(`.context/screenshots/m2-multi-source-${process.platform}.png`);
+      const compareSource = await $('select[aria-label="Source library to compare"]');
+      await compareSource.waitForDisplayed();
+      for (const asset of selected) {
+        await compareSource.scrollIntoView();
+        await changeSizeUnit('Source library to compare', asset.rootId);
+        const comparison = await $('section[aria-label="Import byte comparison"]');
+        const choose = await comparison.$('button=Choose indexed comparison scope');
+        await choose.scrollIntoView();
+        await choose.click();
+        const existing = await comparison.$('label*=Generated multi-source import keeper');
+        await existing.waitForDisplayed();
+        await existing.scrollIntoView();
+        await existing.$('input').click();
+        await comparison.$('button=Start read-only comparison').click();
+        const choice = await comparison.$('select[aria-label^="Import choice for"]');
+        await choice.waitForExist({ timeout: 30000 });
+        const options = await choice.$$('option');
+        const groups = [];
+        for (const option of options) {
+          const value = await option.getAttribute('value');
+          if (/^[a-f0-9]{64}$/.test(value)) groups.push(value);
+        }
+        assert.equal(groups.length, 1);
+        assert.equal(await compareSource.isEnabled(), false);
+        await choice.scrollIntoView();
+        await changeSizeUnit(await choice.getAttribute('aria-label'), groups[0]);
+        const save = await comparison.$('button=Save import decisions');
+        await save.waitForEnabled();
+        await save.click();
+        const expected = manifest.files.filter((file) => file.rootId === asset.rootId).length;
+        await browser.waitUntil(async () =>
+          (await comparison.getText()).includes(
+            `Saved import plan: 0 files to copy · ${expected} existing files`,
+          ),
+        );
+        assert.equal(
+          await comparison.$('button=Verify and record skipped import').isExisting(),
+          false,
+        );
+        const ack = await comparison.$('label*=I understand sources remain');
+        await ack.scrollIntoView();
+        await ack.$('input').click();
+        await comparison.$('button=Approve existing-bundle import').click();
+        const start = await comparison.$('button=Verify and record skipped import');
+        await start.waitForEnabled();
+        await start.click();
+        await browser.waitUntil(
+          async () =>
+            (await comparison.getText()).includes(
+              `Import recorded: ${expected} existing files freshly compared`,
+            ),
+          { timeout: 30000 },
+        );
+        const close = await comparison.$('button=Close comparison report');
+        await close.waitForEnabled();
+        await close.click();
+        await compareSource.waitForEnabled();
+      }
+      const history = (
+        await native({
+          kind: 'organization_import_history',
+          plan_id: saved.plan.id,
+          manifest_id: manifest.id,
+        })
+      ).data;
+      assert.equal(history.plans.length, 2);
+      assert.equal(history.sessions.length, 2);
+      const imported = [];
+      for (const summary of history.plans) {
+        const plan = (
+          await native({
+            kind: 'organization_import_plan_open',
+            plan_id: saved.plan.id,
+            import_plan_id: summary.id,
+          })
+        ).data;
+        assert.ok(selected.some((asset) => asset.rootId === plan.sourceRootId));
+        assert.equal(plan.copyFileIds.length, 0);
+        assert.equal(
+          plan.skipFiles.length,
+          manifest.files.filter((file) => file.rootId === plan.sourceRootId).length,
+        );
+        imported.push(plan);
+      }
+      assert.equal(new Set(imported.map((plan) => plan.sourceRootId)).size, 2);
+      assert.ok(
+        history.sessions.every(
+          (session) =>
+            session.state === 'completed' &&
+            session.verifiedFiles === 2 &&
+            session.outputCreated === false &&
+            session.sourcesRetained,
+        ),
+      );
+      const afterImports = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_multisource_audit', rows: null }),
+      );
+      assert.deepEqual(afterImports, audit);
+      assert.equal(afterImports.keeperVerifiedFiles, 2);
+      await writeFile(
+        `${evidence}/multi-source-import-${process.platform}.json`,
+        JSON.stringify({ imported, history, audit: afterImports }),
+      );
+      await compareSource.scrollIntoView();
+      await browser.saveScreenshot(
+        `.context/screenshots/m2-multi-source-import-${process.platform}.png`,
+      );
+      if (process.platform === 'darwin') {
+        // The embedded service reuses this application for live-library.e2e.
+        // Retire only constructor-returned registrations through normal
+        // reviewed maintenance; retain files and durable operation history.
+        for (const rootId of generated.jobs.map((job) => job.rootId)) {
+          const preview = (
+            await native({
+              kind: 'prepare_maintenance',
+              target: { kind: 'library', root_id: rootId },
+            })
+          ).data;
+          const removed = (await native({ kind: 'apply_maintenance', plan_id: preview.id })).data;
+          assert.equal(removed.removedRootId, rootId);
+        }
+        assert.equal((await native({ kind: 'status' })).data.roots.length, 0);
+        const retained = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_multisource_audit', rows: null }),
+        );
+        assert.deepEqual(retained, audit);
+        await writeFile(
+          `${evidence}/multi-source-teardown-${process.platform}.json`,
+          JSON.stringify({
+            registrationsRemoved: generated.jobs.length,
+            rootCount: 0,
+            audit: retained,
+            sourceFilesRemoved: false,
+          }),
+        );
+      }
+    } finally {
+      await picker.mockRestore();
+    }
   });
 });

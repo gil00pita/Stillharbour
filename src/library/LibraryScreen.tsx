@@ -19,6 +19,7 @@ import { type ViewMode, type Section } from './model';
 
 export type { Section } from './model';
 export function LibraryScreen({
+  catalogId = null,
   jobsControl,
   navigationControl,
   defaults,
@@ -29,6 +30,7 @@ export function LibraryScreen({
   onSettings,
   onRelink,
 }: {
+  catalogId?: string | null;
   jobsControl?: ReactNode;
   navigationControl?: ReactNode;
   defaults: import('../bindings').AppPreferences;
@@ -208,6 +210,8 @@ export function LibraryScreen({
       )}
       {organizationIds && (
         <OrganizationPreview
+          catalogId={catalogId}
+          preferredImportRoot={status.importDestination ?? null}
           assetIds={organizationIds}
           revision={status.revision}
           roots={status.roots}

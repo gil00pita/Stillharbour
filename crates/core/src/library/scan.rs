@@ -33,6 +33,9 @@ pub struct ScanContext {
     pub data_directory: PathBuf,
     #[cfg(any(unix, windows))]
     pub data_identity: filesystem::FileIdentity,
+    pub paused: Arc<super::job_control::PauseControl>,
+    pub total_files: Option<u32>,
+    pub processed_files: u32,
     pub canceled: Arc<AtomicBool>,
     pub resources: ResourceScheduler,
     pub discovered: u32,
@@ -42,16 +45,23 @@ pub struct ScanContext {
     pub batch: Vec<Discovery>,
 }
 impl ScanContext {
+    fn boundary(&self) -> Result<()> {
+        super::job_control::boundary(&self.catalog, &self.job.id, &self.paused, &self.canceled)
+    }
     fn progress(&self) -> Result<()> {
-        store::progress(
-            &self.catalog,
-            self.job.id.clone(),
-            self.discovered,
-            self.indexed,
-            self.skipped,
-            self.errors,
-            "Indexing files; originals unchanged".into(),
-        )
+        let (id, total, processed) = (self.job.id.clone(), self.total_files, self.processed_files);
+        let (discovered, indexed, skipped, errors) =
+            (self.discovered, self.indexed, self.skipped, self.errors);
+        let message = match total {
+            Some(total) => format!(
+                "Indexing files · {processed} of {total} · originals unchanged (filename total is an estimate)"
+            ),
+            None => "Discovering filenames; total not yet known".into(),
+        };
+        self.catalog.call(move |db| {
+            db.execute("UPDATE scans SET total_files=?,processed_files=?,discovered=?,indexed=?,skipped=?,errors=?,message=? WHERE id=?", rusqlite::params![total,processed,discovered,indexed,skipped,errors,message,id])?;
+            Ok(())
+        })
     }
     fn issue(&mut self, path: &Path, error: AppError) -> Result<()> {
         self.errors = self.errors.saturating_add(1);
@@ -64,8 +74,15 @@ impl ScanContext {
         )
     }
     #[cfg(any(unix, windows))]
-    fn excluded(&mut self, path: &Path) -> Result<()> {
+    fn excluded(&mut self, path: &Path, reason: &str) -> Result<()> {
         self.skipped = self.skipped.saturating_add(1);
+        store::issue(
+            &self.catalog,
+            self.job.id.clone(),
+            path.to_string_lossy().into_owned(),
+            "Excluded".into(),
+            reason.into(),
+        )?;
         store::exclude_scope(
             &self.catalog,
             self.root.view.id.clone(),
@@ -86,24 +103,30 @@ impl ScanContext {
         )?;
         self.progress()?;
         for ((id, revision), entry) in ids.into_iter().zip(entries) {
+            self.boundary()?;
             if self.canceled.load(Ordering::Relaxed) {
                 break;
             }
             if !entry.media || entry.placeholder {
+                self.processed_files = self.processed_files.saturating_add(1);
+                self.progress()?;
                 continue;
             }
             let current = store::asset(&self.catalog, id.clone())?;
             if current.metadata_state == "ready" {
-                if self
-                    .filter
-                    .file_reason(
-                        &entry.relative,
-                        false,
-                        entry.bytes as u64,
-                        current.date.get(..10),
-                    )
-                    .is_some()
-                {
+                if let Some(reason) = self.filter.file_reason(
+                    &entry.relative,
+                    false,
+                    entry.bytes as u64,
+                    current.date.get(..10),
+                ) {
+                    store::issue(
+                        &self.catalog,
+                        self.job.id.clone(),
+                        entry.relative.to_string_lossy().into_owned(),
+                        "Excluded".into(),
+                        reason.into(),
+                    )?;
                     store::exclude_scope(
                         &self.catalog,
                         self.root.view.id.clone(),
@@ -112,6 +135,8 @@ impl ScanContext {
                     )?;
                 }
                 self.indexed = self.indexed.saturating_add(1);
+                self.processed_files = self.processed_files.saturating_add(1);
+                self.progress()?;
                 continue;
             }
             let operation = (|| -> Result<_> {
@@ -165,6 +190,15 @@ impl ScanContext {
                         .filter
                         .file_reason(&entry.relative, false, entry.bytes as u64, date)
                         .is_some();
+                    if excluded {
+                        store::issue(
+                            &self.catalog,
+                            self.job.id.clone(),
+                            entry.relative.to_string_lossy().into_owned(),
+                            "Excluded".into(),
+                            "Outside date range".into(),
+                        )?;
+                    }
                     store::metadata(&self.catalog, id, revision, Some(metadata), None, excluded)?;
                     self.indexed = self.indexed.saturating_add(1);
                 }
@@ -192,6 +226,7 @@ impl ScanContext {
                     self.issue(&entry.relative, error)?;
                 }
             }
+            self.processed_files = self.processed_files.saturating_add(1);
             self.progress()?;
         }
         Ok(())
@@ -208,6 +243,11 @@ impl ScanContext {
                 "The root volume changed. Relink it before scanning.",
             ));
         }
+        // A separate handle-anchored pass reads names/attributes, never file contents.
+        // Failure leaves the total unknown; the authoritative scan records issues.
+        self.progress()?;
+        self.total_files = self.count_names(&root, PathBuf::new(), 0).ok();
+        self.progress()?;
         self.walk(root, PathBuf::new(), 0, &runtime)?;
         self.flush(&runtime)?;
         // An open directory handle is not proof that its volume/root still exists
@@ -244,6 +284,7 @@ impl ScanContext {
     ) -> Result<()> {
         use rustix::fs::{AtFlags, Dir, statat};
         use std::os::unix::ffi::OsStrExt;
+        self.boundary()?;
         if self.canceled.load(Ordering::Relaxed) {
             return Ok(());
         }
@@ -285,6 +326,7 @@ impl ScanContext {
         )?;
         let mut complete = true;
         for entry in iterator {
+            self.boundary()?;
             if self.canceled.load(Ordering::Relaxed) {
                 complete = false;
                 break;
@@ -334,7 +376,12 @@ impl ScanContext {
                     || (stat.st_dev as u64 == self.data_identity.volume
                         && stat.st_ino as u64 == self.data_identity.file)
                 {
-                    self.excluded(&relative_entry)?;
+                    self.excluded(
+                        &relative_entry,
+                        self.filter
+                            .directory_reason(&relative_entry, hidden)
+                            .unwrap_or("Application data excluded"),
+                    )?;
                     store::directory(
                         &self.catalog,
                         self.root.view.id.clone(),
@@ -378,6 +425,13 @@ impl ScanContext {
             }
             if mode != libc::S_IFREG as u32 {
                 self.skipped = self.skipped.saturating_add(1);
+                store::issue(
+                    &self.catalog,
+                    self.job.id.clone(),
+                    relative_entry.to_string_lossy().into_owned(),
+                    "Unsupported".into(),
+                    "Link or nonregular file was not followed.".into(),
+                )?;
                 store::uncertain(
                     &self.catalog,
                     self.root.view.id.clone(),
@@ -403,12 +457,8 @@ impl ScanContext {
                     continue;
                 }
             };
-            if self
-                .filter
-                .file_reason(&relative_entry, hidden, size, None)
-                .is_some()
-            {
-                self.excluded(&relative_entry)?;
+            if let Some(reason) = self.filter.file_reason(&relative_entry, hidden, size, None) {
+                self.excluded(&relative_entry, reason)?;
                 continue;
             }
             if placeholder {
@@ -494,6 +544,7 @@ impl ScanContext {
                     self.discovered = self.discovered.saturating_add(1)
                 }
                 Err(error) => {
+                    self.processed_files = self.processed_files.saturating_add(1);
                     self.issue(&relative_entry, error)?;
                     store::uncertain(
                         &self.catalog,
@@ -558,3 +609,6 @@ mod tests {
         assert!(!super::is_media_extension("xmp"));
     }
 }
+
+#[path = "filename_inventory.rs"]
+mod filename_inventory;

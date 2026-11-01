@@ -66,7 +66,7 @@ it('uses a known thumbnail inventory and includes cached and unavailable items i
   expect(
     screen.getByRole('progressbar', { name: 'Thumbnail progress for Library' }),
   ).toHaveAttribute('aria-valuenow', '40');
-  expect(screen.getByText('Preparing thumbnails · 40 of 100')).toBeVisible();
+  expect(screen.getByText('Preparing thumbnails · 40 of 100 · 40%')).toBeVisible();
   rerender(
     <ScanJobProgress job={{ ...job, kind: 'thumbnails', state: 'queued' }} label="Library" />,
   );
@@ -76,4 +76,22 @@ it('uses a known thumbnail inventory and includes cached and unavailable items i
   );
   expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
   expect(screen.getByText('Thumbnails finished with unavailable items')).toBeVisible();
+});
+
+it('shows inventory progress and waits for confirmed completion if the directory grows', () => {
+  const { rerender } = render(
+    <ScanJobProgress job={{ ...job, totalFiles: 10, processedFiles: 4 }} label="Library" />,
+  );
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
+  rerender(
+    <ScanJobProgress job={{ ...job, totalFiles: 10, processedFiles: 12 }} label="Library" />,
+  );
+  expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '99');
+  rerender(
+    <ScanJobProgress
+      job={{ ...job, totalFiles: 10, processedFiles: 4, state: 'paused' }}
+      label="Library"
+    />,
+  );
+  expect(screen.getByRole('progressbar')).toHaveAccessibleDescription('Scan paused');
 });

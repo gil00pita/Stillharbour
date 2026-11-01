@@ -1,5 +1,16 @@
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
+    if args.get(1).is_some_and(|arg| arg == "--inspection-worker") {
+        let result = if args.len() == 5 {
+            stillharbour_core::inspection::decoder::worker(&args[2], &args[3], &args[4])
+        } else {
+            Err(stillharbour_core::domain::AppError::new(
+                stillharbour_core::domain::ErrorCode::InvalidInput,
+                "Invalid inspection worker arguments.",
+            ))
+        };
+        std::process::exit(if result.is_ok() { 0 } else { 1 });
+    }
     if args
         .get(1)
         .is_some_and(|arg| arg == "--media-worker-file-v2" || arg == "--media-worker-stdin-v2")

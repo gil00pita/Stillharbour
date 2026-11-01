@@ -3,7 +3,10 @@ pub mod backup;
 pub mod catalog;
 pub mod contract;
 pub mod domain;
+#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+pub mod executor;
 pub mod filesystem;
+pub mod inspection;
 pub mod jobs;
 pub mod library;
 pub mod media;
@@ -22,3 +25,5 @@ pub mod library_fixture;
 pub mod preferences;
 
 pub mod performance;
+#[cfg(test)]
+mod test_process;

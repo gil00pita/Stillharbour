@@ -1,0 +1,1118 @@
+//! Application workflow; native filesystem effects remain in the central
+//! preparation/copy engine, after a separate exact session approval.
+mod import_bundles;
+mod import_comparison;
+mod import_execution;
+mod import_indexing;
+pub(in crate::executor) mod import_planning;
+mod import_receipts;
+#[cfg(test)]
+pub(in crate::executor) use import_comparison::compare_fixture;
+mod recovery;
+use super::{
+    CopyInputs, CopyJournal, CopyOutcome, Object,
+    approval::Approvals,
+    catalog_journal::{CatalogJournal, namespace_journal::NamespaceJournal},
+    failed,
+    sources::Snapshot,
+};
+use crate::{
+    catalog::Catalog,
+    domain::{AppError, ErrorCode, Result},
+    filesystem::FileIdentity,
+    jobs::{JobScheduler, operation_locks::Access, paced_io::PacedIo},
+    library::{Library, native, operation_jobs},
+    operations::*,
+};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+};
+
+struct Session {
+    namespace: Arc<NamespaceJournal>,
+    selection: String,
+    selected_path: PathBuf,
+    ready: Mutex<Option<Arc<CatalogJournal>>>,
+}
+struct Active {
+    id: String,
+    root: String,
+    related_roots: Vec<String>,
+    session: String,
+    cancel: Arc<AtomicBool>,
+}
+struct ActiveGuard {
+    workflow: Arc<CopyWorkflow>,
+    id: String,
+}
+impl Drop for ActiveGuard {
+    fn drop(&mut self) {
+        let _ = PacedIo::shared().set_paused(false);
+        if let Ok(mut active) = self.workflow.active.lock()
+            && active.as_ref().is_some_and(|active| active.id == self.id)
+        {
+            *active = None;
+        }
+    }
+}
+pub(crate) struct CopyWorkflow {
+    catalog: Arc<Catalog>,
+    data_directory: PathBuf,
+    data_identity: Object,
+    data_volume: String,
+    sessions: Mutex<BTreeMap<String, Option<Arc<Session>>>>,
+    recovery: recovery::Sessions,
+    comparisons: import_comparison::Comparisons,
+    import_runs: import_execution::Runs,
+    approvals: Approvals,
+    gate: JobScheduler,
+    active: Mutex<Option<Active>>,
+}
+struct RetainedCopy {
+    job: CopyWorkflowJob,
+    journal: CatalogJournal,
+    sources: Snapshot,
+    namespace: String,
+}
+impl CopyWorkflow {
+    fn retained_copy(
+        &self,
+        job_id: String,
+        path: &Path,
+        identity: &FileIdentity,
+        volume: &str,
+    ) -> Result<RetainedCopy> {
+        let job = operation_jobs::load(&self.catalog, job_id.clone())?;
+        if matches!(
+            job.state,
+            CopyJobState::Queued
+                | CopyJobState::Running
+                | CopyJobState::PauseRequested
+                | CopyJobState::CancelRequested
+        ) {
+            return Err(failed(
+                "Wait for the active operation to stop before recovery inspection.",
+            ));
+        }
+        let stream=match job.action {
+            CopyAction::CopyFiles=>job.review_id.clone(),
+            CopyAction::PrepareNames=>job.ready_review_id.clone().ok_or_else(||failed("Preparation stopped before a copy plan existed. Retain its namespace and journal for review."))?,
+        };
+        let (journal, sources, namespace) = CatalogJournal::open_inspection(
+            self.catalog.clone(),
+            job.plan_id.clone(),
+            stream.clone(),
+        )?;
+        let digest = operation_jobs::scope_digest(&self.catalog, job_id.clone())?;
+        if !journal.matches_job(&job, &digest)? || job.source_root_id != sources.root_id {
+            return Err(failed("Retained job does not match its exact copy scope."));
+        }
+        let selected = native::open_root(path, None)?;
+        if !sources.destination.matches(&selected)?
+            || sources.destination_volume != volume
+            || identity.volume != sources.destination.volume
+            || identity.file != sources.destination.file
+            || native::volume_token(&selected)? != volume
+        {
+            return Err(failed(
+                "Select the original destination folder with its unchanged native identity.",
+            ));
+        }
+        Ok(RetainedCopy {
+            job,
+            journal,
+            sources,
+            namespace,
+        })
+    }
+    pub(crate) fn inspect_retained(
+        &self,
+        job_id: String,
+        path: PathBuf,
+        identity: FileIdentity,
+        volume: String,
+    ) -> Result<CopyRecoveryInspection> {
+        let _permit = self.gate.try_start()?;
+        let RetainedCopy {
+            job,
+            journal,
+            sources,
+            namespace,
+        } = self.retained_copy(job_id.clone(), &path, &identity, &volume)?;
+        let stream = journal.plan().id.clone();
+        let scope = sources.open_scope(&self.catalog, Access::Read)?;
+        if !sources.destination.matches(scope.directory(1).leaf())? {
+            return Err(failed("Retained destination identity changed."));
+        }
+        let output = super::native::read_directory(scope.directory(1).leaf(), &namespace)?;
+        if !journal.plan().destination.matches(&output)? {
+            return Err(failed("Retained output namespace identity changed."));
+        }
+        let cancel = AtomicBool::new(false);
+        let io = PacedIo::shared();
+        let validate = || sources.validate_read_roots(&self.catalog);
+        validate()?;
+        let mut states = Vec::with_capacity(sources.files.len());
+        let mut issues = Vec::new();
+        for (index, file) in journal.plan().files.iter().enumerate() {
+            match super::inspect_item(
+                file,
+                index,
+                &journal,
+                scope.directory(0).leaf(),
+                &output,
+                &io,
+                &cancel,
+            ) {
+                Ok(state) => states.push(state),
+                Err(error) => {
+                    states.push(CopyInspectionState::NeedsAttention);
+                    issues.push(CopyInspectionIssue {
+                        file_id: sources.files[index].id.clone(),
+                        error,
+                    });
+                }
+            }
+        }
+        validate()?;
+        let all = states
+            .iter()
+            .all(|state| *state == super::RecoveredItem::PublishedVerified);
+        let files = sources
+            .files
+            .iter()
+            .map(|file| {
+                Ok(CopyReviewFile {
+                    id: file.id.clone(),
+                    source_path: native::decode_path(&file.location.relative_native)?
+                        .to_string_lossy()
+                        .into_owned(),
+                    target_path: format!("{namespace}/{}", file.target),
+                    bytes: file.bytes.to_string(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(CopyRecoveryInspection {
+            job_id: job.id,
+            source_root_id: sources.root_id,
+            destination_display_path: path.to_string_lossy().into_owned(),
+            output_folder: namespace,
+            files,
+            issues,
+            inspection: CopyInspection {
+                review_id: stream,
+                states,
+                all_published_bytes_verified: all,
+            },
+        })
+    }
+    pub(crate) fn job(&self, id: String) -> Result<CopyWorkflowJob> {
+        let job = operation_jobs::load(&self.catalog, id.clone())?;
+        let live = self
+            .active
+            .lock()
+            .map_err(|_| failed("Copy job state is unavailable."))?
+            .as_ref()
+            .is_some_and(|active| active.id == id);
+        if !live
+            && matches!(
+                job.state,
+                CopyJobState::Queued
+                    | CopyJobState::Running
+                    | CopyJobState::PauseRequested
+                    | CopyJobState::CancelRequested
+            )
+        {
+            self.update(&id,CopyJobState::NeedsRecovery,job.verified_files,job.ready_review_id,"The worker stopped before committing a final job state. Inspect retained files and journal.",None)?;
+            return operation_jobs::load(&self.catalog, id);
+        }
+        Ok(job)
+    }
+    pub(crate) fn inspect(
+        &self,
+        id: String,
+        selection: String,
+        path: PathBuf,
+        identity: FileIdentity,
+        volume: String,
+    ) -> Result<CopyInspection> {
+        let _permit = self.gate.try_start()?;
+        let session = self.session(&id)?;
+        Self::check_selection(&session, &selection, &path, &identity, &volume)?;
+        let ready = session
+            .ready
+            .lock()
+            .map_err(|_| failed("Ready copy state is unavailable."))?
+            .clone()
+            .ok_or_else(|| {
+                failed("Preparation is incomplete; retain its namespace and journal.")
+            })?;
+        let scope = session
+            .namespace
+            .sources()
+            .open_scope(&self.catalog, Access::Read)?;
+        let root = super::native::read_directory(
+            scope.directory(1).leaf(),
+            session.namespace.namespace(),
+        )?;
+        if !ready.plan().destination.matches(&root)? {
+            return Err(failed("Retained output namespace identity changed."));
+        }
+        let io = PacedIo::shared();
+        let cancel = AtomicBool::new(false);
+        let validate = || {
+            session
+                .namespace
+                .sources()
+                .validate_read_roots(&self.catalog)
+        };
+        let states = ready.inspect(CopyInputs {
+            source_root: scope.directory(0).leaf(),
+            destination: &root,
+            io: &io,
+            cancel: &cancel,
+            validate_scope: &validate,
+        })?;
+        let all = states
+            .iter()
+            .all(|state| *state == super::RecoveredItem::PublishedVerified);
+        Ok(CopyInspection {
+            review_id: id,
+            states,
+            all_published_bytes_verified: all,
+        })
+    }
+    pub(crate) fn new(catalog: Arc<Catalog>, data_directory: PathBuf) -> Result<Arc<Self>> {
+        let data = native::open_root(&data_directory, None)?;
+        Ok(Arc::new(Self {
+            catalog,
+            data_directory,
+            data_identity: Object::of(&data)?,
+            data_volume: native::volume_token(&data)?,
+            sessions: Mutex::new(BTreeMap::new()),
+            recovery: Default::default(),
+            comparisons: Default::default(),
+            import_runs: Default::default(),
+            approvals: Approvals::new(),
+            gate: JobScheduler::new(1)?,
+            active: Mutex::new(None),
+        }))
+    }
+    fn session(&self, id: &str) -> Result<Arc<Session>> {
+        crate::operations::validate_id(id)?;
+        let entries = self
+            .sessions
+            .lock()
+            .map_err(|_| failed("Copy review state is unavailable."))?;
+        for (key, value) in entries.iter() {
+            if let Some(session) = value
+                && (key == id
+                    || session
+                        .ready
+                        .lock()
+                        .map_err(|_| failed("Ready copy state is unavailable."))?
+                        .as_ref()
+                        .is_some_and(|ready| ready.plan().id == id))
+            {
+                return Ok(session.clone());
+            }
+        }
+        Err(failed(
+            "This copy review belongs to an earlier session. Reopen and authorize its destination again.",
+        ))
+    }
+    fn check_selection(
+        session: &Session,
+        id: &str,
+        path: &Path,
+        identity: &FileIdentity,
+        volume: &str,
+    ) -> Result<()> {
+        let expected = &session.namespace.sources().destination;
+        if session.selection != id
+            || identity.volume != expected.volume
+            || identity.file != expected.file
+            || volume != session.namespace.sources().destination_volume
+        {
+            return Err(failed(
+                "The native destination selection changed. Review the output folder again.",
+            ));
+        }
+        let selected = native::open_root(path, Some(identity))?;
+        if !expected.matches(&selected)? || native::volume_token(&selected)? != volume {
+            return Err(failed(
+                "The selected destination changed identity or volume.",
+            ));
+        }
+        Ok(())
+    }
+    fn check_space(
+        &self,
+        session: &Session,
+        assessment: &CopyAssessment,
+        initial: bool,
+    ) -> Result<()> {
+        self.check_scope_space(
+            session.namespace.sources(),
+            &session.selected_path,
+            assessment,
+            initial,
+        )
+    }
+    fn check_scope_space(
+        &self,
+        sources: &Snapshot,
+        path: &Path,
+        assessment: &CopyAssessment,
+        initial: bool,
+    ) -> Result<()> {
+        let data = native::open_root(&self.data_directory, None)?;
+        let output = native::open_root(path, None)?;
+        if !self.data_identity.matches(&data)?
+            || native::volume_token(&data)? != self.data_volume
+            || !sources.destination.matches(&output)?
+            || native::volume_token(&output)? != sources.destination_volume
+        {
+            return Err(failed(
+                "Output/application-journal storage identity changed.",
+            ));
+        }
+        let destination_stats = fs2::statvfs(path)?;
+        let journal_stats = fs2::statvfs(&self.data_directory)?;
+        let output_required = if initial {
+            assessment
+                .capacity
+                .estimated_peak_additional_bytes
+                .parse::<u128>()
+                .map_err(|_| failed("Invalid retained copy capacity estimate."))?
+        } else {
+            64 * 1024 * 1024
+        };
+        let journal_required: u128 = if initial {
+            128 * 1024 * 1024
+        } else {
+            16 * 1024 * 1024
+        };
+        let shared = sources.destination_volume == self.data_volume;
+        let output_required = output_required
+            + if shared {
+                journal_required.saturating_sub(if initial { 32 * 1024 * 1024 } else { 0 })
+            } else {
+                0
+            };
+        if assessment.capacity.status == CopyCapacityStatus::InsufficientForEstimate
+            || u128::from(destination_stats.available_space()) < output_required
+            || (!shared && u128::from(journal_stats.available_space()) < journal_required)
+        {
+            return Err(failed(
+                "Output/application-journal free space is below the operation estimate/reserve. Existing files are retained.",
+            ));
+        }
+        if !self
+            .data_identity
+            .matches(&native::open_root(&self.data_directory, None)?)?
+            || !sources
+                .destination
+                .matches(&native::open_root(path, None)?)?
+        {
+            return Err(failed("Storage changed during free-space observation."));
+        }
+        Ok(())
+    }
+    fn assess_sources(
+        &self,
+        library: &Library,
+        source: &Snapshot,
+        original_targets: bool,
+    ) -> Result<CopyAssessment> {
+        if source.import_selection.is_some() || source.root_partition.is_some() {
+            let snapshot = source.clone();
+            self.catalog.call(move |db| snapshot.validate(db))?;
+            library.organization_import_copy_assessment(
+                source.owner_id.clone(),
+                source.manifest_id.clone(),
+                source.files.iter().map(|file| file.id.clone()).collect(),
+                original_targets,
+            )
+        } else if original_targets {
+            library
+                .organization_copy_assessment(source.owner_id.clone(), source.manifest_id.clone())
+        } else {
+            library.organization_copy_prepared_assessment(
+                source.owner_id.clone(),
+                source.manifest_id.clone(),
+            )
+        }
+    }
+    fn current_sources(&self, source: &Snapshot) -> Result<Snapshot> {
+        match (&source.import_selection, &source.root_partition) {
+            (Some(selection), _) => {
+                self.import_copy_sources(source.owner_id.clone(), selection.id.clone())
+            }
+            (None, Some(root)) => Snapshot::build_partition(
+                &self.catalog,
+                source.owner_id.clone(),
+                source.manifest_id.clone(),
+                root.clone(),
+            ),
+            (None, None) => Snapshot::build(
+                &self.catalog,
+                source.owner_id.clone(),
+                source.manifest_id.clone(),
+            ),
+        }
+    }
+    fn fresh(&self, library: &Library, session: &Session) -> Result<CopyAssessment> {
+        let source = session.namespace.sources();
+        let assessment = self.assess_sources(library, source, false)?;
+        let current = self.current_sources(source)?;
+        if serde_json::to_vec(&current).ok() != serde_json::to_vec(source).ok() {
+            return Err(failed(
+                "The reviewed native source scope changed. Build a fresh review.",
+            ));
+        }
+        self.check_space(session, &assessment, true)?;
+        Ok(assessment)
+    }
+    fn view(&self, session: &Session, assessment: CopyAssessment) -> Result<CopyActionReview> {
+        let ready = session
+            .ready
+            .lock()
+            .map_err(|_| failed("Ready copy state is unavailable."))?;
+        let (id, digest, action) = if let Some(ready) = ready.as_ref() {
+            (
+                ready.plan().id.clone(),
+                ready.digest(),
+                CopyAction::CopyFiles,
+            )
+        } else {
+            (
+                session.namespace.id().into(),
+                session.namespace.digest(),
+                CopyAction::PrepareNames,
+            )
+        };
+        let source = session.namespace.sources();
+        let files = source
+            .files
+            .iter()
+            .map(|file| {
+                Ok(CopyReviewFile {
+                    id: file.id.clone(),
+                    source_path: native::decode_path(&file.location.relative_native)?
+                        .to_string_lossy()
+                        .into_owned(),
+                    target_path: format!("{}/{}", session.namespace.namespace(), file.target),
+                    bytes: file.bytes.to_string(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(CopyActionReview {
+            id,
+            plan_id: source.owner_id.clone(),
+            manifest_id: source.manifest_id.clone(),
+            digest,
+            action,
+            source_root_id: source.root_id.clone(),
+            destination_display_path: session.selected_path.to_string_lossy().into_owned(),
+            output_folder: session.namespace.namespace().into(),
+            files,
+            assessment,
+            sources_retained: true,
+            independent_backup: false,
+        })
+    }
+    fn match_effect(
+        &self,
+        library: &Library,
+        source: (String, String, Option<String>),
+        selection: &str,
+        identity: &FileIdentity,
+        volume: &str,
+    ) -> Result<(
+        CopyAssessment,
+        Snapshot,
+        super::effects::Effect,
+        Vec<super::effects::Candidate>,
+    )> {
+        crate::operations::validate_id(selection)?;
+        let (owner, manifest, partition) = source;
+        let sources = match partition {
+            Some(root) => Snapshot::build_partition(&self.catalog, owner, manifest, root)?,
+            None => Snapshot::build(&self.catalog, owner, manifest)?,
+        };
+        // Each explicit partition reviews its own new retained namespace.
+        // Earlier partitions may have created siblings in the destination;
+        // historical unprefixed target observations are not its write scope.
+        let assessment =
+            self.assess_sources(library, &sources, sources.root_partition.is_none())?;
+        if identity.volume != sources.destination.volume
+            || identity.file != sources.destination.file
+            || volume != sources.destination_volume
+        {
+            return Err(failed(
+                "Select the saved draft's actual destination folder.",
+            ));
+        }
+        let (effect, previous) = super::effects::Effect::lookup(&self.catalog, &sources)?;
+        Ok((assessment, sources, effect, previous))
+    }
+    pub(crate) fn effect_match(
+        &self,
+        library: &Library,
+        owner: String,
+        manifest: String,
+        selection: String,
+        _path: PathBuf,
+        identity: (FileIdentity, String),
+    ) -> Result<CopyEffectMatch> {
+        self.effect_match_for_root(library, (owner, manifest, None), selection, _path, identity)
+    }
+    pub(crate) fn effect_match_for_root(
+        &self,
+        library: &Library,
+        source: (String, String, Option<String>),
+        selection: String,
+        _path: PathBuf,
+        identity: (FileIdentity, String),
+    ) -> Result<CopyEffectMatch> {
+        let (_, sources, effect, previous) =
+            self.match_effect(library, source, &selection, &identity.0, &identity.1)?;
+        let mut existing = Vec::new();
+        for candidate in previous {
+            let preparation_recorded = candidate.preparation_recorded(&self.catalog)?;
+            let job = operation_jobs::latest_namespace(
+                &self.catalog,
+                candidate.owner_id.clone(),
+                candidate.token.clone(),
+            )?;
+            existing.push(ExistingCopyEffect {
+                plan_id: candidate.owner_id,
+                manifest_id: candidate.manifest_id,
+                review_id: candidate.token,
+                output_folder: candidate.namespace,
+                preparation_recorded,
+                job,
+            });
+        }
+        let can_reuse_review = existing.is_empty()
+            || existing.len() == 1
+                && existing[0].plan_id == sources.owner_id
+                && existing[0].manifest_id == sources.manifest_id
+                && !existing[0].preparation_recorded
+                && existing[0].job.is_none();
+        Ok(CopyEffectMatch {
+            plan_id: sources.owner_id,
+            manifest_id: sources.manifest_id,
+            digest: effect.digest,
+            existing,
+            can_reuse_review,
+        })
+    }
+    pub(crate) fn create_review(
+        &self,
+        library: &Library,
+        owner: String,
+        manifest: String,
+        selection: String,
+        path: PathBuf,
+        selected_identity: (FileIdentity, String),
+    ) -> Result<CopyActionReview> {
+        self.create_review_for_root(
+            library,
+            (owner, manifest, None),
+            selection,
+            path,
+            selected_identity,
+        )
+    }
+    pub(crate) fn create_review_for_root(
+        &self,
+        library: &Library,
+        source: (String, String, Option<String>),
+        selection: String,
+        path: PathBuf,
+        selected_identity: (FileIdentity, String),
+    ) -> Result<CopyActionReview> {
+        let (identity, volume) = selected_identity;
+        crate::operations::validate_id(&selection)?;
+        let (assessment, sources, _, _) =
+            self.match_effect(library, source, &selection, &identity, &volume)?;
+        self.bind_review(assessment, sources, selection, path, (identity, volume))
+    }
+    fn bind_review(
+        &self,
+        assessment: CopyAssessment,
+        sources: Snapshot,
+        selection: String,
+        path: PathBuf,
+        selected_identity: (FileIdentity, String),
+    ) -> Result<CopyActionReview> {
+        crate::operations::validate_id(&selection)?;
+        let (identity, volume) = selected_identity;
+        let selected = native::open_root(&path, Some(&identity))?;
+        if !sources.destination.matches(&selected)?
+            || native::volume_token(&selected)? != sources.destination_volume
+            || volume != sources.destination_volume
+        {
+            return Err(failed(
+                "Select the saved import plan's actual destination folder.",
+            ));
+        }
+        drop(selected);
+        let (effect, previous) = super::effects::Effect::lookup(&self.catalog, &sources)?;
+        let token = if previous.is_empty() {
+            uuid::Uuid::new_v4().to_string()
+        } else if previous.len() == 1
+            && previous[0].owner_id == sources.owner_id
+            && previous[0].manifest_id == sources.manifest_id
+            && !previous[0].preparation_recorded(&self.catalog)?
+            && operation_jobs::latest_namespace(
+                &self.catalog,
+                previous[0].owner_id.clone(),
+                previous[0].token.clone(),
+            )?
+            .is_none()
+        {
+            previous[0].token.clone()
+        } else {
+            return Err(failed(
+                "This exact source/template mapping already has a retained output folder. Review existing output history and freshly verify its bytes; a new draft cannot allocate another folder.",
+            ));
+        };
+        {
+            let mut entries = self
+                .sessions
+                .lock()
+                .map_err(|_| failed("Copy review state is unavailable."))?;
+            if entries.len() >= 64 {
+                return Err(AppError::new(
+                    ErrorCode::Busy,
+                    "This session has 64 retained copy reviews. Close unused reviews before creating more.",
+                ));
+            }
+            entries.insert(token.clone(), None);
+        }
+        let result = (|| {
+            let namespace = Arc::new(NamespaceJournal::bind_effect(
+                self.catalog.clone(),
+                sources,
+                token.clone(),
+                true,
+                Some(effect),
+            )?);
+            let session = Arc::new(Session {
+                namespace,
+                selection: selection.clone(),
+                selected_path: path.clone(),
+                ready: Mutex::new(None),
+            });
+            Self::check_selection(&session, &selection, &path, &identity, &volume)?;
+            self.approvals.revoke_review(session.namespace.id())?;
+            let view = self.view(&session, assessment)?;
+            self.sessions
+                .lock()
+                .map_err(|_| failed("Copy review state is unavailable."))?
+                .insert(token.clone(), Some(session));
+            Ok(view)
+        })();
+        if result.is_err() {
+            self.sessions
+                .lock()
+                .map_err(|_| failed("Copy review state is unavailable."))?
+                .remove(&token);
+        }
+        result
+    }
+    pub(crate) fn create_import_review(
+        &self,
+        library: &Library,
+        owner: String,
+        import: String,
+        selection: String,
+        path: PathBuf,
+        selected_identity: (FileIdentity, String),
+    ) -> Result<CopyActionReview> {
+        library.ensure_work_admission()?;
+        let sources = self.import_copy_sources(owner, import)?;
+        let assessment =
+            self.assess_sources(library, &sources, sources.root_partition.is_none())?;
+        if let Some(checker) = self.copy_keeper_check(&sources)? {
+            checker.scopes(self)?;
+        }
+        self.bind_review(assessment, sources, selection, path, selected_identity)
+    }
+    pub(crate) fn get_review(
+        &self,
+        library: &Library,
+        id: String,
+        selection: String,
+        path: PathBuf,
+        identity: FileIdentity,
+        volume: String,
+    ) -> Result<CopyActionReview> {
+        let session = self.session(&id)?;
+        Self::check_selection(&session, &selection, &path, &identity, &volume)?;
+        let assessment = self.assess_sources(library, session.namespace.sources(), false)?;
+        self.view(&session, assessment)
+    }
+    pub(crate) fn approve(
+        &self,
+        library: &Library,
+        input: CopyApprovalInput,
+        selection: String,
+        path: PathBuf,
+        identity: FileIdentity,
+        volume: String,
+    ) -> Result<CopyActionApproval> {
+        let session = self.session(&input.review_id)?;
+        Self::check_selection(&session, &selection, &path, &identity, &volume)?;
+        if self
+            .active
+            .lock()
+            .map_err(|_| failed("Copy job state is unavailable."))?
+            .is_some()
+        {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Finish the active organization job before approving another.",
+            ));
+        }
+        let assessment = self.fresh(library, &session)?;
+        let view = self.view(&session, assessment)?;
+        if input.review_id != view.id || input.digest != view.digest || input.action != view.action
+        {
+            return Err(failed("This approval belongs to a changed copy review."));
+        }
+        let review = match input.action {
+            CopyAction::PrepareNames => session.namespace.preparation_review(&selection)?,
+            CopyAction::CopyFiles => {
+                if !input.fidelity_limits_acknowledged {
+                    return Err(failed(
+                        "Acknowledge the displayed byte-only copy fidelity limits before approval.",
+                    ));
+                }
+                let ready = session
+                    .ready
+                    .lock()
+                    .map_err(|_| failed("Ready copy state is unavailable."))?;
+                let ready = ready
+                    .as_ref()
+                    .ok_or_else(|| failed("Prepare the exact output names first."))?;
+                if ready.history_count()? != 0 {
+                    return Err(failed(
+                        "This copy has execution history. Inspect recovery before further writes.",
+                    ));
+                }
+                let scope = session
+                    .namespace
+                    .sources()
+                    .open_scope(&self.catalog, Access::Read)?;
+                session
+                    .namespace
+                    .validate_native(scope.directory(1).leaf())?;
+                ready.copy_review(&selection)?
+            }
+        };
+        Ok(CopyActionApproval {
+            id: self.approvals.issue(review)?,
+            review_id: view.id,
+            action: view.action,
+            expires_in_seconds: 600,
+        })
+    }
+    pub(crate) fn start(
+        self: &Arc<Self>,
+        library: Arc<Library>,
+        input: CopyStartInput,
+        selection: String,
+        path: PathBuf,
+        identity: FileIdentity,
+        volume: String,
+    ) -> Result<CopyWorkflowJob> {
+        library.ensure_work_admission()?;
+        let session = self.session(&input.review_id)?;
+        Self::check_selection(&session, &selection, &path, &identity, &volume)?;
+        let permit = self.gate.try_start()?;
+        let assessment = self.fresh(&library, &session)?;
+        let view = self.view(&session, assessment.clone())?;
+        if view.id != input.review_id || view.digest != input.digest {
+            return Err(failed("The action review changed before job admission."));
+        }
+        let ready = session
+            .ready
+            .lock()
+            .map_err(|_| failed("Ready copy state is unavailable."))?
+            .clone();
+        let review = if let Some(ready) = ready.as_ref() {
+            if ready.history_count()? != 0 {
+                return Err(failed(
+                    "This copy has execution history. Inspect retained files before further writes.",
+                ));
+            }
+            ready.copy_review(&selection)?
+        } else {
+            session.namespace.preparation_review(&selection)?
+        };
+        let proof = self.approvals.consume(&input.approval_id, &review)?;
+        let now = crate::library::store::now();
+        let job = CopyWorkflowJob {
+            id: uuid::Uuid::new_v4().to_string(),
+            plan_id: view.plan_id,
+            review_id: view.id,
+            source_root_id: view.source_root_id,
+            action: view.action,
+            state: CopyJobState::Queued,
+            total_files: view.files.len() as u32,
+            verified_files: 0,
+            ready_review_id: None,
+            message: "Approved organization work queued; originals remain in place.".into(),
+            error: None,
+            started_at: now.clone(),
+            updated_at: now,
+        };
+        let related_roots = self
+            .copy_keeper_check(session.namespace.sources())?
+            .map_or_else(Vec::new, |checker| checker.root_ids());
+        operation_jobs::create(&self.catalog, job.clone(), view.digest)?;
+        let cancel = permit.cancellation();
+        *self
+            .active
+            .lock()
+            .map_err(|_| failed("Copy job state is unavailable."))? = Some(Active {
+            id: job.id.clone(),
+            root: job.source_root_id.clone(),
+            related_roots,
+            session: session.namespace.id().into(),
+            cancel: cancel.clone(),
+        });
+        if let Err(error) = library.ensure_work_admission() {
+            cancel.store(true, Ordering::Release);
+            *self
+                .active
+                .lock()
+                .map_err(|_| failed("Copy job state is unavailable."))? = None;
+            self.update(
+                &job.id,
+                CopyJobState::NeedsAttention,
+                0,
+                None,
+                "Maintenance blocked native admission; existing objects remain untouched.",
+                Some(error.clone()),
+            )?;
+            return Err(error);
+        }
+        let this = self.clone();
+        let job_id = job.id.clone();
+        let returned = job.clone();
+        let spawned=std::thread::Builder::new().name("organization-operation".into()).spawn(move|| {
+            let _permit=permit;
+            let _active=ActiveGuard{workflow:this.clone(),id:job_id.clone()};
+            let result=(||->Result<(CopyJobState,u32,Option<String>,String)> {
+                if cancel.load(Ordering::Acquire) {return Ok((CopyJobState::CanceledWithPartialCopies,0,None,"Canceled before native work; originals remain unchanged.".into()));}
+                this.update(&job_id,CopyJobState::Running,0,None,"Preparing approved native operation",None)?;
+                let (scope,keepers)=this.copy_scope(session.namespace.sources())?;
+                let mut keeper_stats=super::fingerprints::Stats::default();
+                if let Some(checker)=&keepers {
+                    this.update(&job_id,CopyJobState::Running,0,None,"Freshly comparing the chosen existing import bundles before native work.",None)?;
+                    if matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok((CopyJobState::CanceledWithPartialCopies,0,None,"Existing-bundle verification canceled before native work.".into()));}
+                }
+                this.check_space(&session,&assessment,true)?;
+                if let Some(ready)=ready.as_ref() {
+                    session.namespace.validate_native(scope.directory(1).leaf())?;
+                    let root=super::native::read_directory(scope.directory(1).leaf(),session.namespace.namespace())?;
+                    if !ready.plan().destination.matches(&root)? {return Err(failed("Prepared namespace identity changed before copying."));}
+                    let io=PacedIo::shared();
+                    let validate=|| {
+                        session.namespace.sources().validate_roots(&this.catalog)?;
+                        let entry=super::native::lookup(scope.directory(1).leaf(),session.namespace.namespace())?.ok_or_else(||failed("Prepared namespace disappeared."))?;
+                        if entry.kind!=super::native::EntryKind::Directory || entry.object!=ready.plan().destination {return Err(failed("Prepared namespace changed membership."));}
+                        this.check_space(&session,&assessment,false)
+                    };
+                    let progress=|verified| {
+                        let current=operation_jobs::load(&this.catalog,job_id.clone())?;
+                        this.update(&job_id,current.state,verified,current.ready_review_id,"Verified file completion recorded; originals remain in place.",None)
+                    };
+                    let outcome=ready.execute_approved(CopyInputs{source_root:scope.directory(0).leaf(),destination:&root,io:&io,cancel:&cancel,validate_scope:&validate},&selection,proof,None,Some(&progress))?;
+                    let verified=ready.verified_files()?;
+                    if outcome==CopyOutcome::CompletedVerified && let Some(checker)=&keepers && matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok((CopyJobState::CanceledWithPartialCopies,verified,None,"Existing-bundle recheck canceled; retain completed copies for review.".into()));}
+                    if outcome==CopyOutcome::CompletedVerified { this.record_import_copy(session.namespace.sources(),&job_id,keeper_stats.bytes_read)?; }
+                    Ok(match outcome {
+                        CopyOutcome::CompletedVerified=>(CopyJobState::CompletedVerified,verified,None,"All selected file bytes were copied and fully compared. Originals remain; filesystem metadata fidelity limits still apply.".into()),
+                        CopyOutcome::CanceledWithPartialCopies=>(CopyJobState::CanceledWithPartialCopies,verified,None,"Canceled at a safe boundary. Retain published outputs and partial stages for inspection.".into()),
+                        CopyOutcome::Interrupted=>(CopyJobState::NeedsRecovery,verified,None,"Interrupted operation; inspect retained files and journal before further writes.".into()),
+                    })
+                } else {
+                    let prepared=session.namespace.prepare_approved(scope.directory(1).leaf(),&cancel,&selection,proof)?;
+                    prepared.validate_parent(scope.directory(1).leaf())?;
+                    if let Some(checker)=&keepers && matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok((CopyJobState::CanceledWithPartialCopies,0,None,"Existing-bundle recheck canceled; retain the prepared namespace.".into()));}
+                    let ready=Arc::new(session.namespace.ready_journal()?);
+                    let id=ready.plan().id.clone();
+                    *session.ready.lock().map_err(|_|failed("Ready copy state is unavailable."))?=Some(ready);
+                    Ok((CopyJobState::Prepared,0,Some(id),"Output names are prepared. No source bytes were copied; review and approve the separate copy action.".into()))
+                }
+            })();
+            match result {
+                Ok((state,count,ready,message))=>{let _=this.update(&job_id,state,count,ready,&message,None);}
+                Err(error)=> {
+                    let canceled=cancel.load(Ordering::Acquire);
+                    let count=session.ready.lock().ok().and_then(|ready|ready.as_ref().map(|ready|ready.verified_files().unwrap_or(0))).unwrap_or(0);
+                    let _=this.update(&job_id,if canceled {CopyJobState::CanceledWithPartialCopies} else {CopyJobState::NeedsAttention},count,None,"Operation stopped. Originals and all existing output objects are retained; inspect before retrying.",Some(error));
+                }
+            }
+        });
+        if let Err(error) = spawned {
+            *self
+                .active
+                .lock()
+                .map_err(|_| failed("Copy job state is unavailable."))? = None;
+            self.update(
+                &job.id,
+                CopyJobState::NeedsAttention,
+                0,
+                None,
+                "The native worker could not start. No native operation was begun.",
+                Some(
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "Organization worker could not start.",
+                    )
+                    .caused_by(error),
+                ),
+            )?;
+            return Err(AppError::new(
+                ErrorCode::WorkerFailed,
+                "Organization worker could not start. Review again before retrying.",
+            ));
+        }
+        Ok(returned)
+    }
+    fn update(
+        &self,
+        id: &str,
+        state: CopyJobState,
+        verified: u32,
+        ready: Option<String>,
+        message: &str,
+        error: Option<AppError>,
+    ) -> Result<()> {
+        let mut job = operation_jobs::load(&self.catalog, id.into())?;
+        let expected = job.state;
+        job.state = state;
+        job.verified_files = verified;
+        job.ready_review_id = ready;
+        job.message = message.into();
+        job.error = error;
+        operation_jobs::transition(&self.catalog, job, expected)
+    }
+    pub(crate) fn cancel(&self, id: &str) -> Result<CopyWorkflowJob> {
+        let active = self
+            .active
+            .lock()
+            .map_err(|_| failed("Copy job state is unavailable."))?;
+        let job = operation_jobs::load(&self.catalog, id.into())?;
+        if let Some(active) = active.as_ref().filter(|active| active.id == id) {
+            active.cancel.store(true, Ordering::Release);
+            if matches!(
+                job.state,
+                CopyJobState::Queued | CopyJobState::Running | CopyJobState::PauseRequested
+            ) {
+                self.update(
+                    id,
+                    CopyJobState::CancelRequested,
+                    job.verified_files,
+                    job.ready_review_id,
+                    "Cancellation requested; waiting for a safe native boundary.",
+                    None,
+                )?;
+            }
+        }
+        operation_jobs::load(&self.catalog, id.into())
+    }
+    pub(crate) fn cancel_root(&self, root: &str) -> Result<bool> {
+        let comparison = self.comparisons.root(root, true)?;
+        let import = self.import_runs.root(root, true)?;
+        let active = self
+            .active
+            .lock()
+            .map_err(|_| failed("Copy job state is unavailable."))?;
+        if let Some(active) = active.as_ref().filter(|active| {
+            active.root == root || active.related_roots.iter().any(|id| id == root)
+        }) {
+            active.cancel.store(true, Ordering::Release);
+            return Ok(true);
+        }
+        Ok(comparison || import)
+    }
+    pub(crate) fn has_active_root(&self, root: &str) -> Result<bool> {
+        Ok(self
+            .active
+            .lock()
+            .map_err(|_| failed("Copy job state is unavailable."))?
+            .as_ref()
+            .is_some_and(|active| {
+                active.root == root || active.related_roots.iter().any(|id| id == root)
+            })
+            || self.comparisons.root(root, false)?
+            || self.import_runs.root(root, false)?)
+    }
+    pub(crate) fn io_status(&self) -> Result<CopyIoStatus> {
+        let io = PacedIo::shared();
+        Ok(CopyIoStatus {
+            aggregate_bytes_per_second: io.bytes_per_second()?.to_string(),
+            byte_io_paused: io.is_paused()?,
+            burst_bytes: crate::jobs::paced_io::ISSUED_BURST_BYTES as u32,
+        })
+    }
+    pub(crate) fn set_io(
+        &self,
+        rate: Option<String>,
+        paused: Option<bool>,
+    ) -> Result<CopyIoStatus> {
+        let io = PacedIo::shared();
+        if let Some(rate) = rate {
+            io.set_rate(
+                rate.parse()
+                    .map_err(|_| failed("Enter an exact whole-byte operation I/O rate."))?,
+            )?;
+        }
+        if let Some(paused) = paused {
+            io.set_paused(paused)?;
+        }
+        self.io_status()
+    }
+    pub(crate) fn discard(&self, id: &str) -> Result<()> {
+        let session = self.session(id)?;
+        if self
+            .active
+            .lock()
+            .map_err(|_| failed("Copy job state is unavailable."))?
+            .as_ref()
+            .is_some_and(|active| active.session == session.namespace.id())
+        {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Finish or cancel the active job before closing its review.",
+            ));
+        }
+        self.approvals.revoke_review(session.namespace.id())?;
+        if let Some(ready) = session
+            .ready
+            .lock()
+            .map_err(|_| failed("Ready copy review is unavailable."))?
+            .as_ref()
+        {
+            self.approvals.revoke_review(&ready.plan().id)?;
+        }
+        self.sessions
+            .lock()
+            .map_err(|_| failed("Copy review state is unavailable."))?
+            .remove(session.namespace.id());
+        Ok(())
+    }
+}

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import type { OrganizationTemplate, SavedTemplate, TemplateRef } from '../bindings';
+import type { OrganizationTemplate, SavedTemplate, TemplateRef, TemplateSample } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
+import { TemplateExamples } from './TemplateExamples';
+import { retainedExamples } from './retainedTemplateExamples';
 
 export function OrganizationTemplates({
   template,
@@ -13,6 +15,7 @@ export function OrganizationTemplates({
   const [selected, setSelected] = useState<SavedTemplate | null>(null);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [samples, setSamples] = useState<TemplateSample[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const request = useRef(0);
@@ -24,6 +27,13 @@ export function OrganizationTemplates({
   );
   async function run(save: boolean, fork = false) {
     if (busy) return;
+    if (
+      save &&
+      samples.some((s) => !Number.isInteger(s.sequence) || s.sequence < 1 || s.sequence > 240)
+    ) {
+      setError('Each example needs a whole-number sequence from 1–240.');
+      return;
+    }
     const id = ++request.current;
     setBusy(true);
     setError(null);
@@ -37,6 +47,7 @@ export function OrganizationTemplates({
               name,
               description,
               template,
+              samples,
             },
           },
           'organization_template',
@@ -78,6 +89,13 @@ export function OrganizationTemplates({
               disabled={busy}
               onChange={(event) => {
                 const value = templates.find((v) => v.reference.id === event.target.value) ?? null;
+                try {
+                  setSamples(value ? retainedExamples(value) : []);
+                  setError(null);
+                } catch (error) {
+                  setError(errorMessage(error));
+                  return;
+                }
                 setSelected(value);
                 setName(value?.name ?? '');
                 setDescription(value?.description ?? '');
@@ -110,6 +128,7 @@ export function OrganizationTemplates({
               onChange={(event) => setDescription(event.target.value)}
             />
           </label>
+          <TemplateExamples samples={samples} disabled={busy} onChange={setSamples} />
           <button type="button" disabled={busy || !name.trim()} onClick={() => void run(true)}>
             {selected ? 'Save new version' : 'Save template'}
           </button>
@@ -126,7 +145,15 @@ export function OrganizationTemplates({
             <button
               type="button"
               disabled={busy}
-              onClick={() => onLoad(selected.template, selected.reference)}
+              onClick={() => {
+                try {
+                  setSamples(retainedExamples(selected));
+                  setError(null);
+                  onLoad(selected.template, selected.reference);
+                } catch (error) {
+                  setError(errorMessage(error));
+                }
+              }}
             >
               Use retained version
             </button>

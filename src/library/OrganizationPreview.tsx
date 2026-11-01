@@ -3,12 +3,12 @@ import type {
   OrganizationIssue,
   OrganizationPreview as Preview,
   OrganizationTemplate,
-  LibraryRoot,
   TemplateRef,
+  ImportDestinationPreference,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { OrganizationCompanions } from './OrganizationCompanions';
-import { OrganizationDestination } from './OrganizationDestination';
+import { OrganizationDestination, type DestinationRootOption } from './OrganizationDestination';
 import { OrganizationTemplates } from './OrganizationTemplates';
 import { OrganizationTrees } from './OrganizationTrees';
 
@@ -38,14 +38,18 @@ const issueLabels: Record<OrganizationIssue, string> = {
 };
 
 export function OrganizationPreview({
+  catalogId = null,
+  preferredImportRoot = null,
   assetIds,
   revision,
   roots,
   onClose,
 }: {
+  catalogId?: string | null;
+  preferredImportRoot?: ImportDestinationPreference | null;
   assetIds: string[];
   revision: string;
-  roots: Pick<LibraryRoot, 'id' | 'label'>[];
+  roots: DestinationRootOption[];
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -79,7 +83,11 @@ export function OrganizationPreview({
   }, []);
   function update(patch: Partial<OrganizationTemplate>) {
     setTemplateReference(null);
-    setTemplate((value) => ({ ...value, ...patch }));
+    setTemplate((value) => {
+      const next = { ...value, ...patch };
+      if (next.filenameStemCase === 'preserve') delete next.filenameStemCase;
+      return next;
+    });
     setPreview(null);
     setError(null);
   }
@@ -189,7 +197,32 @@ export function OrganizationPreview({
                   <option value="block">Block the affected photo</option>
                 </select>
               </label>
+              <label>
+                Filename stem case
+                <select
+                  value={template.filenameStemCase ?? 'preserve'}
+                  aria-label="Filename stem case"
+                  onChange={(event) =>
+                    update({
+                      filenameStemCase:
+                        event.target.value === 'lowercase'
+                          ? 'lowercase'
+                          : event.target.value === 'uppercase'
+                            ? 'uppercase'
+                            : 'preserve',
+                    })
+                  }
+                >
+                  <option value="preserve">Preserve</option>
+                  <option value="lowercase">Lowercase</option>
+                  <option value="uppercase">Uppercase</option>
+                </select>
+              </label>
             </div>
+            <p className="help">
+              Stem case applies to proposed filenames, including Undated names. Folder names and
+              extension case stay as previewed.
+            </p>
             <button type="submit" className="primary">
               {busy ? 'Building preview…' : 'Build preview'}
             </button>
@@ -223,10 +256,13 @@ export function OrganizationPreview({
               and native source path order.
             </p>
             <OrganizationDestination
+              catalogId={catalogId}
+              preferredImportRoot={preferredImportRoot}
               key={preview.fingerprint}
               preview={preview}
               revision={revision}
               templateReference={templateReference}
+              roots={roots}
             />
             <label>
               Find a path

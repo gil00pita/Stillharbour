@@ -10,6 +10,96 @@ pub struct LibraryFixture {
     baseline: BTreeMap<PathBuf, String>,
 }
 impl LibraryFixture {
+    /// Only the constructor-owned valid JPEG and its companion; unlike the
+    /// malformed-format coverage fixture, this supports a complete real scan.
+    pub fn coherent_import_copy(&self) -> Result<Self> {
+        use std::io::Write;
+        self.verify_unchanged()?;
+        let directory = tempfile::Builder::new()
+            .prefix("stillharbour-complete-import-")
+            .tempdir()?;
+        for (source, target) in [
+            ("Coast/Generated-00.jpg", "Renamed.jpg"),
+            ("Coast/Generated-00.xmp", "Renamed.xmp"),
+        ] {
+            let relative = Path::new(source);
+            if !self.baseline.contains_key(relative) {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "The expected generated import member is missing.",
+                ));
+            }
+            let path = self.path().join(relative);
+            let metadata = std::fs::symlink_metadata(&path)?;
+            if !metadata.is_file() || metadata.len() > 16 * 1024 * 1024 {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Unexpected generated import member type or size.",
+                ));
+            }
+            let mut output = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(directory.path().join(target))?;
+            output.write_all(&std::fs::read(path)?)?;
+        }
+        self.verify_unchanged()?;
+        let baseline = manifest(directory.path())?;
+        Ok(Self {
+            directory,
+            baseline,
+        })
+    }
+    /// Constructor-only copies of this generated baseline, with different
+    /// filenames. No renderer-supplied root, filename or content is accepted.
+    pub fn renamed_comparison_copy(&self) -> Result<Self> {
+        use std::io::Write;
+        self.verify_unchanged()?;
+        let directory = tempfile::Builder::new()
+            .prefix("stillharbour-import-comparison-")
+            .tempdir()?;
+        for (index, (relative, signature)) in self.baseline.iter().enumerate() {
+            if relative
+                .components()
+                .any(|part| !matches!(part, std::path::Component::Normal(_)))
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated comparison source escaped its boundary.",
+                ));
+            }
+            if signature == "directory" || signature.starts_with("link:") {
+                continue;
+            }
+            let source = self.path().join(relative);
+            if !std::fs::symlink_metadata(&source)?.is_file()
+                || source.metadata()?.len() > 16 * 1024 * 1024
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Unexpected generated comparison source type or size.",
+                ));
+            }
+            let parent = relative.parent().unwrap_or_else(|| Path::new(""));
+            let mut name = std::ffi::OsString::from(format!("existing-{index:04}-"));
+            name.push(relative.file_name().ok_or_else(|| {
+                AppError::new(ErrorCode::Conflict, "Missing generated filename.")
+            })?);
+            let target_parent = directory.path().join(parent);
+            std::fs::create_dir_all(&target_parent)?;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(target_parent.join(name))?;
+            file.write_all(&std::fs::read(source)?)?;
+        }
+        self.verify_unchanged()?;
+        let baseline = manifest(directory.path())?;
+        Ok(Self {
+            directory,
+            baseline,
+        })
+    }
     pub fn generate() -> Result<Self> {
         Self::generate_in(None)
     }
@@ -227,6 +317,92 @@ impl LibraryFixture {
             ));
         }
         Ok(self.baseline.len() as u32)
+    }
+    /// Test-host caller supplies only its own constructor-created destination.
+    /// This independent byte audit accepts partial stages without claiming they
+    /// are completed copies. It never modifies or cleans an output object.
+    pub fn audit_generated_outputs(&self, destination: &Path) -> Result<serde_json::Value> {
+        let verified = self.verify_unchanged()?;
+        if std::fs::read(destination.join("destination-only.txt"))? != b"retained destination" {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "Generated destination-only bytes changed.",
+            ));
+        }
+        fn visit(
+            fixture: &LibraryFixture,
+            root: &Path,
+            path: &Path,
+            depth: usize,
+            files: &mut Vec<serde_json::Value>,
+            count: &mut usize,
+        ) -> Result<()> {
+            if depth > 32 {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated output audit exceeded depth bound.",
+                ));
+            }
+            for entry in std::fs::read_dir(path)? {
+                let entry = entry?;
+                *count += 1;
+                if *count > 4096 {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Generated output audit exceeded entry bound.",
+                    ));
+                }
+                let relative = entry
+                    .path()
+                    .strip_prefix(root)
+                    .map_err(|_| {
+                        AppError::new(
+                            ErrorCode::Conflict,
+                            "Generated output escaped its boundary.",
+                        )
+                    })?
+                    .to_owned();
+                if relative == Path::new("destination-only.txt") {
+                    continue;
+                }
+                let kind = entry.file_type()?;
+                if kind.is_symlink() {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Unexpected link in generated output.",
+                    ));
+                }
+                if kind.is_dir() {
+                    visit(fixture, root, &entry.path(), depth + 1, files, count)?;
+                } else if kind.is_file() && entry.metadata()?.len() <= 16 * 1024 * 1024 {
+                    let bytes = std::fs::read(entry.path())?;
+                    let digest = blake3::hash(&bytes).to_hex().to_string();
+                    let mut matches = false;
+                    for (source, baseline) in &fixture.baseline {
+                        if baseline.split(':').next() == Some(digest.as_str())
+                            && std::fs::symlink_metadata(fixture.path().join(source))?.is_file()
+                            && std::fs::read(fixture.path().join(source))? == bytes
+                        {
+                            matches = true;
+                            break;
+                        }
+                    }
+                    files.push(serde_json::json!({"relativePath":relative.to_string_lossy(),"bytes":bytes.len().to_string(),"digest":digest,"matchesGeneratedSourceBytes":matches}));
+                } else {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Unexpected generated output type or size.",
+                    ));
+                }
+            }
+            Ok(())
+        }
+        let mut files = Vec::new();
+        let mut count = 0;
+        visit(self, destination, destination, 0, &mut files, &mut count)?;
+        Ok(
+            serde_json::json!({"sourceVerifiedFiles":verified,"neighborUnchanged":true,"files":files,"auditedEntries":count,"writesPerformed":false}),
+        )
     }
 }
 fn manifest(root: &Path) -> Result<BTreeMap<PathBuf, String>> {

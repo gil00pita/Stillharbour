@@ -26,6 +26,8 @@ jobs:
       - run: npm run release:check
       - run: npm run desktop:test:build
       - run: npm run desktop:test
+      - name: Native cross-volume generated fixtures
+        run: npm run native:cross-volume
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -35,4 +37,12 @@ jobs:
             .context/wdio
             .context/gallery/**/warm-scroll.json
             .context/gallery/**/manifest-*.json
+            .context/gallery/**/multi-source-*.json
+            .context/gallery/**/m3-inspections-*.json
             .context/windows-directory-selection/native-*/*.json
+            .context/generated-rename/*.json
+            .context/cross-volume/**/*.json
+            .context/cross-volume/**/*.log
+            .context/cross-volume/**/*.txt
+            .context/cross-volume/**/*.stdout
+            .context/cross-volume/**/*.stderr

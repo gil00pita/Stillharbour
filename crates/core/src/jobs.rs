@@ -1,4 +1,6 @@
 //! Bounded admission independent of any UI queue. Blocking jobs use worker threads.
+pub mod operation_locks;
+pub mod paced_io;
 pub mod resources;
 
 use crate::domain::{AppError, ErrorCode, Result};

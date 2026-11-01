@@ -8,6 +8,7 @@ use crate::{
     organization::{OrganizationDestinationReview, OrganizationTemplate},
 };
 use std::path::{Path, PathBuf};
+mod targets;
 fn same(left: &FileIdentity, right: &FileIdentity) -> bool {
     left.volume == right.volume && left.file == right.file
 }
@@ -27,6 +28,28 @@ fn directory_chain(path: &Path) -> Result<DirectoryChain> {
 }
 
 impl Library {
+    /// A saved preference is a catalog-scoped hint, never write authority.
+    /// Offline managed roots may remain preferred until explicitly reconnected.
+    pub fn validate_import_destination_preference(
+        &self,
+        catalog_id: &str,
+        root_id: String,
+    ) -> Result<()> {
+        crate::operations::validate_id(&root_id)?;
+        if self.catalog.summary()?.id != catalog_id
+            || !store::root_exists(&self.catalog, root_id.clone())?
+        {
+            return Err(invalid(
+                "Choose a preferred import destination in the current catalog.",
+            ));
+        }
+        if store::root(&self.catalog, root_id)?.view.mode != super::model::RootMode::Managed {
+            return Err(invalid(
+                "A referenced library cannot be the preferred import destination. Its grant is unchanged.",
+            ));
+        }
+        Ok(())
+    }
     pub fn organization_destination(
         &self,
         asset_ids: Vec<String>,
@@ -35,6 +58,27 @@ impl Library {
         path: PathBuf,
         expected: (FileIdentity, String),
     ) -> Result<OrganizationDestinationReview> {
+        self.organization_destination_for_root(
+            asset_ids,
+            template,
+            preview_fingerprint,
+            path,
+            expected,
+            None,
+        )
+    }
+    pub fn organization_destination_for_root(
+        &self,
+        asset_ids: Vec<String>,
+        template: OrganizationTemplate,
+        preview_fingerprint: String,
+        path: PathBuf,
+        expected: (FileIdentity, String),
+        destination_root_id: Option<String>,
+    ) -> Result<OrganizationDestinationReview> {
+        if let Some(id) = &destination_root_id {
+            crate::operations::validate_id(id)?;
+        }
         let _admission = self.destination_gate.try_lock().map_err(|_| {
             AppError::new(
                 ErrorCode::Busy,
@@ -51,6 +95,14 @@ impl Library {
         let preview = self.organization_preview(asset_ids.clone(), template.clone())?;
         if preview.fingerprint != preview_fingerprint {
             return Err(conflict());
+        }
+        if destination_root_id
+            .as_ref()
+            .is_some_and(|id| preview.rows.iter().any(|row| &row.root_id == id))
+        {
+            return Err(invalid(
+                "The destination library must be separate from every selected source library.",
+            ));
         }
         // Picker paths may contain Windows short-name/case aliases. Resolve
         // spelling, then independently open every resolved component and bind
@@ -81,6 +133,7 @@ impl Library {
         }
         let mut evidence = Vec::new();
         let mut held = Vec::new();
+        let mut selected_root_found = destination_root_id.is_none();
         for root in roots {
             // Offline/inaccessible/replaced roots cannot prove nonoverlap.
             let chain = directory_chain(&root.path).map_err(|error| AppError::new(error.code.clone(),
@@ -90,7 +143,19 @@ impl Library {
             {
                 return Err(conflict());
             }
-            if destination.overlaps(&chain) {
+            let selected_root = destination_root_id.as_ref() == Some(&root.view.id);
+            if selected_root {
+                if root.view.mode != super::model::RootMode::Managed
+                    || root.view.availability != "online"
+                    || !same(destination.identity(), chain.identity())
+                {
+                    return Err(invalid(
+                        "Choose the selected online managed library's root itself. A referenced library, child or ancestor cannot receive this grant.",
+                    ));
+                }
+                super::original_jobs::require_reconciled_root(&self.catalog, root.view.id.clone())?;
+                selected_root_found = true;
+            } else if destination.overlaps(&chain) {
                 return Err(AppError::new(
                     ErrorCode::Conflict,
                     "Choose a destination outside every indexed library, with no ancestor or descendant overlap.",
@@ -105,6 +170,13 @@ impl Library {
             ));
             held.push(chain);
         }
+        if !selected_root_found {
+            return Err(invalid(
+                "The selected destination library no longer exists. Review another destination.",
+            ));
+        }
+        let (targets, target_evidence) = targets::review(destination.leaf(), &preview.rows)?;
+        let space = crate::filesystem::volume_probe(&path)?;
         // A read-only review is an observation, not a reservation. Check the
         // selected path again and reject catalog changes during native work.
         let current_selected = native::open_root(&selected_path, Some(&expected.0))?;
@@ -121,16 +193,25 @@ impl Library {
         if current_preview.fingerprint != preview_fingerprint {
             return Err(conflict());
         }
-        let bytes = serde_json::to_vec(&(
-            "organization-destination-v1",
+        let mut bytes = serde_json::to_vec(&(
+            "organization-destination-v2-target-observations",
             &preview_fingerprint,
             native::encode_path(&path),
             &volume,
             destination.identity().volume,
             destination.identity().file,
             evidence,
+            target_evidence,
         ))
         .map_err(|e| invalid("Could not fingerprint destination observations.").caused_by(e))?;
+        // Preserve historical external-folder fingerprints exactly. An explicit
+        // managed-root grant is a separate, digest-bound policy observation.
+        if let Some(id) = destination_root_id {
+            bytes.extend_from_slice(
+                &serde_json::to_vec(&("managed-destination-root-v1", id))
+                    .map_err(|e| invalid("Invalid destination root policy.").caused_by(e))?,
+            );
+        }
         Ok(OrganizationDestinationReview {
             preview_fingerprint,
             catalog_revision: preview.catalog_revision,
@@ -138,6 +219,9 @@ impl Library {
             fingerprint: blake3::hash(&bytes).to_hex().to_string(),
             execution_available: false,
             persisted: false,
+            targets,
+            available_bytes: space.available_bytes.to_string(),
+            total_bytes: space.total_bytes.to_string(),
         })
     }
 }

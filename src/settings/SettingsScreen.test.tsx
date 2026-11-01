@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'react';
 import { SettingsScreen } from './SettingsScreen';
 import { fixturePreferences } from '../library/__tests__/fixtures';
 import type { LibraryStatus } from '../bindings';
@@ -23,7 +24,10 @@ const status: LibraryStatus = {
   metadataAvailable: true,
   previewAvailable: true,
 };
-function setup(onSave = vi.fn(async (value) => value)) {
+function setup(
+  onSave = vi.fn(async (value) => value),
+  overrides: Partial<ComponentProps<typeof SettingsScreen>> = {},
+) {
   const onRelink = vi.fn(async () => {});
   const onAddFolder = vi.fn();
   const onRescan = vi.fn(async () => {});
@@ -39,10 +43,87 @@ function setup(onSave = vi.fn(async (value) => value)) {
       onMaintenance={vi.fn(async () => {})}
       locationBusy={false}
       onError={vi.fn()}
+      {...overrides}
     />,
   );
   return { onSave, onRelink, onAddFolder, onRescan };
 }
+it('saves and clears a catalog-scoped import hint without changing the browsing default or grants', async () => {
+  const managed = {
+    ...status.roots[0]!,
+    id: 'destination',
+    label: 'Managed copies',
+    mode: 'managed' as const,
+    availability: 'online',
+  };
+  const saveImport = vi.fn(async (rootId: string | null) => ({
+    catalogId: 'current-catalog',
+    rootId,
+  }));
+  const c = setup(undefined, {
+    catalogId: 'current-catalog',
+    status: { ...status, roots: [...status.roots, managed] },
+    onSaveImportDestination: saveImport,
+  });
+  expect(screen.getByRole('option', { name: 'Generated photos — read-only' })).toBeDisabled();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Preferred import destination' }), {
+    target: { value: 'destination' },
+  });
+  expect(c.onSave).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Save import destination' }));
+  await screen.findByText(
+    'Import destination saved for this catalog. Folder grants and existing plans are unchanged.',
+  );
+  expect(screen.getByRole('combobox', { name: 'Preferred import destination' })).toHaveValue(
+    'destination',
+  );
+  expect(saveImport).toHaveBeenLastCalledWith('destination');
+  expect(c.onSave).not.toHaveBeenCalled();
+  fireEvent.change(screen.getByRole('combobox', { name: 'Preferred import destination' }), {
+    target: { value: '' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save import destination' }));
+  await screen.findByText(
+    'Import destination saved for this catalog. Folder grants and existing plans are unchanged.',
+  );
+  expect(c.onSave).not.toHaveBeenCalled();
+  expect(saveImport).toHaveBeenLastCalledWith(null);
+  expect(c.onRescan).not.toHaveBeenCalled();
+  expect(c.onRelink).not.toHaveBeenCalled();
+});
+it.each(['disk failure', 'foreign catalog'])(
+  'retains an import choice after %s without claiming success',
+  async (failure) => {
+    const managed = {
+      ...status.roots[0]!,
+      id: 'destination',
+      label: 'Managed copies',
+      mode: 'managed' as const,
+    };
+    const saveImport = vi.fn(async () => {
+      if (failure === 'disk failure') throw new Error('Catalog storage unavailable');
+      return { catalogId: 'another-catalog', rootId: 'destination' };
+    });
+    const c = setup(undefined, {
+      catalogId: 'current-catalog',
+      status: { ...status, roots: [...status.roots, managed] },
+      onSaveImportDestination: saveImport,
+    });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Preferred import destination' }), {
+      target: { value: 'destination' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save import destination' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      failure === 'disk failure' ? 'Catalog storage unavailable' : 'another catalog or choice',
+    );
+    expect(screen.getByRole('combobox', { name: 'Preferred import destination' })).toHaveValue(
+      'destination',
+    );
+    expect(screen.getByRole('button', { name: 'Save import destination' })).toBeEnabled();
+    expect(screen.queryByText(/Import destination saved for this catalog/)).not.toBeInTheDocument();
+    expect(c.onSave).not.toHaveBeenCalled();
+  },
+);
 it('shows scan settings inline and uses existing library IDs without saving defaults', () => {
   const c = setup();
   expect(screen.getByRole('heading', { name: 'Settings' })).toHaveFocus();

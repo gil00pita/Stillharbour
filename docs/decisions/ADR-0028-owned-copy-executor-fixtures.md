@@ -1,0 +1,37 @@
+# ADR-0028 — Central copy engine and shared byte budget under fixture capability
+
+Date: 2026-10-31. Status: executor development against disposable fixtures; production copying remains unavailable.
+
+## Capability boundary
+
+The M2 copy engine is compiled only for Rust tests or fixture-probes. Its public CopyFixture constructor owns a new random temporary run; it accepts no source/destination paths, imported approvals or renderer data. Fixed generated source files include a companion, unknown bytes and an empty file. A destination-only neighbor remains outside the owned organized output. Original-file mutation guards and production command surface remain unchanged.
+
+The engine consumes an immutable digest-bound private plan and held source/output handles. Source/output volume tokens, native identities and source revisions are rechecked; one scope mutex excludes execution/recovery overlap. The fixture journal adapter uses its own SQLite database with FULL synchronization and immutable plan/append-only event triggers. This exercises the reusable copy state machine; it is not yet the catalog operation_journal adapter, a ready-plan approval, root-lock registry across arbitrary plans or desktop executor integration.
+
+## Owned I/O
+
+PacedIo provides a process-wide shared controller for operation streams. Default aggregate application-issued I/O is 10 MiB/s, with 64-KiB chunks/token credit, FIFO admission, one outstanding I/O request, 64 waiting calls, live rate updates and pause/cancellation at byte boundaries. The conservative issued-byte envelope allows 128 KiB of burst: 64 KiB of token credit plus one already-admitted syscall that may have been delayed by scheduling. A stalled syscall cannot accumulate additional admitted requests, while queued cancellation remains responsive. Every source/copy/verification read and copy write is charged before the syscall. Requested buffers remain charged on EOF, short I/O and failure; no refund creates a concurrent burst. Known remaining lengths bound requests, with a one-byte EOF check. Full byte comparison is retained before and after publication, so successful copying reads the source three times, writes once and reads the destination twice, plus bounded EOF probes.
+
+The single aggregate budget conservatively covers all these streams regardless of device/path topology. It does not coordinate separate application processes, meter physical disk traffic, filesystem metadata/flush activity, codec internals or helper processes. Existing scanning/rendering admission is unchanged. No production rate-control UI is claimed yet.
+
+## Publication and recovery
+
+Journal intent before exclusive stage creation; retain its native identity before copying. Stream bounded buffers, flush, close/reopen, compare complete source/stage bytes and retain BLAKE3 evidence. Revalidate scope/source, journal publish intent, publish without replacement, then compare complete source/published bytes and retain completion. Verification evidence retains the exact output identity and change-time-based revision. Recheck fresh source path membership and source/output versions around publication and completion; repeat the checks for previously completed outputs before the plan-completion record. Recovery applies fresh member/version checks too. This remains sequential observation, not an atomic filesystem snapshot. Existing targets and every failed/partial stage remain intact. There is no source removal, automatic cleanup or blind retry.
+
+Windows uses held-directory-relative NtCreateFile with FILE_CREATE for new objects and NtSetInformationFile with replacement disabled for the owned stage handle. Regular files retain no-recall/no-follow flags. New directories use directory attributes and directory-specific creation flags plus no-follow. The initial combined directory arguments failed locally with invalid-parameter; the corrected combination restricts no-recall to regular files. No existing directory is adopted through this exclusive creation path. Existing entries still fail rather than being opened through a link. The generic original-operation guard and the separate metadata-output publisher remain unchanged. Wdk_Foundation is an additional feature on the already pinned Windows SDK crate, not a dependency upgrade or helper binary.
+
+macOS uses mkdirat/openat with exclusive/no-follow creation, held directory handles, renameatx_np with RENAME_EXCL and supported file/directory flushes. Same-user external source/stage edits cannot be represented as universally excluded on macOS; before/after identity/revision checks and byte comparison detect observed changes. Native platform tests remain mandatory. File flush/process-restart evidence is not physical power-loss proof.
+
+Recovery opens the retained plan/journal, reauthorizes the fixture roots and inspects actual stage/target identity and complete bytes. It distinguishes not started, retained partial stage, verified stage, published verified bytes and needs attention with typed errors. Journal completion alone never proves content. Unknown/replaced/extra-linked stages and occupied targets remain for review. Inspection never deletes, publishes, replays, appends completion or overwrites anything.
+
+## Native test route
+
+The desktop-test-only organization_copy_executor_fixture action accepts no supplied scope and runs constructor-owned completed/interrupted copies on a blocking worker. Its receipt records actual recovery states, independent verification of the three generated sources and destination neighbor, replay rejection and configured byte budget. The native scenario retains owned-copy-executor-OS.json under the existing CI evidence directory. No real copy button is wired to this diagnostic, and production excludes the route. This is native IPC evidence for fixtures, not the completed production executor user flow.
+
+## Validation and remaining gate
+
+Tests interrupt and actually exit owned child processes after intent, creation, copy chunk, flush, staged verification, publish intent, publication, item completion and plan completion. The child validates its generated temporary root, owner token, fixed source bytes/names, plan digest and native roots before exiting; it is test-only and has no production environment route. Separately inject disk-full at a write boundary and use actual SQLite query-only denial after publication. Test cancellation, overlap exclusion, changed sources, substituted stages, hard links, case/Unicode neighbors and no-replace behavior. Preserve independent generated-source/destination checks.
+
+Byte verification here is not metadata-fidelity preservation, independent backup, all-files import, ready-plan authorization or undo. Production integration still needs explicit native namespace/name preflight, capacity/fidelity reporting, binding ADR-0027 manifests to ready plans/approval, catalog journaling and job/control/recovery UI, root/path locking, import/idempotency and reverse-plan undo. In-place mutations/quarantine still require exact-version independent recovery and preservation gates. M2/M3 remain unfinished.
+
+Primary declarations: [Microsoft NtCreateFile](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntcreatefile), [Microsoft no-replace rename](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information), [Apple exclusive rename declarations](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/sys/stdio.h). Actual outcomes belong in the implementation log.

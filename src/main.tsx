@@ -4,8 +4,10 @@ import App from './App';
 import './styles.css';
 import { diagnosticValue, installDiagnostics } from './performance';
 
+let GeneratedRenameLab: React.ComponentType | null = null;
 if (import.meta.env.MODE === 'desktop-test') {
   await import('@wdio/tauri-plugin');
+  GeneratedRenameLab = (await import('./GeneratedRenameLab')).GeneratedRenameLab;
   installDiagnostics();
 }
 
@@ -19,6 +21,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         }
       >
         <App />
+        {GeneratedRenameLab && <GeneratedRenameLab />}
       </React.Profiler>
     ) : (
       <App />

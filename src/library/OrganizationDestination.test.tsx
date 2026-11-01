@@ -40,6 +40,9 @@ const response: OrganizationDestinationReview = {
   fingerprint: 'destination',
   executionAvailable: false,
   persisted: false,
+  targets: [],
+  availableBytes: '10000000000000000',
+  totalBytes: '20000000000000000',
 };
 beforeEach(() => {
   vi.mocked(pickDirectory).mockReset().mockResolvedValue({
@@ -50,6 +53,139 @@ beforeEach(() => {
   vi.mocked(libraryData).mockReset().mockResolvedValue(response);
 });
 const choose = () => fireEvent.click(screen.getByRole('button', { name: 'Choose destination' }));
+it('uses a matching catalog preference only as the initial managed destination choice', async () => {
+  render(
+    <OrganizationDestination
+      preview={preview}
+      revision="1"
+      catalogId="catalog"
+      preferredImportRoot={{ catalogId: 'catalog', rootId: 'destination' }}
+      roots={[
+        { id: 'destination', label: 'Managed copies', mode: 'managed', availability: 'online' },
+      ]}
+    />,
+  );
+  expect(screen.getByRole('combobox', { name: 'Destination library policy' })).toHaveValue(
+    'destination',
+  );
+  expect(pickDirectory).not.toHaveBeenCalled();
+  choose();
+  await screen.findByText('Destination identity and indexed-root overlap checked.');
+  expect(libraryData).toHaveBeenCalledWith(
+    expect.objectContaining({ destination_root_id: 'destination' }),
+    'organization_destination',
+  );
+});
+it.each(['source', 'offline', 'missing', 'readonly'] as const)(
+  'does not silently fall back from an unsafe preferred destination: %s',
+  async (variant) => {
+    const id = variant === 'source' ? 'root' : 'preferred';
+    render(
+      <OrganizationDestination
+        preview={preview}
+        revision="1"
+        catalogId="catalog"
+        preferredImportRoot={{ catalogId: 'catalog', rootId: id }}
+        roots={
+          variant === 'missing'
+            ? []
+            : [
+                {
+                  id,
+                  label: 'Preferred copies',
+                  mode: variant === 'readonly' ? 'referenced' : 'managed',
+                  availability: variant === 'offline' ? 'offline' : 'online',
+                },
+              ]
+        }
+      />,
+    );
+    expect(screen.getByRole('combobox', { name: 'Destination library policy' })).toHaveValue(id);
+    expect(screen.getByRole('button', { name: 'Choose destination' })).toBeDisabled();
+    expect(pickDirectory).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Destination library policy' }), {
+      target: { value: '' },
+    });
+    expect(screen.getByRole('button', { name: 'Choose destination' })).toBeEnabled();
+  },
+);
+it('ignores a preference from another catalog', () => {
+  render(
+    <OrganizationDestination
+      preview={preview}
+      revision="1"
+      catalogId="current"
+      preferredImportRoot={{ catalogId: 'other', rootId: 'destination' }}
+    />,
+  );
+  expect(screen.getByRole('combobox', { name: 'Destination library policy' })).toHaveValue('');
+  expect(screen.getByRole('button', { name: 'Choose destination' })).toBeEnabled();
+});
+it('binds an explicitly selected managed destination and retires its review when policy changes', async () => {
+  render(
+    <OrganizationDestination
+      preview={preview}
+      revision="1"
+      roots={[
+        { id: 'root', label: 'Source', mode: 'managed', availability: 'online' },
+        { id: 'readonly', label: 'Referenced', mode: 'referenced', availability: 'online' },
+        { id: 'offline', label: 'Offline', mode: 'managed', availability: 'offline' },
+        { id: 'destination', label: 'Managed copies', mode: 'managed', availability: 'online' },
+      ]}
+    />,
+  );
+  expect(screen.getByRole('option', { name: 'Source — selected source' })).toBeDisabled();
+  expect(screen.getByRole('option', { name: 'Referenced — read-only' })).toBeDisabled();
+  expect(screen.getByRole('option', { name: 'Offline — unavailable' })).toBeDisabled();
+  const policy = screen.getByRole('combobox', { name: 'Destination library policy' });
+  fireEvent.change(policy, { target: { value: 'destination' } });
+  choose();
+  await screen.findByRole('status');
+  expect(libraryData).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'organization_destination',
+      destination_root_id: 'destination',
+      selection_id: 'opaque-session',
+    }),
+    'organization_destination',
+  );
+  vi.mocked(libraryData).mockResolvedValueOnce({
+    plan: {
+      id: 'managed-draft',
+      policy: 'organization-plan-v1',
+      createdAt: 'now',
+      digest: 'digest',
+      state: 'draft',
+      destinationRootId: 'destination',
+      templateReference: null,
+      preview,
+      destinationPath: response.destinationPath,
+      destinationFingerprint: response.fingerprint,
+      blockers: ['execution_and_recovery'],
+      executionAvailable: false,
+    },
+    stale: false,
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save plan draft' }));
+  await screen.findByText(/Plan draft saved/);
+  expect(libraryData).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'organization_plan_create',
+      draft: expect.objectContaining({ destinationRootId: 'destination' }),
+    }),
+    'organization_plan',
+  );
+  fireEvent.change(policy, { target: { value: '' } });
+  expect(screen.queryByText(/Plan draft saved/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save plan draft' })).not.toBeInTheDocument();
+  choose();
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ destination_root_id: expect.anything() }),
+      'organization_destination',
+    ),
+  );
+});
 it('saves a native-bound draft only after preflight and prevents duplicate submission', async () => {
   render(<OrganizationDestination preview={preview} revision="1" />);
   expect(screen.queryByRole('button', { name: 'Save plan draft' })).not.toBeInTheDocument();
@@ -108,6 +244,42 @@ it('checks only an explicit native selection and discloses unfinished planning',
   expect(screen.getByText('Fixture/<destination>')).toBeVisible();
   expect(document.querySelector('destination')).toBeNull();
   expect(screen.getByText(/without reserving target names/)).toBeVisible();
+});
+
+it('shows native target conflicts and exact space observations while retaining a draft-only action', async () => {
+  vi.mocked(libraryData).mockResolvedValueOnce({
+    ...response,
+    targets: [
+      {
+        assetId: 'occupied',
+        targetRelativePath: 'Family/<photo>.JPG',
+        state: 'occupied',
+        blockingComponent: 'Family/<photo>.JPG',
+      },
+      {
+        assetId: 'new',
+        targetRelativePath: 'New/photo.JPG',
+        state: 'unoccupied_observed',
+        blockingComponent: null,
+      },
+      {
+        assetId: 'blocked',
+        targetRelativePath: 'file/photo.JPG',
+        state: 'ancestor_not_directory',
+        blockingComponent: 'file',
+      },
+    ],
+  });
+  render(<OrganizationDestination preview={preview} revision="1" />);
+  choose();
+  await screen.findByRole('table', { name: 'Existing target review' });
+  expect(screen.getByText('Target already exists — retained')).toBeVisible();
+  expect(screen.getByText('No existing target observed')).toBeVisible();
+  expect(screen.getByText('A parent name is occupied by a file')).toBeVisible();
+  expect(screen.getByText(/10,000,000,000,000,000 bytes available/)).toBeVisible();
+  expect(screen.getByText(/space is not reserved/)).toBeVisible();
+  expect(document.querySelector('photo')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Save plan draft' })).toBeEnabled();
 });
 it('retains the previous observation on picker cancellation without another check', async () => {
   render(<OrganizationDestination preview={preview} revision="1" />);

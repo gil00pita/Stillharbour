@@ -1,5 +1,11 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0055](decisions/ADR-0055-explicit-filename-stem-case.md) adds an explicit proposed filename-stem case choice, with exact extensions/directories and legacy Preserve identity. Nondefault saved-template policy metadata is versioned; execution and preservation gates remain unchanged.
+
+[ADR-0054](decisions/ADR-0054-fixture-relocation-and-restoration.md) adds fixture-gated same-volume directory-to-directory relocation and retained companion restoration. Duplicate-removal authority, incomplete-state continuation and production mutation gates remain separate.
+
+The bounded rename graph and closed generated native experiment are recorded in [ADR-0053](decisions/ADR-0053-fixture-rename-graph.md). Native process-exit recovery and the remaining M2 gates are still open; these fixtures cannot authorize real-library mutations.
+
 These are proposed defaults. Record changes as short ADRs rather than silently changing the specification.
 
 | Area | Default | Required gate |
@@ -183,3 +189,131 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Owner-approved Windows NTFS read adapter — 2026-10-30
 
 [ADR-0021](decisions/ADR-0021-windows-ntfs-scanning.md) records the explicit Windows-backend continuation. Use local NTFS volume GUID/file identities, bounded held-handle enumeration and file-ID opens with native name/membership checks. Baseline worker dimensions/previews preserve filesystem date provenance; unsupported roots show the blocking alert. Generic original publication/durability, non-NTFS/network support, full Windows metadata/format packaging and release/preservation gates remain separate. No persisted identity/schema migration.
+
+## Complete direct-folder companion review — 2026-10-31
+
+[ADR-0026](decisions/ADR-0026-confirmed-companion-review.md) adds metadata-only live folder-name inventory and append-only decisions bound to retained drafts. Full reviewed public inventory, selected exact native locators, acknowledgement and targets are retained without changing original draft digests. Limits and incomplete observations are explicit. Future executable manifests must bind explicit decision IDs and revalidate; no original mutation or execution approval is introduced.
+
+## Explicit compiled copy scopes — 2026-10-31
+
+[ADR-0027](decisions/ADR-0027-compiled-copy-manifests.md) reconciles explicit per-photo companion decisions into bounded immutable manifests, combines only identical mappings and preserves cross-bundle conflicts. Original draft digests/schema stay unchanged; fresh retries are idempotent and retained opening recomputes reconciliation. Destination/content/fidelity/capacity/approval/executor gates remain pending.
+
+## Owned copy executor development — 2026-10-31
+
+[ADR-0028](decisions/ADR-0028-owned-copy-executor-fixtures.md) develops the central source-retaining stage/copy/verify/no-replace/recovery sequence with a shared precharged byte budget against constructor-owned temporary fixtures. Real process-exit and journal-denial tests supplement cooperative interruption; retained originals/neighbors are independently checked. The production catalog/job/ready-plan/approval adapters and mutation gates remain pending. Do not treat fixture completion as real-library authorization or full metadata/backup fidelity.
+
+## Native future-name preparation — 2026-10-31
+
+[ADR-0029](decisions/ADR-0029-native-name-preparation.md) extends the constructor-owned M2 fixture capability with actual exclusive name creation in a new pending output namespace. It retains empty identified stages, native collision evidence and an immutable fingerprint, with bounded inputs/journal records and no execution authority. This is a prerequisite for ready-plan approval, not production destination reservation or copying.
+
+## Copy capacity and fidelity review — 2026-10-31
+
+[ADR-0030](decisions/ADR-0030-copy-capacity-and-fidelity-review.md) adds an ID-only on-demand assessment of a freshly revalidated retained manifest/destination. Show native allocation units, exact per-file rounded data and explicit metadata/journal/headroom allowances against observed free bytes. Report unverified metadata aspects, retained sources and absent independent backup without granting approval. Capacity remains an estimate, not a reservation or completed executor gate.
+
+## Shared operation scopes — 2026-10-31
+
+[ADR-0031](decisions/ADR-0031-shared-native-operation-scopes.md) supplies bounded process-wide all-or-none native directory read/write admission. Scans acquire shared root leases before catalog job creation; constructor-owned copy/preparation fixtures take source-read/output-write scopes and recovery takes read scopes. Native identities/ancestry, not text prefixes, determine overlap. Other read/write adapters and cross-process coordination remain outside this partial integration; no production mutation or full AC-081 acceptance follows.
+
+## Catalog-backed copy streams — 2026-10-31
+
+[ADR-0032](decisions/ADR-0032-catalog-copy-streams.md) advances the catalog to schema 4 with indexed append-only journal scope/unique copy-stream anchors, preserving independently openable prior-version snapshots and identities. The fixture-only central engine can use the actual catalog actor with validated retained draft/manifest bindings, bounded ordered events and transactionally checked writes. This is a flat single-root adapter prerequisite, not ready-plan approval or production copying.
+
+## Native copy parent locations — 2026-10-31
+
+[ADR-0033](decisions/ADR-0033-native-copy-parent-locations.md) extends the fixture-only engine/catalog adapter to exact single-root nested mappings. Native source bytes and intermediate object identities drive reads; portable target parents carry native identity proofs. Fresh parent/member checks reject substituted directories. Legacy omitted fields preserve flat stream digests. No production ready-plan/approval or multi-root copy authority is added.
+
+## Identified empty-stage reuse — 2026-10-31
+
+[ADR-0034](decisions/ADR-0034-identified-empty-stage-reuse.md) joins actual constructor-owned name preparation to copying through immutable empty-stage identity/revision proofs and a distinct copy journal. Verify single-link/empty/unchanged membership before writing; never recreate or truncate a changed stage. The catalog adapter rejects unbound prepared-stage authority. This fixture pipeline still grants no production approval.
+
+## Catalog namespace preparation facts - 2026-10-31
+
+[ADR-0035](decisions/ADR-0035-catalog-namespace-preparation-facts.md) separates event append from copy inspection and binds frozen namespace identity/exact manifest targets to bounded append-only catalog facts. Scope validation, atomic anchor/count checks, hash-chain/recomputed typed fingerprint checks and terminal replay refusal preserve interrupted evidence without granting copy approval. Production prepared-stage ready plans and approvals remain open.
+
+## Prepared catalog copy projection - 2026-10-31
+
+[ADR-0036](decisions/ADR-0036-prepared-catalog-copy-projection.md) binds exact completed namespace facts to private fixture copy streams and derives every source/stage/target/parent mapping without overrides. Enforce one stream per namespace and 64 per draft; reopen current bytes without replay. Complete/interrupted native diagnostics preserve prepared IDs. Production ready-plan/session approval/jobs remain open.
+
+## Native source planning before future targets - 2026-10-31
+
+[ADR-0037](decisions/ADR-0037-native-source-snapshots.md) separates native source snapshots from executable plans and v2 namespace facts. Future target folders remain absent during preview; actual preparation supplies their identities. Freeze a backend-derived visible output prefix for later explicit review, preserve source/destination scope checks and retain older disposable evidence without granting approval. Production preparation/session approval/jobs remain open.
+
+## Session-bound action approvals - 2026-10-31
+
+[ADR-0038](decisions/ADR-0038-session-bound-action-approvals.md) introduces bounded monotonic, one-attempt backend tickets and nonserializable proofs bound to exact action/review/native selection. Preparation/copy wrappers recompute evidence scope and enforce current managed-root permissions before native effects/publication. Actual user approval/job integration remains open; fixture grants never become persisted authority.
+
+## Application organization workflow and jobs - 2026-10-31
+
+[ADR-0039](decisions/ADR-0039-organization-workflow-jobs.md) connects exact native scope and ephemeral approvals to typed application review/start/control/inspection requests and bounded worker jobs. Schema 5 adds immutable-scope durable job records, expected-state transitions, journaled progress and restart needs_recovery without replay. The experimental copy-workflow feature is enabled for native test builds; normal builds remain unavailable until their workflow gates pass. Original mutation permissions are unchanged.
+
+## Retained copy inspection - 2026-10-31
+
+[ADR-0040](decisions/ADR-0040-retained-copy-inspection.md) adds read-only existing-job inspection with fresh private destination selection, exact catalog/native binding and referenced-root read scopes. No anchor, session, approval or replay is created. Typed per-file errors remain visible; incomplete preparation without a ready stream remains blocked. Default copying/original mutation gates are unchanged.
+
+## Reviewed copy continuation fixture - 2026-10-31
+
+[ADR-0041](decisions/ADR-0041-reviewed-copy-continuation.md) adds an explicit ResumeFiles grant for the exact retained journal/native observations, full-prefix comparison before append, same-object no-replace publication, missing-phase reconciliation and fresh-verified completed no-op. It remains under fixture-probes/test only; no application retry authority or default-copy/original mutation gate changes.
+
+## Application continuation - 2026-10-31
+
+[ADR-0042](decisions/ADR-0042-application-copy-continuation.md) integrates retained continuation review/approval/start and digest-linked durable jobs behind copy-workflow. A bounded held-directory inventory seal rejects unknown/foreign/missing objects; fresh comparisons drive progress. Historical recorded phases remain distinct from current verification. Default copying/original mutation gates remain unchanged; full/native validation is pending.
+
+## Copy effect identity and schema 6 - 2026-10-31
+
+[ADR-0043](decisions/ADR-0043-copy-effect-history.md) binds exact native source/template/target mappings to retained output history independently of new draft/session UUIDs. Atomic catalog admission refuses another namespace for that mapping. Existing output must be freshly byte-inspected; history never restores approval. Schema 6 adds immutable journal indexes after retained v5 snapshots. Experimental/default preservation gates remain unchanged.
+
+## Reopen complete retained preparation - 2026-10-31
+
+[ADR-0044](decisions/ADR-0044-reopen-complete-preparation.md) handles loss of the ready-copy binding after complete recorded native name preparation. Fresh private selection and exact retained/native validation reconstruct planning metadata only; the copy still needs new fidelity acknowledgment, approval and start. Unknown/changed/incomplete objects remain blocked and preserved. Reopened/discarded scopes revoke previous ephemeral grants. No schema/default feature/original mutation change.
+
+## Read-only import comparison - 2026-10-31
+
+[ADR-0045](decisions/ADR-0045-read-only-import-comparison.md) adds bounded ephemeral comparison jobs against explicitly selected indexed roots. Size/sample/full BLAKE3 filters always precede direct byte equality evidence, with native version/membership checks and shared pacing/cancellation. Referenced reads do not enable managed copying. Offline, inaccessible and incomplete scope stays unknown. Reports grant no skip/removal authority; bundle-aware import planning and execution remain unfinished.
+
+## Whole-bundle import observations - 2026-10-31
+
+[ADR-0046](decisions/ADR-0046-import-bundle-observations.md) groups connected confirmed companions and requires coherent native folder/stem mappings, distinct byte-compared keepers and indexed-media primary matches before showing an existing bundle. Incomplete/ambiguous layouts require attention. Observations grant no execution authority.
+
+## Import decisions and verified skip receipts - 2026-10-31
+
+[ADR-0047](decisions/ADR-0047-import-decisions-and-skip-receipts.md) retains explicit whole-bundle choices/native keeper versions, reuses equivalent decisions, and implements all-existing completion through separate acknowledgment/approval/start and fresh direct comparison. Durable queued/outcome records never restore authority or replay. Mixed copy/skip execution remains disabled.
+
+## Import copy projections - 2026-11-01
+
+[ADR-0048](decisions/ADR-0048-import-copy-projections.md) derives exact source-retaining copy subsets from saved whole-bundle decisions. An omitted optional reference preserves legacy serialization; projected sources bind their observed managed/referenced mode without weakening ordinary managed-copy admission. Namespace targets and effect memberships reconcile by the retained IDs. Construction remains private to generated tests; mixed import UI/receipt orchestration is not enabled.
+
+[ADR-0049](decisions/ADR-0049-import-keeper-admission.md): shared atomic source/output/keeper admission and fresh complete-byte checks before/after projected work and recovery. Mixed application orchestration remains unfinished.
+
+[ADR-0050](decisions/ADR-0050-import-copy-review.md) connects exact new-only capacity/review, feature-gated mixed import IPC/UI and durable combined verification facts. Completed receipts require both valid evidence and committed job success; neither replay nor approval is restored.
+
+[ADR-0051](decisions/ADR-0051-import-output-indexing.md) adds explicit picker-bound catalog discovery of unchanged completed import output. New roots are Referenced; existing native root/scan identities are reused. Publication-version checks do not become a fresh hash baseline, and overlap guards remain unchanged.
+
+[ADR-0052](decisions/ADR-0052-native-cross-volume-fixtures.md) adds a closed, nonce-owned virtual-volume harness for actual distinct filesystem identities, application-core copy jobs and nine in-process interruption/continuation cases. Local capability unavailability is not a passing native result. No original mutation/recovery-provider gate changes.
+
+
+[ADR-0056](decisions/ADR-0056-generated-rename-review-lifecycle.md) adds an instrumented-only typed review/acknowledgment/approval/run/undo lifecycle over the closed native generated scope. It preserves production exclusions; application catalog path updates and jobs remain open.
+
+
+[ADR-0057](decisions/ADR-0057-generated-rename-catalog-commit.md) adds atomic actual-catalog path commits in the closed generated session. Stable IDs/annotations survive case/cycles; native-complete/catalog-pending states require a fresh approved commit. Production catalogs and original-mutation gates are unchanged.
+
+
+[ADR-0058](decisions/ADR-0058-generated-catalog-process-exits.md) adds real child exits at six native-to-catalog transaction boundaries in both directions, bounded cold reconstruction and SQLite reopen. Approval is never reconstructed; pre-commit recovery needs fresh approval and adds no native moves. This remains test-only generated-scope evidence.
+
+
+[ADR-0059](decisions/ADR-0059-organization-job-history.md) introduces schema-7 immutable generated organization plans, durable job attempts and protected events, retaining copy-job semantics. Native/catalog verification and terminal job evidence commit together; interrupted history never restores approval or native work. General original-worker orchestration remains open.
+
+
+[ADR-0060](decisions/ADR-0060-bounded-generated-original-worker.md) adds one generated backend worker, independent typed status/stop, durable-step progress and cooperative retained-state stopping. It requires fresh review/approval after stop and preserves production exclusions; a bounded owned hold supports deterministic native UI testing.
+
+[ADR-0061](decisions/ADR-0061-original-operation-scan-coordination.md) retains a single generated native lease through movement and catalog/job commit, and defers scans/removal while durable original recovery is unresolved. Verified completion resolves only its own plan; monitor invalidations remain pending. This is partial coordination evidence, not production mutation or restart adoption.
+
+[ADR-0062](decisions/ADR-0062-explicit-managed-copy-destination.md) adds an explicitly selected different managed copy destination, immutable optional root binding, fresh grant/recovery checks and existing-root import discovery. External-folder policy remains strict/default; original mutation stays gated. Validation is in progress.
+
+
+## M3 read-only inspections — 2026-11-01 (accepted fixture gate)
+
+[ADR-0070](decisions/ADR-0070-read-only-inspection-jobs.md) connects bounded native duplicate/health/storage jobs to catalog schema 9 and native UI. Root/object/revision validation, complete direct-byte comparisons, versioned candidate fingerprints and append-only explicit baselines remain backend-owned. Keeper review retains protected/preferred folder and manual/date policy without granting cleanup approval. Constructor-owned duplicate bundle proof reuses M2 quarantine/restore; real-library quarantine and independent-recovery gates remain closed. The implemented M3 fixture/read-only gate passes complete both-target CI 41324632055 at 563721a; M3_VALIDATION.md records inspected native evidence and limitations. No M4 implementation is authorized.
+
+## Scan-control branch integration — 2026-11-01
+
+[ADR-0071](decisions/ADR-0071-scan-control-progress.md) integrates the preferred 93fd459 scan behavior with the target's M2/M3 work. Catalog schema 10 adds filename-progress counters without discarding operation/inspection schema or data. The incoming branch's independent schema-4 counter layout keeps its progress and gains the missing target indexes before later migrations. Partial layouts fail closed; pre-migration snapshots and UUID preservation remain mandatory. M2/M3 fixture acceptance remains historical evidence, and this merge does not authorize M4 or real-library mutations.

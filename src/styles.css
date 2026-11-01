@@ -100,6 +100,15 @@
 .organization-destination h3 {
   margin-top: 0;
 }
+.bundle-inventory th:first-child {
+  width: 64px;
+}
+.bundle-inventory .bundle-review-ack {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  margin-block: 16px;
+}
 .organization-trees {
   margin-block: 16px;
 }
@@ -2005,6 +2014,11 @@ input.switch-control:disabled {
   .viewer-body.with-info {
     flex-direction: column;
   }
+  .viewer-body.with-info .viewer-main {
+    /* Keep navigation above the control bar, even with the filmstrip open.
+       The details pane yields height and scrolls inside its remaining space. */
+    min-height: 214px;
+  }
   .photo-viewer .inspector {
     width: 100%;
     max-height: 45%;
@@ -2159,6 +2173,10 @@ input.switch-control:disabled {
   grid-template-columns: auto minmax(32px, 1fr) auto;
   gap: 12px;
   align-items: center;
+}
+.preparation-actions {
+  display: flex;
+  gap: 8px;
 }
 .preparation-summary {
   font-size: 13px;

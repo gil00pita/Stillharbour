@@ -83,6 +83,12 @@ pub struct ScanJob {
     pub id: String,
     pub root_id: String,
     pub state: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub total_files: Option<u32>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub processed_files: Option<u32>,
     pub discovered: u32,
     pub indexed: u32,
     pub skipped: u32,
@@ -138,6 +144,18 @@ pub struct LibraryChangePage {
 pub struct LibraryStatus {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
+    pub inspection_jobs: Option<Vec<crate::inspection::model::InspectionJob>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub import_destination: Option<ImportDestinationPreference>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub original_jobs: Option<Vec<crate::operations::original_jobs::OriginalOperationJob>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub copy_jobs: Option<Vec<crate::operations::CopyWorkflowJob>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub monitoring: Option<Vec<RootMonitor>>,
     pub roots: Vec<LibraryRoot>,
     pub jobs: Vec<ScanJob>,
@@ -145,6 +163,12 @@ pub struct LibraryStatus {
     pub preview_generation: String,
     pub metadata_available: bool,
     pub preview_available: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ImportDestinationPreference {
+    pub catalog_id: String,
+    pub root_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -471,6 +495,52 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    InspectionIssues {
+        job_id: String,
+        after: Option<String>,
+    },
+    InspectionKeeperLatest {
+        job_id: String,
+        group_id: String,
+    },
+    InspectionKeeperReview {
+        input: crate::inspection::KeeperReviewInput,
+    },
+    InspectionStart {
+        input: crate::inspection::model::InspectionInput,
+    },
+    InspectionJob {
+        job_id: String,
+    },
+    InspectionJobs {},
+    InspectionCancel {
+        job_id: String,
+    },
+    InspectionFindings {
+        job_id: String,
+        after: Option<String>,
+    },
+    InspectionGroups {
+        job_id: String,
+        after: Option<String>,
+    },
+    InspectionGroupMembers {
+        job_id: String,
+        group_id: String,
+        after: Option<String>,
+    },
+    InspectionReport {
+        job_id: String,
+    },
+    InspectionFolders {
+        job_id: String,
+        parent_id: String,
+        after: Option<String>,
+    },
+    OrganizationImportDestinationSet {
+        catalog_id: String,
+        root_id: Option<String>,
+    },
     OrganizationTemplates {},
     OrganizationTemplateSave {
         save: crate::operations::TemplateSave,
@@ -489,13 +559,176 @@ pub enum LibraryRequest {
         plan_id: String,
         format: crate::operations::PlanExportFormat,
     },
+    OrganizationPlanSaveExport {
+        selection_id: String,
+        plan_id: String,
+        format: crate::operations::PlanExportFormat,
+    },
     OrganizationDestination {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        destination_root_id: Option<String>,
         selection_id: String,
         asset_ids: Vec<String>,
         template: crate::organization::OrganizationTemplate,
         preview_fingerprint: String,
     },
     OrganizationCompanions {
+        asset_id: String,
+    },
+    OrganizationBundleInventory {
+        asset_id: String,
+        source_revision: String,
+    },
+    OrganizationBundleConfirm {
+        input: crate::operations::BundleConfirmationInput,
+    },
+    OrganizationCopyManifest {
+        input: crate::operations::CopyManifestInput,
+    },
+    OrganizationCopyManifestOpen {
+        plan_id: String,
+        manifest_id: String,
+    },
+    OrganizationCopyAssessment {
+        plan_id: String,
+        manifest_id: String,
+    },
+    OrganizationImportComparisonStart {
+        input: crate::operations::ImportComparisonInput,
+    },
+    OrganizationImportPlanCreate {
+        input: crate::operations::ImportPlanInput,
+    },
+    OrganizationImportHistory {
+        plan_id: String,
+        manifest_id: String,
+    },
+    OrganizationImportSavedPlans {
+        plan_id: String,
+    },
+    OrganizationImportSkipApprove {
+        input: crate::operations::ImportSkipApprovalInput,
+    },
+    OrganizationImportSkipStart {
+        input: crate::operations::ImportSkipStartInput,
+    },
+    OrganizationImportSession {
+        plan_id: String,
+        session_id: String,
+    },
+    OrganizationImportSessionCancel {
+        plan_id: String,
+        session_id: String,
+    },
+    OrganizationImportSessionDiscard {
+        plan_id: String,
+        session_id: String,
+    },
+    OrganizationImportPlanOpen {
+        plan_id: String,
+        import_plan_id: String,
+    },
+    OrganizationImportCopyReview {
+        plan_id: String,
+        import_plan_id: String,
+        selection_id: String,
+    },
+    OrganizationImportCopyReceipt {
+        job_id: String,
+    },
+    OrganizationImportIndexOutput {
+        job_id: String,
+        selection_id: String,
+    },
+    OrganizationImportPlanRelease {
+        plan_id: String,
+        import_plan_id: String,
+    },
+    OrganizationImportComparisonJob {
+        job_id: String,
+    },
+    OrganizationImportComparisonCancel {
+        job_id: String,
+    },
+    OrganizationImportComparisonDiscard {
+        job_id: String,
+    },
+    OrganizationOriginalHistory {
+        job_id: String,
+    },
+    OrganizationCopyCapabilities {},
+    OrganizationCopyEffectMatch {
+        plan_id: String,
+        manifest_id: String,
+        selection_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        source_root_id: Option<String>,
+    },
+    OrganizationCopyPreparationReopen {
+        job_id: String,
+        selection_id: String,
+    },
+    OrganizationCopyReviewCreate {
+        plan_id: String,
+        manifest_id: String,
+        selection_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        source_root_id: Option<String>,
+    },
+    OrganizationCopyReview {
+        review_id: String,
+        selection_id: String,
+    },
+    OrganizationCopyApprove {
+        input: crate::operations::CopyApprovalInput,
+        selection_id: String,
+    },
+    OrganizationCopyStart {
+        input: crate::operations::CopyStartInput,
+        selection_id: String,
+    },
+    OrganizationCopyJob {
+        job_id: String,
+    },
+    OrganizationCopyCancel {
+        job_id: String,
+    },
+    OrganizationCopyIo {},
+    OrganizationCopySetIo {
+        aggregate_bytes_per_second: Option<String>,
+        byte_io_paused: Option<bool>,
+    },
+    OrganizationCopyDiscard {
+        review_id: String,
+    },
+    OrganizationCopyInspect {
+        review_id: String,
+        selection_id: String,
+    },
+    OrganizationCopyRecoveryInspect {
+        job_id: String,
+        selection_id: String,
+    },
+    OrganizationCopyContinuationReview {
+        job_id: String,
+        selection_id: String,
+    },
+    OrganizationCopyContinuationApprove {
+        input: crate::operations::CopyApprovalInput,
+        selection_id: String,
+    },
+    OrganizationCopyContinuationStart {
+        input: crate::operations::CopyStartInput,
+        selection_id: String,
+    },
+    OrganizationCopyContinuationDiscard {
+        review_id: String,
+    },
+    OrganizationBundleReviews {
+        plan_id: String,
         asset_id: String,
     },
     OrganizationPreview {
@@ -538,6 +771,15 @@ pub enum LibraryRequest {
     },
     GenerateThumbnails {
         root_id: String,
+    },
+    Pause {
+        job_id: String,
+    },
+    Resume {
+        job_id: String,
+    },
+    Retry {
+        job_id: String,
     },
     Cancel {
         job_id: String,
@@ -609,11 +851,46 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    InspectionIssues(crate::inspection::model::InspectionIssuePage),
+    InspectionKeeperLatest(Option<Box<crate::inspection::KeeperReview>>),
+    InspectionKeeperReview(crate::inspection::KeeperReview),
+    InspectionJob(Box<crate::inspection::model::InspectionJob>),
+    InspectionJobs(Vec<crate::inspection::model::InspectionJob>),
+    InspectionFindings(crate::inspection::model::FindingPage),
+    InspectionGroups(crate::inspection::model::DuplicatePage),
+    InspectionReport(Option<Box<crate::inspection::model::InspectionReport>>),
+    InspectionFolders(crate::inspection::model::FolderPage),
+    OrganizationImportDestination(ImportDestinationPreference),
+    OrganizationOriginalHistory(crate::operations::original_jobs::OriginalOperationHistory),
+    OrganizationCopyCapabilities(crate::operations::CopyWorkflowCapabilities),
+    OrganizationImportComparisonJob(Box<crate::operations::ImportComparisonJob>),
+    OrganizationImportPlan(Box<crate::operations::ImportPlan>),
+    OrganizationImportCopyReceipt(Option<Box<crate::operations::ImportCopyReceipt>>),
+    OrganizationImportOutputIndex(Box<crate::operations::ImportOutputIndex>),
+    OrganizationImportSkipApproval(crate::operations::ImportSkipApproval),
+    OrganizationImportSession(Box<crate::operations::ImportSession>),
+    OrganizationImportHistory(Box<crate::operations::ImportHistory>),
+    OrganizationImportSavedPlans(Vec<crate::operations::ImportPlanSummary>),
+    OrganizationCopyEffectMatch(crate::operations::CopyEffectMatch),
+    OrganizationCopyReview(Box<crate::operations::CopyActionReview>),
+    OrganizationCopyPreparationReopened(Box<crate::operations::CopyPreparationReopened>),
+    OrganizationCopyApproval(crate::operations::CopyActionApproval),
+    OrganizationCopyJob(crate::operations::CopyWorkflowJob),
+    OrganizationCopyIo(crate::operations::CopyIoStatus),
+    OrganizationCopyInspection(crate::operations::CopyInspection),
+    OrganizationCopyRecoveryInspection(crate::operations::CopyRecoveryInspection),
+    OrganizationCopyContinuationReview(Box<crate::operations::CopyContinuationReview>),
     OrganizationTemplates(Vec<crate::operations::SavedTemplate>),
     OrganizationTemplate(crate::operations::SavedTemplate),
     OrganizationPlans(crate::operations::OrganizationPlanPage),
     OrganizationPlan(Box<crate::operations::OrganizationPlanDetail>),
     OrganizationPlanExport(crate::operations::PlanExport),
+    OrganizationPlanExportSaved(crate::operations::PlanExportSaved),
+    OrganizationBundleInventory(crate::operations::BundleInventory),
+    OrganizationBundleConfirmation(crate::operations::BundleConfirmation),
+    OrganizationBundleReviews(Vec<crate::operations::BundleConfirmation>),
+    OrganizationCopyManifest(crate::operations::CopyManifest),
+    OrganizationCopyAssessment(crate::operations::CopyAssessment),
     OrganizationDestination(crate::organization::OrganizationDestinationReview),
     OrganizationCompanions(crate::organization::OrganizationCompanionReview),
     OrganizationPreview(crate::organization::OrganizationPreview),
