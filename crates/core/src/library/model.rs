@@ -83,6 +83,12 @@ pub struct ScanJob {
     pub id: String,
     pub root_id: String,
     pub state: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub total_files: Option<u32>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub processed_files: Option<u32>,
     pub discovered: u32,
     pub indexed: u32,
     pub skipped: u32,
@@ -765,6 +771,15 @@ pub enum LibraryRequest {
     },
     GenerateThumbnails {
         root_id: String,
+    },
+    Pause {
+        job_id: String,
+    },
+    Resume {
+        job_id: String,
+    },
+    Retry {
+        job_id: String,
     },
     Cancel {
         job_id: String,

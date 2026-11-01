@@ -2,6 +2,7 @@
 use super::*;
 
 pub(super) struct ThumbnailJob {
+    pub paused: Arc<super::super::job_control::PauseControl>,
     pub id: String,
     pub root_id: String,
     pub cancel: Arc<AtomicBool>,
@@ -51,7 +52,9 @@ impl Library {
         }
         let job = store::begin_thumbnail_job(&self.catalog, root_id.clone())?;
         let cancel = Arc::new(AtomicBool::new(false));
+        let paused = Arc::new(super::super::job_control::PauseControl::default());
         jobs.push(ThumbnailJob {
+            paused: paused.clone(),
             id: job.id.clone(),
             root_id: root_id.clone(),
             cancel: cancel.clone(),
@@ -61,7 +64,8 @@ impl Library {
         let spawned = std::thread::Builder::new()
             .name("thumbnail-library-job".into())
             .spawn(move || {
-                let outcome = owner.run_thumbnail_job(&id, &root_id, cancel.clone());
+                let outcome =
+                    owner.run_thumbnail_job(&id, &root_id, cancel.clone(), paused.clone());
                 let (state, message) = match outcome {
                     _ if cancel.load(Ordering::Relaxed) => (
                         "canceled",
@@ -99,8 +103,15 @@ impl Library {
         }
         Ok(job)
     }
-    fn run_thumbnail_job(&self, id: &str, root_id: &str, cancel: Arc<AtomicBool>) -> Result<u32> {
+    fn run_thumbnail_job(
+        &self,
+        id: &str,
+        root_id: &str,
+        cancel: Arc<AtomicBool>,
+        paused: Arc<super::super::job_control::PauseControl>,
+    ) -> Result<u32> {
         let _permit = loop {
+            super::super::job_control::boundary(&self.catalog, id, &paused, &cancel)?;
             if cancel.load(Ordering::Relaxed) {
                 return Ok(0);
             }
@@ -138,6 +149,7 @@ impl Library {
         if id.starts_with("thumbnail:initial:") {
             let held = std::time::Instant::now();
             while self.initial_previews_hold.load(Ordering::Acquire) {
+                super::super::job_control::boundary(&self.catalog, id, &paused, &cancel)?;
                 if cancel.load(Ordering::Relaxed) {
                     return Ok(0);
                 }
@@ -150,7 +162,9 @@ impl Library {
                 std::thread::sleep(Duration::from_millis(20));
             }
         }
+        let mut work_time = Duration::ZERO;
         loop {
+            super::super::job_control::boundary(&self.catalog, id, &paused, &cancel)?;
             if cancel.load(Ordering::Relaxed) {
                 break;
             }
@@ -159,9 +173,11 @@ impl Library {
                 break;
             }
             for (row, key) in page {
+                super::super::job_control::boundary(&self.catalog, id, &paused, &cancel)?;
                 if cancel.load(Ordering::Relaxed) {
                     break;
                 }
+                let work_started = Instant::now();
                 after = row;
                 if self.existing_preview(&key)?.is_some() {
                     store::preview_state_for_edge(&self.catalog, key, None)?;
@@ -192,6 +208,11 @@ impl Library {
                         }
                     }
                 }
+                work_time += work_started.elapsed();
+                let processed = generated + cached + errors;
+                let remaining_seconds = (work_time.as_secs_f64() / f64::from(processed)
+                    * f64::from(total.saturating_sub(processed)))
+                .ceil() as u64;
                 store::progress(
                     &self.catalog,
                     id.into(),
@@ -199,7 +220,14 @@ impl Library {
                     generated,
                     cached,
                     errors,
-                    "Preparing tiny previews; originals remain read-only".into(),
+                    if processed < 3 {
+                        "Preparing tiny previews; estimating remaining time…".into()
+                    } else {
+                        format!(
+                            "Preparing tiny previews · about {} min remaining (estimate)",
+                            remaining_seconds.div_ceil(60).max(1)
+                        )
+                    },
                 )?;
             }
         }

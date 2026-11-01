@@ -11,6 +11,7 @@ impl ScanContext {
         depth: u32,
         runtime: &tokio::runtime::Runtime,
     ) -> Result<()> {
+        self.boundary()?;
         if self.canceled.load(Ordering::Relaxed) {
             return Ok(());
         }
@@ -40,6 +41,7 @@ impl ScanContext {
         };
         let mut complete = true;
         loop {
+            self.boundary()?;
             if self.canceled.load(Ordering::Relaxed) {
                 complete = false;
                 break;
@@ -91,7 +93,12 @@ impl ScanContext {
                     || self.root.path.join(&path).starts_with(&self.data_directory)
                     || self.filter.directory_reason(&path, hidden).is_some()
                 {
-                    self.excluded(&path)?;
+                    self.excluded(
+                        &path,
+                        self.filter
+                            .directory_reason(&path, hidden)
+                            .unwrap_or("Application data excluded"),
+                    )?;
                     store::directory(
                         &self.catalog,
                         self.root.view.id.clone(),
@@ -138,12 +145,8 @@ impl ScanContext {
                 }
                 continue;
             }
-            if self
-                .filter
-                .file_reason(&path, hidden, entry.bytes, None)
-                .is_some()
-            {
-                self.excluded(&path)?;
+            if let Some(reason) = self.filter.file_reason(&path, hidden, entry.bytes, None) {
+                self.excluded(&path, reason)?;
                 continue;
             }
             let result = (|| -> Result<Discovery> {
@@ -190,6 +193,7 @@ impl ScanContext {
                     self.discovered = self.discovered.saturating_add(1);
                 }
                 Err(error) => {
+                    self.processed_files = self.processed_files.saturating_add(1);
                     self.issue(&path, error)?;
                     store::uncertain(
                         &self.catalog,

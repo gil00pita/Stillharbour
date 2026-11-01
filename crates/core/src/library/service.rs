@@ -47,6 +47,7 @@ pub struct LibraryOptions {
     pub workers: workers::WorkerPaths,
 }
 struct ActiveScan {
+    paused: Arc<super::job_control::PauseControl>,
     id: String,
     root_id: String,
     cancel: Arc<AtomicBool>,
@@ -725,7 +726,9 @@ impl Library {
         let job = store::begin_job(&self.catalog, id, filter.clone())?;
         root.view.filter = filter;
         let cancel = permit.cancellation();
+        let paused = Arc::new(super::job_control::PauseControl::default());
         *self.active.lock().map_err(|_| lock_error())? = Some(ActiveScan {
+            paused: paused.clone(),
             id: job.id.clone(),
             root_id: root.view.id.clone(),
             cancel: cancel.clone(),
@@ -749,6 +752,9 @@ impl Library {
                     data_directory: owner.options.data_directory.clone(),
                     #[cfg(any(unix, windows))]
                     data_identity: managed_identity,
+                    paused,
+                    total_files: None,
+                    processed_files: 0,
                     canceled: cancel.clone(),
                     resources: owner.resources.clone(),
                     discovered: 0,
@@ -814,6 +820,46 @@ impl Library {
             .caused_by(error));
         }
         Ok(response)
+    }
+    pub fn set_paused(&self, id: String, pause: bool) -> Result<()> {
+        let jobs = self.thumbnail_jobs.lock().map_err(|_| lock_error())?;
+        let active = self.active.lock().map_err(|_| lock_error())?;
+        let (paused, canceled) = if let Some(job) = jobs.iter().find(|job| job.id == id) {
+            (&job.paused, &job.cancel)
+        } else if let Some(job) = active.as_ref().filter(|job| job.id == id) {
+            (&job.paused, &job.cancel)
+        } else {
+            return Err(invalid("This job is no longer running. Retry it instead."));
+        };
+        if canceled.load(Ordering::Acquire) {
+            return Err(invalid("This job is stopping. Wait before retrying."));
+        }
+        let job = store::job(&self.catalog, id.clone())?;
+        if !matches!(
+            job.state.as_str(),
+            "queued" | "running" | "pause_requested" | "paused"
+        ) {
+            return Err(invalid("This job has finished. Retry it instead."));
+        }
+        paused.request(&self.catalog, &id, pause)?;
+        Ok(())
+    }
+    pub fn retry(self: &Arc<Self>, id: String) -> Result<ScanJob> {
+        let job = store::job(&self.catalog, id)?;
+        if matches!(
+            job.state.as_str(),
+            "queued" | "running" | "cancel_requested" | "pause_requested" | "paused"
+        ) {
+            return Err(invalid(
+                "Pause, resume or stop the active job before retrying.",
+            ));
+        }
+        if matches!(job.kind, Some(JobKind::Thumbnails)) {
+            self.generate_thumbnails(job.root_id)
+        } else {
+            let root = store::root(&self.catalog, job.root_id)?;
+            self.scan(root.view.id, root.view.filter)
+        }
     }
     pub fn cancel(&self, id: String) -> Result<()> {
         {
@@ -1586,6 +1632,7 @@ mod maintenance_tests {
         let cancel = permit.cancellation();
         let job = store::begin_job(&library.catalog, root.into(), ScanFilter::default()).unwrap();
         *library.active.lock().unwrap() = Some(ActiveScan {
+            paused: Arc::new(super::super::job_control::PauseControl::default()),
             id: job.id.clone(),
             root_id: root.into(),
             cancel: cancel.clone(),
@@ -1610,6 +1657,110 @@ mod maintenance_tests {
             drop(permit);
         });
         (job.id, worker)
+    }
+    #[test]
+    fn paused_job_resumes_in_place_and_cancellation_wakes_it() {
+        let (_data, library, root) = removal_fixture();
+        let job = store::begin_job(&library.catalog, root.clone(), ScanFilter::default()).unwrap();
+        let paused = Arc::new(super::super::job_control::PauseControl::default());
+        let cancel = Arc::new(AtomicBool::new(false));
+        *library.active.lock().unwrap() = Some(ActiveScan {
+            id: job.id.clone(),
+            root_id: root,
+            paused: paused.clone(),
+            cancel: cancel.clone(),
+        });
+        for cancel_instead in [false, true] {
+            library.set_paused(job.id.clone(), true).unwrap();
+            let owner = library.clone();
+            let id = job.id.clone();
+            let (p, c) = (paused.clone(), cancel.clone());
+            let finished = Arc::new(AtomicBool::new(false));
+            let stop = finished.clone();
+            let worker = std::thread::spawn(move || {
+                while !stop.load(Ordering::Acquire) && !c.load(Ordering::Acquire) {
+                    super::super::job_control::boundary(&owner.catalog, &id, &p, &c).unwrap();
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+            });
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while store::job(&library.catalog, job.id.clone()).unwrap().state != "paused" {
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(!worker.is_finished());
+            // Rapid resume/pause must be acknowledged even if the worker has
+            // not left its wait yet; the second request must not get stranded.
+            library.set_paused(job.id.clone(), false).unwrap();
+            library.set_paused(job.id.clone(), true).unwrap();
+            while store::job(&library.catalog, job.id.clone()).unwrap().state != "paused" {
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(library.retry(job.id.clone()).is_err());
+            if cancel_instead {
+                library.cancel(job.id.clone()).unwrap();
+            } else {
+                library.set_paused(job.id.clone(), false).unwrap();
+            }
+            finished.store(true, Ordering::Release);
+            worker.join().unwrap();
+            assert_eq!(
+                store::job(&library.catalog, job.id.clone()).unwrap().state,
+                if cancel_instead {
+                    "cancel_requested"
+                } else {
+                    "running"
+                }
+            );
+        }
+        assert!(library.set_paused(job.id.clone(), false).is_err());
+        *library.active.lock().unwrap() = None;
+        // A process restart cannot leave a durable paused job looking live.
+        store::recover_jobs(&library.catalog).unwrap();
+        assert_eq!(
+            store::job(&library.catalog, job.id).unwrap().state,
+            "interrupted"
+        );
+    }
+    #[test]
+    fn filename_inventory_counts_without_metadata_and_retry_keeps_sources() {
+        let (data, library, root) = removal_fixture();
+        fs::write(
+            data.path().join("generated-source/.hidden.txt"),
+            b"excluded",
+        )
+        .unwrap();
+        let job = library.scan(root.clone(), ScanFilter::default()).unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !library.scan_idle() {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        let detail = library.job_details(job.id.clone()).unwrap();
+        assert_eq!(detail.job.total_files, Some(1));
+        assert_eq!(detail.job.processed_files, Some(1));
+        assert!(
+            detail
+                .issues
+                .iter()
+                .any(|s| s.contains(".hidden.txt: Hidden file excluded"))
+        );
+        let retry = library.retry(job.id).unwrap();
+        assert_ne!(retry.id, detail.job.id);
+        while !library.scan_idle() {
+            assert!(Instant::now() < deadline);
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(
+            library.job_details(retry.id).unwrap().job.state,
+            "completed"
+        );
+        assert_eq!(
+            fs::read(data.path().join("generated-source/original.txt")).unwrap(),
+            b"generated source retained"
+        );
+        library.cancel_all();
     }
     #[test]
     fn removal_stops_selected_scan_before_review_and_preserves_sources() {
@@ -1663,6 +1814,7 @@ mod maintenance_tests {
         let cancel = permit.cancellation();
         let job = store::begin_job(&library.catalog, root.clone(), ScanFilter::default()).unwrap();
         *library.active.lock().unwrap() = Some(ActiveScan {
+            paused: Arc::new(super::super::job_control::PauseControl::default()),
             id: job.id,
             root_id: root.clone(),
             cancel: cancel.clone(),

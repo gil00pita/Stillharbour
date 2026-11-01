@@ -22,7 +22,9 @@ export function thumbnailDescription(
     running:
       percentage === undefined
         ? 'Counting photos for preview preparation…'
-        : `Preparing thumbnails · ${processed.toLocaleString()} of ${job.discovered.toLocaleString()}`,
+        : `Preparing thumbnails · ${processed.toLocaleString()} of ${job.discovered.toLocaleString()} · ${percentage}%`,
+    paused: 'Thumbnail generation paused',
+    pause_requested: 'Pausing thumbnail generation…',
     cancel_requested: 'Stopping thumbnail generation…',
     completed: 'Thumbnails complete',
     partial: 'Thumbnails finished with unavailable items',

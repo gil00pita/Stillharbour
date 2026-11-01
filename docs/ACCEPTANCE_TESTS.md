@@ -549,3 +549,14 @@ Isolation validation continuation: require a real child to write beyond both OS 
 ### M3 evidence record — 2026-11-01
 
 Applicable AC-040–057 and AC-059–065 evidence is indexed in [M3_VALIDATION.md](M3_VALIDATION.md), against complete Windows/macOS CI 41324632055 at 563721a and inspected native result/zoom/recovery artifacts. This accepts the implemented read-only and disposable-fixture gate; it does not authorize real-library quarantine before M4 independent recovery. The declared normalized subset is static PNG8 policy v2, and deep raster coverage/unsupported formats, bounds and metric limitations remain explicit. AC-058 remains future scope; no perceptual mode was added. Existing acceptance requirements and preservation gates remain in force.
+
+## Scan control and progress refinement — 2026-11-01
+
+AC-002/010/015/022 extensions, using generated sources only:
+
+- Filename inventory precedes content/metadata reads. Count permitted regular entries without following links or hydrating cloud placeholders, retain bounded directory buffers/depth, and preserve filters/app-data exclusions. Inventory failures never reconcile missing files. A known total drives processed/total scan progress; growth caps active progress at 99 and cancellation never claims completion.
+- Details reports intentional exclusions with relative labels and reasons, plus read/metadata/preview failures, bounded to the first 200 entries. Thumbnail asset IDs resolve to display labels locally. Render hostile strings as text. Explain that exclusions need changed scan settings and that old jobs lack newly recorded reasons.
+- Pause requests remain pending until an admitted scan/thumbnail worker reaches a safe boundary; counts stop while paused. Resume continues the same job ID/cursor. Cancel, removal and shutdown wake paused work. A restart converts paused/pending jobs to interrupted.
+- Retry rejects active jobs, uses backend job/root identity and current saved filters, retries failed work and reuses unchanged metadata/previews. Never changes originals or bypasses exclusions. Failed requests remain explicit and re-attemptable.
+- Thumbnail progress includes generated/cached/unavailable observations. Remaining time is explicitly an estimate after three items; paused boundary time is excluded. No fixed throughput or large-library timing promise.
+- Schema-9 catalogs retain independent pre-migration snapshots before schema 10 adds nullable counters; the legacy scan-branch schema-4 layout preserves existing counters; UUIDs/data survive. Retain rollback and child-process migration failure checks. Run native Windows/macOS pause/resume on the held initial-preview job and capture unchanged counts/same identity, alongside existing source manifests. Local host limitations are recorded separately.

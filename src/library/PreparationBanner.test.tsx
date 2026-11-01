@@ -85,7 +85,7 @@ it('shows actual processed previews after inventory, including unavailable outco
   expect(screen.getByText('40 previews processed')).toBeVisible();
   expect(screen.getByText('5 previews unavailable · Details in Jobs')).toBeVisible();
   expect(screen.getByRole('progressbar')).toHaveAccessibleDescription(
-    'Preparing thumbnails · 40 of 100',
+    'Preparing thumbnails · 40 of 100 · 40%',
   );
   rerender(
     <PreparationBanner
@@ -175,4 +175,22 @@ it('retains failures, suppresses stale errors after changing folders and hides a
     />,
   );
   expect(screen.queryByRole('region', { name: 'Library preparation' })).not.toBeInTheDocument();
+});
+
+it('pauses discovery and resumes the same job without starting a new scan', async () => {
+  const { rerender } = render(
+    <PreparationBanner status={status} rootId={null} onRefresh={refresh} />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Pause scan' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'pause', job_id: 'scan' }));
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  rerender(
+    <PreparationBanner
+      status={{ ...status, jobs: [{ ...scan, state: 'paused' }] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Resume job' }));
+  await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'resume', job_id: 'scan' }));
 });

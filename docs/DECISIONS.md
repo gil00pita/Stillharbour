@@ -313,3 +313,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## M3 read-only inspections — 2026-11-01 (accepted fixture gate)
 
 [ADR-0070](decisions/ADR-0070-read-only-inspection-jobs.md) connects bounded native duplicate/health/storage jobs to catalog schema 9 and native UI. Root/object/revision validation, complete direct-byte comparisons, versioned candidate fingerprints and append-only explicit baselines remain backend-owned. Keeper review retains protected/preferred folder and manual/date policy without granting cleanup approval. Constructor-owned duplicate bundle proof reuses M2 quarantine/restore; real-library quarantine and independent-recovery gates remain closed. The implemented M3 fixture/read-only gate passes complete both-target CI 41324632055 at 563721a; M3_VALIDATION.md records inspected native evidence and limitations. No M4 implementation is authorized.
+
+## Scan-control branch integration — 2026-11-01
+
+[ADR-0071](decisions/ADR-0071-scan-control-progress.md) integrates the preferred 93fd459 scan behavior with the target's M2/M3 work. Catalog schema 10 adds filename-progress counters without discarding operation/inspection schema or data. The incoming branch's independent schema-4 counter layout keeps its progress and gains the missing target indexes before later migrations. Partial layouts fail closed; pre-migration snapshots and UUID preservation remain mandatory. M2/M3 fixture acceptance remains historical evidence, and this merge does not authorize M4 or real-library mutations.

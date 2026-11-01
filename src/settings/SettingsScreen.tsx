@@ -170,7 +170,11 @@ export function SettingsScreen({
             busy ||
             Boolean(maintenanceTarget) ||
             !status ||
-            status.jobs.some((job) => ['queued', 'running', 'cancel_requested'].includes(job.state))
+            status.jobs.some((job) =>
+              ['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
+                job.state,
+              ),
+            )
           }
           onClick={(event) => {
             maintenanceOpener.current = event.currentTarget;

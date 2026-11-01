@@ -14,7 +14,7 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: u32 = 9;
+pub const SCHEMA_VERSION: u32 = 10;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
@@ -500,7 +500,78 @@ mod tests {
         assert_eq!(Catalog::open(path).unwrap().summary().unwrap().id, id);
     }
 
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn schema_ten_migration_retains_schema_nine_before_adding_progress() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("progress.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        drop(catalog);
+        {
+            let db = Connection::open(&path).unwrap();
+            db.execute_batch("ALTER TABLE scans DROP COLUMN total_files; ALTER TABLE scans DROP COLUMN processed_files; PRAGMA user_version=9;").unwrap();
+        }
+        let catalog = Catalog::open(path).unwrap();
+        assert_eq!(catalog.summary().unwrap().id, id);
+        assert_eq!(catalog.summary().unwrap().schema, SCHEMA_VERSION);
+        let retained = std::fs::read_dir(owned.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|p| {
+                p.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("pre-migration-v9-")
+            })
+            .unwrap();
+        let backup =
+            Connection::open_with_flags(retained, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        assert_eq!(summary(&backup).unwrap().schema, 9);
+        assert_eq!(summary(&backup).unwrap().id, id);
+        assert_eq!(
+            backup
+                .query_row(
+                    "SELECT count(*) FROM pragma_table_info('scans') WHERE name='total_files'",
+                    [],
+                    |r| r.get::<_, u32>(0)
+                )
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn partial_scan_progress_schema_is_retained_without_migration() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("partial.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        drop(catalog);
+        {
+            let db = Connection::open(&path).unwrap();
+            db.execute_batch(
+                "ALTER TABLE scans DROP COLUMN processed_files; PRAGMA user_version=9;",
+            )
+            .unwrap();
+        }
+        assert!(Catalog::open(path.clone()).is_err());
+        let db = Connection::open(path).unwrap();
+        assert_eq!(summary(&db).unwrap().schema, 9);
+        assert_eq!(summary(&db).unwrap().id, id);
+        assert_eq!(
+            db.query_row(
+                "SELECT count(*) FROM pragma_table_info('scans') WHERE name='total_files'",
+                [],
+                |r| r.get::<_, u32>(0)
+            )
+            .unwrap(),
+            1
+        );
+    }
     fn strip_original_job_schema(db: &Connection) -> rusqlite::Result<()> {
+        db.execute_batch("ALTER TABLE scans DROP COLUMN total_files; ALTER TABLE scans DROP COLUMN processed_files;")?;
         crate::library::inspection_store::strip_schema(db)?;
         db.execute_batch("DROP TABLE import_destination_preference; DROP TABLE original_operation_events; DROP TABLE original_operation_jobs; DROP TABLE original_operation_plans;")
     }
@@ -669,6 +740,45 @@ mod tests {
         drop(catalog);
         id
     }
+    #[test]
+    #[cfg(any(windows, target_os = "macos"))]
+    fn scan_branch_v4_migrates_without_losing_progress_or_identity() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("scan-branch.stillharbour");
+        let id = legacy_three_fixture(&path);
+        {
+            let db = Connection::open(&path).unwrap();
+            db.execute_batch("ALTER TABLE scans ADD COLUMN total_files INTEGER; ALTER TABLE scans ADD COLUMN processed_files INTEGER; PRAGMA user_version=4;").unwrap();
+            db.execute("INSERT INTO roots(id,label,native_path,display_path,mode,is_base,platform,volume,device,inode,availability,filter) VALUES('fixture-root','Generated',X'','Generated','referenced',1,'fixture','fixture','0','0','unknown',?1)", [serde_json::to_string(&crate::library::model::ScanFilter::default()).unwrap()]).unwrap();
+            db.execute_batch("INSERT INTO scans(id,root_id,state,message,started_at,total_files,processed_files) VALUES('retained-progress','fixture-root','interrupted','Retained fixture','2026-11-01',12,5);").unwrap();
+        }
+        let catalog = Catalog::open(path).unwrap();
+        assert_eq!(catalog.summary().unwrap().id, id);
+        assert_eq!(catalog.summary().unwrap().schema, SCHEMA_VERSION);
+        catalog.call(|db| {
+            let indexes:u32 = db.query_row("SELECT count(*) FROM sqlite_schema WHERE type='index' AND name IN ('operation_journal_scope','operation_copy_stream')", [], |row| row.get(0))?;
+            assert_eq!(indexes, 2);
+            let columns:u32 = db.query_row("SELECT count(*) FROM pragma_table_info('scans') WHERE name IN ('total_files','processed_files')", [], |row| row.get(0))?;
+            assert_eq!(columns, 2);
+            assert_eq!(db.query_row("SELECT total_files,processed_files FROM scans WHERE id='retained-progress'", [], |row| Ok((row.get::<_,u32>(0)?,row.get::<_,u32>(1)?)))?, (12,5));
+            assert_eq!(db.query_row("SELECT state FROM job_events WHERE sequence=1", [], |row|row.get::<_,String>(0))?, "retained user data");
+            Ok(())
+        }).unwrap();
+        let snapshot = std::fs::read_dir(owned.path())
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .find(|p| {
+                p.file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("pre-migration-v4-")
+            })
+            .unwrap();
+        let backup =
+            Connection::open_with_flags(snapshot, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        assert_eq!(summary(&backup).unwrap().schema, 4);
+        assert_eq!(summary(&backup).unwrap().id, id);
+    }
     fn legacy_four_fixture(path: &Path) -> String {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
@@ -700,6 +810,7 @@ mod tests {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
         catalog.call(|db| {
+            db.execute_batch("ALTER TABLE scans DROP COLUMN total_files; ALTER TABLE scans DROP COLUMN processed_files;")?;
             crate::library::inspection_store::strip_schema(db)?;
             db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data'); PRAGMA user_version=8;")?;
             Ok(())
@@ -732,7 +843,7 @@ mod tests {
                 assert_eq!(db.query_row("SELECT count(*) FROM sqlite_schema WHERE type='table' AND name='inspection_jobs'",[],|row|row.get::<_,i64>(0)).unwrap(),0);
             } else {
                 let catalog = result.unwrap();
-                assert_eq!(catalog.summary().unwrap().schema, 9);
+                assert_eq!(catalog.summary().unwrap().schema, SCHEMA_VERSION);
                 assert_eq!(catalog.summary().unwrap().id, id);
             }
             let snapshot = std::fs::read_dir(owned.path())
@@ -763,6 +874,7 @@ mod tests {
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
         catalog.call(|db|{
+            db.execute_batch("ALTER TABLE scans DROP COLUMN total_files; ALTER TABLE scans DROP COLUMN processed_files;")?;
             crate::library::inspection_store::strip_schema(db)?;
             db.execute_batch("DROP TABLE import_destination_preference; INSERT INTO job_events VALUES(1,'fixture','retained user data'); PRAGMA user_version=7;")?;
             db.execute("INSERT INTO roots(id,label,native_path,display_path,mode,is_base,platform,volume,device,inode,availability,filter) VALUES('327d8c01-938e-4c13-8514-91f848e2eabc','Offline metadata fixture',X'00','Generated offline observation','referenced',1,'fixture','retained-volume','1','2','offline',?)",[serde_json::to_string(&crate::library::model::ScanFilter::default()).unwrap()])?;
