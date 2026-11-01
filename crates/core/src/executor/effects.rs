@@ -102,16 +102,22 @@ impl Effect {
         let files = snapshot
             .files
             .iter()
-            .zip(&manifest.files)
-            .map(|(file, member)| File {
-                location: file.location.clone(),
-                object: file.object.clone(),
-                revision: file.revision.clone(),
-                bytes: file.bytes,
-                target: file.target.clone(),
-                bundle_asset_ids: member.view.bundle_asset_ids.clone(),
+            .map(|file| {
+                let member = manifest
+                    .files
+                    .iter()
+                    .find(|member| member.view.id == file.id)
+                    .ok_or_else(|| failed("Copy effect refers to an unknown manifest file."))?;
+                Ok(File {
+                    location: file.location.clone(),
+                    object: file.object.clone(),
+                    revision: file.revision.clone(),
+                    bytes: file.bytes,
+                    target: file.target.clone(),
+                    bundle_asset_ids: member.view.bundle_asset_ids.clone(),
+                })
             })
-            .collect();
+            .collect::<Result<Vec<_>>>()?;
         let definition = Definition {
             policy: "source-retaining-copy-effect-v1".into(),
             catalog_id: snapshot.catalog_id.clone(),

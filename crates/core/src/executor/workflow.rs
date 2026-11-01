@@ -3,7 +3,7 @@
 mod import_bundles;
 mod import_comparison;
 mod import_execution;
-mod import_planning;
+pub(in crate::executor) mod import_planning;
 #[cfg(test)]
 pub(in crate::executor) use import_comparison::compare_fixture;
 mod recovery;

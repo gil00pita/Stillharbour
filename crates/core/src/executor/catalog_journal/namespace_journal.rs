@@ -488,13 +488,13 @@ fn load_preparation_for(
         return Err(failed("Foreign or recursive prepared namespace binding."));
     }
     scope.sources.validate_for(db, managed)?;
-    let manifest = copy_manifest::load(db, owner, &scope.sources.manifest_id)?;
-    let targets: Vec<Target> = manifest
+    let targets: Vec<Target> = scope
+        .sources
         .files
         .iter()
         .map(|file| Target {
-            id: file.view.id.clone(),
-            path: file.view.target_relative_path.clone(),
+            id: file.id.clone(),
+            path: file.target.clone(),
         })
         .collect();
     if scope.targets != targets {
@@ -530,6 +530,14 @@ fn load_preparation_for(
 }
 pub(super) fn validate_copy_binding(db: &Connection, binding: &Binding) -> Result<()> {
     validate_copy_binding_for(db, binding, true).map(|_| ())
+}
+pub(super) fn required_source_mode(
+    db: &Connection,
+    binding: &Binding,
+) -> Result<crate::library::model::RootMode> {
+    Ok(validate_copy_binding_for(db, binding, false)?
+        .0
+        .required_mode())
 }
 pub(super) fn recovery_inventory_record(
     db: &Connection,

@@ -61,6 +61,11 @@ impl Stored {
     }
     fn validate(&self, db: &Connection) -> Result<()> {
         let view = &self.view;
+        if self.source.import_selection.is_some() {
+            return Err(failed(
+                "An import decision cannot recursively contain an import copy projection.",
+            ));
+        }
         validate_id(&view.id)?;
         self.source.validate_mapping(db)?;
         if self.policy != "whole-bundle-import-plan-v1"
@@ -315,6 +320,100 @@ impl Stored {
             entry.open(lease.directory(index).leaf())?;
         }
         Ok(())
+    }
+}
+fn projected(
+    db: &Connection,
+    owner: &str,
+    id: &str,
+    digest: &str,
+    mode: crate::library::model::RootMode,
+) -> Result<Snapshot> {
+    let stored = load(db, owner, id)?;
+    if stored.view.digest != digest || stored.view.copy_file_ids.is_empty() {
+        return Err(failed(
+            "Select an immutable import plan with files to copy.",
+        ));
+    }
+    let mut snapshot = stored.source;
+    snapshot
+        .files
+        .retain(|file| stored.view.copy_file_ids.contains(&file.id));
+    if snapshot.files.len() != stored.view.copy_file_ids.len() {
+        return Err(failed(
+            "Import copy decisions do not match the original source file IDs.",
+        ));
+    }
+    snapshot.import_selection = Some(crate::executor::sources::ImportSelection {
+        id: id.into(),
+        digest: digest.into(),
+        source_mode: mode,
+    });
+    Ok(snapshot)
+}
+pub(in crate::executor) fn validate_projection(db: &Connection, snapshot: &Snapshot) -> Result<()> {
+    let selection = snapshot
+        .import_selection
+        .as_ref()
+        .ok_or_else(|| failed("An import copy projection needs its exact retained decisions."))?;
+    let expected = projected(
+        db,
+        &snapshot.owner_id,
+        &selection.id,
+        &selection.digest,
+        selection.source_mode,
+    )?;
+    let expected = serde_json::to_vec(&expected)
+        .map_err(|error| failed("Could not encode expected import copy scope.").caused_by(error))?;
+    let actual = serde_json::to_vec(snapshot)
+        .map_err(|error| failed("Could not encode import copy scope.").caused_by(error))?;
+    if expected != actual {
+        return Err(failed(
+            "Import copy scope differs from its exact retained source/target subset.",
+        ));
+    }
+    Ok(())
+}
+impl CopyWorkflow {
+    #[cfg(test)]
+    pub(in crate::executor) fn import_copy_sources(
+        &self,
+        owner: String,
+        id: String,
+    ) -> Result<Snapshot> {
+        let snapshot = self.catalog.call(move |db| {
+            let stored = load(db, &owner, &id)?;
+            let mode: String = db.query_row(
+                "SELECT mode FROM roots WHERE id=?",
+                [&stored.source.root_id],
+                |row| row.get(0),
+            )?;
+            let mode = match mode.as_str() {
+                "managed" => crate::library::model::RootMode::Managed,
+                "referenced" => crate::library::model::RootMode::Referenced,
+                _ => {
+                    return Err(failed(
+                        "The import source has no readable registered grant.",
+                    ));
+                }
+            };
+            let snapshot = projected(db, &owner, &id, &stored.view.digest, mode)?;
+            snapshot.validate(db)?;
+            Ok(snapshot)
+        })?;
+        let scope = snapshot.open_scope(&self.catalog, Access::Read)?;
+        for member in &snapshot.files {
+            let file = member.location.open(scope.directory(0).leaf())?;
+            if !member.object.matches(&file)?
+                || native::revision(&file)? != member.revision
+                || file.metadata()?.len() != member.bytes
+            {
+                return Err(failed(
+                    "An import copy source changed. Compare and review again.",
+                ));
+            }
+        }
+        Ok(snapshot)
     }
 }
 type Skips = Vec<(String, String, String)>;

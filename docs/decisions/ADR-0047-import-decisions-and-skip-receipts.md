@@ -1,6 +1,6 @@
 # ADR-0047 — Retained import decisions and fresh verified skip receipts
 
-Date: 2026-10-31. Status: experimental M2; complete checks and Windows native validation pass; macOS CI pending.
+Date: 2026-10-31. Status: experimental M2; complete checks and Windows/macOS native CI pass through dc55a9e.
 
 ## Decision
 
@@ -21,3 +21,5 @@ Use ID-only typed requests for decisions, history, explicit approval/start, poll
 Focused generated tests cover native whole-bundle binding, source/keeper changes, stable decision reuse, false digests/ticket replay, new session after restart, historical receipts with offline keepers, canceled work, repeated fresh reads, absent outputs and denied completion journals. Component tests cover explicit choice/approval/start, split-bundle and foreign-session refusal, stale errors, incomplete history without replay and late approval disposal. Native acceptance uses a separate constructor-owned valid JPEG/sidecar pair with a complete real scan and coherent renamed stem; malformed/unsupported comparison coverage remains a separate fixture. Audit originals, both candidate files, existing outputs and neighbors independently. Complete/native outcomes follow in the implementation log.
 
 This slice does not complete folder import, mixed copy/skip, multi-root organization, cross-volume/case-cycle/undo or M2. M3 still requires the M2 gate.
+
+Both platform jobs pass in [CI run 41257971646](https://github.com/gil00pita/Stillharbour/actions/runs/41257971646). The separate test-only timeout correction accommodates the owned fault matrix; application behavior/gates are unchanged.

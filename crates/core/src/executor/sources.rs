@@ -1,6 +1,7 @@
 //! Native source planning is distinct from an executable copy plan. Future
 //! target folders need not exist and no output object is created here.
 use super::{Object, failed, locations};
+use crate::library::model::RootMode;
 use crate::{
     catalog::Catalog,
     domain::Result,
@@ -11,6 +12,14 @@ use crate::{
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct ImportSelection {
+    pub id: String,
+    pub digest: String,
+    pub source_mode: RootMode,
+}
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -37,6 +46,8 @@ pub(super) struct Snapshot {
     pub source_volume: String,
     pub destination: Object,
     pub destination_volume: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub import_selection: Option<ImportSelection>,
     pub files: Vec<File>,
 }
 pub(super) fn root(db: &Connection, id: &str, managed: bool) -> Result<(Vec<u8>, Object, String)> {
@@ -60,6 +71,11 @@ pub(super) fn root(db: &Connection, id: &str, managed: bool) -> Result<(Vec<u8>,
     ))
 }
 impl Snapshot {
+    pub(super) fn required_mode(&self) -> RootMode {
+        self.import_selection
+            .as_ref()
+            .map_or(RootMode::Managed, |selection| selection.source_mode)
+    }
     #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn validate_roots(&self, catalog: &Arc<Catalog>) -> Result<()> {
         self.validate_roots_for(catalog, true)
@@ -71,7 +87,22 @@ impl Snapshot {
     #[cfg(any(test, feature = "copy-workflow"))]
     fn validate_roots_for(&self, catalog: &Arc<Catalog>, managed: bool) -> Result<()> {
         let id = self.root_id.clone();
-        let (path, object, volume) = catalog.call(move |db| root(db, &id, managed))?;
+        let importing = self.import_selection.is_some();
+        let required_mode = self.required_mode();
+        let (path, object, volume) = catalog.call(move |db| {
+            if managed && importing {
+                let mode: String =
+                    db.query_row("SELECT mode FROM roots WHERE id=?", [&id], |row| row.get(0))?;
+                let expected = match required_mode {
+                    RootMode::Managed => "managed",
+                    RootMode::Referenced => "referenced",
+                };
+                if mode != expected {
+                    return Err(failed("The import source grant changed."));
+                }
+            }
+            root(db, &id, managed && !importing)
+        })?;
         if object != self.source || volume != self.source_volume {
             return Err(failed("Source root identity/volume grant changed."));
         }
@@ -208,6 +239,7 @@ impl Snapshot {
             source_volume,
             destination,
             destination_volume: draft.destination_volume,
+            import_selection: None,
             files,
         };
         let retained = snapshot.clone();
@@ -235,7 +267,11 @@ impl Snapshot {
         let snapshot = self.clone();
         let (source_path, destination_path) = catalog.call(move |db| {
             snapshot.validate_for(db, destination_access == Access::Write)?;
-            let (source, _, _) = root(db, &snapshot.root_id, destination_access == Access::Write)?;
+            let (source, _, _) = root(
+                db,
+                &snapshot.root_id,
+                destination_access == Access::Write && snapshot.import_selection.is_none(),
+            )?;
             Ok((
                 source,
                 operation_store::load(db, &snapshot.owner_id)?.destination_native,
@@ -288,7 +324,27 @@ impl Snapshot {
     }
     pub(super) fn validate_for(&self, db: &Connection, managed: bool) -> Result<()> {
         self.validate_mapping(db)?;
-        let (_, source, volume) = root(db, &self.root_id, managed)?;
+        let (_, source, volume) = root(
+            db,
+            &self.root_id,
+            managed && self.import_selection.is_none(),
+        )?;
+        if managed && self.import_selection.is_some() {
+            let mode: String = db.query_row(
+                "SELECT mode FROM roots WHERE id=?",
+                [&self.root_id],
+                |row| row.get(0),
+            )?;
+            let expected = match self.required_mode() {
+                RootMode::Managed => "managed",
+                RootMode::Referenced => "referenced",
+            };
+            if mode != expected {
+                return Err(failed(
+                    "The import source grant changed. Retain current outputs and review again.",
+                ));
+            }
+        }
         if self.source != source || self.source_volume != volume {
             return Err(failed(
                 "Source snapshot no longer matches its current root grant.",
@@ -297,6 +353,18 @@ impl Snapshot {
         Ok(())
     }
     pub(super) fn validate_mapping(&self, db: &Connection) -> Result<()> {
+        if self.import_selection.is_some() {
+            #[cfg(any(test, feature = "copy-workflow"))]
+            {
+                return super::workflow::import_planning::validate_projection(db, self);
+            }
+            #[cfg(not(any(test, feature = "copy-workflow")))]
+            {
+                return Err(failed(
+                    "Import copy projections are unavailable in this build.",
+                ));
+            }
+        }
         let draft = operation_store::load(db, &self.owner_id)?;
         let manifest = copy_manifest::load(db, &self.owner_id, &self.manifest_id)?;
         if self.policy != "native-copy-source-snapshot-v1"

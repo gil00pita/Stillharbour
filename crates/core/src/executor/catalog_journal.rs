@@ -201,6 +201,7 @@ pub(super) struct CatalogJournal {
     encoded: String,
     anchor: i64,
     history: Mutex<History>,
+    source_mode: crate::library::model::RootMode,
 }
 struct ObservedJournal<'a> {
     inner: &'a CatalogJournal,
@@ -404,10 +405,14 @@ impl CatalogJournal {
         let root = root.to_owned();
         let object = self.binding.plan.source.clone();
         let expected_volume = self.binding.plan.source_volume.clone();
+        let expected_mode = match self.source_mode {
+            crate::library::model::RootMode::Managed => "managed",
+            crate::library::model::RootMode::Referenced => "referenced",
+        };
         self.catalog.call(move|db| {
             let (device,inode,volume,mode):(String,String,String,String)=db.query_row("SELECT device,inode,volume,mode FROM roots WHERE id=?",[root],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?)))?;
-            if device!=object.volume.to_string() || inode!=object.file.to_string() || volume!=expected_volume || mode!="managed" {
-                return Err(failed("The source root managed grant changed. Retain current outputs and review again."));
+            if device!=object.volume.to_string() || inode!=object.file.to_string() || volume!=expected_volume || mode!=expected_mode {
+                return Err(failed(&format!("The source root {expected_mode} grant changed. Retain current outputs and review again.")));
             }
             Ok(())
         })
@@ -495,6 +500,7 @@ impl CatalogJournal {
         })?;
         Ok((
             Self {
+                source_mode: sources.required_mode(),
                 catalog,
                 binding,
                 encoded,
@@ -617,7 +623,7 @@ impl CatalogJournal {
         let supplied = plan.clone();
         let owner = owner_id.clone();
         let manifest = manifest_id.clone();
-        let (binding,encoded,anchor,history)=catalog.call(move |db| {
+        let (binding,encoded,anchor,history,source_mode)=catalog.call(move |db| {
             let tx=db.transaction()?;
             let draft=operation_store::load(&tx,&owner)?;
             let scope=copy_manifest::load(&tx,&owner,&manifest)?;
@@ -650,9 +656,11 @@ impl CatalogJournal {
                     history.apply(&event,&binding.plan)?;
                 }
             }
-            tx.commit()?;Ok((binding,encoded,anchor,history))
+            let source_mode=if binding.namespace.is_some(){namespace_journal::required_source_mode(&tx,&binding)?}else{crate::library::model::RootMode::Managed};
+            tx.commit()?;Ok((binding,encoded,anchor,history,source_mode))
         })?;
         Ok(Self {
+            source_mode,
             catalog,
             binding,
             encoded,
@@ -1989,6 +1997,495 @@ mod tests {
         let closed = wait_import(&fixture, &workflow, closing.id);
         assert_eq!(closed.state, ImportSessionState::Canceled);
         assert!(!workflow.has_active_root(&root).unwrap());
+        assert!(fixture.preserved().unwrap());
+    }
+    fn import_draft_for(fixture: &Fixture, ids: Vec<String>) -> crate::operations::CopyManifest {
+        use crate::operations::*;
+        let template = crate::organization::OrganizationTemplate {
+            pattern: "Imports/{original_stem}.{ext}".into(),
+            event: String::new(),
+            missing_date: crate::organization::MissingDatePolicy::Block,
+        };
+        let preview = fixture
+            .library
+            .organization_preview(ids.clone(), template.clone())
+            .unwrap();
+        let target = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&target).unwrap();
+        let volume = crate::library::native::volume_token(&target).unwrap();
+        drop(target);
+        let draft = fixture
+            .library
+            .organization_plan_create(
+                PlanDraftInput {
+                    asset_ids: ids.clone(),
+                    template,
+                    preview_fingerprint: preview.fingerprint,
+                    template_reference: None,
+                },
+                fixture.destination.clone(),
+                (identity, volume),
+            )
+            .unwrap();
+        let owner = draft.plan.id.clone();
+        let retained = fixture
+            .library
+            .catalog
+            .call(move |db| operation_store::load(db, &owner))
+            .unwrap();
+        let mut decisions = Vec::new();
+        for source in retained.sources {
+            let inventory = fixture
+                .library
+                .organization_bundle_inventory(source.id.clone(), source.revision.clone())
+                .unwrap();
+            decisions.push(
+                fixture
+                    .library
+                    .organization_bundle_confirm(BundleConfirmationInput {
+                        plan_id: draft.plan.id.clone(),
+                        asset_id: source.id,
+                        source_revision: source.revision,
+                        inventory_fingerprint: inventory.fingerprint,
+                        companion_ids: inventory
+                            .entries
+                            .iter()
+                            .filter(|entry| {
+                                entry.selectable && entry.relation != BundleRelation::Additional
+                            })
+                            .map(|entry| entry.id.clone())
+                            .collect(),
+                        reviewed_all_entries: true,
+                    })
+                    .unwrap()
+                    .id,
+            );
+        }
+        fixture
+            .library
+            .organization_copy_manifest(CopyManifestInput {
+                plan_id: draft.plan.id,
+                bundle_confirmation_ids: decisions,
+            })
+            .unwrap()
+    }
+    fn mixed_import_fixture() -> (
+        Fixture,
+        Arc<crate::executor::CopyWorkflow>,
+        crate::operations::ImportPlan,
+        String,
+        String,
+    ) {
+        use crate::operations::*;
+        let mut fixture = Fixture::with_nested(true).unwrap();
+        let owner = fixture.owner.clone();
+        let source = fixture
+            .library
+            .catalog
+            .call(move |db| Ok(operation_store::load(db, &owner)?.sources[0].clone()))
+            .unwrap();
+        let folder = fixture.source.join("z-new");
+        std::fs::create_dir(&folder).unwrap();
+        let mut new_photo = generated_photo_bytes().unwrap();
+        new_photo.extend_from_slice(b"new generated fixture");
+        let new_sidecar = b"<x:xmpmeta>new generated companion</x:xmpmeta>".to_vec();
+        std::fs::write(folder.join("New.JPG"), &new_photo).unwrap();
+        std::fs::write(folder.join("New.xmp"), &new_sidecar).unwrap();
+        fixture.baseline.extend([
+            ("z-new/New.JPG".into(), new_photo.clone()),
+            ("z-new/New.xmp".into(), new_sidecar.clone()),
+        ]);
+        let file = crate::filesystem::open_readonly(&folder.join("New.JPG")).unwrap();
+        let object = Object::of(&file).unwrap();
+        let revision = crate::library::native::revision(&file).unwrap();
+        drop(file);
+        let id = uuid::Uuid::new_v4().to_string();
+        let inserted = id.clone();
+        let root = source.root_id.clone();
+        fixture.library.catalog.call(move|db|{db.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,presence,is_media,seen_scan) VALUES(?1,?2,?3,'z-new/New.JPG',?4,'z-new','New.JPG','New','jpg',?5,?6,?7,'now','2026-10-31T00:00:00','filesystem_modified','ready','pending','present',1,'owned-fixture')",params![inserted,root,crate::library::native::encode_path(Path::new("z-new/New.JPG")),crate::library::native::encode_path(Path::new("z-new")),format!("{}:{}",object.volume,object.file),new_photo.len() as i64,revision])?;db.execute("UPDATE library_state SET revision=revision+1",[])?;Ok(())}).unwrap();
+        let only_new = import_draft_for(&fixture, vec![id.clone()]);
+        let expected = crate::executor::sources::Snapshot::build(
+            &fixture.library.catalog,
+            only_new.plan_id,
+            only_new.id,
+        )
+        .unwrap();
+        let expected_digest = fixture
+            .library
+            .catalog
+            .call(move |db| Ok(crate::executor::effects::Effect::capture(db, &expected)?.digest))
+            .unwrap();
+        let manifest = import_draft_for(&fixture, vec![source.id, id]);
+        fixture.owner = manifest.plan_id.clone();
+        fixture.manifest = manifest.id.clone();
+        assert_eq!(manifest.files.len(), 4);
+        let (root, _, _) = comparison_root(
+            &fixture,
+            &[
+                ("Renamed.JPG", generated_photo_bytes().unwrap()),
+                ("Renamed.xmp", COMPANION_BYTES.to_vec()),
+            ],
+        );
+        let workflow = crate::executor::CopyWorkflow::new(
+            fixture.library.catalog.clone(),
+            fixture._run.path().join("data"),
+        )
+        .unwrap();
+        let job = workflow
+            .start_import_comparison(
+                &fixture.library,
+                ImportComparisonInput {
+                    plan_id: fixture.owner.clone(),
+                    manifest_id: fixture.manifest.clone(),
+                    scope_root_ids: vec![root],
+                },
+            )
+            .unwrap();
+        let job = wait_comparison(&workflow, job.id);
+        let plan = workflow
+            .create_import_plan(
+                &fixture.library,
+                ImportPlanInput {
+                    comparison_job_id: job.id.clone(),
+                    choices: job
+                        .report
+                        .as_ref()
+                        .unwrap()
+                        .bundles
+                        .iter()
+                        .map(|bundle| ImportBundleChoice {
+                            file_id: bundle.file_ids[0].clone(),
+                            existing_group_id: bundle
+                                .existing_groups
+                                .first()
+                                .map(|group| group.id.clone()),
+                        })
+                        .collect(),
+                },
+            )
+            .unwrap();
+        assert_eq!(plan.copy_file_ids.len(), 2);
+        assert_eq!(plan.skip_files.len(), 2);
+        (fixture, workflow, plan, source.root_id, expected_digest)
+    }
+    #[test]
+    fn import_copy_projection_preserves_ids_memberships_targets_and_legacy_encoding() {
+        let (fixture, workflow, plan, root, expected_digest) = mixed_import_fixture();
+        let original = crate::executor::sources::Snapshot::build(
+            &fixture.library.catalog,
+            fixture.owner.clone(),
+            fixture.manifest.clone(),
+        )
+        .unwrap();
+        assert!(
+            !serde_json::to_value(&original)
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .contains_key("import_selection")
+        );
+        let projected = workflow
+            .import_copy_sources(fixture.owner.clone(), plan.id.clone())
+            .unwrap();
+        assert_eq!(projected.files.len(), 2);
+        assert!(
+            projected
+                .files
+                .iter()
+                .all(|file| plan.copy_file_ids.contains(&file.id)
+                    && file.target.starts_with("Imports/New."))
+        );
+        let snapshot = projected.clone();
+        let effect = fixture
+            .library
+            .catalog
+            .call(move |db| Ok(crate::executor::effects::Effect::capture(db, &snapshot)?.digest))
+            .unwrap();
+        assert_eq!(
+            effect, expected_digest,
+            "effect memberships must be looked up by ID, not zipped against skipped prefix files"
+        );
+        let mut changes = Vec::new();
+        let mut changed = projected.clone();
+        changed.files.push(original.files[0].clone());
+        changes.push(changed);
+        let mut changed = projected.clone();
+        changed.files[0].target = "renumbered.JPG".into();
+        changes.push(changed);
+        let mut changed = projected.clone();
+        changed.import_selection.as_mut().unwrap().digest = "f".repeat(64);
+        changes.push(changed);
+        let mut changed = projected.clone();
+        changed.import_selection.as_mut().unwrap().id = uuid::Uuid::new_v4().to_string();
+        changes.push(changed);
+        for changed in changes {
+            assert!(
+                fixture
+                    .library
+                    .catalog
+                    .call(move |db| changed.validate(db))
+                    .is_err()
+            );
+        }
+        let changed = root.clone();
+        fixture
+            .library
+            .catalog
+            .call(move |db| {
+                db.execute("UPDATE roots SET mode='referenced' WHERE id=?", [changed])?;
+                Ok(())
+            })
+            .unwrap();
+        assert!(
+            projected
+                .open_scope(
+                    &fixture.library.catalog,
+                    crate::jobs::operation_locks::Access::Write
+                )
+                .is_err()
+        );
+        let referenced = workflow
+            .import_copy_sources(fixture.owner.clone(), plan.id)
+            .unwrap();
+        assert_eq!(
+            referenced.required_mode(),
+            crate::library::model::RootMode::Referenced
+        );
+        assert!(
+            crate::executor::sources::Snapshot::build(
+                &fixture.library.catalog,
+                fixture.owner.clone(),
+                fixture.manifest.clone()
+            )
+            .is_err()
+        );
+        assert!(fixture.preserved().unwrap());
+    }
+    #[test]
+    fn import_copy_projection_prepares_and_publishes_only_new_bundle_with_referenced_source() {
+        use crate::executor::CopyOutcome;
+        use crate::executor::approval::Approvals;
+        use crate::jobs::{operation_locks::Access, paced_io::PacedIo};
+        use std::sync::atomic::AtomicBool;
+        for referenced in [false, true] {
+            let (fixture, workflow, plan, root, expected_digest) = mixed_import_fixture();
+            if referenced {
+                fixture
+                    .library
+                    .catalog
+                    .call(move |db| {
+                        db.execute("UPDATE roots SET mode='referenced' WHERE id=?", [root])?;
+                        Ok(())
+                    })
+                    .unwrap();
+            }
+            let snapshot = workflow
+                .import_copy_sources(fixture.owner.clone(), plan.id.clone())
+                .unwrap();
+            let sources = snapshot.clone();
+            let effect = fixture
+                .library
+                .catalog
+                .call(move |db| crate::executor::effects::Effect::capture(db, &sources))
+                .unwrap();
+            assert_eq!(effect.digest, expected_digest);
+            let namespace = namespace_journal::NamespaceJournal::bind_effect(
+                fixture.library.catalog.clone(),
+                snapshot.clone(),
+                uuid::Uuid::new_v4().to_string(),
+                true,
+                Some(effect),
+            )
+            .unwrap();
+            let lease = snapshot
+                .open_scope(&fixture.library.catalog, Access::Write)
+                .unwrap();
+            let selection = uuid::Uuid::new_v4().to_string();
+            let approvals = Approvals::new();
+            let review = namespace.preparation_review(&selection).unwrap();
+            let ticket = approvals.issue(review.clone()).unwrap();
+            namespace
+                .prepare_approved(
+                    lease.directory(1).leaf(),
+                    &AtomicBool::new(false),
+                    &selection,
+                    approvals.consume(&ticket, &review).unwrap(),
+                )
+                .unwrap();
+            let journal = namespace.ready_journal().unwrap();
+            assert_eq!(journal.plan().files.len(), 2);
+            assert!(
+                journal
+                    .plan()
+                    .files
+                    .iter()
+                    .zip(&snapshot.files)
+                    .all(|(file, source)| file.object == source.object
+                        && file.destination_location.as_ref().map_or_else(
+                            || file.target.clone(),
+                            |location| format!("{}/{}", location.relative_parent, file.target)
+                        ) == source.target
+                        && file
+                            .source_location
+                            .as_ref()
+                            .is_some_and(|location| location.relative_native
+                                == source.location.relative_native))
+            );
+            let output =
+                crate::executor::output_chain(&fixture.destination.join(namespace.namespace()))
+                    .unwrap();
+            let io = PacedIo::shared();
+            let cancel = AtomicBool::new(false);
+            let validate = || snapshot.validate_roots(&fixture.library.catalog);
+            let review = journal.copy_review(&selection).unwrap();
+            let ticket = approvals.issue(review.clone()).unwrap();
+            let outcome = journal
+                .execute_approved(
+                    crate::executor::CopyInputs {
+                        source_root: lease.directory(0).leaf(),
+                        destination: output.leaf(),
+                        io: &io,
+                        cancel: &cancel,
+                        validate_scope: &validate,
+                    },
+                    &selection,
+                    approvals.consume(&ticket, &review).unwrap(),
+                    None,
+                    None,
+                )
+                .unwrap();
+            assert_eq!(outcome, CopyOutcome::CompletedVerified);
+            assert_eq!(journal.verified_files().unwrap(), 2);
+            for member in &snapshot.files {
+                assert_eq!(
+                    std::fs::read(
+                        fixture
+                            .destination
+                            .join(namespace.namespace())
+                            .join(&member.target)
+                    )
+                    .unwrap(),
+                    std::fs::read(
+                        fixture.source.join(
+                            crate::library::native::decode_path(&member.location.relative_native)
+                                .unwrap()
+                        )
+                    )
+                    .unwrap()
+                );
+            }
+            assert!(
+                !fixture
+                    .destination
+                    .join(namespace.namespace())
+                    .join("Imports/Photo.jpg")
+                    .exists()
+            );
+            assert!(
+                !fixture
+                    .destination
+                    .join(namespace.namespace())
+                    .join("Imports/Photo.xmp")
+                    .exists()
+            );
+            assert!(fixture.preserved().unwrap());
+        }
+    }
+    #[test]
+    fn import_copy_projection_grant_change_retains_empty_stages_without_publication() {
+        use crate::executor::{RecoveredItem, approval::Approvals};
+        use crate::jobs::{operation_locks::Access, paced_io::PacedIo};
+        use std::sync::atomic::AtomicBool;
+        let (fixture, workflow, plan, root, _) = mixed_import_fixture();
+        let changed = root.clone();
+        fixture
+            .library
+            .catalog
+            .call(move |db| {
+                db.execute("UPDATE roots SET mode='referenced' WHERE id=?", [changed])?;
+                Ok(())
+            })
+            .unwrap();
+        let snapshot = workflow
+            .import_copy_sources(fixture.owner.clone(), plan.id)
+            .unwrap();
+        let namespace = namespace_journal::NamespaceJournal::bind_snapshot(
+            fixture.library.catalog.clone(),
+            snapshot.clone(),
+            uuid::Uuid::new_v4().to_string(),
+            false,
+        )
+        .unwrap();
+        let lease = snapshot
+            .open_scope(&fixture.library.catalog, Access::Write)
+            .unwrap();
+        let approvals = Approvals::new();
+        let selection = uuid::Uuid::new_v4().to_string();
+        let review = namespace.preparation_review(&selection).unwrap();
+        let ticket = approvals.issue(review.clone()).unwrap();
+        namespace
+            .prepare_approved(
+                lease.directory(1).leaf(),
+                &AtomicBool::new(false),
+                &selection,
+                approvals.consume(&ticket, &review).unwrap(),
+            )
+            .unwrap();
+        let journal = namespace.ready_journal().unwrap();
+        let output =
+            crate::executor::output_chain(&fixture.destination.join(namespace.namespace()))
+                .unwrap();
+        let io = PacedIo::shared();
+        let cancel = AtomicBool::new(false);
+        let changed = AtomicBool::new(false);
+        let validate = || {
+            // Revoke only after the stream's initial catalog validation, then
+            // return success: the journal's own boundary check must refuse it.
+            if !changed.swap(true, std::sync::atomic::Ordering::AcqRel) {
+                let root = root.clone();
+                fixture.library.catalog.call(move |db| {
+                    db.execute("UPDATE roots SET mode='managed' WHERE id=?", [root])?;
+                    Ok(())
+                })?;
+            }
+            Ok(())
+        };
+        let review = journal.copy_review(&selection).unwrap();
+        let ticket = approvals.issue(review.clone()).unwrap();
+        let error = journal
+            .execute_approved(
+                crate::executor::CopyInputs {
+                    source_root: lease.directory(0).leaf(),
+                    destination: output.leaf(),
+                    io: &io,
+                    cancel: &cancel,
+                    validate_scope: &validate,
+                },
+                &selection,
+                approvals.consume(&ticket, &review).unwrap(),
+                None,
+                None,
+            )
+            .err()
+            .unwrap();
+        assert!(error.message.contains("referenced grant changed"));
+        assert_eq!(journal.history_count().unwrap(), 0);
+        let inspected = journal
+            .inspect(crate::executor::CopyInputs {
+                source_root: lease.directory(0).leaf(),
+                destination: output.leaf(),
+                io: &io,
+                cancel: &cancel,
+                validate_scope: &validate,
+            })
+            .unwrap();
+        assert_eq!(
+            inspected,
+            vec![
+                RecoveredItem::PreparedEmptyStage,
+                RecoveredItem::PreparedEmptyStage
+            ]
+        );
         assert!(fixture.preserved().unwrap());
     }
     #[test]
