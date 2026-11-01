@@ -56,6 +56,15 @@ pub struct ImportCopyReceipt {
     pub sources_retained: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportOutputIndex {
+    pub job_id: String,
+    pub root: crate::library::model::LibraryRoot,
+    pub scan: Option<crate::library::model::ScanJob>,
+    pub already_registered: bool,
+    pub original_mutations_enabled: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct ImportSkipApprovalInput {
     pub plan_id: String,

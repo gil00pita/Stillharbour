@@ -17,6 +17,7 @@ import { errorMessage, library, libraryData, pickDirectory } from '../ipc';
 import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
 import { copyJobActive } from './copyJobs';
 import { RetainedCopyInspection } from './RetainedCopyInspection';
+import { ImportOutputIndexReview } from './ImportOutputIndexReview';
 
 function validateReview(value: CopyActionReview, plan: string, manifest: string) {
   if (
@@ -476,6 +477,9 @@ export function VerifiedCopyWorkflow({
           {receipt.skippedFiles.length} existing{' '}
           {receipt.skippedFiles.length === 1 ? 'file' : 'files'} freshly verified. Sources retained.
         </p>
+      )}
+      {receipt && (
+        <ImportOutputIndexReview receipt={receipt} sourceRootId={manifest.files[0]!.rootId} />
       )}
       {importPlan && job?.state === 'completed_verified' && !receipt && (
         <button type="button" onClick={() => setReceiptRetry((old) => old + 1)}>

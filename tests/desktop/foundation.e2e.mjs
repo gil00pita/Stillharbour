@@ -664,6 +664,84 @@ async function verifyMixedImport(
     (await native({ kind: 'organization_import_copy_receipt', job_id: job.id })).data,
     receipt,
   );
+  const addedOutput = after.files.find(
+    (file) => !before.files.some((prior) => prior.relativePath === file.relativePath),
+  );
+  await indexCompletedImportOutput(receipt, addedOutput.relativePath.split(/[/\\]/)[0], evidence);
+}
+async function indexCompletedImportOutput(receipt, outputFolder, evidence) {
+  const section = await $('section[aria-label="Index import output"]');
+  await section.waitForExist();
+  await section.$('button=Choose destination and index output').scrollIntoView();
+  await section.$('button=Choose destination and index output').click();
+  await section.$('p*=Output folder registered:').waitForExist({ timeout: 30000 });
+  await section.$('p=Scan complete').waitForExist({ timeout: 30000 });
+  const status = (await native({ kind: 'status' })).data;
+  const root = status.roots.find((root) =>
+    root.displayPath.replaceAll('\\', '/').endsWith(`/${outputFolder}`),
+  );
+  assert.ok(root);
+  assert.equal(root.mode, 'referenced');
+  assert.equal(root.fileCount, 1);
+  const scan = status.jobs.find(
+    (job) => job.rootId === root.id && !job.id.startsWith('thumbnail:'),
+  );
+  assert.equal(scan.state, 'completed');
+  assert.equal(scan.indexed, 1);
+  const query = {
+    rootId: root.id,
+    folder: '',
+    name: '',
+    fromDate: '',
+    throughDate: '',
+    minBytes: '',
+    maxBytes: '',
+    extension: '',
+    favoritesOnly: false,
+    tag: '',
+    sort: 'capture',
+    includeMissing: false,
+  };
+  const page = (await native({ kind: 'query', query, cursor: null, limit: 24 })).data;
+  assert.equal(page.rows.length, 1);
+  assert(page.rows[0][3].endsWith('Generated-01.png'));
+  const beforeRetry = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+  );
+  await section.$('button=Review output registration').scrollIntoView();
+  await section.$('button=Review output registration').click();
+  await section.$('p*=Output folder already registered:').waitForExist();
+  const retried = (await native({ kind: 'status' })).data;
+  assert.equal(retried.roots.length, status.roots.length);
+  assert.equal(
+    retried.jobs.filter((job) => job.rootId === root.id && !job.id.startsWith('thumbnail:')).length,
+    1,
+  );
+  assert.equal(
+    retried.jobs.find((job) => job.rootId === root.id && !job.id.startsWith('thumbnail:')).id,
+    scan.id,
+  );
+  const afterRetry = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', { action: 'organization_destination_audit', rows: null }),
+  );
+  assert.deepEqual(afterRetry, beforeRetry);
+  assert.deepEqual(
+    (await native({ kind: 'organization_import_copy_receipt', job_id: receipt.jobId })).data,
+    receipt,
+  );
+  await writeFile(
+    `${evidence}/import-output-index-${process.platform}.json`,
+    JSON.stringify({
+      root,
+      scan,
+      page,
+      receipt,
+      unchangedOutputs: afterRetry,
+      registrationRetryAddedNoRootOrScan: true,
+    }),
+  );
+  await section.scrollIntoView();
+  await browser.saveScreenshot(`.context/screenshots/m2-import-index-${process.platform}.png`);
 }
 async function reviewEquivalentDraft(original, destination, evidence, audit) {
   // Recreate the user's selected mapping through real ID-only IPC. Draft UUIDs

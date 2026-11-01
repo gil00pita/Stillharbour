@@ -3,6 +3,7 @@
 mod import_bundles;
 mod import_comparison;
 mod import_execution;
+mod import_indexing;
 pub(in crate::executor) mod import_planning;
 mod import_receipts;
 #[cfg(test)]

@@ -12,6 +12,7 @@ import type {
 import { errorMessage, library, libraryData } from '../ipc';
 import { CopyIoControls } from './CopyJobProgress';
 import { VerifiedCopyWorkflow } from './VerifiedCopyWorkflow';
+import { ImportOutputIndexReview } from './ImportOutputIndexReview';
 
 import {
   digest,
@@ -143,6 +144,7 @@ export function ImportPlanReview({
     validateImportPlan(next, manifest, comparison);
     if (epoch.current === token) {
       setPlan(next);
+      setCopyReceipts([]);
       setApproval(null);
       setJob(null);
       setAck(false);
@@ -205,6 +207,7 @@ export function ImportPlanReview({
     if (session) validateSession(session, next);
     if (epoch.current === token) {
       setPlan(next);
+      setCopyReceipts([]);
       setApproval(null);
       setAck(false);
       setJob(session ?? null);
@@ -364,13 +367,16 @@ export function ImportPlanReview({
           ))}
           {!history.plans.length && <p>No import decisions are retained for this manifest.</p>}
           {copyReceipts.map((receipt) => (
-            <p key={receipt.jobId}>
-              Completed import: {receipt.copiedFileIds.length} new{' '}
-              {receipt.copiedFileIds.length === 1 ? 'file' : 'files'} copied /{' '}
-              {receipt.skippedFiles.length} existing{' '}
-              {receipt.skippedFiles.length === 1 ? 'file' : 'files'} verified · {receipt.verifiedAt}
-              . Sources retained; no approval restored.
-            </p>
+            <div key={receipt.jobId}>
+              <p>
+                Completed import: {receipt.copiedFileIds.length} new{' '}
+                {receipt.copiedFileIds.length === 1 ? 'file' : 'files'} copied /{' '}
+                {receipt.skippedFiles.length} existing{' '}
+                {receipt.skippedFiles.length === 1 ? 'file' : 'files'} verified ·{' '}
+                {receipt.verifiedAt}. Sources retained; no approval restored.
+              </p>
+              <ImportOutputIndexReview receipt={receipt} sourceRootId={manifest.files[0]!.rootId} />
+            </div>
           ))}
         </div>
       )}

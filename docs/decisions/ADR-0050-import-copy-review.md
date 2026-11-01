@@ -1,6 +1,6 @@
 # ADR-0050 — Mixed import review and durable verification receipts
 
-Date: 2026-11-01. Status: M2 continuation; full checks and Windows native UI/recovery pass; own macOS CI pending.
+Date: 2026-11-01. Status: M2 continuation; full checks and Windows/macOS native UI/recovery pass in CI run 41262382228.
 
 ## Decision
 

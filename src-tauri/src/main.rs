@@ -218,6 +218,7 @@ async fn library_request(
         | LibraryRequest::OrganizationCopyEffectMatch { selection_id, .. }
         | LibraryRequest::OrganizationCopyReviewCreate { selection_id, .. }
         | LibraryRequest::OrganizationImportCopyReview { selection_id, .. }
+        | LibraryRequest::OrganizationImportIndexOutput { selection_id, .. }
         | LibraryRequest::OrganizationCopyReview { selection_id, .. }
         | LibraryRequest::OrganizationCopyApprove { selection_id, .. }
         | LibraryRequest::OrganizationCopyStart { selection_id, .. }
@@ -232,6 +233,21 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::OrganizationImportIndexOutput { job_id, .. } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Choose the original import destination again with the native picker.",
+                    )
+                })?;
+                LibraryResponse::OrganizationImportOutputIndex(Box::new(
+                    library.organization_import_index_output(
+                        job_id,
+                        chosen.path.clone(),
+                        selected_identity(chosen)?,
+                    )?,
+                ))
+            }
             LibraryRequest::OrganizationImportCopyReceipt { job_id } => {
                 LibraryResponse::OrganizationImportCopyReceipt(
                     library

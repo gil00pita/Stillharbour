@@ -14,6 +14,22 @@ fn unavailable() -> AppError {
     )
 }
 impl Library {
+    pub fn organization_import_index_output(
+        self: &Arc<Self>,
+        _job: String,
+        _path: PathBuf,
+        _identity: (FileIdentity, String),
+    ) -> Result<ImportOutputIndex> {
+        #[cfg(any(test, feature = "copy-workflow"))]
+        {
+            self.copy_workflow
+                .index_import_output(self.clone(), _job, _path, _identity)
+        }
+        #[cfg(not(any(test, feature = "copy-workflow")))]
+        {
+            Err(unavailable())
+        }
+    }
     pub fn organization_import_copy_review(
         &self,
         _owner: String,

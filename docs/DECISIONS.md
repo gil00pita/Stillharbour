@@ -279,3 +279,5 @@ The owner continued to M2 and selected organization templates/previews as the pr
 [ADR-0049](decisions/ADR-0049-import-keeper-admission.md): shared atomic source/output/keeper admission and fresh complete-byte checks before/after projected work and recovery. Mixed application orchestration remains unfinished.
 
 [ADR-0050](decisions/ADR-0050-import-copy-review.md) connects exact new-only capacity/review, feature-gated mixed import IPC/UI and durable combined verification facts. Completed receipts require both valid evidence and committed job success; neither replay nor approval is restored.
+
+[ADR-0051](decisions/ADR-0051-import-output-indexing.md) adds explicit picker-bound catalog discovery of unchanged completed import output. New roots are Referenced; existing native root/scan identities are reused. Publication-version checks do not become a fresh hash baseline, and overlap guards remain unchanged.

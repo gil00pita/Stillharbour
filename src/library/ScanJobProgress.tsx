@@ -3,6 +3,7 @@ import type { ScanJob } from '../bindings';
 import { thumbnailProgress, thumbnailDescription } from './jobProgress';
 
 const descriptions: Record<string, string> = {
+  queued: 'Scan queued',
   running: 'Scanning · total files not yet known',
   cancel_requested: 'Stopping scan…',
   completed: 'Scan complete',
@@ -26,7 +27,8 @@ export function ScanJobProgress({
     return (
       <ThumbnailProgress job={job} label={label} descriptionId={descriptionId} compact={compact} />
     );
-  const active = job.state === 'running' || job.state === 'cancel_requested';
+  const active =
+    job.state === 'queued' || job.state === 'running' || job.state === 'cancel_requested';
   const completed = job.state === 'completed';
   const description = descriptions[job.state] ?? 'Scan not running';
   return (

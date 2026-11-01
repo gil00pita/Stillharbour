@@ -567,6 +567,10 @@ pub enum LibraryRequest {
     OrganizationImportCopyReceipt {
         job_id: String,
     },
+    OrganizationImportIndexOutput {
+        job_id: String,
+        selection_id: String,
+    },
     OrganizationImportPlanRelease {
         plan_id: String,
         import_plan_id: String,
@@ -763,6 +767,7 @@ pub enum LibraryResponse {
     OrganizationImportComparisonJob(Box<crate::operations::ImportComparisonJob>),
     OrganizationImportPlan(Box<crate::operations::ImportPlan>),
     OrganizationImportCopyReceipt(Option<Box<crate::operations::ImportCopyReceipt>>),
+    OrganizationImportOutputIndex(Box<crate::operations::ImportOutputIndex>),
     OrganizationImportSkipApproval(crate::operations::ImportSkipApproval),
     OrganizationImportSession(Box<crate::operations::ImportSession>),
     OrganizationImportHistory(Box<crate::operations::ImportHistory>),

@@ -49,6 +49,7 @@ struct Item {
     phase: u8,
     object: Option<Object>,
     digest: Option<String>,
+    copy_revision: Option<String>,
 }
 #[derive(Clone)]
 struct History {
@@ -176,6 +177,7 @@ impl History {
                             "Completed output differs from the verified owned object.",
                         ));
                     }
+                    item.copy_revision = Some(completed.copy_revision);
                 }
                 _ => unreachable!(),
             }
@@ -305,6 +307,48 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
     Ok(())
 }
 impl CatalogJournal {
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(in crate::executor) fn validate_completed_members(
+        &self,
+        output: &std::fs::File,
+    ) -> Result<()> {
+        let history = self
+            .history
+            .lock()
+            .map_err(|_| failed("Completed copy history is unavailable."))?;
+        if !self.binding.plan.destination.matches(output)?
+            || history
+                .items
+                .iter()
+                .any(|item| item.phase != 6 || item.copy_revision.is_none())
+        {
+            return Err(failed(
+                "Only the exact completed published output can be indexed.",
+            ));
+        }
+        for (file, item) in self.binding.plan.files.iter().zip(&history.items) {
+            let parent = super::destination_parent(output, file)?;
+            let current = super::native::read(&parent, &file.target)?;
+            let object = item
+                .object
+                .as_ref()
+                .ok_or_else(|| failed("Published output has no recorded native identity."))?;
+            if !object.matches(&current)?
+                || crate::library::native::revision(&current)?
+                    != *item
+                        .copy_revision
+                        .as_ref()
+                        .ok_or_else(|| failed("Published output has no recorded version."))?
+                || current.metadata()?.len() != file.bytes
+                || crate::filesystem::identity(&current)?.links != 1
+            {
+                return Err(failed(
+                    "Published output changed since complete byte verification. Indexing was not authorized by this receipt.",
+                ));
+            }
+        }
+        Ok(())
+    }
     pub(in crate::executor) fn recovery_inventory(
         &self,
         parent: &std::fs::File,
@@ -2548,6 +2592,7 @@ mod tests {
                     .all(|file| plan.copy_file_ids.contains(&file.id))
             );
             assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
+            let mut final_job = String::new();
             for action in [CopyAction::PrepareNames, CopyAction::CopyFiles] {
                 assert_eq!(review.action, action);
                 let approval = workflow
@@ -2628,6 +2673,7 @@ mod tests {
                         logical.to_string()
                     );
                 } else {
+                    final_job = finished.id.clone();
                     assert_eq!(finished.verified_files, if variant == 2 { 0 } else { 2 });
                     let receipt = workflow.import_copy_receipt(finished.id.clone()).unwrap();
                     assert_eq!(receipt.is_some(), variant < 2);
@@ -2695,6 +2741,7 @@ mod tests {
                         assert_eq!(completed.state, CopyJobState::CompletedVerified);
                         assert_eq!(completed.review_id, finished.review_id);
                         assert_ne!(completed.id, finished.id);
+                        final_job = completed.id.clone();
                         let receipt = workflow.import_copy_receipt(completed.id).unwrap().unwrap();
                         assert_eq!(receipt.import_plan_id, plan.id);
                         assert_eq!(receipt.copied_file_ids, plan.copy_file_ids);
@@ -2721,11 +2768,84 @@ mod tests {
                         plan.id,
                         selection,
                         fixture.destination.clone(),
-                        (identity, volume)
+                        (identity.clone(), volume.clone())
                     )
                     .is_err()
             );
             assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 3);
+            let root_count = crate::library::store::roots(&fixture.library.catalog)
+                .unwrap()
+                .len();
+            if variant == 3 {
+                let path = fixture.destination.join(&review.files[0].target_path);
+                let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+                let mut bytes = std::fs::read(&path).unwrap();
+                bytes[0] ^= 1;
+                std::fs::write(&path, bytes).unwrap();
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(&path)
+                    .unwrap()
+                    .set_times(std::fs::FileTimes::new().set_modified(modified))
+                    .unwrap();
+            } else if variant == 4 {
+                let parent = fixture
+                    .destination
+                    .join(&review.output_folder)
+                    .canonicalize()
+                    .unwrap();
+                assert!(parent.starts_with(fixture._run.path().canonicalize().unwrap()));
+                let path = parent.join("unknown-added.txt");
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .create_new(true)
+                    .open(path)
+                    .unwrap();
+            }
+            let indexed = workflow.index_import_output(
+                fixture.library.clone(),
+                final_job.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            );
+            if variant < 2 {
+                let indexed = indexed.unwrap();
+                assert!(!indexed.already_registered);
+                assert_eq!(
+                    indexed.root.mode,
+                    crate::library::model::RootMode::Referenced
+                );
+                assert!(!indexed.original_mutations_enabled);
+                let retry = workflow
+                    .index_import_output(
+                        fixture.library.clone(),
+                        final_job,
+                        fixture.destination.clone(),
+                        (identity, volume),
+                    )
+                    .unwrap();
+                assert!(retry.already_registered);
+                assert_eq!(retry.root.id, indexed.root.id);
+                assert_eq!(
+                    crate::library::store::roots(&fixture.library.catalog)
+                        .unwrap()
+                        .len(),
+                    root_count + 1
+                );
+                assert_eq!(
+                    retry.scan.as_ref().map(|scan| &scan.id),
+                    indexed.scan.as_ref().map(|scan| &scan.id)
+                );
+            } else {
+                assert!(indexed.is_err());
+                assert_eq!(
+                    crate::library::store::roots(&fixture.library.catalog)
+                        .unwrap()
+                        .len(),
+                    root_count
+                );
+            }
+            assert!(fixture.preserved().unwrap());
         }
     }
     #[test]
