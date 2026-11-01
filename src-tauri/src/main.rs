@@ -27,6 +27,8 @@ struct NativeSelection {
 
 struct Foundation {
     #[cfg(feature = "desktop-test")]
+    rename_fixture: Arc<Mutex<Option<stillharbour_core::executor::GeneratedRenameSession>>>,
+    #[cfg(feature = "desktop-test")]
     _test_data: tempfile::TempDir,
     #[cfg(feature = "desktop-test")]
     fixture: Mutex<Option<stillharbour_core::library_fixture::LibraryFixture>>,
@@ -874,6 +876,54 @@ fn test_library_fixture(
 
 #[cfg(feature = "desktop-test")]
 #[tauri::command]
+async fn test_generated_rename(
+    window: tauri::WebviewWindow,
+    state: State<'_, Foundation>,
+    request: stillharbour_core::operations::generated_rename::GeneratedRenameRequest,
+) -> Result<stillharbour_core::operations::generated_rename::GeneratedRenameReview> {
+    use stillharbour_core::operations::generated_rename::GeneratedRenameRequest;
+    if window.label() != "main" {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Invalid generated-fixture window.",
+        ));
+    }
+    let session = state.rename_fixture.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut slot = session
+            .try_lock()
+            .map_err(|_| AppError::new(ErrorCode::Busy, "The generated operation is busy."))?;
+        if matches!(request, GeneratedRenameRequest::Create {}) {
+            if slot.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Inspect the existing generated session instead of replacing it.",
+                ));
+            }
+            *slot = Some(stillharbour_core::executor::GeneratedRenameSession::create()?);
+            return slot
+                .as_mut()
+                .unwrap()
+                .request(GeneratedRenameRequest::Inspect {});
+        }
+        slot.as_mut()
+            .ok_or_else(|| {
+                AppError::new(ErrorCode::InvalidInput, "Create a generated fixture first.")
+            })?
+            .request(request)
+    })
+    .await
+    .map_err(|error| {
+        AppError::new(
+            ErrorCode::WorkerFailed,
+            "Generated operation worker stopped. Inspect retained state.",
+        )
+        .caused_by(error)
+    })?
+}
+
+#[cfg(feature = "desktop-test")]
+#[tauri::command]
 async fn test_performance(
     window: tauri::WebviewWindow,
     state: State<'_, Foundation>,
@@ -1411,6 +1461,7 @@ fn main() {
         library_request,
         test_library_fixture,
         test_scroll_catalog,
+        test_generated_rename,
         test_performance
     ]);
     #[cfg(not(feature = "desktop-test"))]
@@ -1564,6 +1615,8 @@ fn main() {
             app.manage(Foundation {
                 #[cfg(feature = "desktop-test")]
                 _test_data: test_data,
+                #[cfg(feature = "desktop-test")]
+                rename_fixture: Arc::new(Mutex::new(None)),
                 #[cfg(feature = "desktop-test")]
                 fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]

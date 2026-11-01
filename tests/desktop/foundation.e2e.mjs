@@ -1322,6 +1322,85 @@ describe('native read-only library', () => {
     await mkdir('.context/screenshots', { recursive: true });
     await browser.saveScreenshot('.context/screenshots/m1-onboarding.png');
   });
+  it('reviews and separately approves generated native rename and undo through the actual UI', async function () {
+    this.timeout(120000);
+    await browser.setWindowSize(1180, 780);
+    await browser.execute(() => window.dispatchEvent(new Event('stillharbour:rename-lab')));
+    await $('button=Create generated rename fixture').waitForDisplayed();
+    await $('button=Create generated rename fixture').click();
+    const approval = await $('button=Approve generated targets');
+    await approval.waitForDisplayed();
+    assert.equal(await approval.isEnabled(), false);
+    const read = (request) =>
+      browser.tauri.execute(
+        async ({ core }, value) => core.invoke('test_generated_rename', { request: value }),
+        request,
+      );
+    const initial = await read({ kind: 'inspect' });
+    assert.equal(initial.state, 'review');
+    assert.equal(initial.completedSteps, 0);
+    assert.equal(initial.members.length, 5);
+    assert.equal(initial.productionAuthorization, false);
+    assert.equal(initial.independentRecoveryProven, false);
+    const states = [initial];
+    for (const reverse of [false, true]) {
+      const scope = await $('dialog[aria-labelledby="rename-lab-title"]');
+      const checkbox = await scope.$('input[type="checkbox"]');
+      assert.equal(await checkbox.isSelected(), false);
+      await checkbox.scrollIntoView();
+      await checkbox.click();
+      await $('button=Approve generated targets').click();
+      const start = await $(`button=Run reviewed generated ${reverse ? 'undo' : 'rename'}`);
+      await start.waitForDisplayed();
+      await start.click();
+      await browser.waitUntil(
+        async () => {
+          const text = await scope.$('[role="status"]').getText();
+          return text.includes('completed') && text.includes('10 / 10');
+        },
+        {
+          timeout: 45000,
+          timeoutMsg: 'The generated native rename did not reach a verified terminal state',
+        },
+      );
+      const completed = await read({ kind: 'inspect' });
+      assert.equal(completed.reverse, reverse);
+      assert.equal(completed.state, 'completed');
+      assert.ok(completed.members.every((member) => member.observed === member.after));
+      assert.equal(completed.ticket, null);
+      states.push(completed);
+      await browser.saveScreenshot(
+        `.context/screenshots/m2-generated-${reverse ? 'undo' : 'rename'}-${process.platform}.png`,
+      );
+      if (!reverse) {
+        await $('button=Review generated undo').scrollIntoView();
+        await $('button=Review generated undo').click();
+        await $('button=Approve generated targets').waitForDisplayed();
+        assert.equal(await $('button=Approve generated targets').isEnabled(), false);
+        assert.equal(await $('button=Run reviewed generated undo').isExisting(), false);
+        const undo = await read({ kind: 'inspect' });
+        assert.notEqual(undo.planId, initial.planId);
+        assert.equal(undo.completedSteps, 0);
+        assert.equal(undo.ticket, null);
+        states.push(undo);
+      }
+    }
+    const restored = states.at(-1);
+    assert.ok(
+      restored.members.every((member) =>
+        initial.members.some(
+          (original) => original.id === member.id && original.before === member.observed,
+        ),
+      ),
+    );
+    await mkdir('.context/generated-rename', { recursive: true });
+    await writeFile(
+      `.context/generated-rename/reviewed-${process.platform}.json`,
+      JSON.stringify({ states, generatedOnly: true, catalogIntegration: false }),
+    );
+    await $('button=Close fixture review').click();
+    assert.equal(await $('dialog[aria-labelledby="rename-lab-title"]').isExisting(), false);
+  });
   it('copies and inspects only backend-owned operation fixtures through native IPC', async function () {
     this.timeout(180000);
     const previousTimeouts = await browser.getTimeouts();

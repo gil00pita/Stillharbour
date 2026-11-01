@@ -1,0 +1,44 @@
+//! Typed instrumentation contract. It conveys IDs, never filesystem paths or
+//! authority over existing libraries. Runtime is excluded from normal builds.
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+#[derive(Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum GeneratedRenameRequest {
+    Create {},
+    Inspect {},
+    ReviewReverse {},
+    Approve { plan_id: String, acknowledged: bool },
+    Start { plan_id: String, ticket: String },
+}
+#[derive(Clone, Serialize, Deserialize, TS, PartialEq, Eq, Debug)]
+#[serde(rename_all = "snake_case")]
+pub enum GeneratedRenameState {
+    Review,
+    NeedsContinuation,
+    Completed,
+}
+#[derive(Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GeneratedRenameMember {
+    pub id: String,
+    pub before: String,
+    pub after: String,
+    pub observed: String,
+}
+#[derive(Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GeneratedRenameReview {
+    pub plan_id: String,
+    pub digest: String,
+    pub reverse: bool,
+    pub state: GeneratedRenameState,
+    pub completed_steps: u32,
+    pub total_steps: u32,
+    pub pending_intent: bool,
+    pub members: Vec<GeneratedRenameMember>,
+    pub ticket: Option<String>,
+    pub production_authorization: bool,
+    pub independent_recovery_proven: bool,
+}

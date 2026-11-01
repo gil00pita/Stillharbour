@@ -2,6 +2,7 @@ use stillharbour_core::{
     contract::*,
     domain::{AppError, ErrorCode},
     library::model::*,
+    operations::generated_rename::*,
     operations::*,
     organization::*,
     preferences::*,
@@ -11,6 +12,10 @@ use ts_rs::TS;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ts_rs::Config::default();
     let declarations = [
+        GeneratedRenameRequest::decl(&config),
+        GeneratedRenameState::decl(&config),
+        GeneratedRenameMember::decl(&config),
+        GeneratedRenameReview::decl(&config),
         ErrorCode::decl(&config),
         AppError::decl(&config),
         MissingDatePolicy::decl(&config),

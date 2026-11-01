@@ -10,6 +10,8 @@ mod native;
 mod preparation;
 #[cfg(any(test, feature = "fixture-probes"))]
 mod rename_fixture;
+#[cfg(any(test, feature = "fixture-probes"))]
+pub use rename_fixture::GeneratedRenameSession;
 #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
 mod resume;
 mod sources;

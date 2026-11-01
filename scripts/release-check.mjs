@@ -50,6 +50,9 @@ const frontend = files('dist')
 assert.ok(!frontend.includes('__wdio_mocks__'));
 assert.ok(!frontend.includes('stillharbour:test-library-request'));
 assert.ok(!frontend.includes('__stillharbourPerf'));
+assert.ok(!frontend.includes('stillharbour:rename-lab'));
+assert.ok(!frontend.includes('test_generated_rename'));
+assert.ok(!capability.permissions.includes('allow-test-generated-rename'));
 assert.ok(!capability.permissions.includes('allow-test-performance'));
 console.log(
   'Vendored ExifTool resources match the reviewed file manifest; production frontend excludes test routes.',

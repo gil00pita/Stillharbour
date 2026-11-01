@@ -1,6 +1,7 @@
 //! Closed native experiment. Only this constructor's generated objects can be
 //! moved. Retained local versions are NOT independent recovery or M4 evidence.
 mod quarantine;
+mod session;
 use super::{approval, failed, native, source_native};
 use crate::{
     domain::Result,
@@ -12,6 +13,7 @@ use crate::{
     operations::rename_graph::{self as graph, Facts, Member, NameFact, Plan},
 };
 use rusqlite::{Connection, params};
+pub use session::GeneratedRenameSession;
 use std::{
     collections::BTreeMap,
     fs::File,
