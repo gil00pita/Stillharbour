@@ -155,7 +155,7 @@ impl StoredBundleConfirmation {
     }
 }
 
-fn target(primary: &str, name: &str, relation: &BundleRelation) -> Result<String> {
+pub(crate) fn target(primary: &str, name: &str, relation: &BundleRelation) -> Result<String> {
     let (folder, filename) = primary
         .rsplit_once('/')
         .map_or(("", primary), |(parent, file)| (parent, file));

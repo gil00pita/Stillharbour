@@ -25,6 +25,8 @@ export function GeneratedRenameLab() {
   const [open, setOpen] = useState(false);
   const [review, setReview] = useState<GeneratedRenameReview | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pattern, setPattern] = useState('{event}_{sequence:03}_{original_stem}.{ext}');
+  const [event, setEvent] = useState('Organized');
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -200,9 +202,33 @@ export function GeneratedRenameLab() {
         )}
         <fieldset disabled={busy || stopping || worker?.busy}>
           {!review && !worker?.scopeCreated && (
-            <button onClick={() => void request({ kind: 'create' })}>
-              Create generated rename fixture
-            </button>
+            <>
+              <button onClick={() => void request({ kind: 'create' })}>
+                Create generated rename fixture
+              </button>
+              <label>
+                Generated filename template
+                <input value={pattern} onChange={(e) => setPattern(e.target.value)} />
+              </label>
+              <label>
+                Generated template event
+                <input value={event} onChange={(e) => setEvent(e.target.value)} />
+              </label>
+              <p>
+                Five disposable payloads, including a same-stem XMP companion. No capture dates.
+                Filename templates only; missing dates block.
+              </p>
+              <button
+                onClick={() =>
+                  void request({
+                    kind: 'create_from_template',
+                    template: { pattern, event, missingDate: 'block' },
+                  })
+                }
+              >
+                Review generated template targets
+              </button>
+            </>
           )}
           <button onClick={() => void request({ kind: 'inspect' })}>
             Inspect retained rename state

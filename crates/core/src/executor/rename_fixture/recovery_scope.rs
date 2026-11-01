@@ -21,6 +21,8 @@ struct OriginalScope {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Scope {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    template: Option<crate::organization::OrganizationTemplate>,
     policy: String,
     forward: Plan,
     active: Plan,
@@ -60,6 +62,7 @@ fn retain(parent: &File, name: &str, bytes: &[u8]) -> Result<()> {
 }
 pub(super) fn save(session: &GeneratedRenameSession, name: &str) -> Result<()> {
     let scope = Scope {
+        template: session.fixture.template.clone(),
         policy: "generated-rename-cold-v1".into(),
         forward: session.fixture.plan.clone(),
         active: session.active.clone(),
@@ -149,10 +152,17 @@ pub(super) fn reopen(
     require!(scope.source.matches(directory.leaf())? && scope.versions.matches(versions.leaf())?);
     let mut seen = std::collections::BTreeSet::new();
     let mut originals = BTreeMap::new();
-    for member in &scope.forward.members {
-        let index = MEMBERS
+    let pairs = match &scope.template {
+        Some(template) => super::super::template::pairs(template)?,
+        None => MEMBERS
             .iter()
-            .position(|(before, after)| member.before == *before && member.after == *after)
+            .map(|(before, after)| (before.to_string(), after.to_string()))
+            .collect(),
+    };
+    for member in &scope.forward.members {
+        let index = pairs
+            .iter()
+            .position(|(before, after)| &member.before == before && &member.after == after)
             .ok_or_else(|| failed("Foreign generated recovery member."))?;
         require!(seen.insert(index));
         let active = scope
@@ -207,6 +217,7 @@ pub(super) fn reopen(
         );
     }
     let fixture = Fixture {
+        template: scope.template,
         run,
         root_id: scope.forward.root_id.clone(),
         source_root: scope.source,
@@ -288,6 +299,85 @@ impl Retained {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn template_targets_reopen_execute_and_undo_with_fresh_approvals_and_stable_catalog_ids() {
+        use crate::operations::generated_rename::{
+            GeneratedRenameRequest as Request, GeneratedRenameState,
+        };
+        let template = crate::organization::OrganizationTemplate {
+            pattern: "{event}_{sequence:03}_{original_stem}.{ext}".into(),
+            event: "Reviewed".into(),
+            missing_date: crate::organization::MissingDatePolicy::Block,
+            filename_stem_case: None,
+        };
+        let mut session = GeneratedRenameSession::create_from_template(template).unwrap();
+        let initial = session.inspect().unwrap();
+        let expected = [
+            ("A.JPG", "Reviewed_001_A.JPG"),
+            ("B.JPG", "Reviewed_002_B.JPG"),
+            ("Case.JPG", "Reviewed_003_Case.JPG"),
+            ("Case.xmp", "Reviewed_003_Case.xmp"),
+            ("Undo.JPG", "Reviewed_004_Undo.JPG"),
+        ];
+        for (before, after) in expected {
+            assert!(
+                initial
+                    .members
+                    .iter()
+                    .any(|m| m.before == before && m.after == after)
+            );
+        }
+        for reverse in [false, true] {
+            let review = session.inspect().unwrap();
+            let approved = session
+                .request(Request::Approve {
+                    plan_id: review.plan_id,
+                    acknowledged: true,
+                })
+                .unwrap();
+            let owner = Retained::capture(&mut session).unwrap();
+            drop(session);
+            session = owner.open().unwrap();
+            assert!(
+                session
+                    .request(Request::Start {
+                        plan_id: approved.plan_id,
+                        ticket: approved.ticket.unwrap()
+                    })
+                    .is_err()
+            );
+            let current = session.inspect().unwrap();
+            assert_eq!(current.reverse, reverse);
+            assert!(current.ticket.is_none());
+            let grant = session
+                .request(Request::Approve {
+                    plan_id: current.plan_id,
+                    acknowledged: true,
+                })
+                .unwrap();
+            let completed = session
+                .request(Request::Start {
+                    plan_id: grant.plan_id,
+                    ticket: grant.ticket.unwrap(),
+                })
+                .unwrap();
+            assert_eq!(completed.state, GeneratedRenameState::Completed);
+            assert!(completed.members.iter().all(|m| m.observed == m.after
+                && m.catalog_path == m.after
+                && initial.members.iter().any(|original| original.id == m.id
+                    && original.catalog_asset_id == m.catalog_asset_id)));
+            if !reverse {
+                session.request(Request::ReviewReverse {}).unwrap();
+            }
+        }
+        let completed = session.inspect().unwrap();
+        assert!(completed.members.iter().all(|m| {
+            initial
+                .members
+                .iter()
+                .any(|original| m.id == original.id && m.observed == original.before)
+        }));
+    }
     #[test]
     fn owned_reopen_retains_cleanup_ownership_and_rejects_record_changes_before_reconstruction() {
         let mut session = GeneratedRenameSession::create().unwrap();

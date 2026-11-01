@@ -7,11 +7,20 @@ use ts_rs::TS;
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GeneratedRenameRequest {
     Create {},
+    CreateFromTemplate {
+        template: crate::organization::OrganizationTemplate,
+    },
     Inspect {},
     ReopenRetained {},
     ReviewReverse {},
-    Approve { plan_id: String, acknowledged: bool },
-    Start { plan_id: String, ticket: String },
+    Approve {
+        plan_id: String,
+        acknowledged: bool,
+    },
+    Start {
+        plan_id: String,
+        ticket: String,
+    },
 }
 #[derive(Clone, Serialize, Deserialize, TS, PartialEq, Eq, Debug)]
 #[serde(rename_all = "snake_case")]

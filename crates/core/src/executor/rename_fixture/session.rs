@@ -21,7 +21,14 @@ pub struct GeneratedRenameSession {
 }
 impl GeneratedRenameSession {
     pub fn create() -> Result<Self> {
-        let fixture = Fixture::new()?;
+        Self::with_fixture(Fixture::new()?)
+    }
+    pub(super) fn create_from_template(
+        template: crate::organization::OrganizationTemplate,
+    ) -> Result<Self> {
+        Self::with_fixture(Fixture::from_template(template)?)
+    }
+    fn with_fixture(fixture: Fixture) -> Result<Self> {
         Ok(Self {
             catalog: super::catalog::GeneratedCatalog::create(&fixture)?,
             active: fixture.plan.clone(),
@@ -32,7 +39,8 @@ impl GeneratedRenameSession {
     }
     pub fn request(&mut self, request: GeneratedRenameRequest) -> Result<GeneratedRenameReview> {
         match request {
-            GeneratedRenameRequest::Create {} => Err(failed(
+            GeneratedRenameRequest::Create {}
+            | GeneratedRenameRequest::CreateFromTemplate { .. } => Err(failed(
                 "A generated session already exists. Inspect its retained state.",
             )),
             GeneratedRenameRequest::Inspect {} => self.inspect(),

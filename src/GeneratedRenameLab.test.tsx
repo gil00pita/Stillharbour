@@ -73,6 +73,36 @@ function open() {
     window.dispatchEvent(new Event('stillharbour:rename-lab'));
   });
 }
+it('sends only template policy and keeps a rejected draft editable without approval', async () => {
+  requestInvoke
+    .mockRejectedValueOnce({ message: 'Blocked template' })
+    .mockResolvedValueOnce(review());
+  render(<GeneratedRenameLab />);
+  open();
+  fireEvent.change(screen.getByLabelText('Generated filename template'), {
+    target: { value: '{event}_{original_stem}.{ext}' },
+  });
+  fireEvent.change(screen.getByLabelText('Generated template event'), {
+    target: { value: 'Reviewed' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Review generated template targets' }));
+  await screen.findByRole('alert');
+  expect(
+    screen.queryByRole('button', { name: 'Approve generated targets' }),
+  ).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Review generated template targets' }));
+  expect(await screen.findByRole('button', { name: 'Approve generated targets' })).toBeDisabled();
+  expect(requestInvoke).toHaveBeenLastCalledWith('test_generated_rename', {
+    request: {
+      kind: 'create_from_template',
+      template: {
+        pattern: '{event}_{original_stem}.{ext}',
+        event: 'Reviewed',
+        missingDate: 'block',
+      },
+    },
+  });
+});
 it('requires acknowledgment and an actual grant separately for forward and reverse targets', async () => {
   requestInvoke
     .mockResolvedValueOnce(review())

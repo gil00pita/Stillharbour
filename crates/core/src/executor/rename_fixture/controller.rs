@@ -135,7 +135,10 @@ impl GeneratedRenameController {
         if self.inner.busy.load(Ordering::Acquire) {
             return Err(busy());
         }
-        if matches!(request, GeneratedRenameRequest::Create {}) {
+        if matches!(
+            request,
+            GeneratedRenameRequest::Create {} | GeneratedRenameRequest::CreateFromTemplate { .. }
+        ) {
             if slot.is_some()
                 || self
                     .inner
@@ -148,7 +151,12 @@ impl GeneratedRenameController {
                     "Inspect the existing generated scope instead of replacing it.",
                 ));
             }
-            let session = GeneratedRenameSession::create()?;
+            let session = match request {
+                GeneratedRenameRequest::CreateFromTemplate { template } => {
+                    GeneratedRenameSession::create_from_template(template)?
+                }
+                _ => GeneratedRenameSession::create()?,
+            };
             *self
                 .inner
                 .reader

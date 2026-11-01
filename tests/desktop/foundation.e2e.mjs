@@ -1498,7 +1498,8 @@ describe('native read-only library', () => {
     await browser.setWindowSize(1180, 780);
     await browser.execute(() => window.dispatchEvent(new Event('stillharbour:rename-lab')));
     await $('button=Create generated rename fixture').waitForDisplayed();
-    await $('button=Create generated rename fixture').click();
+    await $('input[value="Organized"]').setValue('Reviewed');
+    await $('button=Review generated template targets').click();
     const approval = await $('button=Approve generated targets');
     await approval.waitForDisplayed();
     assert.equal(await approval.isEnabled(), false);
@@ -1511,6 +1512,16 @@ describe('native read-only library', () => {
     assert.equal(initial.state, 'review');
     assert.equal(initial.completedSteps, 0);
     assert.equal(initial.members.length, 5);
+    assert.ok(
+      initial.members.some(
+        (member) => member.before === 'Case.JPG' && member.after === 'Reviewed_003_Case.JPG',
+      ),
+    );
+    assert.ok(
+      initial.members.some(
+        (member) => member.before === 'Case.xmp' && member.after === 'Reviewed_003_Case.xmp',
+      ),
+    );
     assert.equal(initial.catalogCommitted, false);
     assert.equal(new Set(initial.members.map((member) => member.catalogAssetId)).size, 5);
     assert.ok(initial.members.every((member) => member.catalogPath === member.before));

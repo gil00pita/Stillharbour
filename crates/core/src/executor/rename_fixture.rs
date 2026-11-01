@@ -4,6 +4,7 @@ mod catalog;
 mod controller;
 mod quarantine;
 mod session;
+mod template;
 use super::{approval, failed, native, source_native};
 use crate::{
     domain::Result,
@@ -43,6 +44,7 @@ struct Original {
     created: Option<SystemTime>,
 }
 struct Fixture {
+    template: Option<crate::organization::OrganizationTemplate>,
     run: Run,
     root_id: String,
     source_root: super::Object,
@@ -254,6 +256,7 @@ impl Fixture {
         facts.root_revision = source_native::revision(parent)?;
         let plan = graph::build(id, members, facts)?;
         let result = Self {
+            template: None,
             run: Run::Owned(std::sync::Arc::new(run)),
             root_id,
             source_root: super::Object::of(parent)?,
@@ -943,6 +946,7 @@ mod tests {
             assert_eq!(filesystem::identity(&file).unwrap().links, 1);
         }
         let fixture = Fixture {
+            template: None,
             run: Run::Child(path),
             root_id: scope.forward.root_id.clone(),
             source_root: scope.source_root,
