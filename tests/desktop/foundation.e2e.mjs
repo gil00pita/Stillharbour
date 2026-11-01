@@ -1265,6 +1265,51 @@ async function reviewEquivalentDraft(original, destination, evidence, audit) {
   await verifyAllExistingImport(compiled.files[0].rootId, destination, evidence, audit);
   await $('button=Close saved plans').click();
 }
+async function pauseResumePreparation(receipt) {
+  const before = (await native({ kind: 'status' })).data;
+  const job = before.jobs.find((job) => job.kind === 'thumbnails' && job.state === 'running');
+  assert.ok(job, 'Held thumbnail job must be running before banner pause');
+  const banner = await $('.preparation-banner');
+  const counts = ({ discovered, indexed, skipped, errors, totalFiles, processedFiles }) => ({
+    discovered,
+    indexed,
+    skipped,
+    errors,
+    totalFiles,
+    processedFiles,
+  });
+  await banner.$('button=Pause previews').click();
+  await browser.waitUntil(
+    async () => (await native({ kind: 'job_details', job_id: job.id })).data.job.state === 'paused',
+    { timeout: 10000, timeoutMsg: 'Banner pause never reached the native job boundary' },
+  );
+  const paused = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(paused.id, job.id);
+  assert.deepEqual(counts(paused), counts(job));
+  await browser.waitUntil(
+    async () =>
+      (await $('.preparation-banner .preparation-summary').getText()) === 'Preparation paused',
+  );
+  await banner.$('button=Resume job').waitForEnabled();
+  await browser.saveScreenshot(
+    `.context/screenshots/initial-previews-paused${process.platform === 'darwin' ? '' : '-win32'}.png`,
+  );
+  const stillPaused = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(stillPaused.state, 'paused');
+  assert.deepEqual(counts(stillPaused), counts(paused));
+  await banner.$('button=Resume job').click();
+  await browser.waitUntil(
+    async () =>
+      (await native({ kind: 'job_details', job_id: job.id })).data.job.state === 'running',
+    { timeout: 10000, timeoutMsg: 'Banner resume did not resume the original native job' },
+  );
+  const resumed = (await native({ kind: 'job_details', job_id: job.id })).data.job;
+  assert.equal(resumed.id, job.id);
+  assert.deepEqual(counts(resumed), counts(job));
+  const after = (await native({ kind: 'status' })).data;
+  assert.deepEqual(after.jobs.map(({ id }) => id).sort(), before.jobs.map(({ id }) => id).sort());
+  await writeFile(receipt, JSON.stringify({ before: job, paused, stillPaused, resumed }));
+}
 async function pauseResumeJob(receipt) {
   const before = (await native({ kind: 'status' })).data;
   const job = before.jobs.find((job) => job.kind === 'thumbnails' && job.state === 'running');
@@ -2153,6 +2198,7 @@ describe('native read-only library', () => {
             await writeFile(`${evidence}/windows-banner-${name}.json`, JSON.stringify(layout));
             await browser.saveScreenshot(`.context/screenshots/windows-banner-${name}.png`);
           }
+          await pauseResumePreparation(`${evidence}/windows-preparation-pause.json`);
           await pauseResumeJob(`${evidence}/windows-job-pause.json`);
           await reviewRemovalStopsJobs(`${evidence}/windows-removal-stopped-jobs.json`);
         } finally {
@@ -3086,15 +3132,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         });
         await browser.saveScreenshot(`.context/screenshots/initial-previews-${name}.png`);
       }
-      await $('.preparation-banner button').click();
-      await browser.waitUntil(async () =>
-        (await $('.preparation-banner'))
-          .getText()
-          .then((text) => text.includes('Preview preparation paused')),
-      );
-      assert.equal(await $('.preparation-banner button').getText(), 'Resume previews');
-      await browser.saveScreenshot('.context/screenshots/initial-previews-paused.png');
-      await native({ kind: 'generate_thumbnails', root_id: root.id });
+      await pauseResumePreparation(`${evidence}/preparation-pause.json`);
       await pauseResumeJob(`${evidence}/job-pause.json`);
       await reviewRemovalStopsJobs(`${evidence}/removal-stopped-jobs.json`);
       observations.initialPreparation = {

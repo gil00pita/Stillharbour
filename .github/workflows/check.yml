@@ -36,6 +36,8 @@ jobs:
             .context/screenshots
             .context/wdio
             .context/gallery/**/warm-scroll.json
+            .context/gallery/**/preparation-pause.json
+            .context/gallery/**/job-pause.json
             .context/gallery/**/manifest-*.json
             .context/gallery/**/multi-source-*.json
             .context/gallery/**/m3-inspections-*.json
