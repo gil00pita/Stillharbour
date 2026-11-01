@@ -14,7 +14,17 @@ function review(patch: Partial<GeneratedRenameReview> = {}): GeneratedRenameRevi
     completedSteps: 0,
     totalSteps: 10,
     pendingIntent: false,
-    members: [{ id: 'member', before: 'Case.JPG', after: 'case.JPG', observed: 'Case.JPG' }],
+    catalogCommitted: patch.state === 'completed',
+    members: [
+      {
+        id: 'member',
+        before: 'Case.JPG',
+        after: 'case.JPG',
+        observed: 'Case.JPG',
+        catalogAssetId: 'stable-asset',
+        catalogPath: 'Case.JPG',
+      },
+    ],
     ticket: null,
     productionAuthorization: false,
     independentRecoveryProven: false,
@@ -115,4 +125,37 @@ it('retains an error and exposes fresh inspection instead of reporting completed
   expect(
     screen.queryByRole('button', { name: 'Run reviewed generated rename' }),
   ).not.toBeInTheDocument();
+});
+it('requires fresh approval for a catalog commit after native movement has completed', async () => {
+  const pending = review({ state: 'needs_catalog_commit', completedSteps: 10 });
+  vi.mocked(invoke)
+    .mockResolvedValueOnce(review())
+    .mockResolvedValueOnce(review({ ticket: 'native-ticket' }))
+    .mockRejectedValueOnce(new Error('Catalog commit denied'))
+    .mockResolvedValueOnce(pending)
+    .mockResolvedValueOnce({ ...pending, ticket: 'catalog-ticket' })
+    .mockResolvedValueOnce(review({ state: 'completed', completedSteps: 10 }));
+  render(<GeneratedRenameLab />);
+  open();
+  fireEvent.click(screen.getByRole('button', { name: 'Create generated rename fixture' }));
+  await screen.findByRole('checkbox');
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve generated targets' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Run reviewed generated rename' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Catalog commit denied');
+  fireEvent.click(screen.getByRole('button', { name: 'Inspect retained rename state' }));
+  await screen.findByText(
+    'Native movement is complete. Fresh approval checks the files and commits catalog paths without repeating moves.',
+  );
+  expect(screen.getByRole('button', { name: 'Approve generated targets' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Review generated undo' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('checkbox'));
+  fireEvent.click(screen.getByRole('button', { name: 'Approve generated targets' }));
+  fireEvent.click(
+    await screen.findByRole('button', { name: 'Commit reviewed generated catalog paths' }),
+  );
+  await screen.findByText('Catalog paths committed with stable asset IDs.');
+  expect(invoke).toHaveBeenLastCalledWith('test_generated_rename', {
+    request: { kind: 'start', plan_id: 'forward', ticket: 'catalog-ticket' },
+  });
 });

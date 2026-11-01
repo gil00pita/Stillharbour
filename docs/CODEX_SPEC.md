@@ -798,3 +798,6 @@ M2 continuation (2026-10-31, ADR-0042): application continuation requires a new 
 
 
 Generated rename review continuation (2026-11-01): ADR-0056 develops an instrumented-only actual UI/IPC acknowledgment, one-use approval, native execution/inspection and separately approved undo over constructor-owned generated files. It accepts no renderer paths and remains excluded from production handlers/capabilities/frontend. Private fixture journals do not establish application catalog path updates, durable jobs, restart adoption or general original-organization support. M2 remains open before M3.
+
+
+Generated catalog continuation (2026-11-01): ADR-0057 develops actual schema-6 Catalog path updates within the constructor-owned rename lab. Atomic cycle-safe updates retain asset IDs/annotations and append protected commit receipts. Native completion without a catalog receipt remains pending and needs fresh approval; reverse review requires both. No production catalog schema/identity or real-library mutation permission changes. General application-root organization/jobs/restart integration and remaining M2 gates still precede M3.

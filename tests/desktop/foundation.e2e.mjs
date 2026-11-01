@@ -1340,6 +1340,9 @@ describe('native read-only library', () => {
     assert.equal(initial.state, 'review');
     assert.equal(initial.completedSteps, 0);
     assert.equal(initial.members.length, 5);
+    assert.equal(initial.catalogCommitted, false);
+    assert.equal(new Set(initial.members.map((member) => member.catalogAssetId)).size, 5);
+    assert.ok(initial.members.every((member) => member.catalogPath === member.before));
     assert.equal(initial.productionAuthorization, false);
     assert.equal(initial.independentRecoveryProven, false);
     const states = [initial];
@@ -1368,6 +1371,17 @@ describe('native read-only library', () => {
       assert.equal(completed.state, 'completed');
       assert.ok(completed.members.every((member) => member.observed === member.after));
       assert.equal(completed.ticket, null);
+      assert.equal(completed.catalogCommitted, true);
+      assert.ok(
+        completed.members.every(
+          (member) =>
+            member.catalogPath === member.observed &&
+            initial.members.some(
+              (original) =>
+                original.id === member.id && original.catalogAssetId === member.catalogAssetId,
+            ),
+        ),
+      );
       states.push(completed);
       await browser.saveScreenshot(
         `.context/screenshots/m2-generated-${reverse ? 'undo' : 'rename'}-${process.platform}.png`,
@@ -1396,7 +1410,7 @@ describe('native read-only library', () => {
     await mkdir('.context/generated-rename', { recursive: true });
     await writeFile(
       `.context/generated-rename/reviewed-${process.platform}.json`,
-      JSON.stringify({ states, generatedOnly: true, catalogIntegration: false }),
+      JSON.stringify({ states, generatedOnly: true, catalogIntegration: true }),
     );
     await $('button=Close fixture review').click();
     assert.equal(await $('dialog[aria-labelledby="rename-lab-title"]').isExisting(), false);

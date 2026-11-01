@@ -17,6 +17,7 @@ pub enum GeneratedRenameRequest {
 pub enum GeneratedRenameState {
     Review,
     NeedsContinuation,
+    NeedsCatalogCommit,
     Completed,
 }
 #[derive(Clone, Serialize, Deserialize, TS)]
@@ -26,6 +27,8 @@ pub struct GeneratedRenameMember {
     pub before: String,
     pub after: String,
     pub observed: String,
+    pub catalog_asset_id: String,
+    pub catalog_path: String,
 }
 #[derive(Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -37,6 +40,7 @@ pub struct GeneratedRenameReview {
     pub completed_steps: u32,
     pub total_steps: u32,
     pub pending_intent: bool,
+    pub catalog_committed: bool,
     pub members: Vec<GeneratedRenameMember>,
     pub ticket: Option<String>,
     pub production_authorization: bool,

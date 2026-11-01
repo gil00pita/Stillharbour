@@ -86,12 +86,24 @@ export function GeneratedRenameLab() {
                 {review.totalSteps} journaled steps
               </p>
               <p>Plan: {review.planId}</p>
+              <p>
+                {review.catalogCommitted
+                  ? 'Catalog paths committed with stable asset IDs.'
+                  : 'Catalog paths await the verified native operation and atomic catalog commit.'}
+              </p>
+              {review.state === 'needs_catalog_commit' && (
+                <p>
+                  Native movement is complete. Fresh approval checks the files and commits catalog
+                  paths without repeating moves.
+                </p>
+              )}
               <table aria-label="Generated rename targets">
                 <thead>
                   <tr>
                     <th>Before</th>
                     <th>After</th>
                     <th>Observed now</th>
+                    <th>Catalog path</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -100,6 +112,7 @@ export function GeneratedRenameLab() {
                       <td>{member.before}</td>
                       <td>{member.after}</td>
                       <td>{member.observed}</td>
+                      <td>{member.catalogPath}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -134,7 +147,9 @@ export function GeneratedRenameLab() {
                         })
                       }
                     >
-                      Run reviewed generated {review.reverse ? 'undo' : 'rename'}
+                      {review.state === 'needs_catalog_commit'
+                        ? 'Commit reviewed generated catalog paths'
+                        : `Run reviewed generated ${review.reverse ? 'undo' : 'rename'}`}
                     </button>
                   )}
                 </>

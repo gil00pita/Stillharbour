@@ -292,3 +292,6 @@ The owner continued to M2 and selected organization templates/previews as the pr
 
 
 [ADR-0056](decisions/ADR-0056-generated-rename-review-lifecycle.md) adds an instrumented-only typed review/acknowledgment/approval/run/undo lifecycle over the closed native generated scope. It preserves production exclusions; application catalog path updates and jobs remain open.
+
+
+[ADR-0057](decisions/ADR-0057-generated-rename-catalog-commit.md) adds atomic actual-catalog path commits in the closed generated session. Stable IDs/annotations survive case/cycles; native-complete/catalog-pending states require a fresh approved commit. Production catalogs and original-mutation gates are unchanged.

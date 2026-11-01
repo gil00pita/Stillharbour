@@ -127,3 +127,6 @@ Stem policy continuation, 2026-11-01: ADR-0055 adds explicit proposed Preserve/L
 
 
 Generated review continuation, 2026-11-01: ADR-0056 connects a typed instrumented-only UI/IPC lifecycle to the closed rename engine, with exact native review observations, acknowledgment, one-use approval, inspection and separately reviewed undo. Validation is running. Private fixture journals do not replace application catalog path updates, jobs or restart integration; M2 remains open before M3.
+
+
+Generated catalog continuation, 2026-11-01: ADR-0057 connects the rename lab to a constructor-owned actual Catalog actor. Atomic path/receipt commits retain IDs/annotations and separate native completion from catalog completion, including fresh approved retry without repeated moves. Validation is running. General application library organization, durable jobs/restart adoption, multi-root/target-root policies and remaining M2 gates still precede M3.
