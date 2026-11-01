@@ -2,6 +2,9 @@
 use crate::domain::{AppError, ErrorCode, Result};
 use std::{ffi::OsString, path::Path};
 
+pub mod comparison;
+pub(crate) mod names;
+
 #[derive(Debug, Clone, Copy)]
 pub enum Helper {
     ExifTool,

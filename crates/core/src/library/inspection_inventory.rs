@@ -27,14 +27,14 @@ pub(crate) struct Inventory {
     visited: u32,
     data_identity: filesystem::FileIdentity,
 }
-struct Entry {
-    name: OsString,
-    directory: bool,
-    blocked: bool,
-    hidden: bool,
-    bytes: u64,
+pub(super) struct Entry {
+    pub(super) name: OsString,
+    pub(super) directory: bool,
+    pub(super) blocked: bool,
+    pub(super) hidden: bool,
+    pub(super) bytes: u64,
 }
-fn child(parent: &File, name: &std::ffi::OsStr, directory: bool) -> Result<File> {
+pub(super) fn child(parent: &File, name: &std::ffi::OsStr, directory: bool) -> Result<File> {
     #[cfg(unix)]
     {
         use std::os::unix::ffi::OsStrExt;
@@ -55,7 +55,7 @@ fn child(parent: &File, name: &std::ffi::OsStr, directory: bool) -> Result<File>
         ))
     }
 }
-fn each(parent: &File, mut visitor: impl FnMut(Entry) -> Result<()>) -> Result<()> {
+pub(super) fn each(parent: &File, mut visitor: impl FnMut(Entry) -> Result<()>) -> Result<()> {
     #[cfg(unix)]
     {
         use rustix::fs::{AtFlags, Dir, statat};

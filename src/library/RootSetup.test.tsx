@@ -18,7 +18,7 @@ const selected = {
   identityAvailable: true,
 };
 const expectedExtensions =
-  'jpg jpeg jfif heic heif hif png tif tiff webp avif gif bmp dng cr3 cr2 crw nef nrw arw sr2 srf raf orf rw2 raw pef srw x3f 3fr fff iiq rwl'.split(
+  'jpg jpeg jfif heic heif hif png tif tiff webp avif gif bmp dng cr3 cr2 crw nef nrw arw sr2 srf raf orf rw2 raw pef srw x3f 3fr fff iiq rwl mp4'.split(
     ' ',
   );
 const existingRoot: LibraryRoot = {
@@ -84,7 +84,7 @@ it('highlights unsupported identity as an alert and blocks direct form submissio
 });
 
 describe('advanced folder setup', () => {
-  it('defaults to Managed and the exact 33-photo preset with independent hidden switches', () => {
+  it('defaults to Managed and the exact 34-extension preset with independent hidden switches', () => {
     const onSave = setup();
     expand();
     expect(screen.getByRole('switch', { name: 'Read only' })).not.toBeChecked();

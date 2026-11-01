@@ -231,7 +231,7 @@ mod tests {
         );
     }
     #[test]
-    fn photo_preset_matches_upper_and_lower_case_extensions() {
+    fn media_preset_matches_upper_and_lower_case_extensions() {
         let filter = CompiledFilter::new(ScanFilter {
             extensions: super::super::model::DEFAULT_PHOTO_EXTENSIONS
                 .iter()
@@ -240,7 +240,7 @@ mod tests {
             ..Default::default()
         })
         .unwrap();
-        assert_eq!(filter.spec.extensions.len(), 33);
+        assert_eq!(filter.spec.extensions.len(), 34);
         for ext in super::super::model::DEFAULT_PHOTO_EXTENSIONS {
             for suffix in [ext.to_string(), ext.to_ascii_uppercase()] {
                 assert!(

@@ -10,8 +10,9 @@ import { InspectionScreen, type InspectionSection } from './inspection/Inspectio
 import { RootSetup } from './library/RootSetup';
 import logo from '../assets/branding/stillharbour-logo.svg';
 import { libraryData } from './ipc';
+import { BackupScreen } from './backup/BackupScreen';
 
-type AppSection = Section | 'Settings' | InspectionSection;
+type AppSection = Section | 'Settings' | InspectionSection | 'Backup & Sync';
 
 export default function App() {
   const app = useFoundation();
@@ -129,6 +130,7 @@ function NavigationIcon({ section }: { section: AppSection | 'Map' | 'Utilities'
     Duplicates: 'M4 4h11v13H4ZM9 8h11v13H9',
     Integrity: 'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6ZM8 12l3 3 5-6',
     Storage: 'M4 4h16v16H4ZM4 11h16M12 11v9',
+    'Backup & Sync': 'M4 6h16v14H4ZM8 6V3h8v3M8 13h8m-4-3v6',
     Settings:
       'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z',
   };
@@ -177,7 +179,7 @@ function Sidebar({
                 <span className="nav-label">{item === 'Tags' ? 'Albums / Tags' : item}</span>
               </button>
             ))}
-            {(['Duplicates', 'Integrity', 'Storage'] as const).map((item) => (
+            {(['Duplicates', 'Integrity', 'Storage', 'Backup & Sync'] as const).map((item) => (
               <button
                 key={item}
                 aria-label={item}
@@ -482,6 +484,15 @@ function WorkspaceContent({
         onError={showError}
       />
     );
+  if (section === 'Backup & Sync')
+    return status ? (
+      <BackupScreen
+        key={foundation?.catalogId ?? 'catalog'}
+        status={status}
+        navigationControl={navigationControl}
+        jobsControl={jobsControl}
+      />
+    ) : null;
   if ((section === 'Duplicates' || section === 'Integrity' || section === 'Storage') && status)
     return (
       <InspectionScreen

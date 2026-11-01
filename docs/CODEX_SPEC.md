@@ -400,6 +400,8 @@ Imported filenames and capture-time formatting use the selected saved date polic
 
 ## 13. Backup & Sync and restore
 
+Current M4A implementation scope is recorded in docs/M4_BACKUP_SYNC.md. Its read-only comparison review must retain ambiguous native names and file/folder conflicts without proposing a copy, expose category totals/filtering over the whole bounded report and render per-side observed entry details safely. Conservative Unicode/case warnings do not establish native destination equivalence; metadata observations do not establish companion completeness, fidelity or recovery. M4A policy 3/schema 12 also supply immutable observation history, reviewed superseding profile rebind, potential companion relationships and bounded side-by-side previews. See docs/M4A_VALIDATION.md for the read-only acceptance matrix; all later transfer gates remain separate.
+
 Version 1.1 adds a required readable Safe copy / one-way sync workflow with the base library selected automatically. See docs/BACKUP_SYNC_ADDENDUM.md for compare, retained-version replacement, contextual errors, throttling and M4A-M4D gates. Keep this separate from restic snapshots. Both obey docs/PRESERVATION_CONTRACT.md.
 
 ### 13.1 Engines and transport
@@ -642,11 +644,11 @@ The preservation contract still has highest precedence. Integrity checks and edi
 
 Use docs/CODEX_LIBRARY_FEATURES_PROMPT.md with its prerequisite gate. N1/N2 extend existing modules, N3 adds the desktop recipe editor, N4 is separately staged provider importing, and N5 is the requested future mobile editor. Approve one slice at a time and retain the original M0-M6 release/evidence requirements.
 
-### Default photo extension preset — owner revision, 2026-10-27
+### Default media extension preset — owner revisions, 2026-10-27 and 2026-11-01
 
-.jpg, .jpeg, .jfif, .heic, .heif, .hif, .png, .tif, .tiff, .webp, .avif, .gif, .bmp, .dng, .cr3, .cr2, .crw, .nef, .nrw, .arw, .sr2, .srf, .raf, .orf, .rw2, .raw, .pef, .srw, .x3f, .3fr, .fff, .iiq, .rwl
+.jpg, .jpeg, .jfif, .heic, .heif, .hif, .png, .tif, .tiff, .webp, .avif, .gif, .bmp, .dng, .cr3, .cr2, .crw, .nef, .nrw, .arw, .sr2, .srf, .raf, .orf, .rw2, .raw, .pef, .srw, .x3f, .3fr, .fff, .iiq, .rwl, .mp4
 
-The 33-suffix preset controls photo-file discovery, not decoder capability. Unsupported formats remain catalogued with honest metadata/preview status; existing format, color and native-platform gates remain. Video suffixes remain recognised by the engine when a saved/custom filter permits them, but are not in this default photo preset.
+The built-in 34-suffix preset controls media discovery, not decoder or playback capability. The owner's 2026-11-01 request adds MP4 to the original 33-photo preset. Match `.mp4` and `.MP4` without changing source names. Unsupported content remains catalogued with explicit metadata/preview limitations. Preserve existing saved library and application-default filter lists; no automatic scope expansion or rescan. Other video suffixes remain available through custom filters. Existing format, color and native-platform gates remain.
 
 ### P0 performance evidence — owner authorisation, 2026-10-28
 

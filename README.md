@@ -15,13 +15,14 @@ A local-first photo library that keeps your originals in ordinary folders.
 **Stillharbour** is a native desktop application built with Tauri, React and Rust. Browse photos across folders, inspect metadata, and organise favourites, ratings and tags in a local SQLite catalog. Your originals stay where they are, and annotations stay in the catalog. No account, telemetry or cloud service is enabled.
 
 > [!IMPORTANT]
-> Stillharbour is in development. Native library evidence covers **macOS Apple Silicon**, with a bounded **Windows local NTFS** scan/preview implementation. Windows network drives and other filesystems remain unavailable; capture/camera metadata and broader format support are not implemented there. Signed installers and clean-machine release validation remain pending. M2 has begun with organization previews. File copying, renaming, moving, deletion and production backup remain unavailable. See the [implementation log](docs/IMPLEMENTATION_LOG.md) for actual checks and open gates.
+> Stillharbour is in development. Native library evidence covers **macOS Apple Silicon**, with a bounded **Windows local NTFS** scan/preview implementation. Windows network drives and other filesystems remain unavailable; capture/camera metadata and broader format support are not implemented there. Signed installers and clean-machine release validation remain pending. M2 organization and M3 read-only inspection work are present; M4 has started with read-only Backup & Sync comparison. File copying, renaming, moving, deletion and production backup remain unavailable. See the [implementation log](docs/IMPLEMENTATION_LOG.md) for actual checks and open gates.
 
 ## Features
 
 - **Browse your collection.** A chronological photo canvas, uniform grid, text-only list, folder explorer and date navigation, with filename search and filters.
 - **Keep a local catalog.** Save multiple nonoverlapping photo folders, configure scan filters, follow background jobs, and retain indexed records and available cached previews when a root goes offline.
 - **Inspect and annotate.** View metadata and date provenance; add favourites, ratings and tags individually or in batches without rewriting originals or sidecars.
+- **Compare backup scope.** Review the base library against a separate destination dataset using quick or full-byte comparison, save immutable comparison profiles, review historical destination edits and inspect read-only previews. This read-only M4A increment cannot copy, replace or establish recovery evidence. See [M4 status](docs/M4_BACKUP_SYNC.md).
 - **Look closer.** Navigate photos with zoom, pan, filmstrip and Info, or visually compare 2–4 selected photos. Comparison does not establish duplicate equality.
 - **Plan organization.** Select up to 240 individual photos and try date, event and sequence templates. Save immutable template versions with up to four validated examples and destination-bound drafts; review existing target conflicts and selected source folders. Reopen Saved plans and view or save new JSON/CSV review files. Future-name checks, complete companion bundles, execution, import and undo remain pending. Originals stay in place.
 
@@ -51,6 +52,8 @@ This launches the native desktop app. `npm run dev` starts only the frontend ser
 1. Choose a photo folder, review its scan settings, then select **Save & Start scanning**.
 2. Follow discovery and preview preparation in the progress banner and **Jobs**. Browse Photos, Folders or Tags once the collection is ready.
 3. Open a photo to inspect it, or select photos to add catalog annotations and preview organization templates.
+
+The built-in File Extensions preset includes `.mp4`; existing saved filter lists retain their scope. Discovery does not establish video preview or playback support.
 
 Use generated, disposable media for development tests. Debug catalogs are isolated under `.context/native-data`; production builds use the local application-data directory. Even folders marked **Managed** currently only read originals.
 
@@ -96,8 +99,8 @@ Work proceeds through reviewed milestones. Individual later slices, such as macO
 | [M0 — Foundation](tasks/M0_FOUNDATION.md)                                    | Implemented foundation with recorded local evidence; cross-platform gates remain                                                               |
 | [M1 — Read-only library](tasks/M1_READ_ONLY_LIBRARY.md)                      | Implemented native browsing and catalog annotations; platform and performance gates remain                                                     |
 | [M2 — Organization and import](tasks/M2_SAFE_OPERATIONS.md)                  | In progress: previews, companion review, destination preflight, saved template versions and immutable drafts; execution/import/undo gates open |
-| [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Planned analysis and recoverable cleanup                                                                                                       |
-| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | Planned restic/rclone integration with verified restore                                                                                        |
+| [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Read-only Duplicates, Integrity and Storage; production quarantine awaits M4 recovery                                                          |
+| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | M4A complete and natively validated; copy, snapshots and restore remain gated                                                                  |
 | [M5 — Maps, metadata and formats](tasks/M5_MAP_METADATA_FORMATS.md)          | macOS format-preview slice implemented; maps and remaining scope pending                                                                       |
 | [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | Pending packaging, signing and target-platform acceptance                                                                                      |
 

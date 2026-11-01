@@ -194,3 +194,51 @@ it('pauses discovery and resumes the same job without starting a new scan', asyn
   fireEvent.click(screen.getByRole('button', { name: 'Resume job' }));
   await waitFor(() => expect(library).toHaveBeenCalledWith({ kind: 'resume', job_id: 'scan' }));
 });
+
+it('keeps thumbnail pause pending until acknowledgement and resumes the same job', async () => {
+  const thumbnail: ScanJob = {
+    ...scan,
+    id: 'held-preview-job',
+    kind: 'thumbnails',
+    totalFiles: 20,
+    processedFiles: 0,
+    indexed: 0,
+  };
+  const { rerender } = render(
+    <PreparationBanner
+      status={{ ...status, jobs: [thumbnail] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Pause previews' }));
+  await waitFor(() =>
+    expect(library).toHaveBeenCalledWith({ kind: 'pause', job_id: thumbnail.id }),
+  );
+  await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+  rerender(
+    <PreparationBanner
+      status={{ ...status, jobs: [{ ...thumbnail, state: 'pause_requested' }] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  expect(screen.getByRole('button', { name: 'Pausing…' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: 'Resume previews' })).not.toBeInTheDocument();
+  rerender(
+    <PreparationBanner
+      status={{ ...status, jobs: [{ ...thumbnail, state: 'paused' }] }}
+      rootId={null}
+      onRefresh={refresh}
+    />,
+  );
+  expect(screen.getByText('Preparation paused')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'Resume job' }));
+  await waitFor(() =>
+    expect(library).toHaveBeenCalledWith({ kind: 'resume', job_id: thumbnail.id }),
+  );
+  expect(vi.mocked(library).mock.calls.map(([request]) => request)).toEqual([
+    { kind: 'pause', job_id: thumbnail.id },
+    { kind: 'resume', job_id: thumbnail.id },
+  ]);
+});

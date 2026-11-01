@@ -1,0 +1,92 @@
+.backup-workspace {
+  padding: 24px;
+  overflow: auto;
+}
+.backup-workspace > p {
+  max-width: 90ch;
+  color: var(--muted);
+}
+.backup-workspace select,
+.backup-workspace input {
+  max-width: 100%;
+}
+.backup-scope {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  margin-block: 24px;
+}
+.backup-scope section {
+  border: 1px solid var(--border);
+  padding: 20px;
+  border-radius: 8px;
+}
+.backup-path {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.backup-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-block: 16px;
+}
+.backup-controls select {
+  margin-inline-start: 12px;
+}
+.backup-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 0;
+  list-style: none;
+}
+.backup-entry-details {
+  border: 1px solid var(--border);
+  padding: 16px;
+  margin-block: 16px;
+}
+.backup-entry-details dd {
+  overflow-wrap: anywhere;
+}
+.backup-entry-details img {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  max-height: 512px;
+}
+.backup-table td button {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+.backup-table {
+  overflow: auto;
+  max-height: 60vh;
+}
+.backup-table table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+.backup-table th,
+.backup-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.backup-table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+}
+.backup-table td:first-child {
+  min-width: 160px;
+  max-width: 320px;
+}
+@media (max-width: 850px) {
+  .backup-scope {
+    grid-template-columns: 1fr;
+  }
+}
