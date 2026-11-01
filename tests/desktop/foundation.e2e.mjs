@@ -61,6 +61,47 @@ async function ownedOperationReceipt() {
     }, token);
   }
 }
+async function reviewFilenameStemCase(assetIds, evidence) {
+  const template = {
+    pattern: '{capture:%Y}/{capture:%Y-%m-%d}/{original_stem}.{ext}',
+    event: '',
+    missingDate: 'undated',
+    filenameStemCase: 'uppercase',
+  };
+  const expected = (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
+    .data;
+  await changeSizeUnit('Filename stem case', 'uppercase');
+  await $('button=Build preview').click();
+  await $('.organization-table tbody tr:first-child').waitForDisplayed();
+  const shown = await browser.execute(() =>
+    [...document.querySelectorAll('.organization-table tbody tr')].map(
+      (row) => row.querySelectorAll('td')[1].textContent,
+    ),
+  );
+  assert.deepEqual(
+    shown,
+    expected.rows.map((row) => row.targetRelativePath ?? 'No valid target'),
+  );
+  assert.equal(expected.template.filenameStemCase, 'uppercase');
+  for (const row of expected.rows.filter((row) => row.targetRelativePath)) {
+    const sourceLeaf = row.sourcePath.split(/[\\/]/).at(-1);
+    const targetLeaf = row.targetRelativePath.split('/').at(-1);
+    assert.equal(targetLeaf.split('.').at(-1), sourceLeaf.split('.').at(-1));
+    assert.equal(
+      targetLeaf.slice(0, targetLeaf.lastIndexOf('.')),
+      targetLeaf.slice(0, targetLeaf.lastIndexOf('.')).toUpperCase(),
+    );
+  }
+  await writeFile(
+    `${evidence}/filename-stem-case-${process.platform}.json`,
+    JSON.stringify(expected),
+  );
+  await browser.saveScreenshot(
+    `.context/screenshots/m2-filename-stem-case-${process.platform}.png`,
+  );
+  await changeSizeUnit('Filename stem case', 'preserve');
+  assert.equal(await $('.organization-table').isExisting(), false);
+}
 async function reopenPreparedReview(original, destination, evidence) {
   const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
     (job) => job.planId === original.id,
@@ -1620,6 +1661,12 @@ describe('native read-only library', () => {
         // change. Text list has the existing no-image-demand contract.
         await galleryView('Text list');
         await $('button=Preview organization').click();
+        const stemCaseIds = await browser.execute(() =>
+          [...document.querySelectorAll('.asset-check:checked')].map(
+            (input) => input.closest('[data-asset-id]').dataset.assetId,
+          ),
+        );
+        await reviewFilenameStemCase(stemCaseIds, evidence);
         const destination = await browser.tauri.execute(async ({ core }) =>
           core.invoke('test_performance', {
             action: 'organization_destination_fixture',
@@ -3470,6 +3517,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await $('button=Preview organization').click();
       await $('.organization-preview[open]').waitForDisplayed();
       await assertFormControlsAligned('.organization-preview');
+      await reviewFilenameStemCase(ids, evidence);
       await $('button=Build preview').click();
       await $('.organization-table tbody tr:first-child').waitForDisplayed();
       assert.equal(

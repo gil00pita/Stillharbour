@@ -921,6 +921,7 @@ impl Fixture {
             .into(),
             event: String::new(),
             missing_date: MissingDatePolicy::Block,
+            filename_stem_case: None,
         };
         let preview = library.organization_preview(vec![asset.clone()], template.clone())?;
         let target = crate::library::native::open_root(&destination, None)?;
@@ -2065,6 +2066,7 @@ mod tests {
             pattern: "Imports/{original_stem}.{ext}".into(),
             event: String::new(),
             missing_date: crate::organization::MissingDatePolicy::Block,
+            filename_stem_case: None,
         };
         let preview = fixture
             .library

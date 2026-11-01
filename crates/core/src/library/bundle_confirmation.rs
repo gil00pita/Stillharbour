@@ -453,6 +453,19 @@ mod tests {
             assert_eq!(target(primary, name, &relation).unwrap(), expected);
         }
         assert!(target(primary, "../escape", &BundleRelation::Additional).is_err());
+        assert_eq!(
+            target(
+                "KeepCase/photo.JPG",
+                "Photo.JPG.XMP",
+                &BundleRelation::FilenameSidecar
+            )
+            .unwrap(),
+            "KeepCase/photo.JPG.XMP"
+        );
+        assert_eq!(
+            target("KeepCase/photo.JPG", "Photo.xMp", &BundleRelation::SameStem).unwrap(),
+            "KeepCase/photo.xMp"
+        );
     }
 
     #[test]
@@ -467,6 +480,7 @@ mod tests {
             pattern: "organized/{sequence:03}_{original_stem}.{ext}".into(),
             event: String::new(),
             missing_date: MissingDatePolicy::Block,
+            filename_stem_case: None,
         };
         let preview = fixture
             .library

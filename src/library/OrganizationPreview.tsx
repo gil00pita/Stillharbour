@@ -79,7 +79,11 @@ export function OrganizationPreview({
   }, []);
   function update(patch: Partial<OrganizationTemplate>) {
     setTemplateReference(null);
-    setTemplate((value) => ({ ...value, ...patch }));
+    setTemplate((value) => {
+      const next = { ...value, ...patch };
+      if (next.filenameStemCase === 'preserve') delete next.filenameStemCase;
+      return next;
+    });
     setPreview(null);
     setError(null);
   }
@@ -189,7 +193,32 @@ export function OrganizationPreview({
                   <option value="block">Block the affected photo</option>
                 </select>
               </label>
+              <label>
+                Filename stem case
+                <select
+                  value={template.filenameStemCase ?? 'preserve'}
+                  aria-label="Filename stem case"
+                  onChange={(event) =>
+                    update({
+                      filenameStemCase:
+                        event.target.value === 'lowercase'
+                          ? 'lowercase'
+                          : event.target.value === 'uppercase'
+                            ? 'uppercase'
+                            : 'preserve',
+                    })
+                  }
+                >
+                  <option value="preserve">Preserve</option>
+                  <option value="lowercase">Lowercase</option>
+                  <option value="uppercase">Uppercase</option>
+                </select>
+              </label>
             </div>
+            <p className="help">
+              Stem case applies to proposed filenames, including Undated names. Folder names and
+              extension case stay as previewed.
+            </p>
             <button type="submit" className="primary">
               {busy ? 'Building preview…' : 'Build preview'}
             </button>

@@ -1,5 +1,7 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0055](decisions/ADR-0055-explicit-filename-stem-case.md) adds an explicit proposed filename-stem case choice, with exact extensions/directories and legacy Preserve identity. Nondefault saved-template policy metadata is versioned; execution and preservation gates remain unchanged.
+
 [ADR-0054](decisions/ADR-0054-fixture-relocation-and-restoration.md) adds fixture-gated same-volume directory-to-directory relocation and retained companion restoration. Duplicate-removal authority, incomplete-state continuation and production mutation gates remain separate.
 
 The bounded rename graph and closed generated native experiment are recorded in [ADR-0053](decisions/ADR-0053-fixture-rename-graph.md). Native process-exit recovery and the remaining M2 gates are still open; these fixtures cannot authorize real-library mutations.

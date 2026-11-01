@@ -117,6 +117,32 @@ it('invalidates prior results when editing policy, pattern or preset', async () 
   expect(screen.getByLabelText('Preset')).toHaveValue('');
   expect(screen.queryByRole('table')).not.toBeInTheDocument();
 });
+it('binds explicit stem case to a fresh preview and preserves extension help', async () => {
+  setup();
+  expect(screen.getByLabelText('Filename stem case')).toHaveValue('preserve');
+  await build();
+  fireEvent.change(screen.getByLabelText('Filename stem case'), { target: { value: 'uppercase' } });
+  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  await build();
+  expect(libraryData).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'organization_preview',
+      template: expect.objectContaining({ filenameStemCase: 'uppercase' }),
+    }),
+    'organization_preview',
+  );
+  expect(screen.getByText(/Folder names and extension case stay as previewed/)).toBeVisible();
+  fireEvent.change(screen.getByLabelText('Filename stem case'), { target: { value: 'preserve' } });
+  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  await build();
+  const last = vi
+    .mocked(libraryData)
+    .mock.calls.filter(([request]) => request.kind === 'organization_preview')
+    .at(-1)?.[0];
+  expect(last?.kind).toBe('organization_preview');
+  if (last?.kind === 'organization_preview')
+    expect(last.template).not.toHaveProperty('filenameStemCase');
+});
 
 it('shows a real backend failure and allows a fresh attempt without stale success', async () => {
   setup();

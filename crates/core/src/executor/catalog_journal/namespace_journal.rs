@@ -1042,6 +1042,7 @@ mod tests {
             pattern: "future/nested/{original_stem}.{ext}".into(),
             event: String::new(),
             missing_date: MissingDatePolicy::Block,
+            filename_stem_case: None,
         };
         let preview = fixture
             .library

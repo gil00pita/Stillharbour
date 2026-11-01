@@ -465,6 +465,7 @@ mod tests {
             pattern: "{capture:%Y}/{original_stem}.{ext}".into(),
             event: String::new(),
             missing_date: MissingDatePolicy::Undated,
+            filename_stem_case: None,
         };
         let (revision, sources) = snapshot(&mut db, vec![id.clone()]).unwrap();
         let first = organization::preview(revision, template.clone(), sources).unwrap();

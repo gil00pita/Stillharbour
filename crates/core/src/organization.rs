@@ -75,6 +75,17 @@ pub enum MissingDatePolicy {
     Undated,
     Block,
 }
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FilenameStemCase {
+    #[default]
+    Preserve,
+    Lowercase,
+    Uppercase,
+}
+fn preserve_stem_case(value: &Option<FilenameStemCase>) -> bool {
+    matches!(value, None | Some(FilenameStemCase::Preserve))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -82,6 +93,9 @@ pub struct OrganizationTemplate {
     pub pattern: String,
     pub event: String,
     pub missing_date: MissingDatePolicy,
+    #[serde(default, skip_serializing_if = "preserve_stem_case")]
+    #[ts(optional)]
+    pub filename_stem_case: Option<FilenameStemCase>,
 }
 
 /// Synthetic examples only: slash-separated portable names, never native locators.
@@ -391,7 +405,7 @@ fn resolve(
     if undated && template.missing_date == MissingDatePolicy::Block {
         return Err(MissingCaptureDate);
     }
-    let target = if undated {
+    let mut target = if undated {
         // The documented fallback replaces the entire pattern, not only one token.
         if !valid_component(stem) || !valid_component(ext) {
             return Err(InvalidPath);
@@ -440,6 +454,24 @@ fn resolve(
         }
         rendered.join("/")
     };
+    if let Some(policy @ (FilenameStemCase::Lowercase | FilenameStemCase::Uppercase)) =
+        template.filename_stem_case
+    {
+        let (parent, leaf) = target
+            .rsplit_once('/')
+            .map_or(("", target.as_str()), |(parent, leaf)| (parent, leaf));
+        let (stem, extension) = leaf.rsplit_once('.').ok_or(InvalidPath)?;
+        let stem = match policy {
+            FilenameStemCase::Lowercase => stem.to_lowercase(),
+            FilenameStemCase::Uppercase => stem.to_uppercase(),
+            FilenameStemCase::Preserve => stem.to_owned(),
+        };
+        target = if parent.is_empty() {
+            format!("{stem}.{extension}")
+        } else {
+            format!("{parent}/{stem}.{extension}")
+        };
+    }
     if target.len() > 1024
         || target.split('/').any(|c| !valid_component(c))
         || std::path::Path::new(&target)

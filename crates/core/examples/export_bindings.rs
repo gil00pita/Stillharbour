@@ -14,6 +14,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ErrorCode::decl(&config),
         AppError::decl(&config),
         MissingDatePolicy::decl(&config),
+        FilenameStemCase::decl(&config),
         OrganizationTemplate::decl(&config),
         OrganizationIssue::decl(&config),
         OrganizationRow::decl(&config),

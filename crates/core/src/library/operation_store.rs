@@ -228,6 +228,7 @@ fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplat
         }
         (uuid::Uuid::new_v4().to_string(), 1)
     };
+    let stem_case = save.template.filename_stem_case.unwrap_or_default();
     let result = SavedTemplate {
         reference: TemplateRef { id, version },
         name: save.name.trim().into(),
@@ -235,6 +236,17 @@ fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplat
         created_at: store::now(),
         template: save.template,
         policies: TemplatePolicies {
+            schema_version: if stem_case == organization::FilenameStemCase::Preserve {
+                1
+            } else {
+                2
+            },
+            filename_case_policy: match stem_case {
+                organization::FilenameStemCase::Preserve => "preserve",
+                organization::FilenameStemCase::Lowercase => "lowercase_stem",
+                organization::FilenameStemCase::Uppercase => "uppercase_stem",
+            }
+            .into(),
             sample_inputs: save
                 .samples
                 .iter()
@@ -396,6 +408,7 @@ mod tests {
                 pattern: "{original_stem}.{ext}".into(),
                 event: String::new(),
                 missing_date: MissingDatePolicy::Block,
+                filename_stem_case: None,
             },
             sources.clone(),
         )
@@ -489,13 +502,19 @@ mod tests {
                 pattern: "{original_stem}.{ext}".into(),
                 event: String::new(),
                 missing_date: MissingDatePolicy::Block,
+                filename_stem_case: None,
             },
         };
         let first = save_template(&mut db, input.clone()).unwrap();
+        assert_eq!(first.policies.schema_version, 1);
+        assert_eq!(first.policies.filename_case_policy, "preserve");
         let mut next = input;
         next.previous = Some(first.reference.clone());
         next.template.pattern = "copy/{original_stem}.{ext}".into();
+        next.template.filename_stem_case = Some(organization::FilenameStemCase::Lowercase);
         let second = save_template(&mut db, next.clone()).unwrap();
+        assert_eq!(second.policies.schema_version, 2);
+        assert_eq!(second.policies.filename_case_policy, "lowercase_stem");
         assert_eq!(second.reference.version, 2);
         assert_eq!(
             save_template(&mut db, next).unwrap_err().code,
@@ -522,6 +541,7 @@ mod tests {
                 |r| r.get(0),
             )
             .unwrap();
+        assert!(!old.contains("filenameStemCase"));
         assert_eq!(
             decode::<SavedTemplate>(&old, 8192)
                 .unwrap()
@@ -543,6 +563,7 @@ mod tests {
                 pattern: "{original_stem}.{ext}".into(),
                 event: String::new(),
                 missing_date: MissingDatePolicy::Block,
+                filename_stem_case: None,
             },
             samples: vec![crate::organization::TemplateSample {
                 relative_path: "Family/Photo.JPG".into(),

@@ -11,7 +11,8 @@ export const GALLERY_DECODED_BYTES = 134217728;
 export type ErrorCode = "IO" | "CATALOG" | "CATALOG_IN_USE" | "CATALOG_SCHEMA_NEWER" | "UNSUPPORTED" | "CONFLICT" | "INVALID_INPUT" | "WORKER_FAILED" | "WORKER_TIMEOUT" | "BUSY" | "MUTATION_UNAVAILABLE";
 export type AppError = { code: ErrorCode, message: string, };
 export type MissingDatePolicy = "undated" | "block";
-export type OrganizationTemplate = { pattern: string, event: string, missingDate: MissingDatePolicy, };
+export type FilenameStemCase = "preserve" | "lowercase" | "uppercase";
+export type OrganizationTemplate = { pattern: string, event: string, missingDate: MissingDatePolicy, filenameStemCase?: FilenameStemCase, };
 export type OrganizationIssue = "missing_capture_date" | "missing_value" | "invalid_path" | "source_unavailable" | "non_unicode_path" | "collision" | "possible_case_collision";
 export type OrganizationRow = { assetId: string, rootId: string, sourcePath: string, sourceRevision: string,
 /**

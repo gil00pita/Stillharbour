@@ -157,6 +157,7 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
         pattern: "{original_stem}.{ext}".into(),
         event: String::new(),
         missing_date: stillharbour_core::organization::MissingDatePolicy::Undated,
+        filename_stem_case: None,
     };
     let ids = page
         .assets
@@ -540,6 +541,7 @@ fn missing_and_replaced_ntfs_roots_retain_inventory_and_require_identity_match()
             pattern: "{original_stem}.{ext}".into(),
             event: String::new(),
             missing_date: stillharbour_core::organization::MissingDatePolicy::Undated,
+            filename_stem_case: None,
         };
         let preview = library
             .organization_preview(ids.clone(), template.clone())

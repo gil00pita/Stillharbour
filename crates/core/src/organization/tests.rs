@@ -5,6 +5,7 @@ fn template(pattern: &str) -> OrganizationTemplate {
         pattern: pattern.into(),
         event: "Holiday".into(),
         missing_date: MissingDatePolicy::Undated,
+        filename_stem_case: None,
     }
 }
 fn source(path: &str) -> PreviewSource {
@@ -24,6 +25,71 @@ fn source(path: &str) -> PreviewSource {
 }
 fn run(pattern: &str, sources: Vec<PreviewSource>) -> OrganizationPreview {
     preview("1".into(), template(pattern), sources).unwrap()
+}
+#[test]
+fn filename_stem_case_preserve_keeps_legacy_template_serialization_and_preview_identity() {
+    let original = template("{original_stem}.{ext}");
+    let value = serde_json::to_value(&original).unwrap();
+    assert!(value.get("filenameStemCase").is_none());
+    let mut explicit: OrganizationTemplate = serde_json::from_value(value.clone()).unwrap();
+    explicit.filename_stem_case = Some(FilenameStemCase::Preserve);
+    assert_eq!(serde_json::to_value(&explicit).unwrap(), value);
+    let first = preview("1".into(), original, vec![source("Mixed.JPG")]).unwrap();
+    let second = preview("1".into(), explicit, vec![source("Mixed.JPG")]).unwrap();
+    assert_eq!(first.fingerprint, second.fingerprint);
+}
+#[test]
+fn filename_stem_case_changes_only_proposed_stems_and_applies_to_undated_fallback() {
+    for (case, stem) in [
+        (FilenameStemCase::Lowercase, "mixed.part"),
+        (FilenameStemCase::Uppercase, "MIXED.PART"),
+    ] {
+        let mut template = template("KeepCase/{original_stem}.{ext}");
+        template.filename_stem_case = Some(case);
+        let input = source("OriginalFolder/MiXeD.part.JpG");
+        let p = preview("1".into(), template.clone(), vec![input.clone()]).unwrap();
+        assert_eq!(p.rows[0].source_path, "OriginalFolder/MiXeD.part.JpG");
+        assert_eq!(
+            p.rows[0].target_relative_path,
+            Some(format!("KeepCase/{stem}.JpG"))
+        );
+        template.pattern = "{capture:%Y}/{original_stem}.{ext}".into();
+        let mut input = input;
+        input.capture = None;
+        let p = preview("1".into(), template, vec![input]).unwrap();
+        assert_eq!(
+            p.rows[0].target_relative_path,
+            Some(format!("Undated/{stem}.JpG"))
+        );
+        assert!(p.rows[0].used_undated);
+    }
+}
+#[test]
+fn filename_stem_case_rechecks_collisions_and_expanded_unicode_lengths() {
+    let mut template = template("{original_stem}.{ext}");
+    template.filename_stem_case = Some(FilenameStemCase::Lowercase);
+    let p = preview(
+        "1".into(),
+        template.clone(),
+        vec![source("A.JPG"), source("a.JPG")],
+    )
+    .unwrap();
+    assert!(
+        p.rows
+            .iter()
+            .all(|row| row.issues.contains(&OrganizationIssue::Collision))
+    );
+    let p = preview(
+        "1".into(),
+        template,
+        vec![source(&format!("{}.JPG", "İ".repeat(100)))],
+    )
+    .unwrap();
+    assert!(p.rows[0].issues.contains(&OrganizationIssue::InvalidPath));
+    assert!(p.rows[0].target_relative_path.is_none());
+    let mut value = serde_json::to_value(super::tests::template("{original_stem}.{ext}")).unwrap();
+    value["filenameStemCase"] = serde_json::json!("unreviewed-policy");
+    assert!(serde_json::from_value::<OrganizationTemplate>(value).is_err());
 }
 
 #[test]
@@ -272,6 +338,7 @@ fn template_examples_use_the_preview_resolver_without_filesystem_access() {
         pattern: "{capture:%Y}/{original_folder}/{sequence:03}_{original_stem}.{ext}".into(),
         event: String::new(),
         missing_date: MissingDatePolicy::Undated,
+        filename_stem_case: None,
     };
     let mut sample = TemplateSample {
         relative_path: "Holiday/IMG.JPG".into(),
