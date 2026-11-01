@@ -531,6 +531,9 @@ fn load_preparation_for(
 pub(super) fn validate_copy_binding(db: &Connection, binding: &Binding) -> Result<()> {
     validate_copy_binding_for(db, binding, true).map(|_| ())
 }
+pub(super) fn source_root_id(db: &Connection, binding: &Binding) -> Result<String> {
+    Ok(validate_copy_binding_for(db, binding, true)?.0.root_id)
+}
 pub(super) fn required_source_mode(
     db: &Connection,
     binding: &Binding,

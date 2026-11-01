@@ -5380,3 +5380,324 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.saveScreenshot('.context/screenshots/remove-library-empty.png');
   });
 });
+
+describe('M2 multiple source libraries — generated native fixtures', () => {
+  it('reviews and verifies two source partitions with independent approvals and jobs', async function () {
+    this.timeout(180000);
+    const evidence = await createEvidenceDirectory('.context/gallery');
+    const generated = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_multisource_fixture', rows: null }),
+    );
+    const selected = [];
+    for (let source = 0; source < 2; source += 1) {
+      let next;
+      await browser.waitUntil(
+        async () => {
+          const result = await browser.tauri.execute(async ({ core }) => {
+            try {
+              return {
+                value: await core.invoke('test_performance', {
+                  action: 'organization_multisource_next',
+                  rows: null,
+                }),
+              };
+            } catch (error) {
+              return { error };
+            }
+          });
+          if (result.error) {
+            assert.equal(result.error.code, 'BUSY', JSON.stringify(result.error));
+            return false;
+          }
+          next = result.value;
+          return true;
+        },
+        { timeout: 15000, interval: 150, timeoutMsg: 'The owned source scanner remained busy' },
+      );
+      assert.equal(next.jobs.length, 1);
+      const scan = next.jobs[0];
+      generated.jobs.push(scan);
+      generated.selection = next.selection;
+      await browser.waitUntil(
+        async () => {
+          const status = (await native({ kind: 'status' })).data;
+          const job = status.jobs.find((job) => job.id === scan.id);
+          return job && ['completed', 'partial'].includes(job.state);
+        },
+        { timeout: 60000 },
+      );
+      let asset;
+      const metadataAvailable = (await native({ kind: 'status' })).data.metadataAvailable;
+      await browser.waitUntil(
+        async () => {
+          const page = (
+            await native({
+              kind: 'query',
+              query: {
+                rootId: scan.rootId,
+                folder: '',
+                name: '',
+                fromDate: '',
+                throughDate: '',
+                minBytes: '',
+                maxBytes: '',
+                extension: '',
+                favoritesOnly: false,
+                tag: '',
+                sort: 'capture',
+                includeMissing: false,
+              },
+              cursor: null,
+              limit: 100,
+            })
+          ).data;
+          assert.equal(page.format, 1);
+          const row = page.rows.find(
+            (row) => row[3].replaceAll('\\', '/') === 'Coast/Generated-00.jpg',
+          );
+          asset = row ? { id: row[0], rootId: row[1] } : null;
+          return (
+            !!asset &&
+            (!metadataAvailable ||
+              page.rows.every((row) => !['pending', 'queued', 'running'].includes(row[20])))
+          );
+        },
+        { timeout: 30000 },
+      );
+      selected.push(asset);
+    }
+    await $('button[aria-label="Photos"]').waitForDisplayed({ timeout: 15000 });
+    await $('button[aria-label="Photos"]').click();
+    let stableRevision;
+    let stableSince = 0;
+    await browser.waitUntil(
+      async () => {
+        const status = (await native({ kind: 'status' })).data;
+        const jobs = status.jobs;
+        if (stableRevision !== status.revision) {
+          stableRevision = status.revision;
+          stableSince = Date.now();
+        }
+        const roots = generated.jobs.map((job) => job.rootId);
+        return (
+          roots.every((root) => jobs.some((job) => job.id === `thumbnail:initial:${root}`)) &&
+          jobs.every((job) => !['queued', 'running', 'cancel_requested'].includes(job.state)) &&
+          Date.now() - stableSince >= 3000
+        );
+      },
+      {
+        timeout: 60000,
+        timeoutMsg:
+          'Generated catalog jobs and visible preview revisions did not settle before planning',
+      },
+    );
+    const template = {
+      pattern: 'Partitions/{sequence:04}_{original_stem}.{ext}',
+      event: '',
+      missingDate: 'block',
+    };
+    const assetIds = selected.map((asset) => asset.id);
+    const preview = (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
+      .data;
+    assert.equal(preview.rows.length, 2);
+    assert.ok(preview.rows.every((row) => row.issues.length === 0));
+    const saved = (
+      await native({
+        kind: 'organization_plan_create',
+        selection_id: generated.selection.id,
+        draft: {
+          assetIds,
+          template,
+          previewFingerprint: preview.fingerprint,
+          templateReference: null,
+        },
+      })
+    ).data;
+    await $('button=Saved plans').click();
+    const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
+    const index = plans.findIndex((plan) => plan.id === saved.plan.id);
+    assert.ok(index >= 0);
+    await browser.waitUntil(
+      async () => (await $$('.organization-preview li button')).length === plans.length,
+    );
+    await (await $$('.organization-preview li button'))[index].click();
+    for (let row = 0; row < 2; row += 1) {
+      await writeFile(
+        `${evidence}/multi-source-plan-${row}-${process.platform}.json`,
+        JSON.stringify({
+          saved,
+          current: (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
+            .data,
+          reopened: (await native({ kind: 'organization_plan', plan_id: saved.plan.id })).data,
+          status: (await native({ kind: 'status' })).data,
+        }),
+      );
+      await browser.saveScreenshot(
+        `.context/screenshots/m2-multi-source-plan-${row}-${process.platform}.png`,
+      );
+      const button = (await $$('button=Review all companion filenames'))[row];
+      await button.scrollIntoView();
+      await button.waitForEnabled();
+      await button.click();
+      await browser.saveScreenshot(
+        `.context/screenshots/m2-multi-source-companion-${row}-${process.platform}.png`,
+      );
+      await writeFile(
+        `${evidence}/multi-source-dialog-${row}-${process.platform}.json`,
+        JSON.stringify(
+          await browser.execute(() => ({
+            text: document.querySelector('dialog[open]')?.textContent,
+            buttons: [...document.querySelectorAll('dialog[open] button')].map((button) => ({
+              text: button.textContent,
+              disabled: button.disabled,
+            })),
+            companion: document.querySelector('section[aria-label="Complete companion inventory"]')
+              ?.textContent,
+          })),
+        ),
+      );
+      await $('button=Read all filenames').waitForDisplayed();
+      await $('button=Read all filenames').scrollIntoView();
+      await $('button=Read all filenames').click();
+      try {
+        await $('section[aria-label="Complete companion inventory"] table').waitForDisplayed();
+      } catch (error) {
+        await browser.saveScreenshot(
+          `.context/screenshots/m2-multi-source-read-${row}-${process.platform}.png`,
+        );
+        await writeFile(
+          `${evidence}/multi-source-read-${row}-${process.platform}.json`,
+          JSON.stringify(
+            await browser.execute(() => ({
+              text: document.querySelector('section[aria-label="Complete companion inventory"]')
+                ?.textContent,
+              alerts: [...document.querySelectorAll('[role="alert"]')].map(
+                (element) => element.textContent,
+              ),
+            })),
+          ),
+        );
+        throw error;
+      }
+      await $('label*=I reviewed all filenames').scrollIntoView();
+      await $('label*=I reviewed all filenames').click();
+      await $('button=Save companion review').click();
+      await $(
+        'section[aria-label="Retained companion decision"] [role="status"]',
+      ).waitForDisplayed();
+      await $('button=Close companion inventory').click();
+    }
+    await $('button=Compile copy review').scrollIntoView();
+    await $('button=Compile copy review').click();
+    const rootSelect = await $('select[aria-label="Source library to copy"]');
+    await rootSelect.waitForDisplayed();
+    assert.equal(await rootSelect.getValue(), '');
+    assert.equal(await $('button=Choose destination and review preparation').isExisting(), false);
+    const reviews = [];
+    for (const asset of selected) {
+      const decisions = (
+        await native({
+          kind: 'organization_bundle_reviews',
+          plan_id: saved.plan.id,
+          asset_id: asset.id,
+        })
+      ).data;
+      assert.equal(decisions.length, 1);
+      reviews.push(decisions[0].id);
+    }
+    const manifest = (
+      await native({
+        kind: 'organization_copy_manifest',
+        input: { planId: saved.plan.id, bundleConfirmationIds: reviews },
+      })
+    ).data;
+    const picker = await browser.tauri.mock('foundation_request');
+    const folders = [];
+    try {
+      await picker.mockReturnValue({ kind: 'directory', data: generated.selection });
+      for (const asset of selected) {
+        await rootSelect.scrollIntoView();
+        await changeSizeUnit('Source library to copy', asset.rootId);
+        const expected = manifest.files.filter((file) => file.rootId === asset.rootId);
+        assert.ok(expected.length > 0);
+        await $('button=Choose destination and review preparation').scrollIntoView();
+        await $('button=Choose destination and review preparation').click();
+        await $('h4=Output preparation review').waitForDisplayed();
+        const folder = await $(
+          'section[aria-label="Verified organization copy"] strong bdi',
+        ).getText();
+        assert.ok(folder.startsWith('Stillharbour organized '));
+        const before = (await native({ kind: 'status' })).data.copyJobs.filter(
+          (job) => job.planId === saved.plan.id,
+        );
+        assert.equal(before.filter((job) => job.sourceRootId === asset.rootId).length, 0);
+        await $('button=Approve output preparation').scrollIntoView();
+        await $('button=Approve output preparation').click();
+        await $('button=Start output preparation').waitForEnabled();
+        await $('button=Start output preparation').click();
+        await $('h4=Prepared copy review').waitForDisplayed({ timeout: 30000 });
+        const ack = await $(
+          'section[aria-label="Verified organization copy"] input[type="checkbox"]',
+        );
+        await ack.scrollIntoView();
+        await ack.click();
+        await $('button=Approve byte-verified copy').waitForEnabled();
+        await $('button=Approve byte-verified copy').click();
+        await $('button=Start verified copy').waitForEnabled();
+        await $('button=Start verified copy').click();
+        await $('h3=File bytes copied and verified').waitForDisplayed({ timeout: 30000 });
+        await $('button=Inspect actual output bytes').scrollIntoView();
+        await $('button=Inspect actual output bytes').click();
+        await browser.waitUntil(
+          async () =>
+            (await $('section[aria-label="Verified organization copy"]').getText()).includes(
+              'Every selected output was freshly compared with its source.',
+            ),
+          { timeout: 30000 },
+        );
+        const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
+          (job) => job.planId === saved.plan.id && job.sourceRootId === asset.rootId,
+        );
+        assert.equal(jobs.filter((job) => job.state === 'prepared').length, 1);
+        const copied = jobs.filter((job) => job.state === 'completed_verified');
+        assert.equal(copied.length, 1);
+        assert.equal(copied[0].verifiedFiles, expected.length);
+        folders.push(folder);
+      }
+      assert.equal(new Set(folders).size, 2);
+      const audit = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_multisource_audit', rows: null }),
+      );
+      assert.equal(audit.audits.length, 2);
+      for (let root = 0; root < 2; root += 1) {
+        assert.equal(audit.audits[root].neighborUnchanged, true);
+        assert.ok(audit.audits[root].sourceVerifiedFiles > 20);
+        const files = audit.audits[root].files.filter((file) =>
+          file.relativePath.replaceAll('\\', '/').startsWith(`${folders[root]}/`),
+        );
+        assert.equal(
+          files.length,
+          manifest.files.filter((file) => file.rootId === selected[root].rootId).length,
+        );
+        assert.ok(files.every((file) => file.matchesGeneratedSourceBytes));
+      }
+      await writeFile(
+        `${evidence}/multi-source-${process.platform}.json`,
+        JSON.stringify({
+          planId: saved.plan.id,
+          roots: selected.map((asset) => asset.rootId),
+          folders,
+          manifest,
+          audit,
+          jobs: (await native({ kind: 'status' })).data.copyJobs.filter(
+            (job) => job.planId === saved.plan.id,
+          ),
+        }),
+      );
+      await rootSelect.scrollIntoView();
+      await browser.saveScreenshot(`.context/screenshots/m2-multi-source-${process.platform}.png`);
+    } finally {
+      await picker.mockRestore();
+    }
+  });
+});

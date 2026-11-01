@@ -27,6 +27,9 @@ const MAX_EVENT: usize = 8192;
 #[cfg(test)]
 #[path = "catalog_journal/managed_destination_tests.rs"]
 mod managed_destination_tests;
+#[cfg(test)]
+#[path = "catalog_journal/root_partition_tests.rs"]
+mod root_partition_tests;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Binding {
@@ -311,6 +314,18 @@ fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
     }
     Ok(())
 }
+fn binding_source_root(db: &Connection, binding: &Binding) -> Result<String> {
+    if binding.namespace.is_some() {
+        namespace_journal::source_root_id(db, binding)
+    } else {
+        validate_binding(db, binding)?;
+        copy_manifest::load(db, &binding.owner_id, &binding.manifest_id)?
+            .files
+            .first()
+            .map(|file| file.view.root_id.clone())
+            .ok_or_else(|| failed("The retained copy manifest has no source root."))
+    }
+}
 impl CatalogJournal {
     #[cfg(any(test, feature = "copy-workflow"))]
     pub(in crate::executor) fn validate_completed_members(
@@ -418,14 +433,9 @@ impl CatalogJournal {
         proof.authorize(&review.approval(&self.binding.plan, selection)?)?;
         let (cursors, digest, terminal) = self.recovery_history()?;
         let binding = self.binding.clone();
-        let root = self.catalog.call(move |db| {
-            Ok(
-                copy_manifest::load(db, &binding.owner_id, &binding.manifest_id)?.files[0]
-                    .view
-                    .root_id
-                    .clone(),
-            )
-        })?;
+        let root = self
+            .catalog
+            .call(move |db| binding_source_root(db, &binding))?;
         let validate = || {
             (inputs.validate_scope)()?;
             self.validate_root_grant(&root)
@@ -625,15 +635,9 @@ impl CatalogJournal {
     ) -> Result<super::CopyOutcome> {
         proof.authorize(&self.copy_review(selection)?)?;
         let binding = self.binding.clone();
-        let root = self.catalog.call(move |db| {
-            validate_binding(db, &binding)?;
-            Ok(
-                copy_manifest::load(db, &binding.owner_id, &binding.manifest_id)?.files[0]
-                    .view
-                    .root_id
-                    .clone(),
-            )
-        })?;
+        let root = self
+            .catalog
+            .call(move |db| binding_source_root(db, &binding))?;
         let validate = || {
             (inputs.validate_scope)()?;
             self.validate_root_grant(&root)
@@ -1270,7 +1274,7 @@ pub(super) fn fixture_probe() -> Result<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
-    fn comparison_root(
+    pub(super) fn comparison_root(
         fixture: &Fixture,
         files: &[(&str, Vec<u8>)],
     ) -> (String, std::path::PathBuf, Vec<String>) {
@@ -2085,7 +2089,10 @@ mod tests {
         assert!(!workflow.has_active_root(&root).unwrap());
         assert!(fixture.preserved().unwrap());
     }
-    fn import_draft_for(fixture: &Fixture, ids: Vec<String>) -> crate::operations::CopyManifest {
+    pub(super) fn import_draft_for(
+        fixture: &Fixture,
+        ids: Vec<String>,
+    ) -> crate::operations::CopyManifest {
         use crate::operations::*;
         let owner = fixture.owner.clone();
         let destination_root_id = fixture
@@ -3860,7 +3867,7 @@ mod tests {
     }
 
     use super::*;
-    fn wait_operation(
+    pub(super) fn wait_operation(
         load: impl Fn() -> Result<crate::operations::CopyWorkflowJob>,
     ) -> crate::operations::CopyWorkflowJob {
         use crate::operations::CopyJobState;

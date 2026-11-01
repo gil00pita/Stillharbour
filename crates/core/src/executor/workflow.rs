@@ -430,7 +430,7 @@ impl CopyWorkflow {
         source: &Snapshot,
         original_targets: bool,
     ) -> Result<CopyAssessment> {
-        if source.import_selection.is_some() {
+        if source.import_selection.is_some() || source.root_partition.is_some() {
             let snapshot = source.clone();
             self.catalog.call(move |db| snapshot.validate(db))?;
             library.organization_import_copy_assessment(
@@ -450,6 +450,14 @@ impl CopyWorkflow {
         }
     }
     fn current_sources(&self, source: &Snapshot) -> Result<Snapshot> {
+        if let Some(root) = &source.root_partition {
+            return Snapshot::build_partition(
+                &self.catalog,
+                source.owner_id.clone(),
+                source.manifest_id.clone(),
+                root.clone(),
+            );
+        }
         match &source.import_selection {
             Some(selection) => {
                 self.import_copy_sources(source.owner_id.clone(), selection.id.clone())
@@ -524,8 +532,7 @@ impl CopyWorkflow {
     fn match_effect(
         &self,
         library: &Library,
-        owner: String,
-        manifest: String,
+        source: (String, String, Option<String>),
         selection: &str,
         identity: &FileIdentity,
         volume: &str,
@@ -536,8 +543,16 @@ impl CopyWorkflow {
         Vec<super::effects::Candidate>,
     )> {
         crate::operations::validate_id(selection)?;
-        let assessment = library.organization_copy_assessment(owner.clone(), manifest.clone())?;
-        let sources = Snapshot::build(&self.catalog, owner, manifest)?;
+        let (owner, manifest, partition) = source;
+        let sources = match partition {
+            Some(root) => Snapshot::build_partition(&self.catalog, owner, manifest, root)?,
+            None => Snapshot::build(&self.catalog, owner, manifest)?,
+        };
+        // Each explicit partition reviews its own new retained namespace.
+        // Earlier partitions may have created siblings in the destination;
+        // historical unprefixed target observations are not its write scope.
+        let assessment =
+            self.assess_sources(library, &sources, sources.root_partition.is_none())?;
         if identity.volume != sources.destination.volume
             || identity.file != sources.destination.file
             || volume != sources.destination_volume
@@ -558,14 +573,18 @@ impl CopyWorkflow {
         _path: PathBuf,
         identity: (FileIdentity, String),
     ) -> Result<CopyEffectMatch> {
-        let (_, sources, effect, previous) = self.match_effect(
-            library,
-            owner,
-            manifest,
-            &selection,
-            &identity.0,
-            &identity.1,
-        )?;
+        self.effect_match_for_root(library, (owner, manifest, None), selection, _path, identity)
+    }
+    pub(crate) fn effect_match_for_root(
+        &self,
+        library: &Library,
+        source: (String, String, Option<String>),
+        selection: String,
+        _path: PathBuf,
+        identity: (FileIdentity, String),
+    ) -> Result<CopyEffectMatch> {
+        let (_, sources, effect, previous) =
+            self.match_effect(library, source, &selection, &identity.0, &identity.1)?;
         let mut existing = Vec::new();
         for candidate in previous {
             let preparation_recorded = candidate.preparation_recorded(&self.catalog)?;
@@ -606,10 +625,26 @@ impl CopyWorkflow {
         path: PathBuf,
         selected_identity: (FileIdentity, String),
     ) -> Result<CopyActionReview> {
+        self.create_review_for_root(
+            library,
+            (owner, manifest, None),
+            selection,
+            path,
+            selected_identity,
+        )
+    }
+    pub(crate) fn create_review_for_root(
+        &self,
+        library: &Library,
+        source: (String, String, Option<String>),
+        selection: String,
+        path: PathBuf,
+        selected_identity: (FileIdentity, String),
+    ) -> Result<CopyActionReview> {
         let (identity, volume) = selected_identity;
         crate::operations::validate_id(&selection)?;
         let (assessment, sources, _, _) =
-            self.match_effect(library, owner, manifest, &selection, &identity, &volume)?;
+            self.match_effect(library, source, &selection, &identity, &volume)?;
         self.bind_review(assessment, sources, selection, path, (identity, volume))
     }
     fn bind_review(

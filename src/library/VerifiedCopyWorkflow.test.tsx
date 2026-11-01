@@ -10,6 +10,7 @@ import type {
 } from '../bindings';
 import { library, libraryData, pickDirectory } from '../ipc';
 import { VerifiedCopyWorkflow, ReopenPreparedCopy } from './VerifiedCopyWorkflow';
+import { fixturePreferences } from './__tests__/fixtures';
 vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
   libraryData: vi.fn(),
@@ -105,6 +106,96 @@ beforeEach(() => {
     identityAvailable: true,
   });
 });
+it.each([false, true])(
+  'requires a source choice and rejects cross-root reviews (%s)',
+  async (foreign) => {
+    const files = ['root', 'other'].map((rootId, index) => ({
+      id: index ? 'other-photo' : 'photo',
+      rootId,
+      sourceName: 'photo.JPG',
+      sourceRevision: 'revision',
+      targetRelativePath: 'after/photo.JPG',
+      bytes: '42',
+      bundleAssetIds: [],
+    }));
+    const roots = ['root', 'other'].map((id) => ({
+      id,
+      label: id === 'root' ? 'First library' : 'Second library',
+      displayPath: `Generated ${id}`,
+      mode: 'managed' as const,
+      isBase: false,
+      availability: 'online',
+      filter: fixturePreferences().scanFilter,
+      lastScan: null,
+      fileCount: 1,
+    }));
+    vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) => {
+      switch (request.kind) {
+        case 'status':
+          return {
+            roots,
+            jobs: [],
+            revision: '1',
+            previewGeneration: '1',
+            metadataAvailable: false,
+            previewAvailable: false,
+          };
+        case 'organization_copy_capabilities':
+          return { available: true, reason: 'Sources retained' };
+        case 'organization_copy_effect_match':
+          return {
+            planId: 'plan',
+            manifestId: 'manifest',
+            digest: 'a'.repeat(64),
+            existing: [],
+            canReuseReview: true,
+          };
+        case 'organization_copy_review_create':
+          return foreign ? { ...preparation, sourceRootId: 'other' } : preparation;
+        default:
+          throw new Error(`Unexpected request: ${request.kind}`);
+      }
+    });
+    render(<VerifiedCopyWorkflow manifest={{ ...manifest, files }} />);
+    const select = await screen.findByRole('combobox', { name: 'Source library to copy' });
+    expect(select).toHaveValue('');
+    expect(
+      screen.queryByRole('button', { name: 'Choose destination and review preparation' }),
+    ).not.toBeInTheDocument();
+    expect(pickDirectory).not.toHaveBeenCalled();
+    fireEvent.change(select, { target: { value: 'root' } });
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Choose destination and review preparation' }),
+    );
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'organization_copy_review_create',
+          source_root_id: 'root',
+        }),
+        'organization_copy_review',
+      ),
+    );
+    expect(libraryData).toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'organization_copy_effect_match', source_root_id: 'root' }),
+      'organization_copy_effect_match',
+    );
+    if (foreign) {
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'does not match this source library',
+      );
+      expect(screen.queryByRole('button', { name: /Approve/ })).not.toBeInTheDocument();
+    } else {
+      await screen.findByRole('heading', { name: 'Output preparation review' });
+      fireEvent.change(select, { target: { value: 'other' } });
+      expect(
+        screen.queryByRole('heading', { name: 'Output preparation review' }),
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Approve/ })).not.toBeInTheDocument();
+      expect(pickDirectory).toHaveBeenCalledOnce();
+    }
+  },
+);
 it('keeps unsupported builds disabled without opening a picker or starting filesystem work', async () => {
   vi.mocked(libraryData).mockResolvedValueOnce({
     available: false,
@@ -117,6 +208,40 @@ it('keeps unsupported builds disabled without opening a picker or starting files
   await screen.findByText('Native workflow gates are pending.');
   expect(pickDirectory).not.toHaveBeenCalled();
   expect(libraryData).toHaveBeenCalledTimes(1);
+});
+it('retries source discovery and refuses a missing-root choice without opening the picker', async () => {
+  const files = ['root', 'other'].map((rootId) => ({
+    id: rootId,
+    rootId,
+    sourceName: 'photo.JPG',
+    sourceRevision: 'revision',
+    targetRelativePath: 'after/photo.JPG',
+    bytes: '42',
+    bundleAssetIds: [],
+  }));
+  vi.mocked(libraryData)
+    .mockRejectedValueOnce(new Error('Catalog temporarily unavailable'))
+    .mockResolvedValueOnce({
+      roots: [],
+      jobs: [],
+      revision: '1',
+      previewGeneration: '1',
+      metadataAvailable: false,
+      previewAvailable: false,
+    });
+  render(<VerifiedCopyWorkflow manifest={{ ...manifest, files }} />);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Catalog temporarily unavailable');
+  fireEvent.click(screen.getByRole('button', { name: 'Retry source libraries' }));
+  const select = await screen.findByRole('combobox', { name: 'Source library to copy' });
+  expect(screen.getAllByRole('option', { name: /Unavailable source library/ })).toHaveLength(2);
+  for (const option of screen.getAllByRole('option', { name: /Unavailable source library/ }))
+    expect(option).toBeDisabled();
+  fireEvent.change(select, { target: { value: 'root' } });
+  expect(screen.getByRole('alert')).toHaveTextContent('unavailable or has no managed grant');
+  expect(
+    screen.queryByRole('button', { name: 'Choose destination and review preparation' }),
+  ).not.toBeInTheDocument();
+  expect(pickDirectory).not.toHaveBeenCalled();
 });
 it('requires separate exact approvals and starts, then loads the prepared review and actual inspection', async () => {
   vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) => {

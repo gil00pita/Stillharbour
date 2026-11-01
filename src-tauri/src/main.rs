@@ -24,6 +24,12 @@ struct NativeSelection {
     identity: Option<FileIdentity>,
     volume: Option<String>,
 }
+#[cfg(feature = "desktop-test")]
+struct MultiSourceFixture {
+    sources: Vec<stillharbour_core::library_fixture::LibraryFixture>,
+    destination: tempfile::TempDir,
+    registered: usize,
+}
 
 struct Foundation {
     #[cfg(feature = "desktop-test")]
@@ -36,6 +42,8 @@ struct Foundation {
     destination_fixture: Mutex<Option<tempfile::TempDir>>,
     #[cfg(feature = "desktop-test")]
     managed_destination_fixture: Mutex<Option<(tempfile::TempDir, Option<String>)>>,
+    #[cfg(feature = "desktop-test")]
+    multisource_fixture: Mutex<Option<MultiSourceFixture>>,
     #[cfg(feature = "desktop-test")]
     comparison_fixture: Mutex<
         Option<(
@@ -387,6 +395,7 @@ async fn library_request(
             LibraryRequest::OrganizationCopyEffectMatch {
                 plan_id,
                 manifest_id,
+                source_root_id,
                 ..
             } => {
                 let chosen = selection.as_ref().ok_or_else(|| {
@@ -396,9 +405,10 @@ async fn library_request(
                     )
                 })?;
                 LibraryResponse::OrganizationCopyEffectMatch(
-                    library.organization_copy_effect_match(
+                    library.organization_copy_effect_match_for_root(
                         plan_id,
                         manifest_id,
+                        source_root_id,
                         chosen.id.clone(),
                         chosen.path.clone(),
                         selected_identity(chosen)?,
@@ -408,6 +418,7 @@ async fn library_request(
             LibraryRequest::OrganizationCopyReviewCreate {
                 plan_id,
                 manifest_id,
+                source_root_id,
                 ..
             } => {
                 let chosen = selection.as_ref().ok_or_else(|| {
@@ -417,9 +428,10 @@ async fn library_request(
                     )
                 })?;
                 LibraryResponse::OrganizationCopyReview(Box::new(
-                    library.organization_copy_review_create(
+                    library.organization_copy_review_create_for_root(
                         plan_id,
                         manifest_id,
+                        source_root_id,
                         chosen.id.clone(),
                         chosen.path.clone(),
                         selected_identity(chosen)?,
@@ -878,12 +890,12 @@ fn test_library_fixture(
             volume: Some(volume),
         });
     *fixture = Some(generated);
-    Ok(serde_json::to_value(DirectorySelection {
+    serde_json::to_value(DirectorySelection {
         id,
         display_path: "Generated test library · 18 images and safety fixtures".into(),
         identity_available: true,
     })
-    .map_err(|e| AppError::new(ErrorCode::WorkerFailed, "Test response failed.").caused_by(e))?)
+    .map_err(|e| AppError::new(ErrorCode::WorkerFailed, "Test response failed.").caused_by(e))
 }
 
 #[cfg(feature = "desktop-test")]
@@ -1057,6 +1069,106 @@ async fn test_performance(
                     )
                     .caused_by(error)
                 })?
+        }
+        "organization_multisource_fixture"
+        | "organization_multisource_next"
+        | "organization_multisource_audit" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generated multi-source fixture accepts no supplied scope.",
+                ));
+            }
+            let mut owned = state.multisource_fixture.lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated multi-source fixture unavailable.",
+                )
+            })?;
+            if action == "organization_multisource_audit" {
+                let fixture = owned.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::InvalidInput,
+                        "Create the generated multi-source fixture first.",
+                    )
+                })?;
+                let audits = fixture
+                    .sources
+                    .iter()
+                    .map(|source| source.audit_generated_outputs(fixture.destination.path()))
+                    .collect::<Result<Vec<_>>>()?;
+                return Ok(
+                    serde_json::json!({"scope":"constructor-owned-generated-only","audits":audits,"productionAuthorization":false}),
+                );
+            }
+            if action == "organization_multisource_fixture" && owned.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated multi-source fixture already exists.",
+                ));
+            }
+            if action == "organization_multisource_fixture" {
+                let sources = (0..2)
+                    .map(|_| stillharbour_core::library_fixture::LibraryFixture::generate())
+                    .collect::<Result<Vec<_>>>()?;
+                let destination = tempfile::Builder::new()
+                    .prefix("stillharbour-multisource-destination-test-")
+                    .tempdir()?;
+                std::fs::write(
+                    destination.path().join("destination-only.txt"),
+                    b"retained destination",
+                )?;
+                *owned = Some(MultiSourceFixture {
+                    sources,
+                    destination,
+                    registered: 0,
+                });
+            }
+            let fixture = owned.as_mut().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated multi-source fixture unavailable.",
+                )
+            })?;
+            let mut jobs = Vec::new();
+            if action == "organization_multisource_next" {
+                let index = fixture.registered;
+                let source = fixture.sources.get(index).ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::Conflict,
+                        "Both generated source libraries are already registered.",
+                    )
+                })?;
+                source.verify_unchanged()?;
+                let handle = filesystem::open_directory_readonly(source.path())?;
+                let identity = filesystem::identity(&handle)?;
+                let volume = stillharbour_core::library::native::volume_token(&handle)?;
+                let job = state.library.register_verified(
+                    source.path().to_owned(),
+                    (identity, volume),
+                    format!("Generated source partition {}", index + 1),
+                    RootMode::Managed,
+                    ScanFilter::default(),
+                )?;
+                fixture.registered += 1;
+                jobs.push(job);
+            }
+            let path = fixture.destination.path().to_owned();
+            let handle = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&handle)?;
+            let volume = stillharbour_core::library::native::volume_token(&handle)?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state.selection.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Generated selection unavailable.")
+            })? = Some(NativeSelection {
+                id: id.clone(),
+                path,
+                identity: Some(identity),
+                volume: Some(volume),
+            });
+            Ok(
+                serde_json::json!({"jobs":jobs,"selection":{"id":id,"displayPath":"Generated multi-source destination","identityAvailable":true}}),
+            )
         }
         "organization_managed_destination_fixture" => {
             if rows.is_some() {
@@ -1758,6 +1870,8 @@ fn main() {
                 destination_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 managed_destination_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                multisource_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 comparison_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]

@@ -47,6 +47,8 @@ pub(super) struct Snapshot {
     pub destination: Object,
     pub destination_volume: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_partition: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub import_selection: Option<ImportSelection>,
     pub files: Vec<File>,
 }
@@ -118,7 +120,17 @@ impl Snapshot {
         Ok(())
     }
     pub(super) fn build(catalog: &Arc<Catalog>, owner: String, manifest: String) -> Result<Self> {
-        Self::build_for(catalog, owner, manifest, true)
+        Self::build_for(catalog, owner, manifest, true, None)
+    }
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(super) fn build_partition(
+        catalog: &Arc<Catalog>,
+        owner: String,
+        manifest: String,
+        root: String,
+    ) -> Result<Self> {
+        crate::operations::validate_id(&root)?;
+        Self::build_for(catalog, owner, manifest, true, Some(root))
     }
     #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) fn build_read(
@@ -126,35 +138,58 @@ impl Snapshot {
         owner: String,
         manifest: String,
     ) -> Result<Self> {
-        Self::build_for(catalog, owner, manifest, false)
+        Self::build_for(catalog, owner, manifest, false, None)
     }
     fn build_for(
         catalog: &Arc<Catalog>,
         owner: String,
         manifest: String,
         managed: bool,
+        root_partition: Option<String>,
     ) -> Result<Self> {
         crate::operations::validate_id(&owner)?;
         crate::operations::validate_id(&manifest)?;
+        let partition = root_partition.clone();
         let (draft, manifest, root_id, path, source, source_volume) = catalog.call(move |db| {
             let draft = operation_store::load(db, &owner)?;
             operation_store::validate_destination_root(db, &draft)?;
-            let manifest = copy_manifest::load(db, &owner, &manifest)?;
-            let root_id = manifest
+            let mut manifest = copy_manifest::load(db, &owner, &manifest)?;
+            if partition.is_some()
+                && manifest
+                    .files
+                    .iter()
+                    .map(|file| &file.view.root_id)
+                    .collect::<std::collections::BTreeSet<_>>()
+                    .len()
+                    < 2
+            {
+                return Err(failed(
+                    "Use the ordinary review for a single-source manifest.",
+                ));
+            }
+            let first_root = manifest
                 .files
                 .first()
                 .ok_or_else(|| failed("No source files were selected."))?
                 .view
                 .root_id
                 .clone();
+            let root_id = partition.clone().unwrap_or(first_root);
             if !manifest.view.issues.is_empty()
-                || manifest
-                    .files
-                    .iter()
-                    .any(|file| file.view.root_id != root_id)
+                || (partition.is_none()
+                    && manifest
+                        .files
+                        .iter()
+                        .any(|file| file.view.root_id != root_id))
             {
                 return Err(failed(
                     "Source planning currently requires one conflict-free source root.",
+                ));
+            }
+            manifest.files.retain(|file| file.view.root_id == root_id);
+            if manifest.files.is_empty() {
+                return Err(failed(
+                    "The selected source root is not in this confirmed manifest.",
                 ));
             }
             let (path, source, volume) = root(db, &root_id, managed)?;
@@ -243,6 +278,7 @@ impl Snapshot {
             source_volume,
             destination,
             destination_volume: draft.destination_volume,
+            root_partition,
             import_selection: None,
             files,
         };
@@ -371,6 +407,14 @@ impl Snapshot {
         Ok(())
     }
     pub(super) fn validate_mapping(&self, db: &Connection) -> Result<()> {
+        if let Some(root) = &self.root_partition {
+            crate::operations::validate_id(root)?;
+            if root != &self.root_id || self.import_selection.is_some() {
+                return Err(failed(
+                    "A source-root partition cannot change roots or become an import projection.",
+                ));
+            }
+        }
         if self.import_selection.is_some() {
             #[cfg(any(test, feature = "copy-workflow"))]
             {
@@ -384,7 +428,24 @@ impl Snapshot {
             }
         }
         let draft = operation_store::load(db, &self.owner_id)?;
-        let manifest = copy_manifest::load(db, &self.owner_id, &self.manifest_id)?;
+        let mut manifest = copy_manifest::load(db, &self.owner_id, &self.manifest_id)?;
+        if self.root_partition.is_some() {
+            if manifest
+                .files
+                .iter()
+                .map(|file| &file.view.root_id)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len()
+                < 2
+            {
+                return Err(failed(
+                    "A source partition requires the complete multiple-root manifest.",
+                ));
+            }
+            manifest
+                .files
+                .retain(|file| file.view.root_id == self.root_id);
+        }
         if self.policy != "native-copy-source-snapshot-v1"
             || self.catalog_id != draft.catalog_id
             || self.owner_digest != draft.view.digest

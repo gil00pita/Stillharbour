@@ -18,6 +18,7 @@ import { CopyJobProgress, CopyIoControls } from './CopyJobProgress';
 import { copyJobActive } from './copyJobs';
 import { RetainedCopyInspection } from './RetainedCopyInspection';
 import { ImportOutputIndexReview } from './ImportOutputIndexReview';
+import { RootPartitionCopyWorkflow } from './RootPartitionCopyWorkflow';
 
 function validateReview(value: CopyActionReview, plan: string, manifest: string) {
   if (
@@ -38,7 +39,7 @@ function validateReopened(value: CopyPreparationReopened, job: CopyWorkflowJob) 
   if (value.importPlan) validateImportCopyReview(value.review, value.manifest, value.importPlan);
   const files = value.importPlan
     ? value.manifest.files.filter((file) => value.importPlan!.copyFileIds.includes(file.id))
-    : value.manifest.files;
+    : value.manifest.files.filter((file) => file.rootId === job.sourceRootId);
   if (
     value.jobId !== job.id ||
     value.manifest.planId !== job.planId ||
@@ -60,17 +61,64 @@ function validateReopened(value: CopyPreparationReopened, job: CopyWorkflowJob) 
     throw new Error('The reopened preparation does not match this job.');
   validateReview(value.review, job.planId, value.manifest.id);
 }
-export function VerifiedCopyWorkflow({
+type WorkflowProps = {
+  manifest: CopyManifest;
+  initial?: PreparedReview | undefined;
+  importPlan?: ImportPlan;
+  onActivityChange?: ((active: boolean) => void) | undefined;
+};
+export function VerifiedCopyWorkflow(props: WorkflowProps) {
+  if (new Set(props.manifest.files.map((file) => file.rootId)).size > 1 && !props.importPlan)
+    return (
+      <RootPartitionCopyWorkflow
+        manifest={props.manifest}
+        initialRootId={props.initial?.review.sourceRootId}
+        onActivityChange={props.onActivityChange}
+      >
+        {(root, activity) => (
+          <CopyWorkflowSession
+            key={root}
+            {...props}
+            initial={props.initial?.review.sourceRootId === root ? props.initial : undefined}
+            sourceRootId={root}
+            onActivityChange={activity}
+          />
+        )}
+      </RootPartitionCopyWorkflow>
+    );
+  return <CopyWorkflowSession {...props} />;
+}
+function validatePartition(
+  value: CopyActionReview,
+  manifest: CopyManifest,
+  root: string | undefined,
+) {
+  if (!root) return;
+  const files = manifest.files.filter((file) => file.rootId === root);
+  if (
+    value.sourceRootId !== root ||
+    value.files.length !== files.length ||
+    files.some((file, index) => {
+      const observed = value.files[index];
+      return (
+        !observed ||
+        observed.id !== file.id ||
+        observed.bytes !== file.bytes ||
+        observed.targetPath !== `${value.outputFolder}/${file.targetRelativePath}`
+      );
+    })
+  )
+    throw new Error(
+      'The native review does not match this source library. Review the selected library again.',
+    );
+}
+function CopyWorkflowSession({
   manifest,
   initial,
   importPlan,
   onActivityChange,
-}: {
-  manifest: CopyManifest;
-  initial?: PreparedReview;
-  importPlan?: ImportPlan;
-  onActivityChange?: (active: boolean) => void;
-}) {
+  sourceRootId,
+}: WorkflowProps & { sourceRootId?: string }) {
   const [selection, setSelection] = useState<DirectorySelection | null>(initial?.selection ?? null);
   const [existing, setExisting] = useState<CopyEffectMatch | null>(null);
   const [review, setReview] = useState<CopyActionReview | null>(initial?.review ?? null);
@@ -107,16 +155,19 @@ export function VerifiedCopyWorkflow({
   }, [review, job]);
   useEffect(
     () => () => {
-      if (!importPlan) return;
+      if (!importPlan && !sourceRootId) return;
       const current = lifetime.current;
-      if (current.job && copyJobActive(current.job))
-        void library({ kind: 'organization_copy_cancel', job_id: current.job.id }).catch(() => {});
-      else if (current.review)
+      if (current.job && copyJobActive(current.job)) {
+        if (importPlan)
+          void library({ kind: 'organization_copy_cancel', job_id: current.job.id }).catch(
+            () => {},
+          );
+      } else if (current.review)
         void library({ kind: 'organization_copy_discard', review_id: current.review.id }).catch(
           () => {},
         );
     },
-    [importPlan],
+    [importPlan, sourceRootId],
   );
   useEffect(() => {
     if (!importPlan || !job || job.state !== 'completed_verified') return;
@@ -184,6 +235,7 @@ export function VerifiedCopyWorkflow({
       .then((value) => {
         if (!active) return;
         validateReview(value, manifest.planId, manifest.id);
+        validatePartition(value, manifest, sourceRootId);
         if (importPlan) validateImportCopyReview(value, manifest, importPlan);
         if (value.id !== preparedReview || value.action !== 'copy_files')
           throw new Error('The prepared copy review does not match its native job.');
@@ -208,6 +260,7 @@ export function VerifiedCopyWorkflow({
     manifest,
     importPlan,
     readyRetry,
+    sourceRootId,
   ]);
   async function create() {
     const token = ++epoch.current;
@@ -236,6 +289,7 @@ export function VerifiedCopyWorkflow({
             plan_id: manifest.planId,
             manifest_id: manifest.id,
             selection_id: chosen.id,
+            ...(sourceRootId ? { source_root_id: sourceRootId } : {}),
           },
           'organization_copy_effect_match',
         );
@@ -283,13 +337,15 @@ export function VerifiedCopyWorkflow({
               plan_id: manifest.planId,
               manifest_id: manifest.id,
               selection_id: chosen.id,
+              ...(sourceRootId ? { source_root_id: sourceRootId } : {}),
             },
         'organization_copy_review',
       );
       validateReview(value, manifest.planId, manifest.id);
+      validatePartition(value, manifest, sourceRootId);
       if (importPlan) validateImportCopyReview(value, manifest, importPlan);
       if (epoch.current !== token) {
-        if (importPlan)
+        if (importPlan || sourceRootId)
           void library({ kind: 'organization_copy_discard', review_id: value.id }).catch(() => {});
         return;
       }
@@ -337,6 +393,7 @@ export function VerifiedCopyWorkflow({
       )
         throw new Error('The reopened preparation belongs to different import decisions.');
       validateReview(value.review, manifest.planId, manifest.id);
+      validatePartition(value.review, manifest, sourceRootId);
       setSelection(chosen);
       setReview(value.review);
       setJob(null);

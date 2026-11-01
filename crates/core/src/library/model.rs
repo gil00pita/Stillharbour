@@ -608,6 +608,9 @@ pub enum LibraryRequest {
         plan_id: String,
         manifest_id: String,
         selection_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        source_root_id: Option<String>,
     },
     OrganizationCopyPreparationReopen {
         job_id: String,
@@ -617,6 +620,9 @@ pub enum LibraryRequest {
         plan_id: String,
         manifest_id: String,
         selection_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        source_root_id: Option<String>,
     },
     OrganizationCopyReview {
         review_id: String,
