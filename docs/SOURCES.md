@@ -92,3 +92,8 @@ Windows CI portability checks (2026-10-28): [Rust slice::as_chunks](https://doc.
 - [Microsoft DiskPart](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/diskpart): the test helper restricts its script to creation of the new named image; initialization/format use validated Storage objects.
 - [Apple disk image guidance](https://support.apple.com/guide/disk-utility/create-a-disk-image-dskutl11888/mac): APFS image choices and the installed hdiutil manual. The macOS harness records installed create-help output and OS/helper provenance; native execution remains the API/behavior gate.
 - [Microsoft MSFT_Disk class](https://learn.microsoft.com/en-us/windows-hardware/drivers/storage/msft-disk): the underlying CIM BusType field is UInt16; PowerShell may adapt its display property to text.
+
+## Native rename primitive references — 2026-11-01
+
+- [Microsoft FILE_RENAME_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information): destination-directory handle and replacement flag semantics for the existing held-file rename primitive. Existing-target refusal requires replacement disabled.
+- [Apple XNU rename manual](https://github.com/apple-oss-distributions/xnu/blob/main/bsd/man/man2/rename.2): source/destination directory-relative operations and filesystem-dependent RENAME_EXCL refusal. The current fixture uses bounded leaves and held ordinary directories. API documentation does not replace the actual Windows/macOS preservation and recovery tests.
