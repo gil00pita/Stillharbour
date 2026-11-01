@@ -36,7 +36,7 @@ async function reviewReadOnlyInspections(evidence) {
       { timeout: 45000, interval: 200, timeoutMsg: `${section} native inspection did not finish` },
     );
     assert.ok(['completed', 'partial'].includes(job.state), job.message);
-    await $('.inspection-table-wrap tbody tr').waitForDisplayed();
+    await $('section[aria-label="Inspected files"] tbody tr:first-child').waitForDisplayed();
     const report = (await native({ kind: 'inspection_report', job_id: job.id })).data;
     const files = (await native({ kind: 'inspection_findings', job_id: job.id, after: null })).data;
     assert.ok(files.rows.length > 0);
@@ -56,14 +56,86 @@ async function reviewReadOnlyInspections(evidence) {
     await browser.saveScreenshot(
       `.context/screenshots/m3-${section.toLowerCase()}-${process.platform}.png`,
     );
-    receipts.push({ job, report, firstPage: files });
+    const displayedRows = await browser.execute(() =>
+      [...document.querySelectorAll('section[aria-label="Inspected files"] tbody tr')].map(
+        (row) => ({
+          name: row.querySelector('th > span').textContent,
+          bytes: row.children[1].textContent.replace(/\D/g, ''),
+          content: row.children[4].textContent,
+        }),
+      ),
+    );
+    assert.deepEqual(
+      displayedRows.map(({ name, bytes }) => ({ name, bytes })),
+      files.rows.map(({ name, bytes }) => ({ name, bytes })),
+    );
+    assert.ok(
+      displayedRows.every((row, index) =>
+        row.content.includes(files.rows[index].content.replaceAll('_', ' ')),
+      ),
+    );
+    await $('section[aria-label="Inspected files"] h2').scrollIntoView({ block: 'start' });
+    await browser.saveScreenshot(
+      `.context/screenshots/m3-${section.toLowerCase()}-results-${process.platform}.png`,
+    );
+    let folderEvidence = null;
+    if (section === 'Storage') {
+      await $('.inspection-storage').scrollIntoView({ block: 'start' });
+      assert.equal(
+        (await $('.inspection-metrics > div:first-child dd').getText()).replace(/\D/g, ''),
+        report.storage.total.logicalBytes,
+      );
+      const scope = (
+        await native({
+          kind: 'inspection_folders',
+          job_id: job.id,
+          parent_id: 'scope',
+          after: null,
+        })
+      ).data;
+      const tiles = await $$('.inspection-map button:not(:disabled)');
+      assert.ok(tiles.length > 0);
+      await tiles[0].click();
+      await browser.waitUntil(
+        async () => (await $$('.inspection-breadcrumbs button')).length === 2,
+      );
+      const folder = (
+        await native({
+          kind: 'inspection_folders',
+          job_id: job.id,
+          parent_id: scope.rows[0].id,
+          after: null,
+        })
+      ).data;
+      await browser.waitUntil(async () =>
+        (await $('.inspection-storage table caption').getText()).includes(folder.parent.name),
+      );
+      const shown = await browser.execute(() => {
+        const row = document.querySelector('.inspection-storage table tbody tr');
+        return {
+          files: row.children[1].textContent.replace(/\D/g, ''),
+          bytes: row.children[2].textContent.replace(/\D/g, ''),
+        };
+      });
+      assert.deepEqual(shown, {
+        files: String(folder.parent.files),
+        bytes: folder.parent.logicalBytes,
+      });
+      await $('.inspection-map').scrollIntoView({ block: 'center' });
+      await browser.saveScreenshot(`.context/screenshots/m3-storage-zoom-${process.platform}.png`);
+      folderEvidence = { scope, folder, shown };
+    }
+    receipts.push({ job, report, firstPage: files, displayedRows, folderEvidence });
   }
   await writeFile(
     `${evidence}/m3-inspections-${process.platform}.json`,
     JSON.stringify({ productionAuthorization: false, receipts }),
   );
   await $('button[aria-label="Photos"]').click();
-  await $('.asset').waitForDisplayed();
+  await browser.waitUntil(async () => (await $$('.asset')).length > 0, {
+    timeout: 15000,
+    timeoutMsg: 'Generated gallery did not return after inspection review',
+  });
 }
 
 async function ownedOperationReceipt() {
