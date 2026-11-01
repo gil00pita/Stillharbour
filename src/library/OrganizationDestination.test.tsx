@@ -53,6 +53,71 @@ beforeEach(() => {
   vi.mocked(libraryData).mockReset().mockResolvedValue(response);
 });
 const choose = () => fireEvent.click(screen.getByRole('button', { name: 'Choose destination' }));
+it('binds an explicitly selected managed destination and retires its review when policy changes', async () => {
+  render(
+    <OrganizationDestination
+      preview={preview}
+      revision="1"
+      roots={[
+        { id: 'root', label: 'Source', mode: 'managed', availability: 'online' },
+        { id: 'readonly', label: 'Referenced', mode: 'referenced', availability: 'online' },
+        { id: 'offline', label: 'Offline', mode: 'managed', availability: 'offline' },
+        { id: 'destination', label: 'Managed copies', mode: 'managed', availability: 'online' },
+      ]}
+    />,
+  );
+  expect(screen.getByRole('option', { name: 'Source — selected source' })).toBeDisabled();
+  expect(screen.getByRole('option', { name: 'Referenced — read-only' })).toBeDisabled();
+  expect(screen.getByRole('option', { name: 'Offline — unavailable' })).toBeDisabled();
+  const policy = screen.getByRole('combobox', { name: 'Destination library policy' });
+  fireEvent.change(policy, { target: { value: 'destination' } });
+  choose();
+  await screen.findByRole('status');
+  expect(libraryData).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'organization_destination',
+      destination_root_id: 'destination',
+      selection_id: 'opaque-session',
+    }),
+    'organization_destination',
+  );
+  vi.mocked(libraryData).mockResolvedValueOnce({
+    plan: {
+      id: 'managed-draft',
+      policy: 'organization-plan-v1',
+      createdAt: 'now',
+      digest: 'digest',
+      state: 'draft',
+      destinationRootId: 'destination',
+      templateReference: null,
+      preview,
+      destinationPath: response.destinationPath,
+      destinationFingerprint: response.fingerprint,
+      blockers: ['execution_and_recovery'],
+      executionAvailable: false,
+    },
+    stale: false,
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save plan draft' }));
+  await screen.findByText(/Plan draft saved/);
+  expect(libraryData).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      kind: 'organization_plan_create',
+      draft: expect.objectContaining({ destinationRootId: 'destination' }),
+    }),
+    'organization_plan',
+  );
+  fireEvent.change(policy, { target: { value: '' } });
+  expect(screen.queryByText(/Plan draft saved/)).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Save plan draft' })).not.toBeInTheDocument();
+  choose();
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ destination_root_id: expect.anything() }),
+      'organization_destination',
+    ),
+  );
+});
 it('saves a native-bound draft only after preflight and prevents duplicate submission', async () => {
   render(<OrganizationDestination preview={preview} revision="1" />);
   expect(screen.queryByRole('button', { name: 'Save plan draft' })).not.toBeInTheDocument();

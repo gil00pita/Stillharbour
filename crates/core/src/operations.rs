@@ -128,6 +128,9 @@ pub struct TemplateRef {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct PlanDraftInput {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub destination_root_id: Option<String>,
     pub asset_ids: Vec<String>,
     pub template: OrganizationTemplate,
     pub preview_fingerprint: String,
@@ -218,6 +221,9 @@ pub enum PlanBlocker {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct OrganizationPlan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub destination_root_id: Option<String>,
     pub id: String,
     pub policy: String,
     pub created_at: String,

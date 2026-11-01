@@ -3,12 +3,11 @@ import type {
   OrganizationIssue,
   OrganizationPreview as Preview,
   OrganizationTemplate,
-  LibraryRoot,
   TemplateRef,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { OrganizationCompanions } from './OrganizationCompanions';
-import { OrganizationDestination } from './OrganizationDestination';
+import { OrganizationDestination, type DestinationRootOption } from './OrganizationDestination';
 import { OrganizationTemplates } from './OrganizationTemplates';
 import { OrganizationTrees } from './OrganizationTrees';
 
@@ -45,7 +44,7 @@ export function OrganizationPreview({
 }: {
   assetIds: string[];
   revision: string;
-  roots: Pick<LibraryRoot, 'id' | 'label'>[];
+  roots: DestinationRootOption[];
   onClose: () => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -256,6 +255,7 @@ export function OrganizationPreview({
               preview={preview}
               revision={revision}
               templateReference={templateReference}
+              roots={roots}
             />
             <label>
               Find a path

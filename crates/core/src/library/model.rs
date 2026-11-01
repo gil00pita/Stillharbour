@@ -501,6 +501,9 @@ pub enum LibraryRequest {
         format: crate::operations::PlanExportFormat,
     },
     OrganizationDestination {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        destination_root_id: Option<String>,
         selection_id: String,
         asset_ids: Vec<String>,
         template: crate::organization::OrganizationTemplate,

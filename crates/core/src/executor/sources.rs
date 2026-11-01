@@ -89,7 +89,10 @@ impl Snapshot {
         let id = self.root_id.clone();
         let importing = self.import_selection.is_some();
         let required_mode = self.required_mode();
+        let owner = self.owner_id.clone();
         let (path, object, volume) = catalog.call(move |db| {
+            let draft = operation_store::load(db, &owner)?;
+            operation_store::validate_destination_root(db, &draft)?;
             if managed && importing {
                 let mode: String =
                     db.query_row("SELECT mode FROM roots WHERE id=?", [&id], |row| row.get(0))?;
@@ -135,6 +138,7 @@ impl Snapshot {
         crate::operations::validate_id(&manifest)?;
         let (draft, manifest, root_id, path, source, source_volume) = catalog.call(move |db| {
             let draft = operation_store::load(db, &owner)?;
+            operation_store::validate_destination_root(db, &draft)?;
             let manifest = copy_manifest::load(db, &owner, &manifest)?;
             let root_id = manifest
                 .files
@@ -333,6 +337,10 @@ impl Snapshot {
         self.validate_for(db, true)
     }
     pub(super) fn validate_for(&self, db: &Connection, managed: bool) -> Result<()> {
+        operation_store::validate_destination_root(
+            db,
+            &operation_store::load(db, &self.owner_id)?,
+        )?;
         self.validate_mapping(db)?;
         let (_, source, volume) = root(
             db,

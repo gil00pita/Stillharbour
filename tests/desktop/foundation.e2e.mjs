@@ -102,6 +102,101 @@ async function reviewFilenameStemCase(assetIds, evidence) {
   await changeSizeUnit('Filename stem case', 'preserve');
   assert.equal(await $('.organization-table').isExisting(), false);
 }
+async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
+  const generated = await browser.tauri.execute(async ({ core }) =>
+    core.invoke('test_performance', {
+      action: 'organization_managed_destination_fixture',
+      rows: null,
+    }),
+  );
+  const picker = existingPicker ?? (await browser.tauri.mock('foundation_request'));
+  try {
+    await picker.mockReturnValue({ kind: 'directory', data: generated.selection });
+    await browser.waitUntil(
+      async () => {
+        const status = (await native({ kind: 'status' })).data;
+        return (
+          status.roots.some(
+            (root) => root.id === generated.rootId && root.availability === 'online',
+          ) && status.jobs.some((job) => job.id === generated.jobId && job.state === 'completed')
+        );
+      },
+      { timeout: 15000, timeoutMsg: 'Generated managed root scan did not settle' },
+    );
+    await $('button=Build preview').click();
+    const policy = await $('select[aria-label="Destination library policy"]');
+    await browser.waitUntil(
+      async () => policy.$(`option[value="${generated.rootId}"]`).isExisting(),
+      { timeout: 15000 },
+    );
+    await changeSizeUnit('Destination library policy', generated.rootId);
+    await $('button=Choose destination').scrollIntoView();
+    await $('button=Choose destination').click();
+    await browser.waitUntil(
+      async () =>
+        browser.execute(() =>
+          document
+            .querySelector('section[aria-label="Organization destination"] [role="status"]')
+            ?.textContent?.includes('identity and indexed-root overlap checked'),
+        ),
+      { timeout: 15000 },
+    );
+    assert.equal(await $('button=Save plan draft').isEnabled(), true);
+    await browser.saveScreenshot(
+      `.context/screenshots/m2-managed-destination-${process.platform}.png`,
+    );
+    const observation = await browser.execute(
+      () => document.querySelector('section[aria-label="Organization destination"]').textContent,
+    );
+    assert.ok(observation.includes('Generated managed copies destination'));
+    await changeSizeUnit('Destination library policy', '');
+    assert.equal(await $('button=Save plan draft').isExisting(), false);
+    let audit;
+    await browser.waitUntil(
+      async () => {
+        const observed = await browser.tauri.execute(async ({ core }) => {
+          try {
+            return {
+              audit: await core.invoke('test_performance', {
+                action: 'organization_managed_destination_audit_remove',
+                rows: null,
+              }),
+            };
+          } catch (error) {
+            return { error };
+          }
+        });
+        if (observed.error) {
+          if (observed.error.code === 'busy') return false;
+          throw new Error(observed.error.message ?? JSON.stringify(observed.error));
+        }
+        audit = observed.audit;
+        return true;
+      },
+      {
+        timeout: 15000,
+        interval: 100,
+        timeoutMsg: 'Generated empty destination did not release its scan',
+      },
+    );
+    assert.deepEqual(audit, {
+      rootRemoved: true,
+      neighborPreserved: true,
+      destinationFilesChanged: false,
+    });
+    await writeFile(
+      `${evidence}/managed-destination-${process.platform}.json`,
+      JSON.stringify({
+        rootId: generated.rootId,
+        reviewed: true,
+        policyChangeRetiredReview: true,
+        audit,
+      }),
+    );
+  } finally {
+    if (!existingPicker) await picker.mockRestore();
+  }
+}
 async function reopenPreparedReview(original, destination, evidence) {
   const jobs = (await native({ kind: 'status' })).data.copyJobs.filter(
     (job) => job.planId === original.id,
@@ -1815,6 +1910,7 @@ describe('native read-only library', () => {
           ),
         );
         await reviewFilenameStemCase(stemCaseIds, evidence);
+        await reviewManagedDestinationPolicy(evidence, picker);
         const destination = await browser.tauri.execute(async ({ core }) =>
           core.invoke('test_performance', {
             action: 'organization_destination_fixture',
@@ -3666,6 +3762,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await $('.organization-preview[open]').waitForDisplayed();
       await assertFormControlsAligned('.organization-preview');
       await reviewFilenameStemCase(ids, evidence);
+      await reviewManagedDestinationPolicy(evidence);
       await $('button=Build preview').click();
       await $('.organization-table tbody tr:first-child').waitForDisplayed();
       assert.equal(

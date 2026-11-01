@@ -104,6 +104,58 @@ it.each(['foreign', 'managed', 'thumbnail'] as const)(
     expect(screen.queryByText(/Output folder registered:/)).not.toBeInTheDocument();
   },
 );
+it('uses an existing managed destination without rejecting retained keepers in that library', async () => {
+  const value: ImportOutputIndex = {
+    ...result,
+    root: { ...result.root, mode: 'managed' },
+    alreadyRegistered: true,
+    scanStarted: false,
+  };
+  const kept: ImportCopyReceipt = {
+    ...receipt,
+    skippedFiles: [
+      {
+        fileId: 'kept',
+        keeperAssetId: 'keeper',
+        keeperRootId: result.root.id,
+        keeperRelativePath: 'retained.JPG',
+        digest: 'b'.repeat(64),
+        sameNativeObject: false,
+      },
+    ],
+  };
+  vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest) =>
+    request.kind === 'job_details'
+      ? { job: { ...result.scan!, state: 'completed' }, issues: [] }
+      : value,
+  );
+  render(<ImportOutputIndexReview receipt={kept} sourceRootId="source" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Choose destination and index output' }));
+  await screen.findByText(/Using the existing managed destination library/);
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});
+it('closing a late managed-root index request cancels its newly started scan only', async () => {
+  let resolve!: (value: ImportOutputIndex) => void;
+  vi.mocked(libraryData).mockImplementation(
+    async () =>
+      new Promise<ImportOutputIndex>((done) => {
+        resolve = done;
+      }),
+  );
+  const view = render(<ImportOutputIndexReview receipt={receipt} sourceRootId="source" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Choose destination and index output' }));
+  await waitFor(() => expect(resolve).toBeTypeOf('function'));
+  view.unmount();
+  await act(async () =>
+    resolve({
+      ...result,
+      root: { ...result.root, mode: 'managed' },
+      alreadyRegistered: true,
+      scanStarted: true,
+    }),
+  );
+  expect(library).toHaveBeenCalledWith({ kind: 'cancel', job_id: 'scan' });
+});
 it.each([false, true])(
   'closing a late registration cancels only a newly started scan (existing: %s)',
   async (existing) => {

@@ -6,6 +6,7 @@ import type {
   OrganizationPlanDetail,
   TemplateRef,
   OrganizationTargetState,
+  LibraryRoot,
 } from '../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
 
@@ -16,15 +17,19 @@ const targetLabels: Record<OrganizationTargetState, string> = {
   unsupported_ancestor: 'A parent or package cannot be used',
   preview_blocked: 'Blocked in the template preview',
 };
+export type DestinationRootOption = Pick<LibraryRoot, 'id' | 'label'> &
+  Partial<Pick<LibraryRoot, 'mode' | 'availability'>>;
 
 export function OrganizationDestination({
   preview,
   revision,
   templateReference = null,
+  roots = [],
 }: {
   preview: OrganizationPreview;
   revision: string;
   templateReference?: TemplateRef | null;
+  roots?: DestinationRootOption[];
 }) {
   const requestId = useRef(0);
   const [selection, setSelection] = useState<DirectorySelection | null>(null);
@@ -32,6 +37,7 @@ export function OrganizationDestination({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<OrganizationPlanDetail | null>(null);
+  const [destinationRootId, setDestinationRootId] = useState('');
   useEffect(
     () => () => {
       requestId.current += 1;
@@ -65,6 +71,7 @@ export function OrganizationDestination({
           asset_ids: preview.rows.map((row) => row.assetId),
           template: preview.template,
           preview_fingerprint: preview.fingerprint,
+          ...(destinationRootId ? { destination_root_id: destinationRootId } : {}),
         },
         'organization_destination',
       );
@@ -93,6 +100,7 @@ export function OrganizationDestination({
             template: preview.template,
             previewFingerprint: preview.fingerprint,
             templateReference,
+            ...(destinationRootId ? { destinationRootId } : {}),
           },
         },
         'organization_plan',
@@ -111,9 +119,45 @@ export function OrganizationDestination({
       aria-busy={busy}
     >
       <h3>Destination for organized copies</h3>
+      <label>
+        Destination library policy
+        <select
+          aria-label="Destination library policy"
+          disabled={busy || stale}
+          value={destinationRootId}
+          onChange={(event) => {
+            requestId.current += 1;
+            setDestinationRootId(event.target.value);
+            setSelection(null);
+            setReview(null);
+            setSaved(null);
+            setError(null);
+          }}
+        >
+          <option value="">Separate destination folder</option>
+          {roots.map((root) => {
+            const source = preview.rows.some((row) => row.rootId === root.id);
+            const reason = source
+              ? 'selected source'
+              : root.mode !== 'managed'
+                ? 'read-only'
+                : root.availability !== 'online'
+                  ? 'unavailable'
+                  : null;
+            return (
+              <option key={root.id} value={root.id} disabled={reason !== null}>
+                {root.label}
+                {reason ? ` — ${reason}` : ''}
+              </option>
+            );
+          })}
+        </select>
+      </label>
       <p>
-        Choose an existing folder outside every indexed library. Checking it leaves both folders
-        unchanged.
+        {destinationRootId
+          ? 'Choose the selected managed library’s root itself with the folder picker. Existing files are retained; new copies require a separately reviewed output namespace.'
+          : 'Choose an existing folder outside every indexed library.'}{' '}
+        Checking it leaves both folders unchanged.
       </p>
       <button type="button" disabled={busy || stale} onClick={() => void check(true)}>
         {busy ? 'Checking destination…' : 'Choose destination'}

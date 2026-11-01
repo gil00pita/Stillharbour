@@ -58,6 +58,9 @@ pub struct ImportCopyReceipt {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ImportOutputIndex {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub scan_started: Option<bool>,
     pub job_id: String,
     pub root: crate::library::model::LibraryRoot,
     pub scan: Option<crate::library::model::ScanJob>,

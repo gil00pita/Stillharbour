@@ -36,6 +36,27 @@ impl Library {
         path: PathBuf,
         expected: (FileIdentity, String),
     ) -> Result<OrganizationDestinationReview> {
+        self.organization_destination_for_root(
+            asset_ids,
+            template,
+            preview_fingerprint,
+            path,
+            expected,
+            None,
+        )
+    }
+    pub fn organization_destination_for_root(
+        &self,
+        asset_ids: Vec<String>,
+        template: OrganizationTemplate,
+        preview_fingerprint: String,
+        path: PathBuf,
+        expected: (FileIdentity, String),
+        destination_root_id: Option<String>,
+    ) -> Result<OrganizationDestinationReview> {
+        if let Some(id) = &destination_root_id {
+            crate::operations::validate_id(id)?;
+        }
         let _admission = self.destination_gate.try_lock().map_err(|_| {
             AppError::new(
                 ErrorCode::Busy,
@@ -52,6 +73,14 @@ impl Library {
         let preview = self.organization_preview(asset_ids.clone(), template.clone())?;
         if preview.fingerprint != preview_fingerprint {
             return Err(conflict());
+        }
+        if destination_root_id
+            .as_ref()
+            .is_some_and(|id| preview.rows.iter().any(|row| &row.root_id == id))
+        {
+            return Err(invalid(
+                "The destination library must be separate from every selected source library.",
+            ));
         }
         // Picker paths may contain Windows short-name/case aliases. Resolve
         // spelling, then independently open every resolved component and bind
@@ -82,6 +111,7 @@ impl Library {
         }
         let mut evidence = Vec::new();
         let mut held = Vec::new();
+        let mut selected_root_found = destination_root_id.is_none();
         for root in roots {
             // Offline/inaccessible/replaced roots cannot prove nonoverlap.
             let chain = directory_chain(&root.path).map_err(|error| AppError::new(error.code.clone(),
@@ -91,7 +121,19 @@ impl Library {
             {
                 return Err(conflict());
             }
-            if destination.overlaps(&chain) {
+            let selected_root = destination_root_id.as_ref() == Some(&root.view.id);
+            if selected_root {
+                if root.view.mode != super::model::RootMode::Managed
+                    || root.view.availability != "online"
+                    || !same(destination.identity(), chain.identity())
+                {
+                    return Err(invalid(
+                        "Choose the selected online managed library's root itself. A referenced library, child or ancestor cannot receive this grant.",
+                    ));
+                }
+                super::original_jobs::require_reconciled_root(&self.catalog, root.view.id.clone())?;
+                selected_root_found = true;
+            } else if destination.overlaps(&chain) {
                 return Err(AppError::new(
                     ErrorCode::Conflict,
                     "Choose a destination outside every indexed library, with no ancestor or descendant overlap.",
@@ -105,6 +147,11 @@ impl Library {
                 root.identity.file,
             ));
             held.push(chain);
+        }
+        if !selected_root_found {
+            return Err(invalid(
+                "The selected destination library no longer exists. Review another destination.",
+            ));
         }
         let (targets, target_evidence) = targets::review(destination.leaf(), &preview.rows)?;
         let space = crate::filesystem::volume_probe(&path)?;
@@ -124,7 +171,7 @@ impl Library {
         if current_preview.fingerprint != preview_fingerprint {
             return Err(conflict());
         }
-        let bytes = serde_json::to_vec(&(
+        let mut bytes = serde_json::to_vec(&(
             "organization-destination-v2-target-observations",
             &preview_fingerprint,
             native::encode_path(&path),
@@ -135,6 +182,14 @@ impl Library {
             target_evidence,
         ))
         .map_err(|e| invalid("Could not fingerprint destination observations.").caused_by(e))?;
+        // Preserve historical external-folder fingerprints exactly. An explicit
+        // managed-root grant is a separate, digest-bound policy observation.
+        if let Some(id) = destination_root_id {
+            bytes.extend_from_slice(
+                &serde_json::to_vec(&("managed-destination-root-v1", id))
+                    .map_err(|e| invalid("Invalid destination root policy.").caused_by(e))?,
+            );
+        }
         Ok(OrganizationDestinationReview {
             preview_fingerprint,
             catalog_revision: preview.catalog_revision,

@@ -496,6 +496,7 @@ mod tests {
             .library
             .organization_plan_create(
                 PlanDraftInput {
+                    destination_root_id: None,
                     asset_ids: vec![fixture.asset_id.clone()],
                     template,
                     preview_fingerprint: preview.fingerprint,

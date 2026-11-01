@@ -61,6 +61,27 @@ impl StoredPlan {
         .to_string())
     }
 }
+/// A retained destination ID is a policy binding, never a replacement for the
+/// native directory/volume checks or a grant over another catalog's roots.
+pub(crate) fn validate_destination_root(db: &Connection, plan: &StoredPlan) -> Result<()> {
+    if let Some(id) = &plan.view.destination_root_id {
+        validate_id(id)?;
+        let valid: bool = db.query_row("SELECT EXISTS(SELECT 1 FROM roots WHERE id=?1 AND mode='managed' AND availability IN ('online','scanning') AND device=?2 AND inode=?3 AND volume=?4)", params![id,plan.destination_device.to_string(),plan.destination_file.to_string(),plan.destination_volume], |row| row.get(0))?;
+        if !valid {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The destination library grant, availability or native identity changed. Retain outputs and review again.",
+            ));
+        }
+        super::original_jobs::require_reconciled_root_db(db, id)?;
+        if plan.sources.iter().any(|source| &source.root_id == id) {
+            return Err(invalid(
+                "A selected source cannot also be the destination library.",
+            ));
+        }
+    }
+    Ok(())
+}
 fn encode<T: Serialize>(value: &T) -> Result<String> {
     serde_json::to_string(value)
         .map_err(|e| invalid("Could not encode planning data.").caused_by(e))
@@ -97,12 +118,13 @@ impl Library {
         path: PathBuf,
         expected: (FileIdentity, String),
     ) -> Result<OrganizationPlanDetail> {
-        let destination = self.organization_destination(
+        let destination = self.organization_destination_for_root(
             input.asset_ids.clone(),
             input.template.clone(),
             input.preview_fingerprint.clone(),
             path.clone(),
             expected.clone(),
+            input.destination_root_id.clone(),
         )?;
         let ids = input.asset_ids.clone();
         let (revision, sources) = self
@@ -120,6 +142,7 @@ impl Library {
         let catalog_id = self.catalog.summary()?.id;
         let mut record = StoredPlan {
             view: OrganizationPlan {
+                destination_root_id: input.destination_root_id,
                 id: uuid::Uuid::new_v4().to_string(),
                 policy: PLAN_POLICY.into(),
                 created_at: store::now(),
@@ -156,6 +179,26 @@ impl Library {
     pub fn organization_plan(&self, id: String) -> Result<OrganizationPlanDetail> {
         validate_id(&id)?;
         let stored = self.catalog.call(move |db| load(db, &id))?;
+        let destination_stale = if stored.view.destination_root_id.is_some() {
+            let checked = stored.clone();
+            match self
+                .catalog
+                .call(move |db| validate_destination_root(db, &checked))
+            {
+                Ok(()) => false,
+                Err(error)
+                    if matches!(
+                        error.code,
+                        ErrorCode::Conflict | ErrorCode::Busy | ErrorCode::InvalidInput
+                    ) =>
+                {
+                    true
+                }
+                Err(error) => return Err(error),
+            }
+        } else {
+            false
+        };
         let current = self.organization_preview(
             stored.sources.iter().map(|s| s.id.clone()).collect(),
             stored.view.preview.template.clone(),
@@ -169,7 +212,7 @@ impl Library {
         };
         Ok(OrganizationPlanDetail {
             plan: stored.view,
-            stale,
+            stale: stale || destination_stale,
         })
     }
     pub fn organization_plans(&self, before: Option<String>) -> Result<OrganizationPlanPage> {
@@ -281,6 +324,7 @@ fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplat
 
 fn insert_plan(db: &mut Connection, plan: &StoredPlan, revision: &str) -> Result<()> {
     let tx = db.transaction()?;
+    validate_destination_root(&tx, plan)?;
     let actual: i64 = tx.query_row(
         "SELECT revision FROM library_state WHERE singleton=1",
         [],
@@ -415,6 +459,7 @@ mod tests {
         .unwrap();
         let mut record = StoredPlan {
             view: OrganizationPlan {
+                destination_root_id: None,
                 id: uuid::Uuid::new_v4().to_string(),
                 policy: PLAN_POLICY.into(),
                 created_at: store::now(),

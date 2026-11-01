@@ -24,6 +24,9 @@ const PLAN_PHASE: &str = "copy_execution_plan_v1";
 const EVENT_PHASE: &str = "copy_execution_event_v1";
 const MAX_RECORD: usize = 65_536;
 const MAX_EVENT: usize = 8192;
+#[cfg(test)]
+#[path = "catalog_journal/managed_destination_tests.rs"]
+mod managed_destination_tests;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Binding {
@@ -818,6 +821,14 @@ impl Fixture {
         photo: Vec<u8>,
         destination_parent: Option<&Path>,
     ) -> Result<Self> {
+        Self::with_media_destination(nested, photo, destination_parent, None)
+    }
+    fn with_media_destination(
+        nested: bool,
+        photo: Vec<u8>,
+        destination_parent: Option<&Path>,
+        destination_mode: Option<crate::library::model::RootMode>,
+    ) -> Result<Self> {
         use crate::library::{
             Library, LibraryOptions, WorkerPaths,
             model::{RootMode, ScanFilter},
@@ -923,12 +934,26 @@ impl Fixture {
             missing_date: MissingDatePolicy::Block,
             filename_stem_case: None,
         };
-        let preview = library.organization_preview(vec![asset.clone()], template.clone())?;
         let target = crate::library::native::open_root(&destination, None)?;
         let target_identity = filesystem::identity(&target)?;
         let destination_volume = native::volume_token(&target)?;
+        let destination_root_id = destination_mode
+            .map(|mode| {
+                store::add_root(
+                    &catalog,
+                    destination.clone(),
+                    target_identity.clone(),
+                    destination_volume.clone(),
+                    "Explicit generated destination library".into(),
+                    mode,
+                    ScanFilter::default(),
+                )
+            })
+            .transpose()?;
+        let preview = library.organization_preview(vec![asset.clone()], template.clone())?;
         let draft = library.organization_plan_create(
             PlanDraftInput {
+                destination_root_id,
                 asset_ids: vec![asset.clone()],
                 template,
                 preview_fingerprint: preview.fingerprint,
@@ -2062,6 +2087,12 @@ mod tests {
     }
     fn import_draft_for(fixture: &Fixture, ids: Vec<String>) -> crate::operations::CopyManifest {
         use crate::operations::*;
+        let owner = fixture.owner.clone();
+        let destination_root_id = fixture
+            .library
+            .catalog
+            .call(move |db| Ok(operation_store::load(db, &owner)?.view.destination_root_id))
+            .unwrap();
         let template = crate::organization::OrganizationTemplate {
             pattern: "Imports/{original_stem}.{ext}".into(),
             event: String::new(),
@@ -2080,6 +2111,7 @@ mod tests {
             .library
             .organization_plan_create(
                 PlanDraftInput {
+                    destination_root_id,
                     asset_ids: ids.clone(),
                     template,
                     preview_fingerprint: preview.fingerprint,
@@ -2138,8 +2170,25 @@ mod tests {
         String,
         String,
     ) {
+        mixed_import_fixture_with_destination(None)
+    }
+    fn mixed_import_fixture_with_destination(
+        destination_mode: Option<crate::library::model::RootMode>,
+    ) -> (
+        Fixture,
+        Arc<crate::executor::CopyWorkflow>,
+        crate::operations::ImportPlan,
+        String,
+        String,
+    ) {
         use crate::operations::*;
-        let mut fixture = Fixture::with_nested(true).unwrap();
+        let mut fixture = Fixture::with_media_destination(
+            true,
+            generated_photo_bytes().unwrap(),
+            None,
+            destination_mode,
+        )
+        .unwrap();
         let owner = fixture.owner.clone();
         let source = fixture
             .library
@@ -2559,8 +2608,10 @@ mod tests {
             return;
         }
         use crate::operations::{CopyAction, CopyApprovalInput, CopyJobState, CopyStartInput};
-        for variant in 0..5 {
-            let (fixture, workflow, plan, source_root, _) = mixed_import_fixture();
+        for variant in 0..6 {
+            let (fixture, workflow, plan, source_root, _) = mixed_import_fixture_with_destination(
+                (variant == 5).then_some(crate::library::model::RootMode::Managed),
+            );
             if variant == 1 {
                 fixture
                     .library
@@ -2647,7 +2698,7 @@ mod tests {
                         })
                         .unwrap();
                 }
-                if action == CopyAction::CopyFiles && variant >= 3 {
+                if action == CopyAction::CopyFiles && (3..=4).contains(&variant) {
                     fixture.library.catalog.call(move|db|{db.execute_batch(if variant==3 {"CREATE TRIGGER deny_import_copy_evidence BEFORE INSERT ON operation_journal WHEN NEW.phase='import_copy_verified_v1' BEGIN SELECT RAISE(ABORT,'owned import receipt denial'); END;"} else {"CREATE TRIGGER deny_import_completion BEFORE UPDATE ON operation_jobs WHEN NEW.state='completed_verified' BEGIN SELECT RAISE(ABORT,'owned import job completion denial'); END;"})?;Ok(())}).unwrap();
                 }
                 let queued = workflow
@@ -2675,7 +2726,9 @@ mod tests {
                         CopyJobState::NeedsRecovery
                     } else {
                         CopyJobState::CompletedVerified
-                    }
+                    },
+                    "variant={variant}, action={action:?}, error={:?}",
+                    finished.error
                 );
                 if action == CopyAction::PrepareNames {
                     workflow.discard(&review.id).unwrap();
@@ -2699,7 +2752,7 @@ mod tests {
                     final_job = finished.id.clone();
                     assert_eq!(finished.verified_files, if variant == 2 { 0 } else { 2 });
                     let receipt = workflow.import_copy_receipt(finished.id.clone()).unwrap();
-                    assert_eq!(receipt.is_some(), variant < 2);
+                    assert_eq!(receipt.is_some(), variant < 2 || variant == 5);
                     if let Some(receipt) = receipt {
                         assert_eq!(receipt.copied_file_ids, plan.copy_file_ids);
                         assert_eq!(receipt.skipped_files.len(), 2);
@@ -2708,7 +2761,14 @@ mod tests {
                     }
                     let job_id = finished.id.clone();
                     let facts:i64=fixture.library.catalog.call(move|db|Ok(db.query_row("SELECT count(*) FROM operation_journal WHERE item_id=? AND phase='import_copy_verified_v1'",[job_id],|row|row.get(0))?)).unwrap();
-                    assert_eq!(facts, if variant < 2 || variant == 4 { 1 } else { 0 });
+                    assert_eq!(
+                        facts,
+                        if variant < 2 || variant == 4 || variant == 5 {
+                            1
+                        } else {
+                            0
+                        }
+                    );
                     for file in &review.files {
                         let output = fixture.destination.join(&file.target_path);
                         if variant == 2 {
@@ -2720,7 +2780,7 @@ mod tests {
                             );
                         }
                     }
-                    if variant >= 3 {
+                    if (3..=4).contains(&variant) {
                         fixture.library.catalog.call(|db|{db.execute_batch("DROP TRIGGER IF EXISTS deny_import_copy_evidence; DROP TRIGGER IF EXISTS deny_import_completion;")?;Ok(())}).unwrap();
                         let continuation = workflow
                             .create_continuation_review(
@@ -2831,12 +2891,16 @@ mod tests {
                 fixture.destination.clone(),
                 (identity.clone(), volume.clone()),
             );
-            if variant < 2 {
+            if variant < 2 || variant == 5 {
                 let indexed = indexed.unwrap();
-                assert!(!indexed.already_registered);
+                assert_eq!(indexed.already_registered, variant == 5);
                 assert_eq!(
                     indexed.root.mode,
-                    crate::library::model::RootMode::Referenced
+                    if variant == 5 {
+                        crate::library::model::RootMode::Managed
+                    } else {
+                        crate::library::model::RootMode::Referenced
+                    }
                 );
                 assert!(!indexed.original_mutations_enabled);
                 let retry = workflow
@@ -2853,12 +2917,16 @@ mod tests {
                     crate::library::store::roots(&fixture.library.catalog)
                         .unwrap()
                         .len(),
-                    root_count + 1
+                    root_count + usize::from(variant != 5)
                 );
-                assert_eq!(
-                    retry.scan.as_ref().map(|scan| &scan.id),
-                    indexed.scan.as_ref().map(|scan| &scan.id)
-                );
+                if variant != 5 {
+                    assert_eq!(
+                        retry.scan.as_ref().map(|scan| &scan.id),
+                        indexed.scan.as_ref().map(|scan| &scan.id)
+                    );
+                } else {
+                    assert_eq!(retry.root.mode, crate::library::model::RootMode::Managed);
+                }
             } else {
                 assert!(indexed.is_err());
                 assert_eq!(
@@ -3211,6 +3279,7 @@ mod tests {
             .library
             .organization_plan_create(
                 PlanDraftInput {
+                    destination_root_id: None,
                     asset_ids: ids,
                     template,
                     preview_fingerprint: preview.fingerprint,

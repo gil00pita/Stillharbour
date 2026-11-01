@@ -35,6 +35,8 @@ struct Foundation {
     #[cfg(feature = "desktop-test")]
     destination_fixture: Mutex<Option<tempfile::TempDir>>,
     #[cfg(feature = "desktop-test")]
+    managed_destination_fixture: Mutex<Option<(tempfile::TempDir, Option<String>)>>,
+    #[cfg(feature = "desktop-test")]
     comparison_fixture: Mutex<
         Option<(
             stillharbour_core::library_fixture::LibraryFixture,
@@ -639,6 +641,7 @@ async fn library_request(
                 )?))
             }
             LibraryRequest::OrganizationDestination {
+                destination_root_id,
                 asset_ids,
                 template,
                 preview_fingerprint,
@@ -650,13 +653,16 @@ async fn library_request(
                         "Choose a destination folder again.",
                     )
                 })?;
-                LibraryResponse::OrganizationDestination(library.organization_destination(
-                    asset_ids,
-                    template,
-                    preview_fingerprint,
-                    selection.path.clone(),
-                    selected_identity(selection)?,
-                )?)
+                LibraryResponse::OrganizationDestination(
+                    library.organization_destination_for_root(
+                        asset_ids,
+                        template,
+                        preview_fingerprint,
+                        selection.path.clone(),
+                        selected_identity(selection)?,
+                        destination_root_id,
+                    )?,
+                )
             }
             LibraryRequest::OrganizationCompanions { asset_id } => {
                 LibraryResponse::OrganizationCompanions(library.organization_companions(asset_id)?)
@@ -1045,6 +1051,120 @@ async fn test_performance(
                     )
                     .caused_by(error)
                 })?
+        }
+        "organization_managed_destination_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generated destination accepts no supplied scope.",
+                ));
+            }
+            let mut owned = state.managed_destination_fixture.lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated managed destination unavailable.",
+                )
+            })?;
+            if owned.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated managed destination already exists.",
+                ));
+            }
+            let directory = tempfile::Builder::new()
+                .prefix("stillharbour-managed-destination-test-")
+                .tempdir()?;
+            std::fs::write(
+                directory.path().join("destination-only.txt"),
+                b"retained managed destination",
+            )?;
+            let path = directory.path().to_owned();
+            let handle = filesystem::open_directory_readonly(&path)?;
+            let identity = filesystem::identity(&handle)?;
+            let volume = stillharbour_core::library::native::volume_token(&handle)?;
+            drop(handle);
+            let job = state.library.register_verified(
+                path.clone(),
+                (identity.clone(), volume.clone()),
+                "Generated managed copies destination".into(),
+                RootMode::Managed,
+                ScanFilter {
+                    extensions: DEFAULT_PHOTO_EXTENSIONS
+                        .iter()
+                        .map(|value| (*value).into())
+                        .collect(),
+                    ..ScanFilter::default()
+                },
+            )?;
+            let id = uuid::Uuid::new_v4().to_string();
+            *state.selection.lock().map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Generated selection unavailable.")
+            })? = Some(NativeSelection {
+                id: id.clone(),
+                path,
+                identity: Some(identity),
+                volume: Some(volume),
+            });
+            *owned = Some((directory, Some(job.root_id.clone())));
+            Ok(
+                serde_json::json!({"rootId":job.root_id,"jobId":job.id,"selection":{"id":id,"displayPath":"Generated managed copies destination","identityAvailable":true}}),
+            )
+        }
+        "organization_managed_destination_audit_remove" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generated destination accepts no supplied scope.",
+                ));
+            }
+            let mut owned = state.managed_destination_fixture.lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated managed destination unavailable.",
+                )
+            })?;
+            let (directory, id) = owned.as_mut().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Create the generated managed destination first.",
+                )
+            })?;
+            let root_id = id.clone().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated destination was already removed.",
+                )
+            })?;
+            if std::fs::read(directory.path().join("destination-only.txt"))?
+                != b"retained managed destination"
+                || std::fs::read_dir(directory.path())?
+                    .take(2)
+                    .collect::<std::io::Result<Vec<_>>>()?
+                    .len()
+                    != 1
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated destination changed during read-only review.",
+                ));
+            }
+            stillharbour_core::library::destination_fixture::remove_empty_registration(
+                &state.library,
+                root_id,
+                directory.path(),
+            )?;
+            *id = None;
+            if std::fs::read(directory.path().join("destination-only.txt"))?
+                != b"retained managed destination"
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated destination neighbor was not retained.",
+                ));
+            }
+            Ok(
+                serde_json::json!({"rootRemoved":true,"neighborPreserved":true,"destinationFilesChanged":false}),
+            )
         }
         "organization_destination_fixture" | "organization_export_fixture" => {
             if state
@@ -1630,6 +1750,8 @@ fn main() {
                 fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 destination_fixture: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                managed_destination_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 comparison_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]

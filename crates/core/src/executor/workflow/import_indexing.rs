@@ -45,6 +45,50 @@ impl CopyWorkflow {
             ));
         }
         let roots = store::roots(&self.catalog)?;
+        let owner = retained.sources.owner_id.clone();
+        let managed_id = self.catalog.call(move |db| {
+            Ok(crate::library::operation_store::load(db, &owner)?
+                .view
+                .destination_root_id)
+        })?;
+        if let Some(id) = managed_id {
+            let root = roots
+                .iter()
+                .find(|root| root.view.id == id)
+                .ok_or_else(|| failed("The selected managed destination no longer exists."))?;
+            if root.view.mode != RootMode::Managed
+                || root.identity.volume != retained.sources.destination.volume
+                || root.identity.file != retained.sources.destination.file
+                || root.volume != volume
+            {
+                return Err(failed(
+                    "The indexed destination grant changed. Retain the verified output.",
+                ));
+            }
+            // Existing discovery owns its scan independently of this dialog.
+            // Join it without claiming cancellation ownership; otherwise request
+            // an ordinary scan using this root's existing filters/grant.
+            let active = store::jobs(&self.catalog)?.into_iter().find(|job| {
+                job.root_id == id
+                    && !matches!(job.kind, Some(crate::library::model::JobKind::Thumbnails))
+                    && matches!(
+                        job.state.as_str(),
+                        "queued" | "running" | "cancel_requested"
+                    )
+            });
+            let (scan, started) = match active {
+                Some(scan) => (scan, false),
+                None => (library.scan(id, root.view.filter.clone())?, true),
+            };
+            return Ok(ImportOutputIndex {
+                scan_started: Some(started),
+                job_id,
+                root: root.view.clone(),
+                scan: Some(scan),
+                already_registered: true,
+                original_mutations_enabled: false,
+            });
+        }
         if let Some(root) = roots.into_iter().find(|root| {
             root.identity.volume == output_identity.volume
                 && root.identity.file == output_identity.file
@@ -59,6 +103,7 @@ impl CopyWorkflow {
                     && !matches!(&scan.kind, Some(crate::library::model::JobKind::Thumbnails))
             });
             return Ok(ImportOutputIndex {
+                scan_started: Some(false),
                 job_id,
                 root: root.view,
                 scan,
@@ -81,6 +126,7 @@ impl CopyWorkflow {
         )?;
         let root = store::root(&self.catalog, scan.root_id.clone())?.view;
         Ok(ImportOutputIndex {
+            scan_started: Some(true),
             job_id,
             root,
             scan: Some(scan),

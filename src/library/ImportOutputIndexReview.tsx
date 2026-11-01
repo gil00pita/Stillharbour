@@ -28,7 +28,8 @@ export function ImportOutputIndexReview({
       value.jobId !== receipt.jobId ||
       !value.root.id ||
       value.root.id === sourceRootId ||
-      receipt.skippedFiles.some((file) => file.keeperRootId === value.root.id) ||
+      (receipt.skippedFiles.some((file) => file.keeperRootId === value.root.id) &&
+        !(value.alreadyRegistered && value.root.mode === 'managed')) ||
       value.originalMutationsEnabled ||
       (!value.alreadyRegistered && value.root.mode !== 'referenced') ||
       (value.scan && (value.scan.rootId !== value.root.id || value.scan.kind === 'thumbnails'))
@@ -54,7 +55,7 @@ export function ImportOutputIndexReview({
       );
       validate(value);
       if (epoch.current !== token) {
-        if (!value.alreadyRegistered && value.scan && active(value.scan))
+        if ((value.scanStarted ?? !value.alreadyRegistered) && value.scan && active(value.scan))
           void library({ kind: 'cancel', job_id: value.scan.id }).catch(() => {});
         return;
       }
@@ -115,17 +116,20 @@ export function ImportOutputIndexReview({
       <h4>Add the output folder to your catalog</h4>
       <p>
         Choose the original destination again. Stillharbour scans this completed output folder
-        without changing files. New folders are registered as referenced libraries. Indexing is
-        separate from byte verification and independent backup.
+        without changing files. New folders are registered as referenced libraries; an explicitly
+        selected managed destination uses its existing library scan settings. Indexing is separate
+        from byte verification and independent backup.
       </p>
       <button type="button" disabled={pending || running} onClick={() => void index()}>
         {result ? 'Review output registration' : 'Choose destination and index output'}
       </button>
       {result && (
         <p role="status">
-          {result.alreadyRegistered
-            ? 'Output folder already registered'
-            : 'Output folder registered'}
+          {result.alreadyRegistered && result.root.mode === 'managed'
+            ? 'Using the existing managed destination library'
+            : result.alreadyRegistered
+              ? 'Output folder already registered'
+              : 'Output folder registered'}
           : <bdi>{result.root.displayPath}</bdi>.
         </p>
       )}

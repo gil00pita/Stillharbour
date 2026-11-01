@@ -5,6 +5,8 @@ mod changes;
 pub(crate) mod copy_manifest;
 mod copy_workflow;
 mod destination;
+#[cfg(feature = "fixture-probes")]
+pub mod destination_fixture;
 mod directory;
 pub mod filters;
 pub mod model;

@@ -150,7 +150,7 @@ impl Library {
             file: draft.destination_file,
             links: 1,
         };
-        let observed = self.organization_destination(
+        let observed = self.organization_destination_for_root(
             draft
                 .sources
                 .iter()
@@ -160,6 +160,7 @@ impl Library {
             draft.view.preview.fingerprint.clone(),
             path.clone(),
             (expected.clone(), draft.destination_volume.clone()),
+            draft.view.destination_root_id.clone(),
         )?;
         // A prepared action has a different, explicitly reviewed namespace
         // prefix and exact native stage/parent proofs. Its own name creation

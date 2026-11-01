@@ -256,6 +256,7 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
     let draft = library
         .organization_plan_create(
             PlanDraftInput {
+                destination_root_id: None,
                 asset_ids: ids.clone(),
                 template: template.clone(),
                 preview_fingerprint: preview.fingerprint.clone(),
