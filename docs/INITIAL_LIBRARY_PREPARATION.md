@@ -1,5 +1,7 @@
 # Initial library preparation
 
+Native pause regression, 2026-11-01: the banner's **Pause previews** now requests cooperative pause of the existing thumbnail job. Assert native `paused`, **Preparation paused** and **Resume job**, with unchanged job ID and discovered/processed/indexed/skipped/error counts. Resume that same job through the banner before exercising Jobs pause/resume. Do not create a new thumbnail job to resume a paused one. **Preview preparation paused** / **Resume previews** describe a retained preparation scope with no active job, such as after explicit removal cancellation; those assertions remain separate. Both native platform paths use the shared `pauseResumePreparation` helper and save `preparation-pause.json` (Windows: `windows-preparation-pause.json`). macOS native CI must rerun before claiming the macOS fix passes.
+
 Owner requests: 2026-10-30/31. New photos should enter the collection after a thumbnail has been generated, with a full-width top progress banner showing actual scanned/processed counts. This is a bounded M1 refinement; all original-file, platform and recovery gates remain unchanged. [ADR-0016](decisions/ADR-0016-initial-preview-preparation.md) records the durable job and visibility decision.
 
 ## Scan-control refinement — 2026-11-01
