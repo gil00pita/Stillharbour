@@ -2,13 +2,20 @@
 // instrumentation, never a control for an existing photo library.
 import { useEffect, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import type { GeneratedRenameRequest, GeneratedRenameReview } from './bindings';
+import type {
+  GeneratedRenameRequest,
+  GeneratedRenameReview,
+  GeneratedWorkerStatus,
+} from './bindings';
 import { errorMessage } from './ipc';
 import { OriginalJobProgress } from './library/OriginalJobProgress';
 
 export function GeneratedRenameLab() {
   const dialog = useRef<HTMLDialogElement>(null);
   const generation = useRef(0);
+  const workerWasBusy = useRef(false);
+  const [worker, setWorker] = useState<GeneratedWorkerStatus | null>(null);
+  const [stopping, setStopping] = useState(false);
   const [open, setOpen] = useState(false);
   const [review, setReview] = useState<GeneratedRenameReview | null>(null);
   const [busy, setBusy] = useState(false);
@@ -25,6 +32,48 @@ export function GeneratedRenameLab() {
   useEffect(() => {
     if (open && !dialog.current?.open) dialog.current?.showModal();
   }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    let live = true;
+    let first = true;
+    let timer: ReturnType<typeof setTimeout>;
+    async function poll() {
+      const epoch = generation.current;
+      try {
+        const next = await invoke<GeneratedWorkerStatus>('test_generated_rename_worker', {
+          request: { kind: 'status' },
+        });
+        if (!live || generation.current !== epoch) return;
+        const finished = workerWasBusy.current && !next.busy;
+        workerWasBusy.current = next.busy;
+        setWorker(next);
+        if (next.error && !next.stopRequested) setError(errorMessage(next.error));
+        if (!next.busy && next.scopeCreated && (first || finished)) {
+          setBusy(true);
+          setAcknowledged(false);
+          try {
+            const inspected = await invoke<GeneratedRenameReview>('test_generated_rename', {
+              request: { kind: 'inspect' },
+            });
+            if (live && generation.current === epoch) setReview(inspected);
+          } finally {
+            if (live && generation.current === epoch) setBusy(false);
+          }
+        }
+      } catch (cause) {
+        if (live && generation.current === epoch) setError(errorMessage(cause));
+      } finally {
+        first = false;
+        // Exactly one request at a time; closing retires late responses.
+        if (live) timer = setTimeout(() => void poll(), 500);
+      }
+    }
+    void poll();
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [open]);
   async function request(value: GeneratedRenameRequest) {
     const id = ++generation.current;
     setBusy(true);
@@ -36,15 +85,56 @@ export function GeneratedRenameLab() {
         request: value,
       });
       if (generation.current === id) setReview(result);
+      if (value.kind === 'start' && generation.current === id) {
+        const status = await invoke<GeneratedWorkerStatus>('test_generated_rename_worker', {
+          request: { kind: 'status' },
+        });
+        if (generation.current !== id) return;
+        workerWasBusy.current = status.busy;
+        setWorker(status);
+        if (!status.busy) {
+          const inspected = await invoke<GeneratedRenameReview>('test_generated_rename', {
+            request: { kind: 'inspect' },
+          });
+          if (generation.current === id) setReview(inspected);
+        }
+      }
     } catch (cause) {
       if (generation.current === id) setError(errorMessage(cause));
     } finally {
       if (generation.current === id) setBusy(false);
     }
   }
+  async function stop() {
+    if (!worker?.job) return;
+    const epoch = generation.current;
+    setStopping(true);
+    setError(null);
+    try {
+      const status = await invoke<GeneratedWorkerStatus>('test_generated_rename_worker', {
+        request: { kind: 'stop', job_id: worker.job.id },
+      });
+      if (generation.current !== epoch) return;
+      workerWasBusy.current = status.busy;
+      setWorker(status);
+      if (!status.busy) {
+        const inspected = await invoke<GeneratedRenameReview>('test_generated_rename', {
+          request: { kind: 'inspect' },
+        });
+        if (generation.current === epoch) setReview(inspected);
+      }
+    } catch (cause) {
+      if (generation.current === epoch) setError(errorMessage(cause));
+    } finally {
+      if (generation.current === epoch) setStopping(false);
+    }
+  }
   function close() {
     generation.current += 1;
     setBusy(false);
+    setStopping(false);
+    setWorker(null);
+    workerWasBusy.current = false;
     setAcknowledged(false);
     setReview((current) => (current ? { ...current, ticket: null } : null));
     dialog.current?.close();
@@ -71,7 +161,26 @@ export function GeneratedRenameLab() {
           independent recovery. Real-library mutations remain disabled.
         </p>
         {error && <p role="alert">{error} Inspect retained state before another action.</p>}
-        <fieldset disabled={busy}>
+        {worker?.busy && (
+          <section aria-label="Active generated worker">
+            {worker.job && <OriginalJobProgress job={worker.job} />}
+            <p aria-live="polite">
+              {worker.job
+                ? `${worker.completedMoves} / ${worker.totalMoves} journaled moves.`
+                : 'Preparing queued worker.'}{' '}
+              {worker.stopRequested
+                ? 'Stop requested; finishing the current verification or journal boundary.'
+                : 'Native worker active.'}
+            </p>
+            <button
+              disabled={stopping || worker.stopRequested || !worker.job}
+              onClick={() => void stop()}
+            >
+              Stop after current step
+            </button>
+          </section>
+        )}
+        <fieldset disabled={busy || stopping || worker?.busy}>
           {!review && (
             <button onClick={() => void request({ kind: 'create' })}>
               Create generated rename fixture
@@ -101,9 +210,11 @@ export function GeneratedRenameLab() {
               {review.jobs.length > 0 && (
                 <section aria-label="Durable organization jobs">
                   <h3>Durable organization jobs</h3>
-                  {review.jobs.map((job) => (
-                    <OriginalJobProgress key={job.id} job={job} />
-                  ))}
+                  {review.jobs
+                    .filter((job) => !worker?.busy || job.id !== worker.job?.id)
+                    .map((job) => (
+                      <OriginalJobProgress key={job.id} job={job} />
+                    ))}
                 </section>
               )}
               <table aria-label="Generated rename targets">
@@ -111,7 +222,7 @@ export function GeneratedRenameLab() {
                   <tr>
                     <th>Before</th>
                     <th>After</th>
-                    <th>Observed now</th>
+                    <th>At last inspection</th>
                     <th>Catalog path</th>
                   </tr>
                 </thead>

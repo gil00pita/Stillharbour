@@ -27,7 +27,7 @@ struct NativeSelection {
 
 struct Foundation {
     #[cfg(feature = "desktop-test")]
-    rename_fixture: Arc<Mutex<Option<stillharbour_core::executor::GeneratedRenameSession>>>,
+    rename_fixture: stillharbour_core::executor::GeneratedRenameController,
     #[cfg(feature = "desktop-test")]
     _test_data: tempfile::TempDir,
     #[cfg(feature = "desktop-test")]
@@ -881,45 +881,41 @@ async fn test_generated_rename(
     state: State<'_, Foundation>,
     request: stillharbour_core::operations::generated_rename::GeneratedRenameRequest,
 ) -> Result<stillharbour_core::operations::generated_rename::GeneratedRenameReview> {
-    use stillharbour_core::operations::generated_rename::GeneratedRenameRequest;
     if window.label() != "main" {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
             "Invalid generated-fixture window.",
         ));
     }
-    let session = state.rename_fixture.clone();
-    tokio::task::spawn_blocking(move || {
-        let mut slot = session
-            .try_lock()
-            .map_err(|_| AppError::new(ErrorCode::Busy, "The generated operation is busy."))?;
-        if matches!(request, GeneratedRenameRequest::Create {}) {
-            if slot.is_some() {
-                return Err(AppError::new(
-                    ErrorCode::Conflict,
-                    "Inspect the existing generated session instead of replacing it.",
-                ));
-            }
-            *slot = Some(stillharbour_core::executor::GeneratedRenameSession::create()?);
-            return slot
-                .as_mut()
-                .unwrap()
-                .request(GeneratedRenameRequest::Inspect {});
-        }
-        slot.as_mut()
-            .ok_or_else(|| {
-                AppError::new(ErrorCode::InvalidInput, "Create a generated fixture first.")
-            })?
-            .request(request)
-    })
-    .await
-    .map_err(|error| {
-        AppError::new(
-            ErrorCode::WorkerFailed,
-            "Generated operation worker stopped. Inspect retained state.",
-        )
-        .caused_by(error)
-    })?
+    let controller = state.rename_fixture.clone();
+    tokio::task::spawn_blocking(move || controller.request(request))
+        .await
+        .map_err(|error| {
+            AppError::new(ErrorCode::WorkerFailed, "Generated review worker stopped.")
+                .caused_by(error)
+        })?
+}
+
+#[cfg(feature = "desktop-test")]
+#[tauri::command]
+async fn test_generated_rename_worker(
+    window: tauri::WebviewWindow,
+    state: State<'_, Foundation>,
+    request: stillharbour_core::operations::generated_rename::GeneratedWorkerRequest,
+) -> Result<stillharbour_core::operations::generated_rename::GeneratedWorkerStatus> {
+    if window.label() != "main" {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Invalid generated-worker window.",
+        ));
+    }
+    let controller = state.rename_fixture.clone();
+    tokio::task::spawn_blocking(move || controller.worker(request))
+        .await
+        .map_err(|error| {
+            AppError::new(ErrorCode::WorkerFailed, "Generated worker status failed.")
+                .caused_by(error)
+        })?
 }
 
 #[cfg(feature = "desktop-test")]
@@ -937,6 +933,18 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "organization_rename_arm_hold" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The generated hold accepts no supplied scope.",
+                ));
+            }
+            state.rename_fixture.arm_native_hold()?;
+            Ok(
+                serde_json::json!({"scope":"generated-rename-only","afterMoves":1,"timeoutSeconds":15}),
+            )
+        }
         "organization_destination_reselect" => {
             if rows.is_some() {
                 return Err(AppError::new(
@@ -1462,6 +1470,7 @@ fn main() {
         test_library_fixture,
         test_scroll_catalog,
         test_generated_rename,
+        test_generated_rename_worker,
         test_performance
     ]);
     #[cfg(not(feature = "desktop-test"))]
@@ -1616,7 +1625,7 @@ fn main() {
                 #[cfg(feature = "desktop-test")]
                 _test_data: test_data,
                 #[cfg(feature = "desktop-test")]
-                rename_fixture: Arc::new(Mutex::new(None)),
+                rename_fixture: stillharbour_core::executor::GeneratedRenameController::default(),
                 #[cfg(feature = "desktop-test")]
                 fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]

@@ -9,10 +9,10 @@ use crate::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 pub(super) struct GeneratedCatalog {
-    pub(super) db: Catalog,
+    pub(super) db: Arc<Catalog>,
     root_id: String,
     volume: String,
     source: super::super::Object,
@@ -60,7 +60,7 @@ impl GeneratedCatalog {
     pub(super) fn create(fixture: &Fixture) -> Result<Self> {
         let path = fixture.run.path().canonicalize()?;
         let directory = root(&path.join("originals"))?;
-        let db = Catalog::open(path.join("rename-catalog.stillharbour"))?;
+        let db = Arc::new(Catalog::open(path.join("rename-catalog.stillharbour"))?);
         db.call(|db| {
             db.execute_batch("CREATE UNIQUE INDEX generated_rename_commit_once ON job_events(job_id) WHERE job_id LIKE 'generated-rename-catalog:%';
             CREATE TRIGGER generated_rename_commit_no_update BEFORE UPDATE ON job_events WHEN OLD.job_id LIKE 'generated-rename-catalog:%' OR NEW.job_id LIKE 'generated-rename-catalog:%' BEGIN SELECT RAISE(ABORT,'Retain generated rename commits'); END;
@@ -358,7 +358,7 @@ impl GeneratedCatalog {
             return Err(failed("The retained generated catalog changed object."));
         }
         let directory = root(&path.join("originals"))?;
-        let db = Catalog::open(path.join("rename-catalog.stillharbour"))?;
+        let db = Arc::new(Catalog::open(path.join("rename-catalog.stillharbour"))?);
         let current = native::maybe_metadata(container.leaf(), "rename-catalog.stillharbour")?
             .ok_or_else(|| failed("The retained generated catalog disappeared."))?;
         if !scope.file.matches(&current)?

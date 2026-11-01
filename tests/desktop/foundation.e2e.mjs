@@ -1346,6 +1346,12 @@ describe('native read-only library', () => {
     assert.equal(initial.productionAuthorization, false);
     assert.equal(initial.independentRecoveryProven, false);
     const states = [initial];
+    const hold = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'organization_rename_arm_hold', rows: null }),
+    );
+    assert.equal(hold.scope, 'generated-rename-only');
+    assert.equal(hold.afterMoves, 1);
+    assert.equal(hold.timeoutSeconds, 15);
     for (const reverse of [false, true]) {
       const scope = await $('dialog[aria-labelledby="rename-lab-title"]');
       const checkbox = await scope.$('input[type="checkbox"]');
@@ -1356,6 +1362,47 @@ describe('native read-only library', () => {
       const start = await $(`button=Run reviewed generated ${reverse ? 'undo' : 'rename'}`);
       await start.waitForDisplayed();
       await start.click();
+      if (!reverse) {
+        const stop = await $('button=Stop after current step');
+        await stop.waitForDisplayed();
+        await browser.waitUntil(
+          async () => {
+            const status = await browser.tauri.execute(async ({ core }) =>
+              core.invoke('test_generated_rename_worker', { request: { kind: 'status' } }),
+            );
+            return status.busy && status.completedMoves === 1;
+          },
+          {
+            timeout: 10000,
+            timeoutMsg: 'The generated worker did not reach its owned durable-step hold',
+          },
+        );
+        await stop.click();
+        await browser.waitUntil(
+          async () => (await scope.$('[role="status"]').getText()).includes('needs_continuation'),
+          { timeout: 10000 },
+        );
+        const stopped = await read({ kind: 'inspect' });
+        assert.equal(stopped.completedSteps, 1);
+        assert.equal(stopped.catalogCommitted, false);
+        assert.ok(
+          stopped.members.some((member) => member.observed.startsWith('.stillharbour-rename-')),
+        );
+        assert.ok(stopped.members.every((member) => member.catalogPath === member.before));
+        assert.ok(stopped.jobs.some((job) => job.state === 'needs_recovery'));
+        states.push(stopped);
+        assert.equal(await $('button=Approve generated targets').isEnabled(), false);
+        await browser.saveScreenshot(
+          `.context/screenshots/m2-generated-stopped-${process.platform}.png`,
+        );
+        const fresh = await scope.$('input[type="checkbox"]');
+        await fresh.scrollIntoView();
+        await fresh.click();
+        await $('button=Approve generated targets').click();
+        const resume = await $('button=Run reviewed generated rename');
+        await resume.waitForDisplayed();
+        await resume.click();
+      }
       await browser.waitUntil(
         async () => {
           const text = await scope.$('[role="status"]').getText();

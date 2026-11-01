@@ -67,42 +67,75 @@ impl GeneratedRenameSession {
                 Ok(view)
             }
             GeneratedRenameRequest::Start { plan_id, ticket } => {
-                let view = self.inspect()?;
-                let binding = self.binding(&view)?;
-                self.approvals
-                    .consume(&ticket, &binding)?
-                    .authorize(&binding)?;
-                if plan_id != view.plan_id || view.state == GeneratedRenameState::Completed {
-                    return Err(failed("This generated-file plan is no longer executable."));
-                }
-                let job = crate::library::original_jobs::create(
-                    &self.catalog.db,
-                    self.active.id.clone(),
-                )?;
-                let outcome = (|| {
-                    crate::library::original_jobs::transition(
-                        &self.catalog.db,
-                        job.id.clone(),
-                        crate::operations::original_jobs::OriginalJobState::Running,
-                        "Checking and moving generated native objects.".into(),
-                    )?;
-                    if !self.fixture.execute(&self.active, None)? {
-                        return Err(failed(
-                            "The generated operation stopped. Inspect before continuing.",
-                        ));
-                    }
-                    self.commit_catalog(job.id.clone())
-                })();
-                if let Err(error) = outcome {
-                    let recovery = crate::library::original_jobs::transition(&self.catalog.db, job.id, crate::operations::original_jobs::OriginalJobState::NeedsRecovery, "The operation stopped. Inspect current native and catalog facts before approving a retry.".into());
-                    if let Err(recovery_error) = recovery {
-                        return Err(failed("The operation stopped and its durable job outcome could not be recorded. Inspect retained files and history.").caused_by(format!("{error}; {recovery_error}")));
-                    }
-                    return Err(error);
-                }
-                self.inspect()
+                let (job, _) = self.prepare_start(plan_id, ticket)?;
+                self.run_job(job.id, None)
             }
         }
+    }
+    pub(super) fn reader(&self) -> std::sync::Arc<crate::catalog::Catalog> {
+        self.catalog.db.clone()
+    }
+    pub(super) fn prepare_start(
+        &self,
+        plan_id: String,
+        ticket: String,
+    ) -> Result<(
+        crate::operations::original_jobs::OriginalOperationJob,
+        GeneratedRenameReview,
+    )> {
+        let view = self.inspect()?;
+        let binding = self.binding(&view)?;
+        self.approvals
+            .consume(&ticket, &binding)?
+            .authorize(&binding)?;
+        if plan_id != view.plan_id || view.state == GeneratedRenameState::Completed {
+            return Err(failed("This generated-file plan is no longer executable."));
+        }
+        let job = crate::library::original_jobs::create(&self.catalog.db, self.active.id.clone())?;
+        match self.inspect() {
+            Ok(queued) => Ok((job, queued)),
+            Err(error) => Err(self.record_stopped(&job.id, error)),
+        }
+    }
+    pub(super) fn record_stopped(
+        &self,
+        job_id: &str,
+        error: crate::domain::AppError,
+    ) -> crate::domain::AppError {
+        let recovery = crate::library::original_jobs::transition(&self.catalog.db, job_id.to_owned(), crate::operations::original_jobs::OriginalJobState::NeedsRecovery, "The worker stopped. Files and stages remain retained; inspect current facts before approving another attempt.".into());
+        match recovery {
+            Ok(_) => error,
+            Err(recovery_error) => failed("The worker stopped and its durable outcome could not be recorded. Inspect retained files and history.").caused_by(format!("{error}; {recovery_error}")),
+        }
+    }
+    pub(super) fn run_job(
+        &self,
+        job_id: String,
+        control: Option<&RunControl>,
+    ) -> Result<GeneratedRenameReview> {
+        let outcome = (|| {
+            crate::library::original_jobs::transition(
+                &self.catalog.db,
+                job_id.clone(),
+                crate::operations::original_jobs::OriginalJobState::Running,
+                "Checking and moving generated native objects.".into(),
+            )?;
+            if !self
+                .fixture
+                .execute_controlled(&self.active, None, control)?
+                || control
+                    .is_some_and(|control| control.stop.load(std::sync::atomic::Ordering::Acquire))
+            {
+                return Err(failed(
+                    "The generated worker stopped at a journal boundary. Inspect retained files and approve a fresh continuation.",
+                ));
+            }
+            self.commit_catalog(job_id.clone())
+        })();
+        if let Err(error) = outcome {
+            return Err(self.record_stopped(&job_id, error));
+        }
+        self.inspect()
     }
     fn binding(&self, view: &GeneratedRenameReview) -> Result<approval::Review> {
         approval::Review::new(

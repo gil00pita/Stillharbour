@@ -47,3 +47,21 @@ pub struct GeneratedRenameReview {
     pub production_authorization: bool,
     pub independent_recovery_proven: bool,
 }
+
+#[derive(Clone, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum GeneratedWorkerRequest {
+    Status {},
+    Stop { job_id: String },
+}
+#[derive(Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct GeneratedWorkerStatus {
+    pub scope_created: bool,
+    pub busy: bool,
+    pub stop_requested: bool,
+    pub completed_moves: u32,
+    pub total_moves: u32,
+    pub job: Option<super::original_jobs::OriginalOperationJob>,
+    pub error: Option<crate::domain::AppError>,
+}

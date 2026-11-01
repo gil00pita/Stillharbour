@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-test-generated-rename-worker"
+description = "Enables the test_generated_rename_worker command without any pre-configured scope."
+commands.allow = ["test_generated_rename_worker"]
+
+[[permission]]
+identifier = "deny-test-generated-rename-worker"
+description = "Denies the test_generated_rename_worker command without any pre-configured scope."
+commands.deny = ["test_generated_rename_worker"]

@@ -91,6 +91,11 @@ fn load_db(db: &Connection, id: &str) -> Result<OriginalOperationJob> {
             .ok_or_else(|| failed("Organization job was not found."))?,
     )
 }
+#[cfg(any(test, feature = "fixture-probes"))]
+pub(crate) fn load(catalog: &Catalog, id: String) -> Result<OriginalOperationJob> {
+    crate::operations::validate_id(&id)?;
+    catalog.call(move |db| load_db(db, &id))
+}
 pub(crate) fn list(catalog: &Catalog) -> Result<Vec<OriginalOperationJob>> {
     catalog.call(|db| {
         let mut statement = db.prepare(&format!("SELECT {COLUMNS} FROM original_operation_jobs j JOIN original_operation_plans p ON p.id=j.plan_id ORDER BY j.updated_at DESC,j.id DESC LIMIT 32"))?;

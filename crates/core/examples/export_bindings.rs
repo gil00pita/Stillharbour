@@ -16,6 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         OriginalJobKind::decl(&config),
         OriginalJobState::decl(&config),
         OriginalOperationJob::decl(&config),
+        GeneratedWorkerRequest::decl(&config),
+        GeneratedWorkerStatus::decl(&config),
         GeneratedRenameRequest::decl(&config),
         GeneratedRenameState::decl(&config),
         GeneratedRenameMember::decl(&config),

@@ -807,3 +807,6 @@ Generated process-exit continuation (2026-11-01): ADR-0058 develops actual child
 
 
 Organization jobs continuation (2026-11-01): ADR-0059 adds separate immutable organization plans and durable job attempts/events in schema 7. Approval binds observed history; native/catalog verification and terminal job state commit together. Startup only marks interrupted workers for review, never resumes I/O or restores grants. Typed status/progress views retain explicit generated scope. General original-worker queue/control, watcher reconciliation, application-root integration and remaining M2 gates still precede M3.
+
+
+Generated worker continuation (2026-11-01): ADR-0060 develops a one-worker/no-backlog controller over generated organization, with independent actual job status, durable journal-step counts and an explicit cooperative stop. Stop retains files/stages and requires fresh review/approval; close only retires frontend polling/grants. A test-only bounded first-step hold supports actual native stop verification. No production original-mutation authority, schema change, general root orchestration or watcher reconciliation is added; M2 remains open before M3.

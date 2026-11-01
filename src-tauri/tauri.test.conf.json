@@ -14,6 +14,7 @@
             "allow-test-scroll-catalog",
             "allow-test-performance",
             "allow-test-generated-rename",
+            "allow-test-generated-rename-worker",
             "core:default",
             "wdio:default",
             "wdio-webdriver:default"

@@ -1,6 +1,7 @@
 //! Closed native experiment. Only this constructor's generated objects can be
 //! moved. Retained local versions are NOT independent recovery or M4 evidence.
 mod catalog;
+mod controller;
 mod quarantine;
 mod session;
 use super::{approval, failed, native, source_native};
@@ -13,8 +14,18 @@ use crate::{
     },
     operations::rename_graph::{self as graph, Facts, Member, NameFact, Plan},
 };
+pub use controller::GeneratedRenameController;
 use rusqlite::{Connection, params};
 pub use session::GeneratedRenameSession;
+#[derive(Default)]
+struct RunControl {
+    stop: std::sync::atomic::AtomicBool,
+    completed: std::sync::atomic::AtomicUsize,
+    #[cfg(feature = "fixture-probes")]
+    hold_first: bool,
+    #[cfg(test)]
+    after_step: Option<(usize, std::sync::Arc<std::sync::Barrier>)>,
+}
 use std::{
     collections::BTreeMap,
     fs::File,
@@ -380,6 +391,14 @@ impl Fixture {
         Ok((super::Object::of(&file)?, source_native::revision(&file)?))
     }
     fn execute(&self, plan: &Plan, fault: Option<Fault>) -> Result<bool> {
+        self.execute_controlled(plan, fault, None)
+    }
+    fn execute_controlled(
+        &self,
+        plan: &Plan,
+        fault: Option<Fault>,
+        control: Option<&RunControl>,
+    ) -> Result<bool> {
         if !plan.issues.is_empty() || plan.root_id != self.root_id {
             return Err(failed("Unresolved or foreign fixture rename scope."));
         }
@@ -450,7 +469,17 @@ impl Fixture {
         if approvals.consume(&ticket, &review).is_ok() {
             return Err(failed("Rename approval replayed."));
         }
+        if let Some(control) = control {
+            control
+                .completed
+                .store(cursor, std::sync::atomic::Ordering::Release);
+        }
         while cursor < plan.steps.len() {
+            if control
+                .is_some_and(|control| control.stop.load(std::sync::atomic::Ordering::Acquire))
+            {
+                return Ok(false);
+            }
             let step = &plan.steps[cursor];
             let original = &self.originals[&step.member_id];
             if !intent {
@@ -511,6 +540,31 @@ impl Fixture {
             }
             cursor += 1;
             intent = false;
+            if let Some(control) = control {
+                control
+                    .completed
+                    .store(cursor, std::sync::atomic::Ordering::Release);
+                #[cfg(feature = "fixture-probes")]
+                if control.hold_first && cursor == 1 {
+                    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+                    while !control.stop.load(std::sync::atomic::Ordering::Acquire)
+                        && std::time::Instant::now() < deadline
+                    {
+                        std::thread::sleep(std::time::Duration::from_millis(10));
+                    }
+                    // An expired diagnostic hold stops with every object/fact
+                    // retained; it never silently resumes the remaining moves.
+                    control
+                        .stop
+                        .store(true, std::sync::atomic::Ordering::Release);
+                }
+                #[cfg(test)]
+                if let Some((step, gate)) = &control.after_step
+                    && cursor == *step
+                {
+                    gate.wait();
+                }
+            }
         }
         self.verify(parent, versions.leaf(), &self.locations(plan, parent, &db)?)?;
         Ok(true)

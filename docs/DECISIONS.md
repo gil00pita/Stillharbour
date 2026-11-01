@@ -301,3 +301,6 @@ The owner continued to M2 and selected organization templates/previews as the pr
 
 
 [ADR-0059](decisions/ADR-0059-organization-job-history.md) introduces schema-7 immutable generated organization plans, durable job attempts and protected events, retaining copy-job semantics. Native/catalog verification and terminal job evidence commit together; interrupted history never restores approval or native work. General original-worker orchestration remains open.
+
+
+[ADR-0060](decisions/ADR-0060-bounded-generated-original-worker.md) adds one generated backend worker, independent typed status/stop, durable-step progress and cooperative retained-state stopping. It requires fresh review/approval after stop and preserves production exclusions; a bounded owned hold supports deterministic native UI testing.
