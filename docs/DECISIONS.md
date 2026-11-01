@@ -304,3 +304,5 @@ The owner continued to M2 and selected organization templates/previews as the pr
 
 
 [ADR-0060](decisions/ADR-0060-bounded-generated-original-worker.md) adds one generated backend worker, independent typed status/stop, durable-step progress and cooperative retained-state stopping. It requires fresh review/approval after stop and preserves production exclusions; a bounded owned hold supports deterministic native UI testing.
+
+[ADR-0061](decisions/ADR-0061-original-operation-scan-coordination.md) retains a single generated native lease through movement and catalog/job commit, and defers scans/removal while durable original recovery is unresolved. Verified completion resolves only its own plan; monitor invalidations remain pending. This is partial coordination evidence, not production mutation or restart adoption.

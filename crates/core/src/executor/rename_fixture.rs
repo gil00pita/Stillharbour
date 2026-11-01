@@ -51,6 +51,12 @@ struct Fixture {
     probes: Vec<super::Object>,
     plan: Plan,
 }
+// Private, constructor-owned scope retained across native movement and the
+// catalog/job transaction. It cannot authorize another fixture or caller path.
+struct ExecutionScope<'a> {
+    fixture: &'a Fixture,
+    lease: crate::jobs::operation_locks::Lease,
+}
 enum Run {
     Owned(tempfile::TempDir),
     #[cfg(test)]
@@ -399,6 +405,32 @@ impl Fixture {
         fault: Option<Fault>,
         control: Option<&RunControl>,
     ) -> Result<bool> {
+        let scope = self.execution_scope()?;
+        self.execute_in_scope(plan, fault, control, &scope)
+    }
+    fn execution_scope(&self) -> Result<ExecutionScope<'_>> {
+        let path = self.run.path().canonicalize()?;
+        let lease = Registry::shared().try_acquire(vec![
+            Scope::new(root(&path.join("originals"))?, Access::Write),
+            Scope::new(root(&path.join("retained"))?, Access::Read),
+        ])?;
+        Ok(ExecutionScope {
+            fixture: self,
+            lease,
+        })
+    }
+    fn execute_in_scope(
+        &self,
+        plan: &Plan,
+        fault: Option<Fault>,
+        control: Option<&RunControl>,
+        scope: &ExecutionScope<'_>,
+    ) -> Result<bool> {
+        if !std::ptr::eq(self, scope.fixture) {
+            return Err(failed(
+                "A held organization scope belongs to another fixture.",
+            ));
+        }
         if !plan.issues.is_empty() || plan.root_id != self.root_id {
             return Err(failed("Unresolved or foreign fixture rename scope."));
         }
@@ -414,13 +446,8 @@ impl Fixture {
         if encode(&canonical)? != encode(plan)? {
             return Err(failed("Retained fixture rename ordering changed."));
         }
-        let path = self.run.path().canonicalize()?;
-        let directory = root(&path.join("originals"))?;
-        let versions = root(&path.join("retained"))?;
-        let _lease = Registry::shared().try_acquire(vec![
-            Scope::new(root(&path.join("originals"))?, Access::Write),
-            Scope::new(root(&path.join("retained"))?, Access::Read),
-        ])?;
+        let directory = scope.lease.directory(0);
+        let versions = scope.lease.directory(1);
         let parent = directory.leaf();
         let db = self.journal(plan)?;
         let locations = self.locations(plan, parent, &db)?;

@@ -3,6 +3,9 @@
 use super::*;
 use crate::operations::generated_rename::*;
 #[cfg(test)]
+#[path = "coordination_tests.rs"]
+mod coordination_tests;
+#[cfg(test)]
 #[path = "restart_tests.rs"]
 mod restart_tests;
 
@@ -114,6 +117,7 @@ impl GeneratedRenameSession {
         control: Option<&RunControl>,
     ) -> Result<GeneratedRenameReview> {
         let outcome = (|| {
+            let scope = self.fixture.execution_scope()?;
             crate::library::original_jobs::transition(
                 &self.catalog.db,
                 job_id.clone(),
@@ -122,7 +126,7 @@ impl GeneratedRenameSession {
             )?;
             if !self
                 .fixture
-                .execute_controlled(&self.active, None, control)?
+                .execute_in_scope(&self.active, None, control, &scope)?
                 || control
                     .is_some_and(|control| control.stop.load(std::sync::atomic::Ordering::Acquire))
             {
@@ -130,7 +134,7 @@ impl GeneratedRenameSession {
                     "The generated worker stopped at a journal boundary. Inspect retained files and approve a fresh continuation.",
                 ));
             }
-            self.commit_catalog(job_id.clone())
+            self.commit_catalog(job_id.clone(), &scope)
         })();
         if let Err(error) = outcome {
             return Err(self.record_stopped(&job_id, error));
@@ -145,14 +149,24 @@ impl GeneratedRenameSession {
             self.fixture.root_id.clone(),
         )
     }
-    fn commit_catalog(&self, job_id: String) -> Result<()> {
+    fn commit_catalog(&self, job_id: String, scope: &ExecutionScope<'_>) -> Result<()> {
+        if !std::ptr::eq(&self.fixture, scope.fixture) {
+            return Err(failed("Catalog commit requires this fixture's held scope."));
+        }
+        // Retaining a handle/lease must not weaken the previous fresh binding
+        // check at commit. In particular Unix can rename an open directory.
         let path = self.fixture.run.path().canonicalize()?;
-        let directory = root(&path.join("originals"))?;
-        let versions = root(&path.join("retained"))?;
-        let _lease = Registry::shared().try_acquire(vec![
-            Scope::new(root(&path.join("originals"))?, Access::Write),
-            Scope::new(root(&path.join("retained"))?, Access::Read),
-        ])?;
+        let current = root(&path.join("originals"))?;
+        let retained = root(&path.join("retained"))?;
+        if !self.fixture.source_root.matches(current.leaf())?
+            || !self.fixture.version_root.matches(retained.leaf())?
+        {
+            return Err(failed(
+                "Generated root bindings changed before catalog commit.",
+            ));
+        }
+        let directory = scope.lease.directory(0);
+        let versions = scope.lease.directory(1);
         let db = self.fixture.journal(&self.active)?;
         if Fixture::cursor(&db, &self.active)? != (self.active.steps.len(), false) {
             return Err(failed("Complete native movement before catalog commit."));

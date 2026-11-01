@@ -278,30 +278,12 @@ mod tests {
         // Match the desktop's independent process budget. Other native fault
         // matrices intentionally saturate the parent's shared I/O limiter;
         // their pacing is not a worker liveness deadline for this scenario.
-        let Some(token) = std::env::var_os("STILLHARBOUR_CONTROLLER_CASE_CHILD") else {
-            let mut child = std::process::Command::new(std::env::current_exe().unwrap())
-                .args(["--exact", "executor::rename_fixture::controller::tests::generated_controller_bounds_queue_stops_at_a_durable_step_and_requires_fresh_approval", "--nocapture"])
-                .env("STILLHARBOUR_CONTROLLER_CASE_CHILD", uuid())
-                .stdout(std::process::Stdio::piped()).stderr(std::process::Stdio::piped()).spawn().unwrap();
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(45);
-            while child.try_wait().unwrap().is_none() {
-                if std::time::Instant::now() >= deadline {
-                    child.kill().unwrap();
-                    child.wait().unwrap();
-                    panic!("Owned controller scenario exceeded 45 seconds");
-                }
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-            let result = child.wait_with_output().unwrap();
-            assert!(
-                result.status.success(),
-                "{} {}",
-                String::from_utf8_lossy(&result.stdout),
-                String::from_utf8_lossy(&result.stderr)
-            );
+        if crate::test_process::isolated(
+            "executor::rename_fixture::controller::tests::generated_controller_bounds_queue_stops_at_a_durable_step_and_requires_fresh_approval",
+            45,
+        ) {
             return;
-        };
-        uuid::Uuid::parse_str(token.to_str().unwrap()).unwrap();
+        }
         let gate = Arc::new(std::sync::Barrier::new(2));
         let controller = GeneratedRenameController {
             inner: Arc::new(Inner {

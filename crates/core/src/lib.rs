@@ -24,3 +24,5 @@ pub mod library_fixture;
 pub mod preferences;
 
 pub mod performance;
+#[cfg(test)]
+mod test_process;

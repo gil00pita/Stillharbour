@@ -265,6 +265,7 @@ impl Library {
             MaintenanceTarget::Library { root_id } => {
                 uuid::Uuid::parse_str(root_id).map_err(|_| invalid("Invalid library identity."))?;
                 self.validate_root_id(root_id.clone())?;
+                super::original_jobs::require_reconciled_root(&self.catalog, root_id.clone())?;
                 Some(root_id.as_str())
             }
             MaintenanceTarget::PreviewCache => None,
@@ -706,6 +707,9 @@ impl Library {
                 crate::jobs::operation_locks::Access::Read,
             ),
         ])?;
+        // Keep the read lease while checking durable recovery state and opening
+        // the scan job. An active writer cannot slip between these checks.
+        super::original_jobs::require_reconciled_root(&self.catalog, root.view.id.clone())?;
         #[cfg(any(unix, windows))]
         let managed_identity =
             filesystem::identity(&native::open_root(&self.options.data_directory, None)?)?;

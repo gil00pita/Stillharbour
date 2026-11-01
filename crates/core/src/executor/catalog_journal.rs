@@ -2552,6 +2552,12 @@ mod tests {
     }
     #[test]
     fn import_projected_workflow_reviews_subset_and_separately_approves_both_actions() {
+        if crate::test_process::isolated(
+            "executor::catalog_journal::tests::import_projected_workflow_reviews_subset_and_separately_approves_both_actions",
+            60,
+        ) {
+            return;
+        }
         use crate::operations::{CopyAction, CopyApprovalInput, CopyJobState, CopyStartInput};
         for variant in 0..5 {
             let (fixture, workflow, plan, source_root, _) = mixed_import_fixture();

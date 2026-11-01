@@ -103,6 +103,21 @@ pub(crate) fn list(catalog: &Catalog) -> Result<Vec<OriginalOperationJob>> {
         while let Some(row) = rows.next()? { jobs.push(decode(row)?); } Ok(jobs)
     })
 }
+/// A stopped original operation can leave retained stages while catalog paths
+/// still describe the pre-operation namespace. Scans must not reconcile that
+/// transient namespace. A verified later attempt resolves that same plan only.
+pub(crate) fn require_reconciled_root(catalog: &Catalog, root_id: String) -> Result<()> {
+    let pending = catalog.call(move |db| {
+        Ok(db.query_row("SELECT EXISTS(SELECT 1 FROM original_operation_plans p JOIN original_operation_jobs j ON j.plan_id=p.id WHERE p.root_id=? AND (j.state IN ('queued','running') OR (j.state='needs_recovery' AND NOT EXISTS(SELECT 1 FROM original_operation_jobs done WHERE done.plan_id=p.id AND done.state='completed_verified'))))", [root_id], |row| row.get::<_, bool>(0))?)
+    })?;
+    if pending {
+        return Err(AppError::new(
+            ErrorCode::Busy,
+            "Organization recovery is pending for this library. Retained files and catalog paths must be reconciled before scanning or removing it.",
+        ));
+    }
+    Ok(())
+}
 #[cfg(any(test, feature = "fixture-probes"))]
 pub(crate) fn retain_plan(
     catalog: &Catalog,
