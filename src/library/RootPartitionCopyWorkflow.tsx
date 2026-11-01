@@ -7,11 +7,13 @@ export function RootPartitionCopyWorkflow({
   initialRootId = '',
   onActivityChange,
   children,
+  purpose = 'copy',
 }: {
   manifest: CopyManifest;
   initialRootId?: string | undefined;
   onActivityChange?: ((active: boolean) => void) | undefined;
   children: (root: string, activity: (active: boolean) => void) => ReactNode;
+  purpose?: 'copy' | 'import';
 }) {
   const ids = [...new Set(manifest.files.map((file) => file.rootId))];
   const [roots, setRoots] = useState<LibraryRoot[] | null>(null);
@@ -43,14 +45,21 @@ export function RootPartitionCopyWorkflow({
     };
   }, [manifest.id, retry]);
   const root = roots?.find((root) => root.id === choice);
-  const allowed =
-    ids.includes(choice) && root?.mode === 'managed' && root.availability === 'online';
+  const readable = (root: LibraryRoot | undefined) =>
+    root?.mode === 'managed' || (purpose === 'import' && root?.mode === 'referenced');
+  const allowed = ids.includes(choice) && readable(root) && root?.availability === 'online';
   return (
-    <section aria-label="Copy source libraries">
-      <h3>Copy one source library at a time</h3>
+    <section aria-label={purpose === 'copy' ? 'Copy source libraries' : 'Import source libraries'}>
+      <h3>
+        {purpose === 'copy'
+          ? 'Copy one source library at a time'
+          : 'Compare one source library at a time'}
+      </h3>
       <p className="help">
-        This selection spans {ids.length} libraries. Each library has its own output folder, native
-        review, approval and job. A completed job covers only its reviewed files.
+        This selection spans {ids.length} libraries.{' '}
+        {purpose === 'copy'
+          ? 'Each library has its own output folder, native review, approval and job. A completed job covers only its reviewed files.'
+          : 'Choose one source for each comparison and import plan. Close its report before switching sources. Copies and skips need separate approval.'}
       </p>
       {!roots && !error && <p role="status">Loading source libraries…</p>}
       {error && (
@@ -61,9 +70,9 @@ export function RootPartitionCopyWorkflow({
       )}
       {roots && (
         <label>
-          Source library to copy
+          {purpose === 'copy' ? 'Source library to copy' : 'Source library to compare'}
           <select
-            aria-label="Source library to copy"
+            aria-label={purpose === 'copy' ? 'Source library to copy' : 'Source library to compare'}
             value={choice}
             disabled={busy}
             onChange={(event) => setChoice(event.target.value)}
@@ -76,13 +85,13 @@ export function RootPartitionCopyWorkflow({
                 <option
                   key={id}
                   value={id}
-                  disabled={
-                    !source || source.mode !== 'managed' || source.availability !== 'online'
-                  }
+                  disabled={!readable(source) || source?.availability !== 'online'}
                 >
                   {source?.label ?? 'Unavailable source library'} — {count} files
                   {source?.mode === 'referenced'
-                    ? ' — read-only'
+                    ? purpose === 'copy'
+                      ? ' — read-only'
+                      : ' — read-only source'
                     : source?.availability !== 'online'
                       ? ' — unavailable'
                       : ''}
@@ -94,8 +103,9 @@ export function RootPartitionCopyWorkflow({
       )}
       {choice && !allowed && roots && (
         <p role="alert">
-          This source library is unavailable or has no managed grant. Review its location and
-          permissions before copying.
+          {purpose === 'copy'
+            ? 'This source library is unavailable or has no managed grant. Review its location and permissions before copying.'
+            : 'This source library is unavailable. Review its location before comparing.'}
         </p>
       )}
       {allowed && children(choice, activity)}

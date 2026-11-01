@@ -8,6 +8,9 @@ pub struct ImportComparisonInput {
     pub plan_id: String,
     pub manifest_id: String,
     pub scope_root_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source_root_id: Option<String>,
 }
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

@@ -29,6 +29,8 @@ struct MultiSourceFixture {
     sources: Vec<stillharbour_core::library_fixture::LibraryFixture>,
     destination: tempfile::TempDir,
     registered: usize,
+    keeper: Option<stillharbour_core::library_fixture::LibraryFixture>,
+    keeper_root: Option<String>,
 }
 
 struct Foundation {
@@ -1072,6 +1074,7 @@ async fn test_performance(
         }
         "organization_multisource_fixture"
         | "organization_multisource_next"
+        | "organization_multisource_keeper"
         | "organization_multisource_audit" => {
             if rows.is_some() {
                 return Err(AppError::new(
@@ -1097,8 +1100,13 @@ async fn test_performance(
                     .iter()
                     .map(|source| source.audit_generated_outputs(fixture.destination.path()))
                     .collect::<Result<Vec<_>>>()?;
+                let keeper = fixture
+                    .keeper
+                    .as_ref()
+                    .map(|keeper| keeper.verify_unchanged())
+                    .transpose()?;
                 return Ok(
-                    serde_json::json!({"scope":"constructor-owned-generated-only","audits":audits,"productionAuthorization":false}),
+                    serde_json::json!({"scope":"constructor-owned-generated-only","audits":audits,"keeperVerifiedFiles":keeper,"productionAuthorization":false}),
                 );
             }
             if action == "organization_multisource_fixture" && owned.is_some() {
@@ -1122,6 +1130,8 @@ async fn test_performance(
                     sources,
                     destination,
                     registered: 0,
+                    keeper: None,
+                    keeper_root: None,
                 });
             }
             let fixture = owned.as_mut().ok_or_else(|| {
@@ -1131,6 +1141,35 @@ async fn test_performance(
                 )
             })?;
             let mut jobs = Vec::new();
+            if action == "organization_multisource_keeper" {
+                if fixture.registered != 2 || fixture.keeper_root.is_some() {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Register both generated sources once before creating their comparison keeper.",
+                    ));
+                }
+                if fixture.keeper.is_none() {
+                    fixture.keeper = Some(fixture.sources[0].coherent_import_copy()?);
+                }
+                let keeper = fixture.keeper.as_ref().ok_or_else(|| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "Generated comparison keeper unavailable.",
+                    )
+                })?;
+                let handle = filesystem::open_directory_readonly(keeper.path())?;
+                let identity = filesystem::identity(&handle)?;
+                let volume = stillharbour_core::library::native::volume_token(&handle)?;
+                let job = state.library.register_verified(
+                    keeper.path().to_owned(),
+                    (identity, volume),
+                    "Generated multi-source import keeper".into(),
+                    RootMode::Referenced,
+                    ScanFilter::default(),
+                )?;
+                fixture.keeper_root = Some(job.root_id.clone());
+                jobs.push(job);
+            }
             if action == "organization_multisource_next" {
                 let index = fixture.registered;
                 let source = fixture.sources.get(index).ok_or_else(|| {

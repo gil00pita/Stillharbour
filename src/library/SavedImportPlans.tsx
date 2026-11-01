@@ -2,11 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 import type { CopyManifest, ImportPlan, ImportPlanSummary } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { ImportPlanReview } from './ImportPlanReview';
-import { digest, validateImportPlan } from './importPlanValidation';
+import { digest, validateImportPlan, importSourceScope } from './importPlanValidation';
 
 export function SavedImportPlans({ planId }: { planId: string }) {
   const [plans, setPlans] = useState<ImportPlanSummary[] | null>(null);
-  const [opened, setOpened] = useState<{ plan: ImportPlan; manifest: CopyManifest } | null>(null);
+  const [opened, setOpened] = useState<{
+    plan: ImportPlan;
+    manifest: CopyManifest;
+    sourceLabel: string | null;
+  } | null>(null);
   const [pending, setPending] = useState(false);
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -71,15 +75,24 @@ export function SavedImportPlans({ planId }: { planId: string }) {
       plan.planId !== planId ||
       plan.id !== summary.id ||
       plan.digest !== summary.digest ||
-      plan.manifestId !== summary.manifestId
+      plan.manifestId !== summary.manifestId ||
+      (summary.sourceRootId && plan.sourceRootId !== summary.sourceRootId)
     )
       throw new Error('A different retained import plan was returned.');
     const manifest = await libraryData(
       { kind: 'organization_copy_manifest_open', plan_id: planId, manifest_id: summary.manifestId },
       'organization_copy_manifest',
     );
-    validateImportPlan(plan, manifest);
-    if (epoch.current === token) setOpened({ plan, manifest });
+    const source = importSourceScope(manifest, plan.sourceRootId);
+    validateImportPlan(plan, source);
+    let sourceLabel: string | null = null;
+    if (new Set(manifest.files.map((file) => file.rootId)).size > 1) {
+      const status = await libraryData({ kind: 'status' }, 'status');
+      sourceLabel =
+        status.roots.find((root) => root.id === plan.sourceRootId)?.label ??
+        'Unavailable source library';
+    }
+    if (epoch.current === token) setOpened({ plan, manifest: source, sourceLabel });
   }
   return (
     <section aria-label="Retained imports" className="organization-destination">
@@ -110,11 +123,19 @@ export function SavedImportPlans({ planId }: { planId: string }) {
       ))}
       {plans?.length === 0 && <p>No retained imports for this saved draft.</p>}
       {opened && (
-        <ImportPlanReview
-          key={opened.plan.id}
-          manifest={opened.manifest}
-          initialPlan={opened.plan}
-        />
+        <>
+          {opened.sourceLabel && (
+            <p>
+              Source library: <bdi>{opened.sourceLabel}</bdi> · {opened.manifest.files.length} files
+              in this retained import.
+            </p>
+          )}
+          <ImportPlanReview
+            key={opened.plan.id}
+            manifest={opened.manifest}
+            initialPlan={opened.plan}
+          />
+        </>
       )}
       {error && <p role="alert">{error}</p>}
     </section>

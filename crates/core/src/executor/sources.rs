@@ -140,6 +140,16 @@ impl Snapshot {
     ) -> Result<Self> {
         Self::build_for(catalog, owner, manifest, false, None)
     }
+    #[cfg(any(test, feature = "copy-workflow"))]
+    pub(super) fn build_read_partition(
+        catalog: &Arc<Catalog>,
+        owner: String,
+        manifest: String,
+        root: String,
+    ) -> Result<Self> {
+        crate::operations::validate_id(&root)?;
+        Self::build_for(catalog, owner, manifest, false, Some(root))
+    }
     fn build_for(
         catalog: &Arc<Catalog>,
         owner: String,
@@ -409,9 +419,9 @@ impl Snapshot {
     pub(super) fn validate_mapping(&self, db: &Connection) -> Result<()> {
         if let Some(root) = &self.root_partition {
             crate::operations::validate_id(root)?;
-            if root != &self.root_id || self.import_selection.is_some() {
+            if root != &self.root_id {
                 return Err(failed(
-                    "A source-root partition cannot change roots or become an import projection.",
+                    "A source-root partition cannot change its retained root.",
                 ));
             }
         }

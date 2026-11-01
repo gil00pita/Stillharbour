@@ -158,6 +158,75 @@ async function chooseScope() {
   fireEvent.click(screen.getByRole('checkbox', { name: 'Existing indexed library · online' }));
   fireEvent.click(screen.getByRole('button', { name: 'Start read-only comparison' }));
 }
+it.each([false, true])(
+  'scopes a multiple-library comparison to one referenced source and refuses a foreign job (%s)',
+  async (foreign) => {
+    mockRequests();
+    const normal = vi.mocked(libraryData).getMockImplementation()!;
+    const second = { ...status.roots[0]!, id: 'second-source', label: 'Second source' };
+    vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest, ...rest) => {
+      if (request.kind === 'status') return { ...status, roots: [...status.roots, second] };
+      if (request.kind === 'organization_import_comparison_start')
+        return foreign ? { ...queued(), sourceRootId: 'second-source' } : queued();
+      return normal(request, ...rest);
+    });
+    const multiple = {
+      ...manifest,
+      files: [
+        ...manifest.files,
+        {
+          ...manifest.files[0]!,
+          id: 'second-file',
+          rootId: 'second-source',
+          bytes: '49',
+          bundleAssetIds: ['second-photo'],
+        },
+      ],
+      selectedBytes: '91',
+    };
+    render(<ImportComparisonReview manifest={multiple} />);
+    const source = await screen.findByRole('combobox', { name: 'Source library to compare' });
+    expect(source).toHaveValue('');
+    expect(screen.getByRole('option', { name: /Selected source/ })).toBeEnabled();
+    expect(
+      screen.queryByRole('button', { name: 'Choose indexed comparison scope' }),
+    ).not.toBeInTheDocument();
+    fireEvent.change(source, { target: { value: 'source-root' } });
+    await chooseScope();
+    expect(libraryData).toHaveBeenCalledWith(
+      {
+        kind: 'organization_import_comparison_start',
+        input: {
+          planId: 'plan',
+          manifestId: 'manifest',
+          scopeRootIds: ['keeper-root'],
+          sourceRootId: 'source-root',
+        },
+      },
+      'organization_import_comparison_job',
+    );
+    if (foreign) {
+      expect(await screen.findByRole('alert')).toHaveTextContent('another source or library scope');
+      expect(
+        screen.queryByRole('heading', { name: 'Observed file comparison' }),
+      ).not.toBeInTheDocument();
+    } else {
+      await screen.findByRole('heading', { name: 'Observed file comparison' });
+      expect(source).toBeDisabled();
+      fireEvent.click(screen.getByRole('button', { name: 'Close comparison report' }));
+      await waitFor(() => expect(source).toBeEnabled());
+      expect(library).toHaveBeenCalledWith({
+        kind: 'organization_import_comparison_discard',
+        job_id: 'comparison',
+      });
+      fireEvent.change(source, { target: { value: 'second-source' } });
+      expect(
+        screen.queryByRole('heading', { name: 'Observed file comparison' }),
+      ).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Choose indexed comparison scope' })).toBeEnabled();
+    }
+  },
+);
 it('compares only an explicit root scope and renders byte evidence as text without skip/removal authority', async () => {
   mockRequests();
   render(<ImportComparisonReview manifest={manifest} />);

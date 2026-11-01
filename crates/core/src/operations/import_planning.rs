@@ -128,6 +128,9 @@ pub struct ImportPlanSummary {
     pub created_at: String,
     pub copy_files: u32,
     pub skip_files: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub source_root_id: Option<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

@@ -3,6 +3,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import type { CopyManifest, ImportPlan, LibraryRequest } from '../bindings';
 import { library, libraryData } from '../ipc';
 import { SavedImportPlans } from './SavedImportPlans';
+import { defaultFilter } from './model';
 vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
   library: vi.fn(),
@@ -122,6 +123,56 @@ it('rejects a foreign retained plan before requesting its source manifest', asyn
       .mocked(libraryData)
       .mock.calls.some(([request]) => request.kind === 'organization_copy_manifest_open'),
   ).toBe(false);
+});
+it('opens only the retained source partition and displays its library label from the full manifest', async () => {
+  const normal = vi.mocked(libraryData).getMockImplementation()!;
+  vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest, ...rest) => {
+    if (request.kind === 'organization_copy_manifest_open')
+      return {
+        ...manifest,
+        files: [
+          ...manifest.files,
+          {
+            ...manifest.files[0]!,
+            id: 'other-file',
+            rootId: 'other-source',
+            bundleAssetIds: ['other-asset'],
+          },
+        ],
+        selectedBytes: '4',
+      };
+    if (request.kind === 'status')
+      return {
+        roots: [
+          {
+            id: 'source',
+            label: 'Original source library',
+            displayPath: 'Generated source',
+            mode: 'referenced',
+            isBase: false,
+            availability: 'online',
+            filter: defaultFilter,
+            lastScan: null,
+            fileCount: 1,
+          },
+        ],
+        jobs: [],
+        revision: '1',
+        previewGeneration: '0',
+        metadataAvailable: false,
+        previewAvailable: false,
+      };
+    return normal(request, ...rest);
+  });
+  render(<SavedImportPlans planId="owner" />);
+  fireEvent.click(await list());
+  await screen.findByText('Original source library');
+  expect(screen.getByText(/Saved import plan: 0 files to copy/)).toHaveTextContent(
+    '1 existing files',
+  );
+  expect(
+    screen.queryByRole('button', { name: 'Start existing-bundle verification' }),
+  ).not.toBeInTheDocument();
 });
 it('shows the unavailable-build reason without requesting import records', async () => {
   vi.mocked(libraryData).mockResolvedValue({

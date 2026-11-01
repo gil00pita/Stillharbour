@@ -26,10 +26,12 @@ export function ImportPlanReview({
   manifest,
   comparison,
   initialPlan,
+  onActivityChange,
 }: {
   manifest: CopyManifest;
   comparison?: ImportComparisonJob | undefined;
   initialPlan?: ImportPlan;
+  onActivityChange?: (active: boolean) => void;
 }) {
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [plan, setPlan] = useState<ImportPlan | null>(initialPlan ?? null);
@@ -48,6 +50,10 @@ export function ImportPlanReview({
   const retained = useRef<string | null>(null);
   const jobId = job?.id;
   const active = job !== null && running(job);
+  useEffect(() => {
+    onActivityChange?.(pending || active || copyActive);
+    return () => onActivityChange?.(false);
+  }, [pending, active, copyActive, onActivityChange]);
   const bundles =
     comparison?.state === 'completed' && comparison.report?.allScopeAvailable
       ? comparison.report.bundles
@@ -163,7 +169,12 @@ export function ImportPlanReview({
         (plan) =>
           plan.manifestId !== manifest.id ||
           !digest(plan.digest) ||
-          plan.copyFiles + plan.skipFiles !== manifest.files.length,
+          !Number.isInteger(plan.copyFiles) ||
+          !Number.isInteger(plan.skipFiles) ||
+          plan.copyFiles < 0 ||
+          plan.skipFiles < 0 ||
+          plan.copyFiles + plan.skipFiles < 1 ||
+          plan.copyFiles + plan.skipFiles > 512,
       ) ||
       value.sessions.some(
         (job) =>
@@ -174,6 +185,16 @@ export function ImportPlanReview({
       )
     )
       throw new Error('Import history does not match this confirmed manifest.');
+    const sourcePlans = value.plans.filter(
+      (saved) => !saved.sourceRootId || saved.sourceRootId === manifest.files[0]?.rootId,
+    );
+    if (sourcePlans.some((saved) => saved.copyFiles + saved.skipFiles !== manifest.files.length))
+      throw new Error('Import history does not match this source library.');
+    const ids = new Set(sourcePlans.map((saved) => saved.id));
+    const sourceHistory = {
+      plans: sourcePlans,
+      sessions: value.sessions.filter((session) => ids.has(session.importPlanId)),
+    };
     const receipts: ImportCopyReceipt[] = [];
     if (plan?.copyFileIds.length) {
       const status = await libraryData({ kind: 'status' }, 'status');
@@ -193,7 +214,7 @@ export function ImportPlanReview({
       }
     }
     if (epoch.current === token) {
-      setHistory(value);
+      setHistory(sourceHistory);
       setCopyReceipts(receipts);
     }
   }

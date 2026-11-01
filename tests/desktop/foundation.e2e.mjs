@@ -5389,22 +5389,22 @@ describe('M2 multiple source libraries — generated native fixtures', () => {
       core.invoke('test_performance', { action: 'organization_multisource_fixture', rows: null }),
     );
     const selected = [];
-    for (let source = 0; source < 2; source += 1) {
+    async function registerOwned(action) {
       let next;
       await browser.waitUntil(
         async () => {
-          const result = await browser.tauri.execute(async ({ core }) => {
+          const result = await browser.tauri.execute(async ({ core }, action) => {
             try {
               return {
                 value: await core.invoke('test_performance', {
-                  action: 'organization_multisource_next',
+                  action,
                   rows: null,
                 }),
               };
             } catch (error) {
               return { error };
             }
-          });
+          }, action);
           if (result.error) {
             assert.equal(result.error.code, 'BUSY', JSON.stringify(result.error));
             return false;
@@ -5415,6 +5415,10 @@ describe('M2 multiple source libraries — generated native fixtures', () => {
         { timeout: 15000, interval: 150, timeoutMsg: 'The owned source scanner remained busy' },
       );
       assert.equal(next.jobs.length, 1);
+      return next;
+    }
+    for (let source = 0; source < 2; source += 1) {
+      const next = await registerOwned('organization_multisource_next');
       const scan = next.jobs[0];
       generated.jobs.push(scan);
       generated.selection = next.selection;
@@ -5466,6 +5470,22 @@ describe('M2 multiple source libraries — generated native fixtures', () => {
       );
       selected.push(asset);
     }
+    const keeper = await registerOwned('organization_multisource_keeper');
+    generated.jobs.push(keeper.jobs[0]);
+    generated.selection = keeper.selection;
+    await browser.waitUntil(
+      async () => {
+        const job = (await native({ kind: 'status' })).data.jobs.find(
+          (job) => job.id === keeper.jobs[0].id,
+        );
+        if (job && ['failed', 'partial', 'canceled'].includes(job.state))
+          assert.fail(
+            `The generated import keeper needs a complete inventory: ${JSON.stringify(job)}`,
+          );
+        return job?.state === 'completed';
+      },
+      { timeout: 60000 },
+    );
     await $('button[aria-label="Photos"]').waitForDisplayed({ timeout: 15000 });
     await $('button[aria-label="Photos"]').click();
     let stableRevision;
@@ -5696,6 +5716,142 @@ describe('M2 multiple source libraries — generated native fixtures', () => {
       );
       await rootSelect.scrollIntoView();
       await browser.saveScreenshot(`.context/screenshots/m2-multi-source-${process.platform}.png`);
+      const compareSource = await $('select[aria-label="Source library to compare"]');
+      await compareSource.waitForDisplayed();
+      for (const asset of selected) {
+        await compareSource.scrollIntoView();
+        await changeSizeUnit('Source library to compare', asset.rootId);
+        const comparison = await $('section[aria-label="Import byte comparison"]');
+        const choose = await comparison.$('button=Choose indexed comparison scope');
+        await choose.scrollIntoView();
+        await choose.click();
+        const existing = await comparison.$('label*=Generated multi-source import keeper');
+        await existing.waitForDisplayed();
+        await existing.scrollIntoView();
+        await existing.$('input').click();
+        await comparison.$('button=Start read-only comparison').click();
+        const choice = await comparison.$('select[aria-label^="Import choice for"]');
+        await choice.waitForExist({ timeout: 30000 });
+        const options = await choice.$$('option');
+        const groups = [];
+        for (const option of options) {
+          const value = await option.getAttribute('value');
+          if (/^[a-f0-9]{64}$/.test(value)) groups.push(value);
+        }
+        assert.equal(groups.length, 1);
+        assert.equal(await compareSource.isEnabled(), false);
+        await choice.scrollIntoView();
+        await changeSizeUnit(await choice.getAttribute('aria-label'), groups[0]);
+        const save = await comparison.$('button=Save import decisions');
+        await save.waitForEnabled();
+        await save.click();
+        const expected = manifest.files.filter((file) => file.rootId === asset.rootId).length;
+        await browser.waitUntil(async () =>
+          (await comparison.getText()).includes(
+            `Saved import plan: 0 files to copy · ${expected} existing files`,
+          ),
+        );
+        assert.equal(
+          await comparison.$('button=Verify and record skipped import').isExisting(),
+          false,
+        );
+        const ack = await comparison.$('label*=I understand sources remain');
+        await ack.scrollIntoView();
+        await ack.$('input').click();
+        await comparison.$('button=Approve existing-bundle import').click();
+        const start = await comparison.$('button=Verify and record skipped import');
+        await start.waitForEnabled();
+        await start.click();
+        await browser.waitUntil(
+          async () =>
+            (await comparison.getText()).includes(
+              `Import recorded: ${expected} existing files freshly compared`,
+            ),
+          { timeout: 30000 },
+        );
+        const close = await comparison.$('button=Close comparison report');
+        await close.waitForEnabled();
+        await close.click();
+        await compareSource.waitForEnabled();
+      }
+      const history = (
+        await native({
+          kind: 'organization_import_history',
+          plan_id: saved.plan.id,
+          manifest_id: manifest.id,
+        })
+      ).data;
+      assert.equal(history.plans.length, 2);
+      assert.equal(history.sessions.length, 2);
+      const imported = [];
+      for (const summary of history.plans) {
+        const plan = (
+          await native({
+            kind: 'organization_import_plan_open',
+            plan_id: saved.plan.id,
+            import_plan_id: summary.id,
+          })
+        ).data;
+        assert.ok(selected.some((asset) => asset.rootId === plan.sourceRootId));
+        assert.equal(plan.copyFileIds.length, 0);
+        assert.equal(
+          plan.skipFiles.length,
+          manifest.files.filter((file) => file.rootId === plan.sourceRootId).length,
+        );
+        imported.push(plan);
+      }
+      assert.equal(new Set(imported.map((plan) => plan.sourceRootId)).size, 2);
+      assert.ok(
+        history.sessions.every(
+          (session) =>
+            session.state === 'completed' &&
+            session.verifiedFiles === 2 &&
+            session.outputCreated === false &&
+            session.sourcesRetained,
+        ),
+      );
+      const afterImports = await browser.tauri.execute(async ({ core }) =>
+        core.invoke('test_performance', { action: 'organization_multisource_audit', rows: null }),
+      );
+      assert.deepEqual(afterImports, audit);
+      assert.equal(afterImports.keeperVerifiedFiles, 2);
+      await writeFile(
+        `${evidence}/multi-source-import-${process.platform}.json`,
+        JSON.stringify({ imported, history, audit: afterImports }),
+      );
+      await compareSource.scrollIntoView();
+      await browser.saveScreenshot(
+        `.context/screenshots/m2-multi-source-import-${process.platform}.png`,
+      );
+      if (process.platform === 'darwin') {
+        // The embedded service reuses this application for live-library.e2e.
+        // Retire only constructor-returned registrations through normal
+        // reviewed maintenance; retain files and durable operation history.
+        for (const rootId of generated.jobs.map((job) => job.rootId)) {
+          const preview = (
+            await native({
+              kind: 'prepare_maintenance',
+              target: { kind: 'library', root_id: rootId },
+            })
+          ).data;
+          const removed = (await native({ kind: 'apply_maintenance', plan_id: preview.id })).data;
+          assert.equal(removed.removedRootId, rootId);
+        }
+        assert.equal((await native({ kind: 'status' })).data.roots.length, 0);
+        const retained = await browser.tauri.execute(async ({ core }) =>
+          core.invoke('test_performance', { action: 'organization_multisource_audit', rows: null }),
+        );
+        assert.deepEqual(retained, audit);
+        await writeFile(
+          `${evidence}/multi-source-teardown-${process.platform}.json`,
+          JSON.stringify({
+            registrationsRemoved: generated.jobs.length,
+            rootCount: 0,
+            audit: retained,
+            sourceFilesRemoved: false,
+          }),
+        );
+      }
     } finally {
       await picker.mockRestore();
     }

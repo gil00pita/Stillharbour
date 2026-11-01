@@ -407,3 +407,38 @@ it('disables unavailable production import history with the backend reason', asy
       .mock.calls.every(([request]) => request.kind === 'organization_copy_capabilities'),
   ).toBe(true);
 });
+it('filters other source plans and attempts before validating the current root history', async () => {
+  const normal = vi.mocked(libraryData).getMockImplementation()!;
+  vi.mocked(libraryData).mockImplementation(async (request: LibraryRequest, ...rest) => {
+    if (request.kind === 'organization_import_history')
+      return {
+        plans: [
+          {
+            id: 'current-plan',
+            manifestId: manifest.id,
+            digest: hash,
+            createdAt: 'current-time',
+            copyFiles: 0,
+            skipFiles: manifest.files.length,
+            sourceRootId: manifest.files[0]!.rootId,
+          },
+          {
+            id: 'other-plan',
+            manifestId: manifest.id,
+            digest: hash,
+            createdAt: 'other-time',
+            copyFiles: 1,
+            skipFiles: 0,
+            sourceRootId: 'another-source',
+          },
+        ],
+        sessions: [{ ...session(), id: 'another-session', importPlanId: 'other-plan' }],
+      };
+    return normal(request, ...rest);
+  });
+  render(<ImportPlanReview manifest={manifest} />);
+  fireEvent.click(await screen.findByRole('button', { name: 'Review saved import decisions' }));
+  await screen.findByRole('button', { name: /Open import plan:.*current-time/ });
+  expect(screen.queryByRole('button', { name: /other-time/ })).not.toBeInTheDocument();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+});

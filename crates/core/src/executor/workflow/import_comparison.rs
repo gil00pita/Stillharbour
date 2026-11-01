@@ -256,6 +256,21 @@ fn admit(catalog: &Catalog, input: &ImportComparisonInput, source: &Snapshot) ->
     })
 }
 
+fn comparison_sources(workflow: &CopyWorkflow, input: &ImportComparisonInput) -> Result<Snapshot> {
+    match &input.source_root_id {
+        Some(root) => Snapshot::build_read_partition(
+            &workflow.catalog,
+            input.plan_id.clone(),
+            input.manifest_id.clone(),
+            root.clone(),
+        ),
+        None => Snapshot::build_read(
+            &workflow.catalog,
+            input.plan_id.clone(),
+            input.manifest_id.clone(),
+        ),
+    }
+}
 fn run(
     workflow: &CopyWorkflow,
     input: &ImportComparisonInput,
@@ -265,11 +280,7 @@ fn run(
     if job.cancel.load(Ordering::Acquire) {
         return Ok(IoStep::Canceled);
     }
-    let source = Snapshot::build_read(
-        &workflow.catalog,
-        input.plan_id.clone(),
-        input.manifest_id.clone(),
-    )?;
+    let source = comparison_sources(workflow, input)?;
     let source_scope = source.open_scope(&workflow.catalog, Access::Read)?;
     let source_root = source_scope.directory(0).leaf();
     let mut scope = admit(&workflow.catalog, input, &source)?;
@@ -576,9 +587,15 @@ fn run(
             "The import source manifest changed during comparison.",
         ));
     }
+    let selected_members = source
+        .files
+        .iter()
+        .map(|file| file.id.as_str())
+        .collect::<BTreeSet<_>>();
     let members = manifest
         .files
         .iter()
+        .filter(|file| selected_members.contains(file.view.id.as_str()))
         .map(|file| {
             Ok(super::import_bundles::Member {
                 id: file.view.id.clone(),
@@ -708,12 +725,11 @@ impl CopyWorkflow {
                 "Compare a conflict-free selection of at most 512 confirmed source files.",
             ));
         }
-        let root = manifest.files[0].root_id.clone();
-        if manifest.files.iter().any(|file| file.root_id != root)
-            || input.scope_root_ids.contains(&root)
-        {
+        let source = comparison_sources(self, &input)?;
+        let root = source.root_id;
+        if input.scope_root_ids.contains(&root) {
             return Err(failed(
-                "Choose an existing-library scope separate from the single selected source root.",
+                "Choose an existing-library scope separate from this selected source root.",
             ));
         }
         let permit = self.gate.try_start()?;
@@ -729,7 +745,7 @@ impl CopyWorkflow {
             candidate_files: 0,
             processed_candidates: 0,
             compared_source_files: 0,
-            total_source_files: manifest.files.len() as u32,
+            total_source_files: source.files.len() as u32,
             bytes_read: "0".into(),
             report: None,
             error: None,
@@ -872,11 +888,7 @@ pub(in crate::executor) fn compare_fixture(
     input: ImportComparisonInput,
     collisions: bool,
 ) -> Result<IoStep<ImportComparisonReport>> {
-    let snapshot = Snapshot::build_read(
-        &workflow.catalog,
-        input.plan_id.clone(),
-        input.manifest_id.clone(),
-    )?;
+    let snapshot = comparison_sources(workflow, &input)?;
     let job = Comparison {
         evidence: Mutex::new(None),
         view: Mutex::new(ImportComparisonJob {

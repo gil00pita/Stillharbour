@@ -8,6 +8,19 @@ import type {
   ImportSession,
 } from '../bindings';
 
+// A display/validation view of one root, retaining the complete immutable
+// manifest identity and digest. It is never sent as an executable manifest.
+export function importSourceScope(manifest: CopyManifest, rootId: string): CopyManifest {
+  const files = manifest.files.filter((file) => file.rootId === rootId);
+  if (!files.length) throw new Error('This import source is not in the confirmed manifest.');
+  if (files.length === manifest.files.length) return manifest;
+  return {
+    ...manifest,
+    files,
+    selectedBytes: files.reduce((total, file) => total + BigInt(file.bytes), 0n).toString(),
+  };
+}
+
 export function validateImportCopyReview(
   review: CopyActionReview,
   manifest: CopyManifest,

@@ -100,8 +100,11 @@ impl Stored {
             ));
         }
         let manifest = copy_manifest::load(db, &view.plan_id, &view.manifest_id)?;
-        let selected = manifest
-            .view
+        // validate_mapping above proves this is every member of the selected
+        // root (or the complete legacy single-root manifest), not an arbitrary
+        // omission of companions from another source.
+        let selected = self
+            .source
             .files
             .iter()
             .map(|file| file.id.clone())
@@ -502,7 +505,7 @@ impl CopyWorkflow {
             operation_store::load(db,&owner)?;
             if let Some(id)=&manifest {copy_manifest::load(db,&owner,id)?;}
             let ids=db.prepare("SELECT item_id FROM operation_journal WHERE plan_id=?1 AND phase=?2 AND (?3 IS NULL OR json_extract(evidence,'$.view.manifestId')=?3) ORDER BY sequence DESC LIMIT 32")?.query_map(params![owner,PHASE,manifest],|row|row.get::<_,String>(0))?.collect::<rusqlite::Result<Vec<_>>>()?;
-            ids.iter().map(|id| {let view=load(db,&owner,id)?.view;Ok(ImportPlanSummary{id:view.id,manifest_id:view.manifest_id,digest:view.digest,created_at:view.created_at,copy_files:view.copy_file_ids.len() as u32,skip_files:view.skip_files.len() as u32})}).collect()
+            ids.iter().map(|id| {let view=load(db,&owner,id)?.view;Ok(ImportPlanSummary{id:view.id,manifest_id:view.manifest_id,digest:view.digest,created_at:view.created_at,copy_files:view.copy_file_ids.len() as u32,skip_files:view.skip_files.len() as u32,source_root_id:Some(view.source_root_id)})}).collect()
         })
     }
     pub(crate) fn create_import_plan(

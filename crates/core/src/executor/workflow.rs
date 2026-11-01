@@ -450,19 +450,17 @@ impl CopyWorkflow {
         }
     }
     fn current_sources(&self, source: &Snapshot) -> Result<Snapshot> {
-        if let Some(root) = &source.root_partition {
-            return Snapshot::build_partition(
+        match (&source.import_selection, &source.root_partition) {
+            (Some(selection), _) => {
+                self.import_copy_sources(source.owner_id.clone(), selection.id.clone())
+            }
+            (None, Some(root)) => Snapshot::build_partition(
                 &self.catalog,
                 source.owner_id.clone(),
                 source.manifest_id.clone(),
                 root.clone(),
-            );
-        }
-        match &source.import_selection {
-            Some(selection) => {
-                self.import_copy_sources(source.owner_id.clone(), selection.id.clone())
-            }
-            None => Snapshot::build(
+            ),
+            (None, None) => Snapshot::build(
                 &self.catalog,
                 source.owner_id.clone(),
                 source.manifest_id.clone(),
@@ -742,7 +740,8 @@ impl CopyWorkflow {
     ) -> Result<CopyActionReview> {
         library.ensure_work_admission()?;
         let sources = self.import_copy_sources(owner, import)?;
-        let assessment = self.assess_sources(library, &sources, true)?;
+        let assessment =
+            self.assess_sources(library, &sources, sources.root_partition.is_none())?;
         if let Some(checker) = self.copy_keeper_check(&sources)? {
             checker.scopes(self)?;
         }

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CopyManifest, ImportComparisonJob, LibraryRoot } from '../bindings';
 import { errorMessage, library, libraryData } from '../ipc';
 import { CopyIoControls } from './CopyJobProgress';
 import { ImportPlanReview } from './ImportPlanReview';
+import { importSourceScope } from './importPlanValidation';
+import { RootPartitionCopyWorkflow } from './RootPartitionCopyWorkflow';
 
 const active = (job: ImportComparisonJob) =>
   ['queued', 'running', 'cancel_requested'].includes(job.state);
@@ -99,18 +101,51 @@ function validate(job: ImportComparisonJob, manifest: CopyManifest, roots: strin
 }
 
 export function ImportComparisonReview({ manifest }: { manifest: CopyManifest }) {
+  if (new Set(manifest.files.map((file) => file.rootId)).size > 1)
+    return (
+      <RootPartitionCopyWorkflow key={manifest.id} manifest={manifest} purpose="import">
+        {(root, activity) => (
+          <ImportComparisonSession
+            key={root}
+            completeManifest={manifest}
+            sourceRootId={root}
+            onActivityChange={activity}
+          />
+        )}
+      </RootPartitionCopyWorkflow>
+    );
+  return <ImportComparisonSession completeManifest={manifest} />;
+}
+function ImportComparisonSession({
+  completeManifest,
+  sourceRootId,
+  onActivityChange,
+}: {
+  completeManifest: CopyManifest;
+  sourceRootId?: string;
+  onActivityChange?: (active: boolean) => void;
+}) {
+  const manifest = useMemo(
+    () => (sourceRootId ? importSourceScope(completeManifest, sourceRootId) : completeManifest),
+    [completeManifest, sourceRootId],
+  );
   const [roots, setRoots] = useState<LibraryRoot[] | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [job, setJob] = useState<ImportComparisonJob | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
+  const [importActive, setImportActive] = useState(false);
   const epoch = useRef(0);
   const retained = useRef<string | null>(null);
   const expectedScope = useRef<string[]>([]);
   const jobId = job?.id;
   const heading = useRef<HTMLHeadingElement>(null);
   const running = job !== null && active(job);
+  useEffect(() => {
+    onActivityChange?.(pending || job !== null);
+    return () => onActivityChange?.(false);
+  }, [pending, job, onActivityChange]);
   const sourceRoots = new Set(manifest.files.map((file) => file.rootId));
   useEffect(
     () => () => {
@@ -175,6 +210,7 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
     }
   }
   async function start() {
+    if (pending || running || importActive) return;
     const token = ++epoch.current;
     setPending(true);
     setError(null);
@@ -191,7 +227,12 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
       const value = await libraryData(
         {
           kind: 'organization_import_comparison_start',
-          input: { planId: manifest.planId, manifestId: manifest.id, scopeRootIds: scope },
+          input: {
+            planId: manifest.planId,
+            manifestId: manifest.id,
+            scopeRootIds: scope,
+            ...(sourceRootId ? { sourceRootId } : {}),
+          },
         },
         'organization_import_comparison_job',
       );
@@ -232,6 +273,7 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
     }
   }
   function selectRoot(id: string, checked: boolean) {
+    if (pending || running || importActive) return;
     epoch.current += 1;
     if (retained.current)
       void library({
@@ -245,6 +287,24 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
     setSelected((old) => (checked ? [...old, id] : old.filter((root) => root !== id)));
   }
   const report = job?.report;
+  async function closeReport() {
+    if (!job || pending || running || importActive) return;
+    const token = ++epoch.current;
+    setPending(true);
+    setError(null);
+    try {
+      await library({ kind: 'organization_import_comparison_discard', job_id: job.id });
+      if (epoch.current === token) {
+        retained.current = null;
+        setJob(null);
+        setPage(0);
+      }
+    } catch (error) {
+      if (epoch.current === token) setError(errorMessage(error));
+    } finally {
+      if (epoch.current === token) setPending(false);
+    }
+  }
   const pages = Math.max(1, Math.ceil((report?.files.length ?? 0) / 64));
   return (
     <section aria-label="Import byte comparison" className="organization-destination">
@@ -260,7 +320,7 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
         </button>
       ) : (
         <>
-          <fieldset disabled={pending || running}>
+          <fieldset disabled={pending || running || importActive}>
             <legend>Existing indexed roots (choose 1–16)</legend>
             {roots.map((root) => (
               <label key={root.id}>
@@ -280,6 +340,7 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
             disabled={
               pending ||
               running ||
+              importActive ||
               !selected.length ||
               selected.length > 16 ||
               manifest.files.length > 512
@@ -299,6 +360,11 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
           {job.totalSourceFiles} selected files · {job.candidateFiles} admitted candidates ·{' '}
           {BigInt(job.bytesRead).toLocaleString()} payload bytes read.
         </p>
+      )}
+      {job && !running && (
+        <button disabled={pending || importActive} onClick={() => void closeReport()}>
+          Close comparison report
+        </button>
       )}
       {running && (
         <>
@@ -418,6 +484,7 @@ export function ImportComparisonReview({ manifest }: { manifest: CopyManifest })
         key={job?.id ?? 'history'}
         manifest={manifest}
         comparison={job ?? undefined}
+        onActivityChange={setImportActive}
       />
     </section>
   );

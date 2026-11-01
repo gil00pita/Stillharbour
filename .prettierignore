@@ -4,6 +4,10 @@ target
 dist
 node_modules
 .context
+.agents
+.codex
+.cursor
+.kiro
 assets
 src-tauri/gen
 src/bindings.ts

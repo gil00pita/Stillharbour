@@ -25,6 +25,9 @@ const EVENT_PHASE: &str = "copy_execution_event_v1";
 const MAX_RECORD: usize = 65_536;
 const MAX_EVENT: usize = 8192;
 #[cfg(test)]
+#[path = "catalog_journal/import_partition_tests.rs"]
+mod import_partition_tests;
+#[cfg(test)]
 #[path = "catalog_journal/managed_destination_tests.rs"]
 mod managed_destination_tests;
 #[cfg(test)]
@@ -1324,7 +1327,7 @@ mod tests {
         fixture.library.catalog.call(move|db|{db.execute("INSERT INTO scans(id,root_id,state,message,started_at) VALUES(?1,?2,'completed','Owned seeded comparison fixture','2026-10-31T00:00:00Z')",params![uuid::Uuid::new_v4().to_string(),root])?;db.execute("UPDATE roots SET availability='online',last_scan='owned-complete' WHERE id=?",[root])?;Ok(())}).unwrap();
         (id, path, ids)
     }
-    fn wait_comparison(
+    pub(super) fn wait_comparison(
         workflow: &crate::executor::CopyWorkflow,
         id: String,
     ) -> crate::operations::ImportComparisonJob {
@@ -1395,6 +1398,7 @@ mod tests {
             .start_import_comparison(
                 &fixture.library,
                 ImportComparisonInput {
+                    source_root_id: None,
                     plan_id: fixture.owner.clone(),
                     manifest_id: fixture.manifest.clone(),
                     scope_root_ids: vec![root.clone()],
@@ -1469,6 +1473,7 @@ mod tests {
                 .start_import_comparison(
                     &fixture.library,
                     ImportComparisonInput {
+                        source_root_id: None,
                         plan_id: fixture.owner.clone(),
                         manifest_id: fixture.manifest.clone(),
                         scope_root_ids: vec![source_root]
@@ -1491,6 +1496,7 @@ mod tests {
         )
         .unwrap();
         let input = ImportComparisonInput {
+            source_root_id: None,
             plan_id: fixture.owner.clone(),
             manifest_id: fixture.manifest.clone(),
             scope_root_ids: vec![root.clone()],
@@ -1615,6 +1621,7 @@ mod tests {
             .start_import_comparison(
                 &fixture.library,
                 ImportComparisonInput {
+                    source_root_id: None,
                     plan_id: fixture.owner.clone(),
                     manifest_id: fixture.manifest.clone(),
                     scope_root_ids: vec![root],
@@ -1728,6 +1735,7 @@ mod tests {
                 .start_import_comparison(
                     &fixture.library,
                     ImportComparisonInput {
+                        source_root_id: None,
                         plan_id: fixture.owner.clone(),
                         manifest_id: fixture.manifest.clone(),
                         scope_root_ids: vec![root],
@@ -1772,6 +1780,7 @@ mod tests {
             .start_import_comparison(
                 &fixture.library,
                 ImportComparisonInput {
+                    source_root_id: None,
                     plan_id: fixture.owner.clone(),
                     manifest_id: fixture.manifest.clone(),
                     scope_root_ids: vec![root],
@@ -1822,7 +1831,7 @@ mod tests {
             approval_id: approval.id,
         }
     }
-    fn wait_import(
+    pub(super) fn wait_import(
         fixture: &Fixture,
         workflow: &crate::executor::CopyWorkflow,
         id: String,
@@ -2253,6 +2262,7 @@ mod tests {
             .start_import_comparison(
                 &fixture.library,
                 ImportComparisonInput {
+                    source_root_id: None,
                     plan_id: fixture.owner.clone(),
                     manifest_id: fixture.manifest.clone(),
                     scope_root_ids: vec![root],
@@ -3134,11 +3144,13 @@ mod tests {
         )
         .unwrap();
         let input = ImportComparisonInput {
+            source_root_id: None,
             plan_id: fixture.owner.clone(),
             manifest_id: fixture.manifest.clone(),
             scope_root_ids: vec![root.clone()],
         };
         let too_many = crate::operations::ImportComparisonInput {
+            source_root_id: None,
             scope_root_ids: (0..17).map(|_| uuid::Uuid::new_v4().to_string()).collect(),
             ..input.clone()
         };
@@ -3148,6 +3160,7 @@ mod tests {
                 .is_err()
         );
         let duplicated = crate::operations::ImportComparisonInput {
+            source_root_id: None,
             scope_root_ids: vec![root.clone(), root],
             ..input.clone()
         };
@@ -3202,6 +3215,7 @@ mod tests {
             .start_import_comparison(
                 &fixture.library,
                 ImportComparisonInput {
+                    source_root_id: None,
                     plan_id: fixture.owner.clone(),
                     manifest_id: fixture.manifest.clone(),
                     scope_root_ids: vec![oversized],
@@ -3230,6 +3244,7 @@ mod tests {
             .start_import_comparison(
                 &fixture.library,
                 ImportComparisonInput {
+                    source_root_id: None,
                     plan_id: fixture.owner.clone(),
                     manifest_id: fixture.manifest.clone(),
                     scope_root_ids: vec![root.clone()],
