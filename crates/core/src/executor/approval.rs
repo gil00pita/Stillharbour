@@ -13,6 +13,8 @@ const LIFETIME: Duration = Duration::from_secs(600);
 pub(super) enum Action {
     #[cfg(any(test, feature = "fixture-probes"))]
     RenameFixture,
+    #[cfg(any(test, feature = "fixture-probes"))]
+    RelocateFixture,
     PrepareNames,
     CopyFiles,
     #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]

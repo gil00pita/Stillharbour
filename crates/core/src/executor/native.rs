@@ -483,6 +483,52 @@ pub(super) fn publish_new(
     target: &str,
     expected: &FileIdentity,
 ) -> Result<File> {
+    publish_to(parent, stage, file, parent, target, expected)
+}
+
+/// Relocation is reachable only from closed generated fixtures. This primitive
+/// supplies neither original-mutation approval nor independent recovery.
+#[cfg(any(test, feature = "fixture-probes"))]
+pub(super) fn relocate_new(
+    source_parent: &File,
+    source: &str,
+    file: File,
+    target_parent: &File,
+    target: &str,
+    expected: &FileIdentity,
+) -> Result<File> {
+    name(source)?;
+    name(target)?;
+    if crate::library::native::volume_token(source_parent)?
+        != crate::library::native::volume_token(target_parent)?
+        || filesystem::identity(source_parent)?.volume != expected.volume
+        || filesystem::identity(target_parent)?.volume != expected.volume
+    {
+        return Err(conflict(
+            "Relocation requires the same validated native volume.",
+        ));
+    }
+    let entry = lookup(source_parent, source)?
+        .ok_or_else(|| conflict("The fixture relocation source is unavailable."))?;
+    if entry.kind != EntryKind::File
+        || !entry.object.matches(&file)?
+        || lookup(target_parent, target)?.is_some()
+    {
+        return Err(conflict(
+            "Relocation membership or destination absence changed.",
+        ));
+    }
+    publish_to(source_parent, source, file, target_parent, target, expected)
+}
+
+fn publish_to(
+    source_parent: &File,
+    stage: &str,
+    file: File,
+    target_parent: &File,
+    target: &str,
+    expected: &FileIdentity,
+) -> Result<File> {
     name(stage)?;
     name(target)?;
     if filesystem::identity(&file)? != *expected || expected.links != 1 {
@@ -514,7 +560,7 @@ pub(super) fn publish_new(
         // preserve every existing target. The source is the held owned handle.
         let status = unsafe {
             let info = buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
-            (*info).RootDirectory = parent.as_raw_handle();
+            (*info).RootDirectory = target_parent.as_raw_handle();
             (*info).FileNameLength = (wide.len() * 2) as u32;
             std::ptr::copy_nonoverlapping(wide.as_ptr(), (*info).FileName.as_mut_ptr(), wide.len());
             let mut io = IO_STATUS_BLOCK::default();
@@ -551,9 +597,9 @@ pub(super) fn publish_new(
         // replacing any target; post-publication identity is checked below.
         if unsafe {
             libc::renameatx_np(
-                parent.as_raw_fd(),
+                source_parent.as_raw_fd(),
                 from.as_ptr(),
-                parent.as_raw_fd(),
+                target_parent.as_raw_fd(),
                 to.as_ptr(),
                 libc::RENAME_EXCL,
             )
@@ -561,7 +607,10 @@ pub(super) fn publish_new(
         {
             return Err(std::io::Error::last_os_error().into());
         }
-        parent.sync_all()?;
+        source_parent.sync_all()?;
+        if filesystem::identity(source_parent)? != filesystem::identity(target_parent)? {
+            target_parent.sync_all()?;
+        }
     }
     #[cfg(not(any(windows, target_os = "macos")))]
     {
@@ -571,7 +620,12 @@ pub(super) fn publish_new(
         ));
     }
     drop(file);
-    let published = read(parent, target)?;
+    // Windows addresses the held source handle. macOS addresses the source
+    // leaf under its held parent; post-identity checks detect a source swap but
+    // do not claim immunity from uncooperative external namespace races.
+    #[cfg(windows)]
+    let _ = source_parent;
+    let published = read(target_parent, target)?;
     if filesystem::identity(&published)? != *expected {
         return Err(conflict(
             "Published output identity changed; inspect retained evidence.",

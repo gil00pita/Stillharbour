@@ -114,6 +114,46 @@ pub(in crate::executor) fn run() -> Result<serde_json::Value> {
             "Cross-volume copy requires two actual native volume identities.",
         ));
     }
+    // Separate newly generated probe objects exercise rejection before any
+    // actual source-library member is opened for relocation.
+    {
+        let container = super::super::output_chain(fixture._run.path())?;
+        let source =
+            super::super::native::create_directory(container.leaf(), "relocation-refusal-source")?;
+        let output = super::super::output_chain(&fixture.destination)?;
+        let mut file = super::super::native::create_file(&source, "retain.bin")?;
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let io = crate::jobs::paced_io::PacedIo::shared();
+        let payload = b"Generated cross-volume relocation refusal";
+        if io.write_all(&mut file, payload, &cancel)?
+            != crate::jobs::paced_io::IoStep::Completed(())
+        {
+            return Err(failed("Cross-volume refusal fixture creation canceled."));
+        }
+        file.sync_all()?;
+        let identity = crate::filesystem::identity(&file)?;
+        let rejected = super::super::native::relocate_new(
+            &source,
+            "retain.bin",
+            file,
+            output.leaf(),
+            "must-not-move.bin",
+            &identity,
+        )
+        .is_err_and(|error| error.code == crate::domain::ErrorCode::Conflict);
+        let mut retained = super::super::native::reopen_stage(&source, "retain.bin", &identity)?;
+        let mut observed = [0u8; 64];
+        let read = io.read(&mut retained, &mut observed, &cancel)?;
+        if !rejected
+            || read != crate::jobs::paced_io::IoStep::Completed(payload.len())
+            || &observed[..payload.len()] != payload
+            || super::super::native::lookup(output.leaf(), "must-not-move.bin")?.is_some()
+        {
+            return Err(failed(
+                "Cross-volume relocation was not refused without effects.",
+            ));
+        }
+    }
     let selected = native::open_root(&fixture.destination, None)?;
     let identity = crate::filesystem::identity(&selected)?;
     let volume = native::volume_token(&selected)?;
@@ -230,7 +270,7 @@ pub(in crate::executor) fn run() -> Result<serde_json::Value> {
         interruptions.push(serde_json::json!({"fault":fault,"before":before,"replayBlocked":true,"freshApprovedContinuation":"completed_verified","sourcesRetained":true,"destinationOnlyRetained":true}));
     }
     Ok(
-        serde_json::json!({"policy":"owned-native-cross-volume-v1","nativeOs":std::env::consts::OS,"sourceVolume":fixture.plan.source_volume,"destinationVolume":fixture.plan.destination_volume,"sourceNativeDevice":fixture.plan.source.volume.to_string(),"destinationNativeDevice":fixture.plan.destination.volume.to_string(),"distinctVolumes":true,"jobs":jobs,"inspection":inspection,"interruptions":interruptions,"sourcesRetained":true,"destinationOnlyRetained":true,"originalMutationsEnabled":false}),
+        serde_json::json!({"policy":"owned-native-cross-volume-v1","nativeOs":std::env::consts::OS,"sourceVolume":fixture.plan.source_volume,"destinationVolume":fixture.plan.destination_volume,"sourceNativeDevice":fixture.plan.source.volume.to_string(),"destinationNativeDevice":fixture.plan.destination.volume.to_string(),"distinctVolumes":true,"crossVolumeRelocationRefused":true,"jobs":jobs,"inspection":inspection,"interruptions":interruptions,"sourcesRetained":true,"destinationOnlyRetained":true,"originalMutationsEnabled":false}),
     )
 }
 

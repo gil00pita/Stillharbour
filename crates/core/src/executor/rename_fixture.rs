@@ -1,5 +1,6 @@
 //! Closed native experiment. Only this constructor's generated objects can be
 //! moved. Retained local versions are NOT independent recovery or M4 evidence.
+mod quarantine;
 use super::{approval, failed, native, source_native};
 use crate::{
     domain::Result,
@@ -319,48 +320,61 @@ impl Fixture {
             .map(|o| (o, native::EntryKind::File))
             .collect::<Vec<_>>();
         let mut revisions = BTreeMap::new();
-        let io = PacedIo::shared();
-        let cancel = AtomicBool::new(false);
         for (id, name) in locations {
-            let original = &self.originals[id];
-            let mut file = native::reopen_stage(parent, name, &original.identity)?;
-            let mut version = native::read(versions, id)?;
-            if filesystem::identity(&version)? != original.version {
-                return Err(failed(
-                    "Retained fixture version changed identity or link count.",
-                ));
-            }
-            let metadata = file.metadata()?;
-            if metadata.len() != original.bytes
-                || metadata.modified()? != original.modified
-                || metadata.permissions().readonly() != original.readonly
-                || metadata.created().ok() != original.created
-            {
-                return Err(failed("Rename fixture metadata changed."));
-            }
-            file.seek(SeekFrom::Start(0))?;
-            version.seek(SeekFrom::Start(0))?;
-            let mut left = [0; CHUNK_BYTES];
-            let mut right = [0; CHUNK_BYTES];
-            loop {
-                let IoStep::Completed(a) = io.read(&mut file, &mut left, &cancel)? else {
-                    return Err(failed("Verification canceled."));
-                };
-                let IoStep::Completed(b) = io.read(&mut version, &mut right, &cancel)? else {
-                    return Err(failed("Verification canceled."));
-                };
-                if a != b || left[..a] != right[..b] {
-                    return Err(failed("Retained rename version differs."));
-                }
-                if a == 0 {
-                    break;
-                }
-            }
-            revisions.insert(id.clone(), source_native::revision(&file)?);
-            inventory.push((super::Object::of(&file)?, native::EntryKind::File));
+            let (object, revision) = self.verify_member(parent, versions, id, name)?;
+            revisions.insert(id.clone(), revision);
+            inventory.push((object, native::EntryKind::File));
         }
         native::verify_entries(parent, &inventory)?;
         Ok(revisions)
+    }
+    fn verify_member(
+        &self,
+        parent: &File,
+        versions: &File,
+        id: &str,
+        name: &str,
+    ) -> Result<(super::Object, String)> {
+        if !self.version_root.matches(versions)? {
+            return Err(failed("Retained version directory identity changed."));
+        }
+        let io = PacedIo::shared();
+        let cancel = AtomicBool::new(false);
+        let original = &self.originals[id];
+        let mut file = native::reopen_stage(parent, name, &original.identity)?;
+        let mut version = native::read(versions, id)?;
+        if filesystem::identity(&version)? != original.version {
+            return Err(failed(
+                "Retained fixture version changed identity or link count.",
+            ));
+        }
+        let metadata = file.metadata()?;
+        if metadata.len() != original.bytes
+            || metadata.modified()? != original.modified
+            || metadata.permissions().readonly() != original.readonly
+            || metadata.created().ok() != original.created
+        {
+            return Err(failed("Rename fixture metadata changed."));
+        }
+        file.seek(SeekFrom::Start(0))?;
+        version.seek(SeekFrom::Start(0))?;
+        let mut left = [0; CHUNK_BYTES];
+        let mut right = [0; CHUNK_BYTES];
+        loop {
+            let IoStep::Completed(a) = io.read(&mut file, &mut left, &cancel)? else {
+                return Err(failed("Verification canceled."));
+            };
+            let IoStep::Completed(b) = io.read(&mut version, &mut right, &cancel)? else {
+                return Err(failed("Verification canceled."));
+            };
+            if a != b || left[..a] != right[..b] {
+                return Err(failed("Retained rename version differs."));
+            }
+            if a == 0 {
+                break;
+            }
+        }
+        Ok((super::Object::of(&file)?, source_native::revision(&file)?))
     }
     fn execute(&self, plan: &Plan, fault: Option<Fault>) -> Result<bool> {
         if !plan.issues.is_empty() || plan.root_id != self.root_id {
@@ -606,6 +620,9 @@ pub(super) fn probe() -> Result<serde_json::Value> {
     Ok(
         serde_json::json!({"scope":"constructor-owned-generated-only","nativeOs":std::env::consts::OS,"members":fixture.plan.members.len(),"steps":fixture.plan.steps.len(),"interruptedAfterFirstRename":interrupted,"freshApprovedContinuation":resumed,"reverseSteps":reverse.steps.len(),"reverseRestoredOriginalNames":true,"completeBytesAndModifiedTimeVerified":true,"originalObjectsRetained":true,"localRetainedVersionsOnly":true,"independentRecoveryProven":false,"productionAuthorization":false}),
     )
+}
+pub(super) fn relocation_probe() -> Result<serde_json::Value> {
+    quarantine::probe()
 }
 
 #[cfg(test)]

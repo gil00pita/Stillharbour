@@ -1270,6 +1270,19 @@ describe('native read-only library', () => {
       });
       assert.equal(receipt.catalogJournal.catalogSchema, 6);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
+      assert.deepEqual(receipt.relocation, {
+        scope: 'generated-relocation-infrastructure-only',
+        nativeOs: process.platform === 'win32' ? 'windows' : 'macos',
+        quarantinedMembers: 2,
+        companionsRestoredTogether: true,
+        originalObjectsAndBytesVerified: 5,
+        planRecords: 2,
+        journalEvents: 8,
+        independentRecoveryProven: false,
+        duplicateRemovalAuthorized: false,
+        productionAuthorization: false,
+        automaticExpiry: false,
+      });
       assert.equal(receipt.renamePlanning.nativeMutationTested, false);
       assert.equal(receipt.renamePlanning.forward.execution_available, false);
       assert.deepEqual(receipt.renamePlanning.forward.issues, []);

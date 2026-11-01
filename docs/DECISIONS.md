@@ -1,5 +1,7 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0054](decisions/ADR-0054-fixture-relocation-and-restoration.md) adds fixture-gated same-volume directory-to-directory relocation and retained companion restoration. Duplicate-removal authority, incomplete-state continuation and production mutation gates remain separate.
+
 The bounded rename graph and closed generated native experiment are recorded in [ADR-0053](decisions/ADR-0053-fixture-rename-graph.md). Native process-exit recovery and the remaining M2 gates are still open; these fixtures cannot authorize real-library mutations.
 
 These are proposed defaults. Record changes as short ADRs rather than silently changing the specification.
