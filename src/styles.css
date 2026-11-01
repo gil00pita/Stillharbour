@@ -2014,6 +2014,11 @@ input.switch-control:disabled {
   .viewer-body.with-info {
     flex-direction: column;
   }
+  .viewer-body.with-info .viewer-main {
+    /* Keep navigation above the control bar, even with the filmstrip open.
+       The details pane yields height and scrolls inside its remaining space. */
+    min-height: 214px;
+  }
   .photo-viewer .inspector {
     width: 100%;
     max-height: 45%;

@@ -1090,16 +1090,37 @@ async function assertViewerControlsOverlay() {
           );
         },
       ),
+      navigationBounds: [...document.querySelectorAll('.viewer-previous, .viewer-next')].map(
+        (button) => {
+          const bounds = button.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            bounds.left + bounds.width / 2,
+            bounds.top + bounds.height / 2,
+          );
+          return {
+            left: bounds.left,
+            top: bounds.top,
+            width: bounds.width,
+            height: bounds.height,
+            hit: hit?.className ?? null,
+          };
+        },
+      ),
     };
   });
-  assert.deepEqual(geometry, {
-    insidePhoto: true,
-    overlaysCanvas: true,
-    heartBeforeInfo: true,
-    singleRow: true,
-    buttonsReachable: true,
-    navigationReachable: true,
-  });
+  const { navigationBounds, ...checks } = geometry;
+  assert.deepEqual(
+    checks,
+    {
+      insidePhoto: true,
+      overlaysCanvas: true,
+      heartBeforeInfo: true,
+      singleRow: true,
+      buttonsReachable: true,
+      navigationReachable: true,
+    },
+    JSON.stringify(navigationBounds),
+  );
 }
 async function assertPhotoCheckboxOnTop(id) {
   // HTMLElement.click() in the embedded driver bypasses real pointer hit testing.
@@ -1248,6 +1269,25 @@ describe('native read-only library', () => {
         sourcesPreserved: true,
       });
       assert.equal(receipt.catalogJournal.catalogSchema, 6);
+      assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
+      assert.equal(receipt.renamePlanning.nativeMutationTested, false);
+      assert.equal(receipt.renamePlanning.forward.execution_available, false);
+      assert.deepEqual(receipt.renamePlanning.forward.issues, []);
+      assert.deepEqual(receipt.nativeRename, {
+        scope: 'constructor-owned-generated-only',
+        nativeOs: process.platform === 'win32' ? 'windows' : 'macos',
+        members: 5,
+        steps: 10,
+        interruptedAfterFirstRename: true,
+        freshApprovedContinuation: true,
+        reverseSteps: 10,
+        reverseRestoredOriginalNames: true,
+        completeBytesAndModifiedTimeVerified: true,
+        originalObjectsRetained: true,
+        localRetainedVersionsOnly: true,
+        independentRecoveryProven: false,
+        productionAuthorization: false,
+      });
       assert.equal(receipt.catalogJournal.completed.publishedVerified, 2);
       assert.equal(receipt.catalogJournal.completed.journalEvents, 13);
       assert.equal(receipt.catalogJournal.completed.sourceAndNeighborPreserved, true);

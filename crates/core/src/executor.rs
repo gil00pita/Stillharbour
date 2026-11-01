@@ -8,6 +8,8 @@ mod fingerprints;
 mod locations;
 mod native;
 mod preparation;
+#[cfg(any(test, feature = "fixture-probes"))]
+mod rename_fixture;
 #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
 mod resume;
 mod sources;
@@ -95,7 +97,7 @@ pub fn run_fixture_probe() -> Result<serde_json::Value> {
     }
     Ok(
         serde_json::json!({"scope":"generated-temporary-only","nativeOs":std::env::consts::OS,"policy":"m2-owned-copy-fixture-v1","configuredAggregateBytesPerSecond":PacedIo::shared().bytes_per_second()?,"chunkBytes":CHUNK_BYTES,"burstBytes":crate::jobs::paced_io::ISSUED_BURST_BYTES,
-        "completed":case(None)?,"interruptedAfterPublish":case(Some(CopyFault::AfterPublish))?,"scopeLocks":scope_lock_fixture_probe()?,"catalogJournal":catalog_journal::fixture_probe()?}),
+            "completed":case(None)?,"interruptedAfterPublish":case(Some(CopyFault::AfterPublish))?,"scopeLocks":scope_lock_fixture_probe()?,"catalogJournal":catalog_journal::fixture_probe()?,"renamePlanning":crate::operations::rename_graph::fixture_preview_probe()?,"nativeRename":rename_fixture::probe()?}),
     )
 }
 #[cfg(any(test, feature = "fixture-probes"))]

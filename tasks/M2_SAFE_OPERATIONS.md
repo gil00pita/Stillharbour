@@ -4,7 +4,13 @@
 
 Enable safe operations only after immutable planning, no-clobber execution and crash recovery work on disposable fixtures.
 
-## Current authorized work — 2026-10-30
+## Current authorized work — 2026-11-01
+
+The owner authorized continuing M2 and then M3 without stopping at intermediate checkpoints, and pushing those checkpoints to draft PR #9. M2 remains unfinished; M3 has not started. Current experimental work includes retained single-root copy planning, approvals/jobs, native staged copying/continuation, mixed whole-bundle import and explicit referenced output indexing. Strict generated cross-volume tests pass on Windows VHDX and macOS APFS in the documented separate CI runs. ADR-0053 adds pure rename/reverse planning and closed native generated-file execution; its broader native checks are pending. Default real-library original mutations and duplicate quarantine remain disabled.
+
+Remaining gate work includes multi-root/target-root policies, full case/Unicode/native failure coverage, original-organization and undo integration through actual fixture UI/IPC, quarantine infrastructure and the other required acceptance scenarios. Local retained fixture versions cannot waive independent recovery. Record actual results before advancing to M3.
+
+## Historical planning progression — 2026-10-30 onward
 
 The owner requested the next stage and prioritized Organization templates and previews. M2 is in progress; [the first preview slice](../docs/M2_ORGANIZATION_PREVIEWS.md) adds bounded catalog-only template previews through actual library IPC. It is not a persisted executable plan, destination preflight or M2 acceptance. Production copying and original mutation remain unavailable. Continue next with destination-aware persistent planning and confirmed companion inventory before implementing/authorizing the executor. Preserve all P4-06 and preservation gates below.
 
@@ -108,3 +114,5 @@ Output catalog continuation, 2026-11-01: ADR-0051 develops explicit discovery of
 Cross-volume continuation, 2026-11-01: ADR-0052 develops nonce-owned Windows VHDX/macOS APFS CI fixtures, actual distinct native identities, application-core preparation/copy and in-process interruption/continuation checks. Local Windows preflight reports administrator unavailable; no mounted-volume pass is claimed. Strict CI evidence and the remaining M2 target-root/multi-root/case-cycle/undo/native gates still precede M3.
 
 Cross-volume CI continuation, 2026-11-01: macOS full/native and the strict APFS probe pass 41265781031, including nine in-process continuations and image cleanup. Windows reaches the virtual-disk guard but requires the raw-CIM BusType correction before any initialization/format; local six-case metadata preflight passes without admin or mounting. Windows mounted evidence and remaining M2 gates still precede M3.
+
+Rename continuation, 2026-11-01: ADR-0053 implements pure case/cycle staging and canonical reverse planning, plus a closed native generated-file experiment. Its local retained versions do not satisfy independent recovery. Native reverse execution, process-exit/journal-denial coverage and actual organization UI integration remain open. Windows CI 41266627076 now passes the strict mounted VHDX copy/continuation gate; macOS APFS evidence is in 41265781031. Neither proves physical-device recovery. M2 remains unfinished before M3.

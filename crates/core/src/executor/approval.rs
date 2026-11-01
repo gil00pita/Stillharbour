@@ -11,6 +11,8 @@ const LIMIT: usize = 64;
 const LIFETIME: Duration = Duration::from_secs(600);
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Action {
+    #[cfg(any(test, feature = "fixture-probes"))]
+    RenameFixture,
     PrepareNames,
     CopyFiles,
     #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
