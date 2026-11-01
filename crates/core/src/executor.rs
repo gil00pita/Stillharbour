@@ -1318,6 +1318,138 @@ mod tests {
         assert!(fixture.sources_preserved().unwrap());
         assert!(fixture.run_until(None, &cancel).is_err());
     }
+
+    #[test]
+    fn unavailable_source_or_destination_at_every_retained_copy_boundary_never_becomes_empty_or_complete()
+     {
+        // Filesystem availability simulation only. It does not physically
+        // disconnect a volume or establish removable-device durability.
+        fn output_snapshot(
+            path: &Path,
+            fixture: &CopyFixture,
+        ) -> std::collections::BTreeMap<std::ffi::OsString, (u64, u64, u64, [u8; 32])> {
+            let base = fixture.run.path().canonicalize().unwrap();
+            let path = path.canonicalize().unwrap();
+            assert!(path.starts_with(&base));
+            let directory = output_chain(&path).unwrap();
+            assert!(fixture.plan.destination.matches(directory.leaf()).unwrap());
+            std::fs::read_dir(path)
+                .unwrap()
+                .map(|entry| {
+                    let entry = entry.unwrap();
+                    assert!(entry.file_type().unwrap().is_file());
+                    let file = filesystem::open_readonly(&entry.path()).unwrap();
+                    let object = Object::of(&file).unwrap();
+                    let bytes = std::fs::read(entry.path()).unwrap();
+                    (
+                        entry.file_name(),
+                        (
+                            object.volume,
+                            object.file,
+                            bytes.len() as u64,
+                            *blake3::hash(&bytes).as_bytes(),
+                        ),
+                    )
+                })
+                .collect()
+        }
+        let cancel = AtomicBool::new(false);
+        for fault in [
+            CopyFault::AfterIntent,
+            CopyFault::AfterStageCreation,
+            CopyFault::AfterCopyChunk,
+            CopyFault::AfterFlush,
+            CopyFault::AfterVerification,
+            CopyFault::BeforePublish,
+            CopyFault::AfterPublish,
+            CopyFault::AfterItemCommit,
+            CopyFault::AfterPlanCommit,
+        ] {
+            for source_unavailable in [true, false] {
+                let fixture = CopyFixture::new().unwrap();
+                assert_eq!(
+                    fixture.run_until(Some(fault), &cancel).unwrap(),
+                    CopyOutcome::Interrupted
+                );
+                let before = fixture.recover(&cancel).unwrap();
+                let output_before =
+                    output_snapshot(&fixture.destination.join("organized"), &fixture);
+                let journal =
+                    Journal::open(&fixture.run.path().join("operation.sqlite"), &fixture.plan)
+                        .unwrap();
+                let events = journal.history_count().unwrap();
+                let base = fixture.run.path().canonicalize().unwrap();
+                assert_eq!(
+                    std::fs::read(base.join("fixture-owner")).unwrap(),
+                    fixture.plan.id.as_bytes()
+                );
+                let available = if source_unavailable {
+                    &fixture.source
+                } else {
+                    &fixture.destination
+                };
+                let unavailable = base.join(if source_unavailable {
+                    "unavailable-source"
+                } else {
+                    "unavailable-destination"
+                });
+                assert_eq!(available.parent(), Some(base.as_path()));
+                assert_eq!(unavailable.parent(), Some(base.as_path()));
+                assert!(!unavailable.exists());
+                // This test owns both names under a unique asserted run. The
+                // rename injects loss of access; it is not an executor move.
+                std::fs::rename(available, &unavailable).unwrap();
+                assert!(
+                    fixture.recover(&cancel).is_err(),
+                    "{fault:?}, source={source_unavailable}"
+                );
+                assert!(fixture.run_until(None, &cancel).is_err());
+                assert_eq!(journal.history_count().unwrap(), events);
+                let actual_source = if source_unavailable {
+                    &unavailable
+                } else {
+                    &fixture.source
+                };
+                for (name, expected) in CopyFixture::originals() {
+                    assert_eq!(std::fs::read(actual_source.join(name)).unwrap(), expected);
+                }
+                let actual_destination = if source_unavailable {
+                    &fixture.destination
+                } else {
+                    &unavailable
+                };
+                assert_eq!(
+                    std::fs::read(actual_destination.join("destination-only.bin")).unwrap(),
+                    b"unique destination bytes"
+                );
+                assert_eq!(
+                    output_snapshot(&actual_destination.join("organized"), &fixture),
+                    output_before
+                );
+                assert!(!available.exists());
+                std::fs::rename(&unavailable, available).unwrap();
+                let after = fixture.recover(&cancel).unwrap();
+                assert_eq!(
+                    after
+                        .items
+                        .iter()
+                        .map(|item| item.state.clone())
+                        .collect::<Vec<_>>(),
+                    before
+                        .items
+                        .iter()
+                        .map(|item| item.state.clone())
+                        .collect::<Vec<_>>()
+                );
+                assert_eq!(
+                    after.all_outputs_byte_verified,
+                    fault == CopyFault::AfterPlanCommit
+                );
+                assert_eq!(journal.history_count().unwrap(), events);
+                assert!(fixture.sources_preserved().unwrap());
+            }
+        }
+    }
     #[test]
     fn late_targets_wrong_stages_and_changed_sources_are_retained_for_attention() {
         let cancel = AtomicBool::new(false);

@@ -53,6 +53,8 @@ Add folder-based import preview and copy execution, exact-content duplicate skip
 
 ## Required failure tests before enablement
 
+Availability matrix continuation, 2026-11-01: add explicit generated source/destination root unavailability after each of nine retained copy boundaries, with unchanged-object/byte/journal checks and fresh inspection after reconnection. Validation is pending. Physical unplug and production mutation remain separate gates.
+
 Inject failure after every journal/copy/publish/catalog stage. Exercise source changes, symlink swaps, destination collisions, disk-full, permissions and unplugged volumes. Prove that recovery does not blindly replay already completed operations and that undo never overwrites newly created data.
 
 ## Gate
