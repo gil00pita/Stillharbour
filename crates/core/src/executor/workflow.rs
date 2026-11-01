@@ -40,6 +40,7 @@ struct Session {
 struct Active {
     id: String,
     root: String,
+    related_roots: Vec<String>,
     session: String,
     cancel: Arc<AtomicBool>,
 }
@@ -731,6 +732,7 @@ impl CopyWorkflow {
         identity: FileIdentity,
         volume: String,
     ) -> Result<CopyWorkflowJob> {
+        library.ensure_work_admission()?;
         let session = self.session(&input.review_id)?;
         Self::check_selection(&session, &selection, &path, &identity, &volume)?;
         let permit = self.gate.try_start()?;
@@ -771,6 +773,9 @@ impl CopyWorkflow {
             started_at: now.clone(),
             updated_at: now,
         };
+        let related_roots = self
+            .copy_keeper_check(session.namespace.sources())?
+            .map_or_else(Vec::new, |checker| checker.root_ids());
         operation_jobs::create(&self.catalog, job.clone(), view.digest)?;
         let cancel = permit.cancellation();
         *self
@@ -779,9 +784,26 @@ impl CopyWorkflow {
             .map_err(|_| failed("Copy job state is unavailable."))? = Some(Active {
             id: job.id.clone(),
             root: job.source_root_id.clone(),
+            related_roots,
             session: session.namespace.id().into(),
             cancel: cancel.clone(),
         });
+        if let Err(error) = library.ensure_work_admission() {
+            cancel.store(true, Ordering::Release);
+            *self
+                .active
+                .lock()
+                .map_err(|_| failed("Copy job state is unavailable."))? = None;
+            self.update(
+                &job.id,
+                CopyJobState::NeedsAttention,
+                0,
+                None,
+                "Maintenance blocked native admission; existing objects remain untouched.",
+                Some(error.clone()),
+            )?;
+            return Err(error);
+        }
         let this = self.clone();
         let job_id = job.id.clone();
         let returned = job.clone();
@@ -791,7 +813,12 @@ impl CopyWorkflow {
             let result=(||->Result<(CopyJobState,u32,Option<String>,String)> {
                 if cancel.load(Ordering::Acquire) {return Ok((CopyJobState::CanceledWithPartialCopies,0,None,"Canceled before native work; originals remain unchanged.".into()));}
                 this.update(&job_id,CopyJobState::Running,0,None,"Preparing approved native operation",None)?;
-                let scope=session.namespace.sources().open_scope(&this.catalog,Access::Write)?;
+                let (scope,keepers)=this.copy_scope(session.namespace.sources())?;
+                let mut keeper_stats=super::fingerprints::Stats::default();
+                if let Some(checker)=&keepers {
+                    this.update(&job_id,CopyJobState::Running,0,None,"Freshly comparing the chosen existing import bundles before native work.",None)?;
+                    if matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok((CopyJobState::CanceledWithPartialCopies,0,None,"Existing-bundle verification canceled before native work.".into()));}
+                }
                 this.check_space(&session,&assessment,true)?;
                 if let Some(ready)=ready.as_ref() {
                     session.namespace.validate_native(scope.directory(1).leaf())?;
@@ -810,6 +837,7 @@ impl CopyWorkflow {
                     };
                     let outcome=ready.execute_approved(CopyInputs{source_root:scope.directory(0).leaf(),destination:&root,io:&io,cancel:&cancel,validate_scope:&validate},&selection,proof,None,Some(&progress))?;
                     let verified=ready.verified_files()?;
+                    if outcome==CopyOutcome::CompletedVerified && let Some(checker)=&keepers && matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok((CopyJobState::CanceledWithPartialCopies,verified,None,"Existing-bundle recheck canceled; retain completed copies for review.".into()));}
                     Ok(match outcome {
                         CopyOutcome::CompletedVerified=>(CopyJobState::CompletedVerified,verified,None,"All selected file bytes were copied and fully compared. Originals remain; filesystem metadata fidelity limits still apply.".into()),
                         CopyOutcome::CanceledWithPartialCopies=>(CopyJobState::CanceledWithPartialCopies,verified,None,"Canceled at a safe boundary. Retain published outputs and partial stages for inspection.".into()),
@@ -818,6 +846,7 @@ impl CopyWorkflow {
                 } else {
                     let prepared=session.namespace.prepare_approved(scope.directory(1).leaf(),&cancel,&selection,proof)?;
                     prepared.validate_parent(scope.directory(1).leaf())?;
+                    if let Some(checker)=&keepers && matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok((CopyJobState::CanceledWithPartialCopies,0,None,"Existing-bundle recheck canceled; retain the prepared namespace.".into()));}
                     let ready=Arc::new(session.namespace.ready_journal()?);
                     let id=ready.plan().id.clone();
                     *session.ready.lock().map_err(|_|failed("Ready copy state is unavailable."))?=Some(ready);
@@ -908,7 +937,9 @@ impl CopyWorkflow {
             .active
             .lock()
             .map_err(|_| failed("Copy job state is unavailable."))?;
-        if let Some(active) = active.as_ref().filter(|active| active.root == root) {
+        if let Some(active) = active.as_ref().filter(|active| {
+            active.root == root || active.related_roots.iter().any(|id| id == root)
+        }) {
             active.cancel.store(true, Ordering::Release);
             return Ok(true);
         }
@@ -920,7 +951,9 @@ impl CopyWorkflow {
             .lock()
             .map_err(|_| failed("Copy job state is unavailable."))?
             .as_ref()
-            .is_some_and(|active| active.root == root)
+            .is_some_and(|active| {
+                active.root == root || active.related_roots.iter().any(|id| id == root)
+            })
             || self.comparisons.root(root, false)?
             || self.import_runs.root(root, false)?)
     }

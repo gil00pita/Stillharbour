@@ -1,6 +1,6 @@
 # ADR-0048 — Exact copy projections of retained import decisions
 
-Date: 2026-11-01. Status: private M2 fixture development; complete checks and Windows native fixtures/regression pass; macOS CI pending.
+Date: 2026-11-01. Status: private M2 fixture development; complete checks and Windows/macOS native regression pass in CI run 41258807708.
 
 ## Decision
 

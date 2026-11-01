@@ -264,6 +264,14 @@ impl Snapshot {
         catalog: &Arc<Catalog>,
         destination_access: Access,
     ) -> Result<crate::jobs::operation_locks::Lease> {
+        self.open_scope_with(catalog, destination_access, Vec::new())
+    }
+    pub(super) fn open_scope_with(
+        &self,
+        catalog: &Arc<Catalog>,
+        destination_access: Access,
+        additional: Vec<Scope>,
+    ) -> Result<crate::jobs::operation_locks::Lease> {
         let snapshot = self.clone();
         let (source_path, destination_path) = catalog.call(move |db| {
             snapshot.validate_for(db, destination_access == Access::Write)?;
@@ -314,10 +322,12 @@ impl Snapshot {
                 "The reviewed roots overlap or changed native scope.",
             ));
         }
-        Registry::shared().try_acquire(vec![
+        let mut scopes = vec![
             Scope::new(source, Access::Read),
             Scope::new(destination, destination_access),
-        ])
+        ];
+        scopes.extend(additional);
+        Registry::shared().try_acquire(scopes)
     }
     pub(super) fn validate(&self, db: &Connection) -> Result<()> {
         self.validate_for(db, true)

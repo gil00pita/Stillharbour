@@ -9,7 +9,7 @@ use crate::{
     },
     filesystem::DirectoryChain,
     jobs::{
-        operation_locks::{Access, Registry, Scope},
+        operation_locks::{Access, Scope},
         paced_io::IoStep,
     },
     library::{native, operation_store},
@@ -237,98 +237,212 @@ fn check_roots(catalog: &Arc<Catalog>, plan: &Stored) -> Result<()> {
         Ok(())
     })
 }
-fn verify(workflow: &CopyWorkflow, plan: &Stored, run: &Run) -> Result<IoStep<()>> {
-    if run.cancel.load(Ordering::Acquire) {
-        return Ok(IoStep::Canceled);
+pub(in crate::executor) struct KeeperCheck {
+    plan: Stored,
+}
+impl KeeperCheck {
+    pub(in crate::executor) fn root_ids(&self) -> Vec<String> {
+        self.plan.view.scope_root_ids.clone()
     }
-    plan.validate_native(&workflow.catalog)?;
-    let source = plan.source.open_scope(&workflow.catalog, Access::Read)?;
-    let mut scopes = Vec::new();
-    for root in &plan.roots {
-        let chain = DirectoryChain::open(&native::decode_path(&root.native_path)?.canonicalize()?)?;
-        if !root.object.matches(chain.leaf())? || native::volume_token(chain.leaf())? != root.volume
-        {
-            return Err(failed("The keeper root changed native identity."));
-        }
-        scopes.push(Scope::new(chain, Access::Read));
-    }
-    let roots = Registry::shared().try_acquire(scopes)?;
-    check_roots(&workflow.catalog, plan)?;
-    let mut stats = Stats::default();
-    let io = PacedIo::shared();
-    let mut verified = Vec::new();
-    for selected in &plan.view.skip_files {
-        if run.cancel.load(Ordering::Acquire) {
-            return Ok(IoStep::Canceled);
-        }
-        check_roots(&workflow.catalog, plan)?;
-        let member = plan
+    pub(super) fn scopes(&self, workflow: &CopyWorkflow) -> Result<Vec<Scope>> {
+        if self
+            .plan
             .source
             .files
             .iter()
-            .find(|file| file.id == selected.file_id)
-            .ok_or_else(|| failed("A selected import source is missing."))?;
-        let candidate = plan
-            .keepers
-            .iter()
-            .find(|entry| {
-                entry.id == selected.keeper_asset_id && entry.root_id == selected.keeper_root_id
-            })
-            .ok_or_else(|| failed("A selected keeper is missing."))?;
-        let root_index = plan
-            .roots
-            .iter()
-            .position(|root| root.id == candidate.root_id)
-            .ok_or_else(|| failed("A selected keeper is outside its root scope."))?;
-        let expected = candidate.clone();
-        let owner = plan.view.plan_id.clone();
-        let source_location = member.location.relative_native.clone();
-        workflow.catalog.call(move|db| {
+            .any(|file| file.object.volume != self.plan.source.source.volume)
+        {
+            return Err(failed(
+                "Import sources crossing native volumes need a separate reviewed root.",
+            ));
+        }
+        for root in &self.plan.roots {
+            if root.id == self.plan.source.root_id || root.object == self.plan.source.source {
+                return Err(failed(
+                    "The source root cannot be its own existing-library scope.",
+                ));
+            }
+            if self
+                .plan
+                .keepers
+                .iter()
+                .any(|file| file.root_id == root.id && file.object.volume != root.object.volume)
+            {
+                return Err(failed(
+                    "An import keeper crosses its registered native volume.",
+                ));
+            }
+        }
+        self.plan.validate_native(&workflow.catalog)?;
+        let mut scopes = Vec::new();
+        for root in &self.plan.roots {
+            let chain =
+                DirectoryChain::open(&native::decode_path(&root.native_path)?.canonicalize()?)?;
+            if !root.object.matches(chain.leaf())?
+                || native::volume_token(chain.leaf())? != root.volume
+            {
+                return Err(failed("The keeper root changed native identity."));
+            }
+            scopes.push(Scope::new(chain, Access::Read));
+        }
+        Ok(scopes)
+    }
+    pub(in crate::executor) fn verify(
+        &self,
+        workflow: &CopyWorkflow,
+        scope: &crate::jobs::operation_locks::Lease,
+        cancel: &AtomicBool,
+        stats: &mut Stats,
+        progress: &dyn Fn(u32, u128) -> Result<()>,
+    ) -> Result<IoStep<()>> {
+        if cancel.load(Ordering::Acquire) {
+            return Ok(IoStep::Canceled);
+        }
+        let plan = &self.plan;
+        if !plan.source.source.matches(scope.directory(0).leaf())?
+            || !plan.source.destination.matches(scope.directory(1).leaf())?
+        {
+            return Err(failed(
+                "Import verification received another native source/destination scope.",
+            ));
+        }
+        for (index, root) in plan.roots.iter().enumerate() {
+            if !root.object.matches(scope.directory(2 + index).leaf())? {
+                return Err(failed(
+                    "Import verification received another native keeper scope.",
+                ));
+            }
+        }
+        check_roots(&workflow.catalog, plan)?;
+        let io = PacedIo::shared();
+        let mut verified = Vec::new();
+        for selected in &plan.view.skip_files {
+            if cancel.load(Ordering::Acquire) {
+                return Ok(IoStep::Canceled);
+            }
+            check_roots(&workflow.catalog, plan)?;
+            let member = plan
+                .source
+                .files
+                .iter()
+                .find(|file| file.id == selected.file_id)
+                .ok_or_else(|| failed("A selected import source is missing."))?;
+            let candidate = plan
+                .keepers
+                .iter()
+                .find(|entry| {
+                    entry.id == selected.keeper_asset_id && entry.root_id == selected.keeper_root_id
+                })
+                .ok_or_else(|| failed("A selected keeper is missing."))?;
+            let root_index = plan
+                .roots
+                .iter()
+                .position(|root| root.id == candidate.root_id)
+                .ok_or_else(|| failed("A selected keeper is outside its root scope."))?;
+            let expected = candidate.clone();
+            let owner = plan.view.plan_id.clone();
+            let source_location = member.location.relative_native.clone();
+            workflow.catalog.call(move|db| {
             let (root,path,identity,revision,bytes,presence,media):IndexedKeeper=db.query_row("SELECT CASE WHEN length(root_id)<=128 THEN root_id END,CASE WHEN length(relative_native)<=8192 THEN relative_native END,CASE WHEN length(native_file)<=128 THEN native_file END,CASE WHEN length(revision)=64 THEN revision END,bytes,presence,is_media FROM assets WHERE id=?",[&expected.id],|row|Ok((row.get(0)?,row.get(1)?,row.get(2)?,row.get(3)?,row.get(4)?,row.get(5)?,row.get(6)?)))?;
             let primary=operation_store::load(db,&owner)?.sources.iter().any(|source|native::decode_path(&source.native_path).is_ok_and(|path|native::decode_path(&source_location).is_ok_and(|member|path==member)));
             if root.as_deref()!=Some(expected.root_id.as_str()) || path.as_ref().is_none_or(|path|native::decode_path(path).ok()!=native::decode_path(&expected.location.relative_native).ok()) || identity.as_deref()!=Some(format!("{}:{}",expected.object.volume,expected.object.file).as_str()) || revision.as_deref()!=Some(expected.revision.as_str()) || bytes<0 || bytes as u64!=expected.bytes || presence!="present" || (primary && !media) {return Err(failed("The indexed keeper changed, is unavailable or is no longer a media primary. Compare and review again."));}Ok(())
         })?;
-        let original = Entry {
-            id: member.id.clone(),
-            root_id: plan.source.root_id.clone(),
-            location: member.location.clone(),
-            object: member.object.clone(),
-            revision: member.revision.clone(),
-            bytes: member.bytes,
-            display: member.display_name.clone(),
-        };
-        let compared = fingerprints::equal(
-            (&original, source.directory(0).leaf()),
-            (candidate, roots.directory(root_index).leaf()),
-            &io,
-            &run.cancel,
-            &mut stats,
-        );
-        update(run, |view| view.bytes_read = stats.bytes_read.to_string())?;
-        match compared? {
-            IoStep::Canceled => return Ok(IoStep::Canceled),
-            IoStep::Completed(Some(witness)) if witness.digest == selected.digest => {}
-            _ => {
-                return Err(failed(
-                    "The chosen existing file no longer matches complete source bytes. Nothing was skipped; compare and review again.",
-                ));
+            let original = Entry {
+                id: member.id.clone(),
+                root_id: plan.source.root_id.clone(),
+                location: member.location.clone(),
+                object: member.object.clone(),
+                revision: member.revision.clone(),
+                bytes: member.bytes,
+                display: member.display_name.clone(),
+            };
+            let compared = fingerprints::equal(
+                (&original, scope.directory(0).leaf()),
+                (candidate, scope.directory(2 + root_index).leaf()),
+                &io,
+                cancel,
+                stats,
+            );
+            progress(verified.len() as u32, stats.bytes_read)?;
+            match compared? {
+                IoStep::Canceled => return Ok(IoStep::Canceled),
+                IoStep::Completed(Some(witness)) if witness.digest == selected.digest => {}
+                _ => {
+                    return Err(failed(
+                        "The chosen existing file no longer matches complete source bytes. Nothing was skipped; compare and review again.",
+                    ));
+                }
             }
+            verified.push((original, candidate, root_index));
+            progress(verified.len() as u32, stats.bytes_read)?;
         }
-        verified.push((original, candidate, root_index));
-        update(run, |view| view.verified_files = verified.len() as u32)?;
-    }
-    check_roots(&workflow.catalog, plan)?;
-    for (source_file, keeper, index) in verified {
-        source_file.open(source.directory(0).leaf())?;
-        keeper.open(roots.directory(index).leaf())?;
-    }
-    if run.cancel.load(Ordering::Acquire) {
-        Ok(IoStep::Canceled)
-    } else {
-        Ok(IoStep::Completed(()))
+        check_roots(&workflow.catalog, plan)?;
+        for (source_file, keeper, index) in verified {
+            source_file.open(scope.directory(0).leaf())?;
+            keeper.open(scope.directory(2 + index).leaf())?;
+        }
+        if cancel.load(Ordering::Acquire) {
+            Ok(IoStep::Canceled)
+        } else {
+            Ok(IoStep::Completed(()))
+        }
     }
 }
+fn verify(workflow: &CopyWorkflow, plan: &Stored, run: &Run) -> Result<IoStep<()>> {
+    if run.cancel.load(Ordering::Acquire) {
+        return Ok(IoStep::Canceled);
+    }
+    let checker = KeeperCheck { plan: plan.clone() };
+    let extras = checker.scopes(workflow)?;
+    let scope = plan
+        .source
+        .open_scope_with(&workflow.catalog, Access::Read, extras)?;
+    checker.verify(
+        workflow,
+        &scope,
+        &run.cancel,
+        &mut Stats::default(),
+        &|verified, bytes| {
+            update(run, |view| {
+                view.verified_files = verified;
+                view.bytes_read = bytes.to_string();
+            })
+        },
+    )
+}
+
 impl CopyWorkflow {
+    pub(super) fn copy_keeper_check(&self, sources: &Snapshot) -> Result<Option<KeeperCheck>> {
+        let Some(selection) = sources.import_selection.as_ref() else {
+            return Ok(None);
+        };
+        let owner = sources.owner_id.clone();
+        let id = selection.id.clone();
+        let expected = selection.digest.clone();
+        let snapshot = sources.clone();
+        self.catalog.call(move |db| {
+            snapshot.validate(db)?;
+            let plan = import_planning::load(db, &owner, &id)?;
+            if plan.view.digest != expected {
+                return Err(failed(
+                    "Import decisions changed before native keeper admission.",
+                ));
+            }
+            Ok(Some(KeeperCheck { plan }))
+        })
+    }
+    pub(in crate::executor) fn copy_scope(
+        &self,
+        sources: &Snapshot,
+    ) -> Result<(crate::jobs::operation_locks::Lease, Option<KeeperCheck>)> {
+        let checker = self.copy_keeper_check(sources)?;
+        let extras = match &checker {
+            Some(checker) => checker.scopes(self)?,
+            None => Vec::new(),
+        };
+        let scope = sources.open_scope_with(&self.catalog, Access::Write, extras)?;
+        Ok((scope, checker))
+    }
     pub(crate) fn import_history(&self, owner: String, manifest: String) -> Result<ImportHistory> {
         let plans = self.import_plan_summaries(owner.clone(), Some(manifest.clone()))?;
         let retained=self.catalog.call({let owner=owner.clone();move|db| {

@@ -2489,6 +2489,175 @@ mod tests {
         assert!(fixture.preserved().unwrap());
     }
     #[test]
+    fn import_keeper_guard_holds_atomic_copy_and_keeper_scopes_without_partial_leases() {
+        use crate::executor::fingerprints::Stats;
+        use crate::jobs::operation_locks::{Access, Registry, Scope};
+        use std::sync::atomic::AtomicBool;
+        let (fixture, workflow, plan, _, _) = mixed_import_fixture();
+        let sources = workflow
+            .import_copy_sources(fixture.owner.clone(), plan.id.clone())
+            .unwrap();
+        let root = plan.scope_root_ids[0].clone();
+        let path = fixture
+            .library
+            .catalog
+            .call(move |db| {
+                crate::library::native::decode_path(
+                    &crate::executor::sources::root(db, &root, false)?.0,
+                )
+            })
+            .unwrap();
+        let path = path.canonicalize().unwrap();
+        let destination = fixture.destination.canonicalize().unwrap();
+        let registry = Registry::shared();
+        let blocker = registry
+            .try_acquire(vec![Scope::new(
+                crate::filesystem::DirectoryChain::open(&destination).unwrap(),
+                Access::Read,
+            )])
+            .unwrap();
+        assert!(workflow.copy_scope(&sources).is_err());
+        let not_leaked = registry
+            .try_acquire(vec![Scope::new(
+                crate::filesystem::DirectoryChain::open(&path).unwrap(),
+                Access::Write,
+            )])
+            .unwrap();
+        drop(not_leaked);
+        drop(blocker);
+        let (scope, check) = workflow.copy_scope(&sources).unwrap();
+        let check = check.unwrap();
+        assert!(
+            registry
+                .try_acquire(vec![Scope::new(
+                    crate::filesystem::DirectoryChain::open(&path).unwrap(),
+                    Access::Write
+                )])
+                .is_err()
+        );
+        let mut stats = Stats::default();
+        let mut total = 0;
+        for _ in 0..2 {
+            assert!(matches!(
+                check
+                    .verify(
+                        &workflow,
+                        &scope,
+                        &AtomicBool::new(false),
+                        &mut stats,
+                        &|_, _| Ok(())
+                    )
+                    .unwrap(),
+                crate::jobs::paced_io::IoStep::Completed(())
+            ));
+            total += 2 * (generated_photo_bytes().unwrap().len() + COMPANION_BYTES.len()) as u128;
+            assert_eq!(stats.bytes_read, total);
+        }
+        assert!(fixture.preserved().unwrap());
+        drop(scope);
+        let released = registry
+            .try_acquire(vec![Scope::new(
+                crate::filesystem::DirectoryChain::open(&path).unwrap(),
+                Access::Write,
+            )])
+            .unwrap();
+        drop(released);
+    }
+    #[test]
+    fn import_keeper_guard_refuses_late_keeper_change_and_inaccessible_index_without_output() {
+        use crate::executor::fingerprints::Stats;
+        use std::sync::atomic::AtomicBool;
+        for inaccessible in [false, true] {
+            let (fixture, workflow, plan, _, _) = mixed_import_fixture();
+            let sources = workflow
+                .import_copy_sources(fixture.owner.clone(), plan.id)
+                .unwrap();
+            let (scope, check) = workflow.copy_scope(&sources).unwrap();
+            let check = check.unwrap();
+            let keeper = plan
+                .skip_files
+                .iter()
+                .find(|file| file.keeper_relative_path.ends_with(".xmp"))
+                .unwrap()
+                .clone();
+            if inaccessible {
+                fixture
+                    .library
+                    .catalog
+                    .call(move |db| {
+                        db.execute(
+                            "UPDATE assets SET presence='inaccessible' WHERE id=?",
+                            [keeper.keeper_asset_id],
+                        )?;
+                        Ok(())
+                    })
+                    .unwrap();
+            } else {
+                let root = keeper.keeper_root_id;
+                let path = fixture
+                    .library
+                    .catalog
+                    .call(move |db| {
+                        crate::library::native::decode_path(
+                            &crate::executor::sources::root(db, &root, false)?.0,
+                        )
+                    })
+                    .unwrap();
+                let file = path.join("Renamed.xmp");
+                let modified = std::fs::metadata(&file).unwrap().modified().unwrap();
+                let mut changed = COMPANION_BYTES.to_vec();
+                changed[0] ^= 1;
+                std::fs::write(&file, &changed).unwrap();
+                std::fs::OpenOptions::new()
+                    .write(true)
+                    .open(&file)
+                    .unwrap()
+                    .set_times(std::fs::FileTimes::new().set_modified(modified))
+                    .unwrap();
+            }
+            assert!(
+                check
+                    .verify(
+                        &workflow,
+                        &scope,
+                        &AtomicBool::new(false),
+                        &mut Stats::default(),
+                        &|_, _| Ok(())
+                    )
+                    .is_err()
+            );
+            assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
+            assert!(fixture.preserved().unwrap());
+        }
+    }
+    #[test]
+    fn import_keeper_guard_cancel_reads_no_payload_and_creates_no_namespace() {
+        use crate::executor::fingerprints::Stats;
+        use std::sync::atomic::AtomicBool;
+        let (fixture, workflow, plan, _, _) = mixed_import_fixture();
+        let sources = workflow
+            .import_copy_sources(fixture.owner.clone(), plan.id)
+            .unwrap();
+        let (scope, check) = workflow.copy_scope(&sources).unwrap();
+        let mut stats = Stats::default();
+        assert!(matches!(
+            check
+                .unwrap()
+                .verify(
+                    &workflow,
+                    &scope,
+                    &AtomicBool::new(true),
+                    &mut stats,
+                    &|_, _| Ok(())
+                )
+                .unwrap(),
+            crate::jobs::paced_io::IoStep::Canceled
+        ));
+        assert_eq!(stats.bytes_read, 0);
+        assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
+        assert!(fixture.preserved().unwrap());
+    }
+    #[test]
     fn import_comparison_bounds_reports_matches_and_candidate_inventory() {
         use crate::operations::{ImportComparisonInput, ImportComparisonState};
         let fixture = Fixture::with_nested(true).unwrap();

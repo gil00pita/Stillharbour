@@ -275,3 +275,5 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Import copy projections - 2026-11-01
 
 [ADR-0048](decisions/ADR-0048-import-copy-projections.md) derives exact source-retaining copy subsets from saved whole-bundle decisions. An omitted optional reference preserves legacy serialization; projected sources bind their observed managed/referenced mode without weakening ordinary managed-copy admission. Namespace targets and effect memberships reconcile by the retained IDs. Construction remains private to generated tests; mixed import UI/receipt orchestration is not enabled.
+
+[ADR-0049](decisions/ADR-0049-import-keeper-admission.md): shared atomic source/output/keeper admission and fresh complete-byte checks before/after projected work and recovery. Mixed application orchestration remains unfinished.

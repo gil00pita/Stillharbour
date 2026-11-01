@@ -334,6 +334,7 @@ impl CopyWorkflow {
         path: PathBuf,
         selected: (FileIdentity, String),
     ) -> Result<CopyWorkflowJob> {
+        library.ensure_work_admission()?;
         let permit = self.gate.try_start()?;
         let session = self.recovery_session(&input.review_id)?;
         Self::recovery_selection(&session, &selection, &path, &selected.0, &selected.1)?;
@@ -362,6 +363,9 @@ impl CopyWorkflow {
             started_at: now.clone(),
             updated_at: now,
         };
+        let related_roots = self
+            .copy_keeper_check(&session.sources)?
+            .map_or_else(Vec::new, |checker| checker.root_ids());
         operation_jobs::create_continuation(
             &self.catalog,
             job.clone(),
@@ -381,9 +385,26 @@ impl CopyWorkflow {
             .map_err(|_| failed("Copy job state is unavailable."))? = Some(Active {
             id: job.id.clone(),
             root: job.source_root_id.clone(),
+            related_roots,
             session: session.view.id.clone(),
             cancel: cancel.clone(),
         });
+        if let Err(error) = library.ensure_work_admission() {
+            cancel.store(true, Ordering::Release);
+            *self
+                .active
+                .lock()
+                .map_err(|_| failed("Copy job state is unavailable."))? = None;
+            self.update(
+                &job.id,
+                CopyJobState::NeedsAttention,
+                0,
+                None,
+                "Maintenance blocked continuation admission; retained objects are unchanged.",
+                Some(error.clone()),
+            )?;
+            return Err(error);
+        }
         let this = self.clone();
         let job_id = job.id.clone();
         let spawned=std::thread::Builder::new().name("organization-continuation".into()).spawn(move|| {
@@ -391,7 +412,9 @@ impl CopyWorkflow {
             let result=(||->Result<CopyOutcome> {
                 if cancel.load(Ordering::Acquire) {return Ok(CopyOutcome::CanceledWithPartialCopies);}
                 this.update(&job_id,CopyJobState::Running,0,None,"Checking retained namespace and freshly verifying continuation.",None)?;
-                let scope=session.sources.open_scope(&this.catalog,Access::Write)?;
+                let (scope,keepers)=this.copy_scope(&session.sources)?;
+                let mut keeper_stats=super::super::fingerprints::Stats::default();
+                if let Some(checker)=&keepers && matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok(CopyOutcome::CanceledWithPartialCopies);}
                 let inventory=session.journal.recovery_inventory(scope.directory(1).leaf())?;
                 let output=super::super::native::read_directory(scope.directory(1).leaf(),&session.namespace)?;
                 if !session.journal.plan().destination.matches(&output)? {return Err(failed("Continuation namespace changed before native admission."));}
@@ -399,7 +422,9 @@ impl CopyWorkflow {
                 let validate=|| {session.sources.validate_roots(&this.catalog)?;inventory.validate()?;this.check_scope_space(&session.sources,&session.path,&assessment,false)};
                 let progress=|count| {let current=operation_jobs::load(&this.catalog,job_id.clone())?;this.update(&job_id,current.state,count,None,"Fresh byte comparison completed; originals remain in place.",None)};
                 let io=PacedIo::shared();
-                session.journal.resume_approved(CopyInputs{source_root:scope.directory(0).leaf(),destination:&output,io:&io,cancel:&cancel,validate_scope:&validate},&selection,session.review.clone(),proof,None,Some(&progress))
+                let outcome=session.journal.resume_approved(CopyInputs{source_root:scope.directory(0).leaf(),destination:&output,io:&io,cancel:&cancel,validate_scope:&validate},&selection,session.review.clone(),proof,None,Some(&progress))?;
+                if outcome==CopyOutcome::CompletedVerified && let Some(checker)=&keepers && matches!(checker.verify(&this,&scope,&cancel,&mut keeper_stats,&|_,_|Ok(()))?,crate::jobs::paced_io::IoStep::Canceled) {return Ok(CopyOutcome::CanceledWithPartialCopies);}
+                Ok(outcome)
             })();
             let current=operation_jobs::load(&this.catalog,job_id.clone());
             let verified=current.as_ref().map(|job|job.verified_files).unwrap_or(0);
