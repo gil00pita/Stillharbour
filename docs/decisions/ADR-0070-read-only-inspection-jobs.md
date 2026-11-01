@@ -1,6 +1,6 @@
 # ADR-0070: Read-only inspection jobs and retained evidence
 
-Date: 2026-11-01. Status: in progress. Domain/native jobs, catalog schema and UI are connected; complete milestone and native UI evidence remain pending.
+Date: 2026-11-01. Status: accepted for the implemented M3 read-only/constructor-owned fixture gate. Complete Windows/macOS CI 41324632055 at 563721a and inspected native evidence are indexed in M3_VALIDATION.md. Production original mutation remains gated on M4 independent recovery.
 
 M3 extends the existing Rust core, native source adapters, resource scheduler and catalog actor. It does not create a second catalog or a new filesystem executor. The renderer supplies registered root/job/member IDs and typed comparison policy. Native paths, source handles, object/revision checks and database writes remain backend-owned.
 

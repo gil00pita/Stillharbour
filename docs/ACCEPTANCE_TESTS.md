@@ -544,3 +544,8 @@ Root-scoped import continuation, 2026-11-01 (ADR-0066): optional sourceRootId se
 Template integration continuation, 2026-11-01 (ADR-0069): the owned generated native scope accepts typed filename-template policy through the existing resolver, derives the same-stem XMP target with the shared companion rule and recomputes the frozen targets on reopening. Test fresh forward/reverse approvals, stable catalog identities and unchanged bytes. Fixed case/cycle probes remain. Full/native target outcomes must be recorded before acceptance; production mutation remains disabled.
 
 Isolation validation continuation: require a real child to write beyond both OS pipe capacities and complete under its unchanged deadline, retaining bounded diagnostics and exact selected-test proof. Parent timeout must include available output instead of discarding it. Do not count the previous import CI timeout as resolved solely because the local suite passed.
+
+
+### M3 evidence record — 2026-11-01
+
+Applicable AC-040–057 and AC-059–065 evidence is indexed in [M3_VALIDATION.md](M3_VALIDATION.md), against complete Windows/macOS CI 41324632055 at 563721a and inspected native result/zoom/recovery artifacts. This accepts the implemented read-only and disposable-fixture gate; it does not authorize real-library quarantine before M4 independent recovery. The declared normalized subset is static PNG8 policy v2, and deep raster coverage/unsupported formats, bounds and metric limitations remain explicit. AC-058 remains future scope; no perceptual mode was added. Existing acceptance requirements and preservation gates remain in force.

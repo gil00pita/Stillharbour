@@ -1,6 +1,6 @@
 # Development
 
-M3 read-only inspection work is in progress. Duplicates, Integrity and Storage use the native catalog job API; the header Jobs dropdown includes retained inspection jobs and cancellation. Coverage, decoder limits and outstanding acceptance work are documented in [M3_INSPECTIONS.md](M3_INSPECTIONS.md). Real-library duplicate quarantine remains unavailable pending M4 recovery evidence.
+M3 read-only inspection and constructor-owned duplicate recovery are accepted at the implemented fixture gate. Duplicates, Integrity and Storage use the native catalog job API; the header Jobs dropdown includes retained inspection jobs and cancellation. Coverage and decoder limits are documented in [M3_INSPECTIONS.md](M3_INSPECTIONS.md); complete both-platform checks and inspected native artifacts are indexed in [M3_VALIDATION.md](M3_VALIDATION.md). Real-library duplicate quarantine remains unavailable pending M4 recovery evidence.
 
 The desktop-test generated rename lab can explicitly reopen its owned retained scope (ADR-0068). This retires the live catalog/session and approvals, then revalidates the exact retained evidence and current native objects before another review. It accepts no renderer path. Existing real child-exit tests use the same decoder. The action does not restart the application process or enable adoption of a real library.
 
