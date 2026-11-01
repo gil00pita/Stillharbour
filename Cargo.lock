@@ -3517,6 +3517,7 @@ dependencies = [
  "blake3",
  "cc",
  "chrono",
+ "crc32fast",
  "fs2",
  "globset",
  "image",

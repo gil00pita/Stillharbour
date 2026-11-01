@@ -105,3 +105,5 @@ Windows CI portability checks (2026-10-28): [Rust slice::as_chunks](https://doc.
 - [Unicode normalization 0.1.26](https://docs.rs/unicode-normalization/0.1.26/unicode_normalization/): explicit NFC comparison keys; this does not rename originals or establish native filesystem equivalence.
 
 - M3 actual-volume capacity uses existing pinned fs2 0.4.3 `statvfs` / `FsStats` (native adapter source inspected locally): https://docs.rs/fs2/0.4.3/fs2/fn.statvfs.html and https://docs.rs/fs2/0.4.3/fs2/struct.FsStats.html. Capacity is an observation, not a reservation or physical reclaim estimate.
+
+- PNG policy-v2 review: W3C PNG Third Edition, sections 5.3–5.5 and 11.3.3 (including registered XMP text keyword): https://www.w3.org/TR/png-3/. Validate CRCs with existing `crc32fast` 1.5.3; exact pinned source/API/license inspected in the local Cargo registry because the version-specific docs page was unavailable. API overview: https://docs.rs/crc32fast/1.5.0/crc32fast/fn.hash.html. No bespoke CRC implementation or new source package.

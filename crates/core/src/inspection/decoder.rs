@@ -9,7 +9,7 @@ pub const INPUT_LIMIT: u64 = 32 * 1024 * 1024;
 pub const QUICK_LIMIT: u64 = 64 * 1024;
 pub const OUTPUT_LIMIT: u64 = 16 * 1024;
 pub const DEEP_POLICY: &str = "inspection-static-raster-image-0.25.10-v1";
-pub const PIXEL_POLICY: &str = "inspection-png8-straight-srgb-image-0.25.10-v1";
+pub const PIXEL_POLICY: &str = "inspection-png8-straight-color-provenance-image-0.25.10-v2";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DecodeMode {
     Quick,
@@ -103,6 +103,9 @@ fn png_policy(bytes: &[u8]) -> std::result::Result<(Vec<u8>, String), &'static s
     let mut cursor = 8usize;
     let mut srgb = None;
     let mut ended = false;
+    let mut time_seen = false;
+    let mut idat_seen = false;
+    let mut idat_ended = false;
     while cursor < bytes.len() {
         let header = bytes
             .get(cursor..cursor + 8)
@@ -118,16 +121,96 @@ fn png_policy(bytes: &[u8]) -> std::result::Result<(Vec<u8>, String), &'static s
             .ok_or("PNG chunk exceeds its budget.")?;
         let chunk = bytes.get(cursor..end).ok_or("PNG chunk is incomplete.")?;
         let kind = &header[4..8];
+        let stored_crc = u32::from_be_bytes(
+            chunk[chunk.len() - 4..]
+                .try_into()
+                .map_err(|_| "PNG CRC is incomplete.")?,
+        );
+        if crc32fast::hash(&chunk[4..chunk.len() - 4]) != stored_crc {
+            return Err("PNG chunk CRC is invalid; normalization is unsupported for this input.");
+        }
+        if cursor == 8 && (kind != b"IHDR" || length != 13) {
+            return Err("PNG must begin with one complete IHDR.");
+        }
+        if idat_seen && kind != b"IDAT" {
+            idat_ended = true;
+        }
         match kind {
-            b"IHDR" | b"IDAT" | b"IEND" => decoded_input.extend_from_slice(chunk),
+            b"IHDR" => {
+                if cursor != 8 || length != 13 {
+                    return Err("PNG image header is duplicated or malformed.");
+                }
+                decoded_input.extend_from_slice(chunk);
+            }
+            b"IDAT" => {
+                if idat_ended {
+                    return Err("PNG image-data chunks are not contiguous.");
+                }
+                idat_seen = true;
+                decoded_input.extend_from_slice(chunk);
+            }
+            b"IEND" => {
+                if length != 0 || !idat_seen {
+                    return Err("PNG image-data/trailer structure is incomplete.");
+                }
+                decoded_input.extend_from_slice(chunk);
+            }
             b"sRGB" => {
-                if length != 1 || chunk[8] > 3 {
+                if length != 1 || chunk[8] > 3 || srgb.is_some() || idat_seen {
                     return Err("PNG sRGB intent is invalid.");
                 }
                 srgb = Some(chunk[8]);
                 decoded_input.extend_from_slice(chunk);
             }
-            b"tEXt" | b"zTXt" | b"iTXt" | b"tIME" => {}
+            b"tEXt" => {
+                let data = &chunk[8..8 + length];
+                let separator = data
+                    .iter()
+                    .position(|byte| *byte == 0)
+                    .ok_or("PNG text keyword separator is missing.")?;
+                if length > 4096
+                    || data[separator + 1..].contains(&0)
+                    || !matches!(
+                        &data[..separator],
+                        b"Title"
+                            | b"Author"
+                            | b"Description"
+                            | b"Copyright"
+                            | b"Creation Time"
+                            | b"Software"
+                            | b"Disclaimer"
+                            | b"Warning"
+                            | b"Source"
+                            | b"Comment"
+                            | b"Collection"
+                    )
+                {
+                    return Err(
+                        "Only bounded uncompressed text with declared descriptive PNG keywords can be excluded; XMP and unknown text semantics are unsupported.",
+                    );
+                }
+            }
+            b"tIME" => {
+                if length != 7 || time_seen {
+                    return Err("PNG time component is malformed or duplicated.");
+                }
+                let data = &chunk[8..15];
+                let year = u16::from_be_bytes([data[0], data[1]]);
+                if year == 0
+                    || chrono::NaiveDate::from_ymd_opt(
+                        i32::from(year),
+                        u32::from(data[2]),
+                        u32::from(data[3]),
+                    )
+                    .is_none()
+                    || data[4] > 23
+                    || data[5] > 59
+                    || data[6] > 60
+                {
+                    return Err("PNG time component has invalid fields.");
+                }
+                time_seen = true;
+            }
             _ => {
                 return Err(
                     "PNG color, orientation, transparency, animation or unknown components are outside the normalized-pixel policy.",
@@ -151,7 +234,7 @@ fn png_policy(bytes: &[u8]) -> std::result::Result<(Vec<u8>, String), &'static s
             "{PIXEL_POLICY}:layout={}:precision=8:alpha={}:srgb-intent={}",
             if bytes[25] == 2 { "rgb" } else { "rgba" },
             if bytes[25] == 2 { "none" } else { "straight" },
-            srgb.unwrap_or(0)
+            srgb.map_or_else(|| "untagged".to_owned(), |intent| intent.to_string())
         ),
     ))
 }
@@ -292,7 +375,7 @@ pub fn inspect(bytes: &[u8], mode: DecodeMode, hint: FormatHint, complete: bool)
             hash.update(image.as_bytes());
             report.pixel_signature = Some(signature);
             report.pixel_digest = Some(hash.finalize().to_hex().to_string());
-            report.coverage="Full static RGB8/RGBA8 PNG pixel signature with declared sRGB/straight-alpha policy; descriptive text/time excluded. Manual review only.".into();
+            report.coverage="Full static RGB8/RGBA8 PNG encoded samples with straight alpha and preserved sRGB-tag/intent or untagged provenance; no appearance-equivalence proof; whitelisted uncompressed descriptive text/valid time excluded; chunk CRCs checked. XMP/compressed/international text are unsupported. Manual review only.".into();
         }
     }
     report
@@ -421,37 +504,148 @@ mod tests {
             ContentState::Unsupported
         );
     }
+    fn insert_chunk(original: &[u8], kind: &[u8; 4], data: &[u8]) -> Vec<u8> {
+        let mut bytes = original[..33].to_vec();
+        bytes.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        bytes.extend_from_slice(kind);
+        bytes.extend_from_slice(data);
+        let mut crc = crc32fast::Hasher::new();
+        crc.update(kind);
+        crc.update(data);
+        bytes.extend_from_slice(&crc.finalize().to_be_bytes());
+        bytes.extend_from_slice(&original[33..]);
+        bytes
+    }
     #[test]
-    fn metadata_chunks_are_excluded_but_unknown_color_and_animation_are_not_guessed() {
+    fn descriptive_metadata_matches_only_with_valid_crc_and_declared_keywords() {
         let original = png(image::ExtendedColorType::Rgb8);
-        let insert = |kind: &[u8; 4]| {
-            let mut bytes = original[..33].to_vec();
-            bytes.extend_from_slice(&0u32.to_be_bytes());
-            bytes.extend_from_slice(kind);
-            bytes.extend_from_slice(&[0; 4]);
-            bytes.extend_from_slice(&original[33..]);
-            bytes
-        };
         let plain = inspect(&original, DecodeMode::Pixels, FormatHint::Image, true);
+        assert!(plain.pixel_digest.is_some());
+        let caption = insert_chunk(&original, b"tEXt", b"Description\0Generated caption");
+        assert_ne!(caption, original);
         assert_eq!(
             plain.pixel_digest,
+            inspect(&caption, DecodeMode::Pixels, FormatHint::Image, true).pixel_digest
+        );
+        let mut broken = caption.clone();
+        broken[45] ^= 1;
+        assert_eq!(
+            inspect(&broken, DecodeMode::Pixels, FormatHint::Image, true).state,
+            ContentState::Unsupported
+        );
+        for (kind, data) in [
+            (
+                b"tEXt",
+                b"XML:com.adobe.xmp\0<tiff:Orientation>6</tiff:Orientation>".as_slice(),
+            ),
+            (b"tEXt", b"Raw profile type exif\0Orientation=6".as_slice()),
+            (
+                b"iTXt",
+                b"XML:com.adobe.xmp\0\0\0\0\0orientation".as_slice(),
+            ),
+            (b"zTXt", b"Description\0\0compressed".as_slice()),
+            (b"tEXt", b"".as_slice()),
+        ] {
+            let report = inspect(
+                &insert_chunk(&original, kind, data),
+                DecodeMode::Pixels,
+                FormatHint::Image,
+                true,
+            );
+            assert_eq!(report.state, ContentState::Unsupported);
+            assert!(report.pixel_digest.is_none());
+        }
+    }
+    #[test]
+    fn color_provenance_and_chunk_structure_are_not_silently_normalized() {
+        let original = png(image::ExtendedColorType::Rgb8);
+        let plain = inspect(&original, DecodeMode::Pixels, FormatHint::Image, true);
+        let tagged = insert_chunk(&original, b"sRGB", &[0]);
+        let explicit = inspect(&tagged, DecodeMode::Pixels, FormatHint::Image, true);
+        assert!(explicit.pixel_digest.is_some());
+        assert_ne!(plain.pixel_signature, explicit.pixel_signature);
+        assert_eq!(
             inspect(
-                &insert(b"tEXt"),
+                &insert_chunk(&tagged, b"sRGB", &[1]),
                 DecodeMode::Pixels,
                 FormatHint::Image,
                 true
             )
-            .pixel_digest
+            .state,
+            ContentState::Unsupported
         );
+        let offset = original
+            .windows(4)
+            .position(|part| part == b"IDAT")
+            .unwrap()
+            - 4;
+        let length = u32::from_be_bytes(original[offset..offset + 4].try_into().unwrap()) as usize;
+        let data = &original[offset + 8..offset + 8 + length];
+        let middle = data.len() / 2;
+        let mut split = original[..offset].to_vec();
+        let append = |target: &mut Vec<u8>, kind: &[u8; 4], payload: &[u8]| {
+            target.extend_from_slice(&(payload.len() as u32).to_be_bytes());
+            target.extend_from_slice(kind);
+            target.extend_from_slice(payload);
+            let mut crc = crc32fast::Hasher::new();
+            crc.update(kind);
+            crc.update(payload);
+            target.extend_from_slice(&crc.finalize().to_be_bytes());
+        };
+        append(&mut split, b"IDAT", &data[..middle]);
+        append(&mut split, b"tEXt", b"Description\0split IDAT is invalid");
+        append(&mut split, b"IDAT", &data[middle..]);
+        split.extend_from_slice(&original[offset + length + 12..]);
+        assert_eq!(
+            inspect(&split, DecodeMode::Pixels, FormatHint::Image, true).state,
+            ContentState::Unsupported
+        );
+    }
+    #[test]
+    fn color_orientation_animation_and_malformed_time_are_not_silently_excluded() {
+        let original = png(image::ExtendedColorType::Rgb8);
         for kind in [b"iCCP", b"eXIf", b"acTL"] {
             assert_eq!(
-                inspect(&insert(kind), DecodeMode::Pixels, FormatHint::Image, true).state,
+                inspect(
+                    &insert_chunk(&original, kind, &[]),
+                    DecodeMode::Pixels,
+                    FormatHint::Image,
+                    true
+                )
+                .state,
                 ContentState::Unsupported
             );
         }
         assert_eq!(
-            inspect(&insert(b"acTL"), DecodeMode::Deep, FormatHint::Image, true).state,
+            inspect(
+                &insert_chunk(&original, b"acTL", &[]),
+                DecodeMode::Deep,
+                FormatHint::Image,
+                true
+            )
+            .state,
             ContentState::Unsupported
+        );
+        for data in [
+            &[0u8; 7][..],
+            &[7, 234, 13, 1, 0, 0, 0][..],
+            &[7, 234, 2, 30, 0, 0, 0][..],
+        ] {
+            assert_eq!(
+                inspect(
+                    &insert_chunk(&original, b"tIME", data),
+                    DecodeMode::Pixels,
+                    FormatHint::Image,
+                    true
+                )
+                .state,
+                ContentState::Unsupported
+            );
+        }
+        let dated = insert_chunk(&original, b"tIME", &[7, 234, 11, 1, 12, 30, 0]);
+        assert_eq!(
+            inspect(&original, DecodeMode::Pixels, FormatHint::Image, true).pixel_digest,
+            inspect(&dated, DecodeMode::Pixels, FormatHint::Image, true).pixel_digest
         );
     }
 }
