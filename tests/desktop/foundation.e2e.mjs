@@ -13,6 +13,10 @@ async function native(request) {
   );
 }
 async function reviewBackupComparison(evidence, existingPicker) {
+  const incompleteFixture = process.platform === 'darwin';
+  const expectedState = incompleteFixture ? 'incomplete' : 'needs_review';
+  const finding = incompleteFixture ? 'uncertain' : 'source_only';
+  const summaryKey = incompleteFixture ? 'uncertain' : 'sourceOnly';
   const destination = await browser.tauri.execute(async ({ core }) =>
     core.invoke('test_performance', { action: 'backup_destination_fixture', rows: null }),
   );
@@ -48,20 +52,42 @@ async function reviewBackupComparison(evidence, existingPicker) {
       },
       { timeout: 30000, interval: 100, timeoutMsg: 'M4A native comparison did not finish' },
     );
-    assert.equal(run.state, 'needs_review', run.message);
+    assert.equal(run.state, expectedState, run.message);
     assert.equal(run.mode, 'verified');
     assert.equal(run.profileId, profile.id);
     assert.equal(run.capabilities.executionAvailable, false);
     assert.equal(run.capabilities.independentRecoveryVerified, false);
-    assert.ok(run.planDigest);
+    if (incompleteFixture) {
+      assert.equal(run.planDigest, null);
+      assert.equal(run.reviewPlan, null);
+      assert.ok(
+        run.issues.some((issue) => issue.side === 'source' && issue.displayPath === 'loop'),
+      );
+    } else {
+      assert.ok(run.planDigest);
+      assert.equal(run.reviewPlan.executionAvailable, false);
+    }
     const page = (await native({ kind: 'backup_comparison_page', run_id: run.id, offset: 0 })).data;
     assert.ok(page.entries.length > 20);
-    assert.ok(page.entries.every((entry) => entry.category === 'source_only'));
+    if (incompleteFixture) {
+      assert.ok(
+        page.entries.some(
+          (entry) =>
+            entry.displayPath === 'loop' &&
+            entry.category === 'blocked' &&
+            entry.sourceKind === 'unsupported',
+        ),
+      );
+      assert.ok(page.entries.every((entry) => ['uncertain', 'blocked'].includes(entry.category)));
+    } else {
+      assert.ok(page.entries.every((entry) => entry.category === finding));
+    }
+    const matching = page.entries.filter((entry) => entry.category === finding);
     assert.ok(page.entries.some((entry) => entry.displayPath.endsWith('.xmp')));
     await $('.backup-table tbody tr:first-child').waitForDisplayed();
     const rows = await $$('.backup-table tbody tr');
     assert.equal(rows.length, page.entries.length);
-    assert.equal(run.summary.sourceOnly, page.entries.length);
+    assert.equal(run.summary[summaryKey], matching.length);
     await $('.backup-table tbody tr:first-child button').click();
     await $('section[aria-label="Entry details"]').waitForDisplayed();
     assert.ok(
@@ -71,7 +97,7 @@ async function reviewBackupComparison(evidence, existingPicker) {
     );
     await changeSizeUnit(
       'Finding filter',
-      'blocked',
+      'verified_equal',
       'section[aria-label="Comparison review"] select',
     );
     await browser.waitUntil(async () =>
@@ -80,11 +106,11 @@ async function reviewBackupComparison(evidence, existingPicker) {
     assert.equal(await $('section[aria-label="Entry details"]').isExisting(), false);
     await changeSizeUnit(
       'Finding filter',
-      'source_only',
+      finding,
       'section[aria-label="Comparison review"] select',
     );
     await $('.backup-table tbody tr:first-child').waitForDisplayed();
-    assert.equal((await $$('.backup-table tbody tr')).length, page.entries.length);
+    assert.equal((await $$('.backup-table tbody tr')).length, matching.length);
     const decodable = page.entries.find((entry) => /\.(png|jpe?g|webp)$/i.test(entry.displayPath));
     assert.ok(decodable, 'Generated comparison fixture must include a decodable image');
     await browser.execute((id) => {
@@ -121,14 +147,15 @@ async function reviewBackupComparison(evidence, existingPicker) {
       reopened = (await native({ kind: 'backup_comparison_latest' })).data;
       return reopened && reopened.id !== run.id && reopened.state !== 'comparing';
     });
-    assert.equal(reopened.state, 'needs_review', reopened.message);
+    assert.equal(reopened.state, expectedState, reopened.message);
     assert.equal(reopened.profileId, profile.id);
     assert.equal(reopened.sourceRootId, run.sourceRootId);
     assert.equal(reopened.datasetDisplayPath, run.datasetDisplayPath);
-    assert.equal(reopened.baselineId, run.id);
+    assert.equal(reopened.baselineId, incompleteFixture ? null : run.id);
     await browser.waitUntil(
       async () =>
-        (await $('section[aria-label="Comparison review"] h3').getText()) === 'needs review',
+        (await $('section[aria-label="Comparison review"] h3').getText()) ===
+        expectedState.replaceAll('_', ' '),
       { timeout: 10000, timeoutMsg: 'Reopened profile result did not reach the native review UI' },
     );
     await $('button=Review profile rebinding').click();
@@ -154,11 +181,12 @@ async function reviewBackupComparison(evidence, existingPicker) {
       reboundRun = (await native({ kind: 'backup_comparison_latest' })).data;
       return reboundRun?.profileId === rebound.id && reboundRun.state !== 'comparing';
     });
-    assert.equal(reboundRun.state, 'needs_review', reboundRun.message);
+    assert.equal(reboundRun.state, expectedState, reboundRun.message);
     assert.notEqual(reboundRun.id, reopened.id);
     await browser.waitUntil(
       async () =>
-        (await $('section[aria-label="Comparison review"] h3').getText()) === 'needs review',
+        (await $('section[aria-label="Comparison review"] h3').getText()) ===
+        expectedState.replaceAll('_', ' '),
     );
     const source = await browser.tauri.execute(async ({ core }) =>
       core.invoke('test_library_fixture', { verify: true }),
