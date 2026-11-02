@@ -40,6 +40,8 @@ jobs:
         run: python scripts/m4-protocol-probe.py --protocols local sftp ftp ftps smb --allow-insecure-ftp --application-probe target/debug/examples/backup_application_probe --evidence .context/m4-protocol-ci.json
       - name: Actual transfer failure preservation and explicit recovery outcomes
         run: python scripts/m4-failure-probe.py --protocols ftp ftps --allow-insecure-ftp --application-probe target/debug/examples/backup_application_probe --evidence .context/m4-failure-ci.json
+      - name: Actual SMB and SFTP upload disconnect and read-only recovery
+        run: python scripts/m4-failure-probe.py --protocols sftp smb --scenarios disconnect_upload --application-probe target/debug/examples/backup_application_probe --evidence .context/m4-application-smb-sftp-disconnect.json
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -47,3 +49,4 @@ jobs:
           path: |
             .context/m4-protocol-ci.json
             .context/m4-failure-ci.json
+            .context/m4-application-smb-sftp-disconnect.json

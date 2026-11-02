@@ -2,7 +2,7 @@
 
 Owner selection, 2026-11-02: build local disposable test servers. No existing account, real library, OS user, share, service or external endpoint is used.
 
-Use Python 3.13. Build-time helper preparation verifies both archive and executable SHA-256 against `vendor/backup-helper-manifest.json`. Helper downloads are explicit; the application does not download or invoke them yet. Run from the repository root:
+Use Python 3.13. Build-time helper preparation verifies both archive and executable SHA-256 against `vendor/backup-helper-manifest.json`. The application never downloads helpers at runtime; its feature-gated native adapter invokes only prepared, pinned resources. Production execution remains gated; transport evidence alone does not enable it. Run from the repository root:
 
 ```text
 python scripts/prepare-backup-helpers.py --download
@@ -37,3 +37,32 @@ First CI at `db9b322`: Windows passes all five transports/negative checks; macOS
 Credential/trust controls now use the actual rclone REST object-read adapter: first read and compare the complete encrypted repository config, repeat that same request with invalid credentials/trust, then prove the valid read still succeeds. The control uses a temporary Basic-authenticated loopback HTTP listener over the same backend, rather than treating an unrelated failed share-listing command as proof of credential rejection. It reads binary bytes without text decoding. There is no extra Python HTTP2 dependency; normal restic continues using its HTTP2 stdio helper. Generic SMB listing/cat experiments do not replace the required full backup/check/source-removal/restore sequence. The added diagnostic `lsf` preflight is removed so the prepared macOS repository can reach the actual restic workflow; all original verification assertions and SMB signing remain in force.
 
 macOS SMB tracing identifies missing-leaf CREATE returning `STATUS_NO_SUCH_FILE` (`0xc000000f`), which the pinned client does not classify as a missing object and exposes as restic HTTP500. The disposable Impacket wrapper changes only that CREATE result to `STATUS_OBJECT_NAME_NOT_FOUND` (`0xc0000034`); both map to file-not-found in [Microsoft's error mapping](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-cifs/8f11e0f3-d545-46cc-97e6-f00569e3e1bc). Other operation statuses, denied access, offline/network errors, authentication and upstream signing/packet encoding remain unchanged. Receipts explicitly identify this fixture adaptation. It is not a production workaround or proof of unmodified Impacket interoperability; the actual full round trip still must pass.
+
+## Actual application fault evidence, 2026-11-02
+
+Build `backup_application_probe` with `fixture-probes,backup-workflow`, then run:
+
+```text
+<venv-python> -m unittest discover -s scripts/tests -p "test_protocol_*.py"
+<venv-python> scripts/m4-failure-probe.py --protocols ftp ftps --allow-insecure-ftp --application-probe target/debug/examples/backup_application_probe --evidence .context/m4-application-failure-final3.json
+```
+
+The Windows final3 matrix passes all ten cases. For each protocol, disconnect, server-writer `ENOSPC`, and lost publication acknowledgment preserve data but leave an explicitly unresolved repository lock. Credential expiry permits a fresh baseline restore after reconnect. A corrupted new pack is included but rejected by actual verification; the whole-repository check also blocks a subsequent baseline restore. None of these blocked outcomes is completed recovery.
+
+Every case first earns a real application baseline snapshot and full restore, then changes only generated source bytes and arms the scoped fault after explicit second-job approval. Final audits compare all six baseline encrypted repository objects by native identity, mode, modification time and complete digest, plus five current source files, baseline history and destination/restore neighbors. Owned helpers must be stopped and generated OS credential references removed. Read-only reconciliation is attempted: exact no-visible-snapshot and exact pinned restic lock refusals remain distinct. There is no automatic unlock, repair, backup replay or deletion of old objects. Receipts retain actual earned flags; listing an existing snapshot may earn inclusion while later checks remain blocked. The eleven Python fault/supervision regressions pass. Earlier timeout and assertion-failure receipts remain failed evidence.
+
+These ten cases establish disposable FTP/FTPS loopback faults, not physical disk exhaustion, cable removal, independent-device recovery or macOS execution results. Individual final3 cases took 49.841–109.992 seconds. Pinned backend-error observation stops an errored helper; fixed startup and idle-I/O bounds do not impose a short total duration on healthy progressing transfers.
+
+Strict replacement certificates require additional native proof. On this Windows token, the adapter's read-only audit-security reopen fails with native error 1314; no privilege is enabled and audit fidelity stays unknown. macOS can qualify only the bounded no-extra-ACL/xattr/resource-fork/flags policy, successful native metadata restoration, fresh exact OLD-version restore comparison, and verified disjoint physical-device sets. No actual macOS strict replacement certificate is established by the Windows receipts or by successful remote transfer; unknown devices, remote failure domains, unsupported metadata and missing native tests remain unavailable.
+
+## Actual SMB/SFTP disconnect and reconnect
+
+```text
+<venv-python> scripts/m4-failure-probe.py --protocols sftp smb --scenarios disconnect_upload --application-probe target/debug/examples/backup_application_probe --evidence .context/m4-application-smb-sftp-disconnect.json
+```
+
+Both Windows application cases pass: SFTP in 60.100 seconds and SMB in 65.680 seconds. The unchanged pinned SFTP server and existing disposable SMB2/3 server sit behind a generated, loopback-only TCP forwarder. After the exact second-job approval and arm marker, it requires observed growth of a new repository pack and actual forwarded bytes before dropping its owned sockets. SFTP records 258048 native new-pack bytes and 284380 armed forwarded bytes; SMB records 1048576 and 1072532 respectively. The bounded forwarder permits at most sixteen socket pairs and 256 KiB per-direction queues; arm-only pacing makes a partial upload observable. Protocol authentication/signing, binaries and production helper behavior are unchanged.
+
+Reconnect remains refused until the native job stops and the exact disarm marker is received. After reconnect, the application attempts read-only reconciliation and baseline verification/restore. Both results are `preserved_unresolved_lock`: exact no-candidate reconciliation refuses adoption, both subsequent baseline operations report the actual repository lock, and no recovery is claimed. All six old encrypted objects retain native identity, mode, modification time and complete bytes; the five current source files, baseline history, restore/destination neighbors and generated credential cleanup pass. Owned helpers are stopped. The opaque proxy cannot certify whether a protocol client attempted a write; it reports the final native identity/metadata/byte audit, separately from the FTP filesystem mutation-prevention hook. It does not parse encrypted traffic, remove locks, retry backup or simulate a physical unplug.
+
+The thirteen Python fault/supervision cases include actual echo forwarding, owned connection closure, reconnect only after disarm, and rejection of existing/non-growing/complete packs as interruption evidence. The proxy uses [Python 3.13 selectors](https://docs.python.org/3.13/library/selectors.html) and bounded [socket send operations](https://docs.python.org/3.13/library/socket.html#socket.socket.send). Native macOS execution remains a separate CI gate.

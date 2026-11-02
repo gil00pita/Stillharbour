@@ -8,7 +8,10 @@ use super::{
 use crate::backup::native_metadata::MetadataManifest;
 use crate::{
     backup::{
-        credentials::{CredentialPurpose, CredentialStore, Secret},
+        credentials::{
+            CredentialPurpose, CredentialStore, ScheduleAuthority, ScheduleScope, Secret,
+            schedule_transaction,
+        },
         helpers::{self, Helper, PinnedHelpers},
         snapshots::*,
     },
@@ -31,6 +34,8 @@ use std::{
     },
     time::{Duration, Instant},
 };
+#[cfg(test)]
+mod content_preservation;
 #[cfg(test)]
 mod native_acceptance;
 #[cfg(test)]
@@ -319,6 +324,8 @@ type TestPhaseHook = Arc<dyn Fn(&SnapshotWorkflow, &JobRecord, &str) + Send + Sy
 struct State {
     #[cfg(test)]
     test_phase: Option<TestPhaseHook>,
+    #[cfg(test)]
+    schedule_fail_after_commit: bool,
     terminal_failures: BTreeMap<String, SnapshotJob>,
     helpers: Option<PinnedHelpers>,
     authorized: BTreeSet<String>,
@@ -675,6 +682,8 @@ impl SnapshotWorkflow {
             state: Mutex::new(State {
                 #[cfg(test)]
                 test_phase: None,
+                #[cfg(test)]
+                schedule_fail_after_commit: false,
                 terminal_failures: BTreeMap::new(),
                 helpers: None,
                 authorized: BTreeSet::new(),
@@ -1739,14 +1748,21 @@ mod application_tests {
             instance: instance.clone(),
             profile: profile.view.id.clone(),
         };
-        crate::backup::credentials::schedule_permit(
-            &catalog,
-            &instance,
-            &profile.view.id,
-            &policy,
-            true,
-        )
-        .unwrap();
+        let scope = ScheduleScope {
+            catalog_id: &catalog,
+            instance: &instance,
+            profile_id: &profile.view.id,
+            policy_digest: &policy,
+        };
+        schedule_transaction()
+            .unwrap()
+            .authorize(
+                &scope,
+                chrono::DateTime::parse_from_rfc3339(&record.view.next_due)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+            )
+            .unwrap();
         f.library.snapshots.persist_schedule(&record).unwrap();
         assert!(
             f.library
@@ -1761,14 +1777,11 @@ mod application_tests {
             .schedule_disable(&profile.view.id)
             .unwrap();
         assert!(
-            !crate::backup::credentials::schedule_permit(
-                &catalog,
-                &instance,
-                &profile.view.id,
-                &policy,
-                false
-            )
-            .unwrap()
+            schedule_transaction()
+                .unwrap()
+                .read(&scope)
+                .unwrap()
+                .is_none()
         );
         f.library.snapshots.persist_schedule(&record).unwrap();
         assert!(
@@ -4574,6 +4587,29 @@ fn collect_output(
         Ok(())
     })
 }
+fn clear_schedule_timing(view: &mut SnapshotSchedule) {
+    view.enabled = false;
+    view.next_due.clear();
+    view.last_run = None;
+}
+fn copy_schedule_timing(view: &mut SnapshotSchedule, authority: &ScheduleAuthority) {
+    view.next_due = authority.next_admissible_utc.clone();
+    view.last_run = authority.last_attempt_utc.clone();
+}
+fn validate_schedule_record(key: &str, record: &ScheduleRecord) -> Result<()> {
+    id(key)?;
+    if record.view.profile_id != key
+        || !(15..=10080).contains(&record.view.interval_minutes)
+        || record.view.timezone != "UTC"
+        || record.view.dst_policy != "elapsed_interval"
+        || record.view.fully_quit_supported
+    {
+        return Err(invalid(
+            "The recurring record does not match its catalog/profile/policy key.",
+        ));
+    }
+    Ok(())
+}
 impl SnapshotWorkflow {
     fn instance(&self) -> Result<String> {
         self.catalog.call(|db| {
@@ -4618,7 +4654,11 @@ impl SnapshotWorkflow {
                 )
                 .optional()?)
         })?;
-        text.map(decode).transpose()
+        let record = text.map(decode::<ScheduleRecord>).transpose()?;
+        if let Some(record) = &record {
+            validate_schedule_record(profile, record)?;
+        }
+        Ok(record)
     }
     fn schedule_policy(record: &ScheduleRecord) -> Result<String> {
         let mut stable = record.clone();
@@ -4632,39 +4672,48 @@ impl SnapshotWorkflow {
         self.catalog.call(move|db|{db.execute("INSERT INTO backup_snapshot_schedules VALUES(?1,?2) ON CONFLICT(profile_id) DO UPDATE SET record=excluded.record",params![id,text])?;Ok(())})
     }
     fn schedule_get(&self, profile: &str) -> Result<Option<SnapshotSchedule>> {
+        let transaction = schedule_transaction()?;
         self.profile(profile)?;
         let Some(mut record) = self.schedule_record(profile)? else {
             return Ok(None);
         };
-        let permitted = record.instance == self.instance()?
-            && crate::backup::credentials::schedule_permit(
-                &self.catalog.summary()?.id,
-                &record.instance,
-                profile,
-                &Self::schedule_policy(&record)?,
-                false,
-            )
-            .unwrap_or(false);
-        if !permitted {
-            record.view.enabled = false;
+        let current = self.instance()?;
+        if !record.view.enabled || record.instance != current {
+            clear_schedule_timing(&mut record.view);
+            return Ok(Some(record.view));
+        }
+        let catalog = self.catalog.summary()?.id;
+        let policy = Self::schedule_policy(&record)?;
+        let scope = ScheduleScope {
+            catalog_id: &catalog,
+            instance: &current,
+            profile_id: profile,
+            policy_digest: &policy,
+        };
+        if let Some(authority) = transaction.read(&scope)? {
+            copy_schedule_timing(&mut record.view, &authority);
+        } else {
+            clear_schedule_timing(&mut record.view);
         }
         Ok(Some(record.view))
     }
     fn schedule_disable(&self, profile: &str) -> Result<Option<SnapshotSchedule>> {
+        let mut transaction = schedule_transaction()?;
         self.profile(profile)?;
-        let Some(mut record) = self.schedule_record(profile)? else {
-            return Ok(None);
-        };
-        record.view.enabled = false;
+        let current = self.instance()?;
+        let catalog = self.catalog.summary()?.id;
+        // Only the CURRENT native catalog instance can be touched, even when a
+        // copied/imported row still names another instance's authority.
         let revoked = if CredentialStore::available() {
-            crate::backup::credentials::schedule_revoke(
-                &self.catalog.summary()?.id,
-                &record.instance,
-                profile,
-            )
+            transaction.revoke(&catalog, &current, profile)
         } else {
             Ok(())
         };
+        let Some(mut record) = self.schedule_record(profile)? else {
+            revoked?;
+            return Ok(None);
+        };
+        clear_schedule_timing(&mut record.view);
         self.persist_schedule(&record)?;
         revoked?;
         Ok(Some(record.view))
@@ -4680,6 +4729,7 @@ impl SnapshotWorkflow {
         enabled: bool,
         catch_up: bool,
     ) -> Result<SnapshotSchedule> {
+        let mut transaction = schedule_transaction()?;
         self.require_execution()?;
         if !(15..=10080).contains(&minutes) || timezone != "UTC" {
             return Err(invalid(
@@ -4713,7 +4763,7 @@ impl SnapshotWorkflow {
                 "Recurring consent requires the current exact reviewed source manifest and profile.",
             ));
         }
-        let record = ScheduleRecord {
+        let mut record = ScheduleRecord {
             view: SnapshotSchedule {
                 profile_id: profile.into(),
                 interval_minutes: minutes,
@@ -4731,15 +4781,27 @@ impl SnapshotWorkflow {
             manifest_digest: review.manifest.reviewed_digest()?,
             instance: self.instance()?,
         };
-        // The OS write is the explicit exact-repeat consent; a catalog row alone
-        // is never an execution grant. Failure leaves the schedule unenabled.
-        crate::backup::credentials::schedule_permit(
-            &p.view.catalog_id,
-            &record.instance,
-            profile,
-            &Self::schedule_policy(&record)?,
-            true,
-        )?;
+        self.authorized(&p)?;
+        let policy = Self::schedule_policy(&record)?;
+        let scope = ScheduleScope {
+            catalog_id: &p.view.catalog_id,
+            instance: &record.instance,
+            profile_id: profile,
+            policy_digest: &policy,
+        };
+        if enabled {
+            let deadline = chrono::DateTime::parse_from_rfc3339(&record.view.next_due)
+                .map_err(|_| invalid("Invalid native schedule deadline."))?
+                .with_timezone(&chrono::Utc);
+            let authority = transaction.authorize(&scope, deadline)?;
+            copy_schedule_timing(&mut record.view, &authority);
+        } else {
+            let revoked = transaction.revoke(&p.view.catalog_id, &record.instance, profile);
+            clear_schedule_timing(&mut record.view);
+            self.persist_schedule(&record)?;
+            revoked?;
+            return Ok(record.view);
+        }
         self.persist_schedule(&record)?;
         Ok(record.view)
     }
@@ -4782,6 +4844,10 @@ impl SnapshotWorkflow {
         if !self.capabilities().schedule_available {
             return Ok(());
         }
+        // An OS item replacement is not CAS. This shared process transaction
+        // serializes read/claim/start with enable/disable; the native catalog
+        // lifetime lock excludes another app process for this same instance.
+        let mut transaction = schedule_transaction()?;
         if self
             .state
             .lock()
@@ -4791,88 +4857,101 @@ impl SnapshotWorkflow {
         {
             return Ok(());
         }
-        let rows = self.catalog.call(|db| {
-            Ok(db
-                .prepare("SELECT CASE WHEN length(CAST(record AS BLOB))<=8192 THEN record END FROM backup_snapshot_schedules LIMIT 33")?
-                .query_map([], |r| r.get::<_, String>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()?)
-        })?;
+        let rows=self.catalog.call(|db|Ok(db.prepare("SELECT profile_id,CASE WHEN length(CAST(record AS BLOB))<=8192 THEN record END FROM backup_snapshot_schedules LIMIT 33")?.query_map([],|r|Ok((r.get::<_,String>(0)?,r.get::<_,String>(1)?)))?.collect::<rusqlite::Result<Vec<_>>>()?))?;
         if rows.len() > 32 {
             return Err(invalid("Recurring policy count exceeds its bound."));
         }
-        for text in rows {
+        let current = self.instance()?;
+        let catalog = self.catalog.summary()?.id;
+        for (key, text) in rows {
             let mut record: ScheduleRecord = decode(text)?;
-            if !record.view.enabled
-                || chrono::DateTime::parse_from_rfc3339(&record.view.next_due)
-                    .map_err(|_| invalid("Invalid schedule due time."))?
-                    > chrono::Utc::now()
-            {
+            validate_schedule_record(&key, &record)?;
+            if !record.view.enabled {
                 continue;
             }
-            let profile = self.profile(&record.view.profile_id)?;
-            let consent = record.instance == self.instance()?
-                && record.profile_digest == digest(&profile)?
-                && crate::backup::credentials::schedule_permit(
-                    &profile.view.catalog_id,
-                    &record.instance,
-                    &profile.view.id,
-                    &Self::schedule_policy(&record)?,
-                    false,
-                )
-                .unwrap_or(false);
-            if !consent {
-                record.view.enabled = false;
-                let revoked = crate::backup::credentials::schedule_revoke(
-                    &profile.view.catalog_id,
-                    &record.instance,
-                    &profile.view.id,
-                );
+            let profile = self.profile(&key)?;
+            if record.instance != current {
+                clear_schedule_timing(&mut record.view);
+                self.persist_schedule(&record)?;
+                continue;
+            }
+            if record.profile_digest != digest(&profile)? {
+                let policy = Self::schedule_policy(&record)?;
+                let scope = ScheduleScope {
+                    catalog_id: &catalog,
+                    instance: &current,
+                    profile_id: &key,
+                    policy_digest: &policy,
+                };
+                let revoked = if transaction.read(&scope)?.is_some() {
+                    transaction.revoke(&catalog, &current, &key)
+                } else {
+                    Ok(())
+                };
+                clear_schedule_timing(&mut record.view);
                 self.persist_schedule(&record)?;
                 revoked?;
                 continue;
             }
-            if skip_missed_schedule(
-                record.view.catch_up,
-                chrono::DateTime::parse_from_rfc3339(&record.view.next_due)
-                    .map_err(|_| invalid("Invalid schedule due time."))?
-                    .with_timezone(&chrono::Utc),
-                chrono::Utc::now(),
-            ) {
-                record.view.next_due = (chrono::Utc::now()
-                    + chrono::Duration::minutes(i64::from(record.view.interval_minutes)))
-                .to_rfc3339();
+            let policy = Self::schedule_policy(&record)?;
+            let scope = ScheduleScope {
+                catalog_id: &catalog,
+                instance: &current,
+                profile_id: &key,
+                policy_digest: &policy,
+            };
+            let Some(authority) = transaction.read(&scope)? else {
+                clear_schedule_timing(&mut record.view);
+                self.persist_schedule(&record)?;
+                continue;
+            };
+            copy_schedule_timing(&mut record.view, &authority);
+            let instant = chrono::Utc::now();
+            if authority.deadline()? > instant {
                 self.persist_schedule(&record)?;
                 continue;
             }
-            // Native session/root reauthorization is still required after a
-            // restart. An imported row never authorizes its own filesystem scope.
+            // Native session/root reauthorization remains mandatory; the OS
+            // timing grant cannot authorize its own filesystem scope.
             if self.authorized(&profile).is_err() {
                 continue;
             }
-            let manifest = self.inventory(&profile, &AtomicBool::new(false));
-            let exact = manifest
-                .ok()
-                .and_then(|m| m.reviewed_digest().ok())
-                .as_deref()
-                == Some(record.view.approved_digest.as_str());
-            record.view.last_run = Some(now());
-            record.view.next_due = (chrono::Utc::now()
-                + chrono::Duration::minutes(i64::from(record.view.interval_minutes)))
-            .to_rfc3339();
-            if !exact {
-                record.view.enabled = false;
-                let revoked = crate::backup::credentials::schedule_revoke(
-                    &profile.view.catalog_id,
-                    &record.instance,
-                    &profile.view.id,
-                );
-                self.persist_schedule(&record)?;
-                revoked?;
-                self.event(&uuid::Uuid::new_v4().to_string(),"schedule_needs_review",serde_json::json!({"profile_id":profile.view.id,"reason":"Source, availability, root or exact version changed; no recurring approval was created."}))?;
+            let skipped =
+                skip_missed_schedule(record.view.catch_up, authority.deadline()?, instant);
+            #[cfg(test)]
+            if std::mem::take(&mut self.state.lock().unwrap().schedule_fail_after_commit) {
+                transaction.fail_next_write_after_commit();
+            }
+            let Some(advanced) = transaction.claim(
+                &scope,
+                &authority,
+                instant,
+                record.view.interval_minutes,
+                !skipped,
+            )?
+            else {
+                continue;
+            };
+            copy_schedule_timing(&mut record.view, &advanced);
+            // Native high-water is durable BEFORE catalog/start writes. Any
+            // failure or process exit consumes this interval, never replays it.
+            self.persist_schedule(&record)?;
+            if skipped {
                 continue;
             }
-            self.persist_schedule(&record)?;
-            let view = self.review(profile)?;
+            let reviewed = self.review(profile);
+            let exact = reviewed
+                .as_ref()
+                .is_ok_and(|v| v.digest == record.view.approved_digest);
+            if !exact {
+                let revoked = transaction.revoke(&catalog, &current, &key);
+                clear_schedule_timing(&mut record.view);
+                self.persist_schedule(&record)?;
+                revoked?;
+                self.event(&uuid::Uuid::new_v4().to_string(),"schedule_needs_review",serde_json::json!({"profile_id":key,"reason":"Source, availability, root or exact version changed; no recurring approval was created."}))?;
+                continue;
+            }
+            let view = reviewed?;
             let review = self
                 .state
                 .lock()
@@ -4881,9 +4960,6 @@ impl SnapshotWorkflow {
                 .get(&view.id)
                 .cloned()
                 .ok_or_else(|| conflict("Scheduled review disappeared."))?;
-            if review.view.digest != record.view.approved_digest {
-                return Err(conflict("Exact recurring scope changed before admission."));
-            }
             self.start(library, review, "backup")?;
             return Ok(());
         }

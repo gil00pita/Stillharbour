@@ -4,9 +4,12 @@ $fixtureRoot = [System.IO.Path]::GetFullPath($env:STILLHARBOUR_PROTOCOL_SCOPE)
 $fixtureTemp = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $fixtureRelative = [System.IO.Path]::GetRelativePath($fixtureTemp, $fixtureRoot)
 $fixtureOwner = $env:STILLHARBOUR_PROTOCOL_OWNER
+$fixtureName = [System.IO.Path]::GetFileName($fixtureRoot)
+$generatedName = $fixtureName -like 'stillharbour-m4-protocol-*' -or
+    ($fixtureOwner -cmatch '^[0-9a-f]{32}$' -and $fixtureName.StartsWith("stillharbour-m4-failure-$fixtureOwner-", [StringComparison]::Ordinal))
 if ([System.IO.Path]::IsPathRooted($fixtureRelative) -or
     $fixtureRelative -eq '..' -or $fixtureRelative.StartsWith('..' + [System.IO.Path]::DirectorySeparatorChar) -or
-    [System.IO.Path]::GetFileName($fixtureRoot) -notlike 'stillharbour-m4-protocol-*' -or
+    -not $generatedName -or
     [System.IO.File]::ReadAllText((Join-Path $fixtureRoot 'owner')) -cne $fixtureOwner) {
     throw 'Invalid constructor-owned SMB test scope.'
 }

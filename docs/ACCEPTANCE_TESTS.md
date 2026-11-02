@@ -184,6 +184,15 @@ restart or a busy interval. With catch-up checked, any backlog admits at most on
 unchanged-scope run and the next deadline advances from the current admission
 time. Skipped deadlines similarly advance from the current skip time. No timer
 runs while fully quit, and reopening still requires native authorization.
+Backdate/replay an old catalog row after a real OS claim: it cannot start an
+earlier second job or replace the OS-derived displayed deadline/last attempt.
+Inject a failed return after the native timing write, reopen session state and
+confirm no worker starts from the old row. Reject legacy digest-only permits
+until fresh reviewed consent. Disable a copied catalog's imported policy and
+confirm the original native instance's authority remains unchanged. Native time
+fixtures may seed both their exact OS authority and catalog row; row-only edits
+must never authorize an early run.
+
 | AC-074 | Photos have valid zero coordinates, missing coordinates, identical coordinates and positions across the antimeridian. Missing GPS does not become (0,0); viewport results/clusters remain correct. |
 | AC-075 | Clicking a map cluster and switching to timeline preserves date/root filters and selection. Large queries use bounded data; markers do not explode into one DOM node per library asset. |
 | AC-076 | Go offline and inspect network logs. No unapproved photo metadata upload; map clearly reports unavailable tiles; attribution and provider cache/offline policy are respected. |

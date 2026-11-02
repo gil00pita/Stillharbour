@@ -1,4 +1,6 @@
 use super::*;
+#[path = "control_acceptance.rs"]
+pub(super) mod control_acceptance;
 use crate::library::{
     LibraryOptions, WorkerPaths,
     model::{RootMode, ScanFilter},

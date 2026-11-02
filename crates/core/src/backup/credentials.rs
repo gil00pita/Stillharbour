@@ -139,45 +139,12 @@ impl CredentialStore {
         platform::delete(&account(catalog_id, purpose, reference)?)
     }
 }
-// Native recurring consent is separate from catalog/profile credentials. Native
-// enrollment cannot create these records and imported catalogs cannot recreate
-// the operating-system permit for another catalog file instance.
-pub(crate) fn schedule_permit(
-    catalog: &str,
-    instance: &str,
-    profile: &str,
-    policy: &str,
-    write: bool,
-) -> Result<bool> {
-    if uuid::Uuid::parse_str(catalog).is_err()
-        || uuid::Uuid::parse_str(profile).is_err()
-        || [instance, policy]
-            .iter()
-            .any(|s| s.len() != 64 || !s.bytes().all(|b| b.is_ascii_hexdigit()))
-    {
-        return Err(unavailable());
-    }
-    let key = format!("{SERVICE}/schedule/{catalog}/{instance}/{profile}");
-    let expected = format!("SHS1{policy}");
-    if write {
-        platform::set(&key, expected.as_bytes())?;
-        return Ok(true);
-    }
-    Ok(platform::get(&key)?.is_some_and(|bytes| bytes.as_slice() == expected.as_bytes()))
-}
+// Native recurring consent and its timing authority are separate from the catalog.
+mod schedules;
+pub(crate) use schedules::{ScheduleAuthority, ScheduleScope, schedule_transaction};
+#[cfg(test)]
 pub(crate) fn schedule_revoke(catalog: &str, instance: &str, profile: &str) -> Result<()> {
-    if uuid::Uuid::parse_str(catalog).is_err()
-        || uuid::Uuid::parse_str(profile).is_err()
-        || instance.len() != 64
-        || !instance.bytes().all(|b| b.is_ascii_hexdigit())
-    {
-        return Err(unavailable());
-    }
-    let key = format!("{SERVICE}/schedule/{catalog}/{instance}/{profile}");
-    if platform::get(&key)?.is_none() {
-        return Ok(());
-    }
-    platform::delete(&key)
+    schedule_transaction()?.revoke(catalog, instance, profile)
 }
 
 #[cfg(windows)]

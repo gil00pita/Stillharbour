@@ -303,6 +303,8 @@ trait EventJournal {
 }
 trait CopyJournal: EventJournal {
     fn history_count(&self) -> Result<u64>;
+    #[cfg(test)]
+    fn control_boundary(&self, _phase: &str) {}
     #[cfg(any(
         test,
         feature = "fixture-probes",
@@ -690,6 +692,8 @@ impl CopyContext<'_> {
                 if io.write_all(&mut stage, &buffer[..count], cancel)? == IoStep::Canceled {
                     return Ok(CopyOutcome::CanceledWithPartialCopies);
                 }
+                #[cfg(test)]
+                journal.control_boundary("copy_chunk");
                 if fault == Some(CopyFault::InjectedDiskFullAfterChunk) {
                     return Err(std::io::Error::from(std::io::ErrorKind::StorageFull).into());
                 }

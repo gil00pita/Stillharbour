@@ -51,6 +51,25 @@ settings require new review. Imported/restored catalog schedules do not acquire
 authority. Intervals use elapsed UTC minutes with no DST shift; one catch-up is
 allowed only for an unchanged scope. Fully quit execution remains unavailable.
 
+The SHS2 OS record binds the policy digest, generation, next-admissible UTC
+deadline and last scheduled attempt. SHS1 digest-only records cannot silently
+acquire timing authority and require fresh reviewed consent. Catalog timing is
+an untrusted mirror; display and admission read the OS state. One process-wide
+transaction serializes enable/disable/read/claim/start, while the existing native
+catalog lifetime lock excludes another app process. Native replacement writes
+are not treated as compare-and-swap: under that transaction, advance the deadline
+and verify readback before catalog or worker-start writes. Failure/crash never
+rolls the high-water mark backward. Attempts, including failed admission, are
+not successful backup claims.
+
+Authority keys always use the current native catalog instance, never the
+instance supplied by an imported row. Imported disable cannot revoke another
+catalog's OS grant. Successful disable removes the current authority. Catch-up
+admits at most one exact-scope attempt; unchecked catch-up skips deadlines more
+than 30 seconds overdue, allowing two normal 15-second polling periods. Skipped
+or attempted deadlines advance from current admission time, including sleep,
+restart and busy backlogs; no platform background agent is installed.
+
 Validation is recorded in M4_VALIDATION.md and the implementation log as commands
 complete. No application/metadata/independent-recovery gate is implied by the
 successful Windows/macOS disposable protocol round trips.
@@ -70,7 +89,6 @@ servers do not provide independent-device proof. Windows uses fixed read-only
 storage controls; macOS traverses native IOKit physical ancestry. Observations are
 ephemeral and rechecked, not imported catalog authority. Native validation remains
 required before claiming either classifier supported.
-
 
 ## Pinned helper failure and resource policy (2026-11-02)
 

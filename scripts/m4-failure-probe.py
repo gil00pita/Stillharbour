@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Actual application failure evidence on disposable loopback FTP/FTPS only."""
 import argparse
+import contextlib
 import importlib.metadata
 import importlib.util
 import json
@@ -62,7 +63,50 @@ def validate_outcome(failure, scenario):
         raise RuntimeError('Unknown preservation outcome cannot pass as recovery evidence.')
 
 
-def failure_case(protocol, scenario, application):
+@contextlib.contextmanager
+def failure_servers(protocol, base, environment, listen_port, binaries):
+    if protocol in ('ftp', 'ftps'):
+        with PROBE.server([sys.executable, ROOT / 'scripts/m4-protocol-probe.py', '--ftp-server'],
+                          base, environment, listen_port):
+            yield {}
+        return
+    backend_port = PROBE.port()
+    while backend_port == listen_port:
+        backend_port = PROBE.port()
+    backend_env = {**environment, 'STILLHARBOUR_PROTOCOL_PORT': str(backend_port)}
+    if protocol == 'sftp':
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+        from cryptography.hazmat.primitives import serialization
+        key = Ed25519PrivateKey.generate()
+        private = base / 'host-key'
+        private.write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH,
+                                             serialization.NoEncryption()))
+        private.chmod(0o600)
+        config = base / 'empty-server.conf'
+        config.write_bytes(b'')
+        public = key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH).decode()
+        command = [binaries['rclone'], 'serve', 'sftp', base / 'server', '--addr',
+                   f'127.0.0.1:{backend_port}', '--key', private, '--log-level', 'ERROR']
+        backend_env.update({'RCLONE_USER': 'fixture', 'RCLONE_PASS': environment['STILLHARBOUR_PROTOCOL_TOKEN']})
+        backend_env['RCLONE_CONFIG'] = str(config)
+        extra = {'host_key': public}
+    elif protocol == 'smb':
+        command = ([Path('C:/Program Files/PowerShell/7/pwsh.exe'), '-NoProfile', '-NonInteractive',
+                    '-File', ROOT / 'scripts/m4-smb-server.ps1'] if sys.platform == 'win32' else
+                   [sys.executable, ROOT / 'scripts/m4-protocol-probe.py', '--smb-server'])
+        extra = {'domain': 'WORKGROUP', 'share': 'FIXTURE'}
+    else:
+        raise RuntimeError('Unsupported fixed proxy protocol.')
+    proxy_logs = base / 'proxy-process'
+    proxy_logs.mkdir()
+    with PROBE.server(command, base, backend_env, backend_port):
+        proxy_env = {**environment, 'STILLHARBOUR_BACKEND_PORT': str(backend_port)}
+        with PROBE.server([sys.executable, ROOT / 'scripts/m4_disconnect_proxy.py'],
+                          proxy_logs, proxy_env, listen_port):
+            yield extra
+
+
+def failure_case(protocol, scenario, application, binaries):
     nonce = secrets.token_hex(16)
     with tempfile.TemporaryDirectory(prefix=f'stillharbour-m4-failure-{nonce}-') as temporary:
         base = Path(temporary).resolve()
@@ -89,14 +133,14 @@ def failure_case(protocol, scenario, application):
         if protocol == 'ftps':
             PROBE.fixture_certificate(base)
             destination['ca_certificate_pem'] = (base / 'server.crt').read_text()
-        else:
+        elif protocol == 'ftp':
             destination['insecure_acknowledged'] = True
-        request = json.dumps({'destination': destination,
+        with failure_servers(protocol, base, environment, listen_port, binaries) as extra:
+            destination.update(extra)
+            request = json.dumps({'destination': destination,
                               'repositoryPassword': secrets.token_urlsafe(32),
                               'transportPassword': password,
                               'failure': {'scenario': scenario, 'ownerNonce': nonce}})
-        command = [sys.executable, ROOT / 'scripts/m4-protocol-probe.py', '--ftp-server']
-        with PROBE.server(command, base, environment, listen_port):
             code, output, stderr = PROBE.run([application], base, environment,
                                               input_text=request, timeout=480, success=False)
             result = json.loads(output)
@@ -108,7 +152,8 @@ def failure_case(protocol, scenario, application):
                 json.dump(result, stream, indent=2)
             if code != 0 or result.get('passed') is not True:
                 diagnostic = PROBE.application_diagnostics(stderr)
-                log = (base / 'server.log').read_bytes()[-1048576:].decode(errors='replace')
+                log_path = base / ('proxy-process/server.log' if protocol in ('smb', 'sftp') else 'server.log')
+                log = log_path.read_bytes()[-1048576:].decode(errors='replace')
                 phases = '; '.join(line for line in log.splitlines() if line.startswith('STILLHARBOUR_GENERATED_FAULT '))[-4096:]
                 markers = ','.join(name for name in ('failure.arm','failure.disarm','failure.triggered','failure.ack') if (control / name).exists())
                 raise RuntimeError(f'Actual failure probe stopped at {result.get("stage", "unknown")} '
@@ -147,9 +192,27 @@ def failure_case(protocol, scenario, application):
                 raise RuntimeError('Final post-reconciliation audit did not retain the exact baseline repository objects.')
             if neighbor.read_bytes() != b'preserved destination-only neighbor':
                 raise RuntimeError('Destination-only neighbor changed during failure handling.')
+            proxy_evidence = None
+            if protocol in ('smb', 'sftp'):
+                proxy_path = PROBE.owned(base, control / 'failure.proxy.json')
+                if proxy_path.stat().st_size > 4096:
+                    raise RuntimeError('Proxy phase evidence exceeds its bound.')
+                proxy_evidence = json.loads(proxy_path.read_bytes())
+                if (proxy_evidence.get('ownerNonce') != nonce
+                        or proxy_evidence.get('scenario') != 'disconnect_upload'
+                        or not 32768 <= proxy_evidence.get('nativeNewPackBytes', 0) < 2097152
+                        or proxy_evidence.get('armedForwardedBytes', 0) <= 0
+                        or not 1 <= proxy_evidence.get('ownedConnectionPairs', 0) <= 16
+                        or proxy_evidence.get('physicalUnplug') is not False):
+                    raise RuntimeError('Proxy interruption lacks real partial-pack/forwarding phase evidence.')
             return {'protocol': protocol, 'scenario': scenario, 'result': 'passed',
                     'nativeOs': sys.platform, 'loopbackOnly': True,
-                    'server': f'pyftpdlib {importlib.metadata.version("pyftpdlib")}',
+                    'server': (f'pyftpdlib {importlib.metadata.version("pyftpdlib")}' if protocol in ('ftp', 'ftps')
+                               else 'pinned rclone SFTP' if protocol == 'sftp'
+                               else 'SMBLibrary 1.5.7' if sys.platform == 'win32' else 'Impacket disposable SMB2'),
+                    'tcpProxyPhaseEvidence': proxy_evidence,
+                    'baselineMutationGuard': ('ftp-filesystem-hook' if protocol in ('ftp', 'ftps')
+                                              else 'final-native-identity-metadata-and-byte-audit'),
                     'faultModel': 'owned-server-writer-ENOSPC' if scenario == 'quota_exhausted' else scenario,
                     'oldRepositoryObjectsUnchanged': True,
                     'oldRepositoryObjects': sum(name != 'outside-repository.bin'
@@ -161,12 +224,14 @@ def failure_case(protocol, scenario, application):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--protocols', nargs='+', choices=['ftp', 'ftps'], default=['ftp', 'ftps'])
+    parser.add_argument('--protocols', nargs='+', choices=['ftp', 'ftps', 'smb', 'sftp'], default=['ftp', 'ftps'])
     parser.add_argument('--scenarios', nargs='+', choices=SCENARIOS, default=list(SCENARIOS))
     parser.add_argument('--allow-insecure-ftp', action='store_true')
     parser.add_argument('--application-probe', type=Path, required=True)
     parser.add_argument('--evidence', type=Path, default=ROOT / '.context/m4-failure-receipt.json')
     args = parser.parse_args()
+    if any(protocol in ('smb', 'sftp') for protocol in args.protocols) and args.scenarios != ['disconnect_upload']:
+        raise SystemExit('SMB/SFTP proxy cases require --scenarios disconnect_upload explicitly.')
     if 'ftp' in args.protocols and not args.allow_insecure_ftp:
         raise SystemExit('Plain FTP requires --allow-insecure-ftp explicitly.')
     application = args.application_probe.resolve()
@@ -179,13 +244,13 @@ def main():
     evidence = args.evidence.resolve()
     if not evidence.is_relative_to(ROOT / '.context'):
         raise SystemExit('Evidence must stay in the workspace .context directory.')
-    PROBE.helpers()  # Verify both pinned native resources before starting servers.
+    binaries, _ = PROBE.helpers()  # Verify both pinned native resources before starting servers.
     receipts = []
     for protocol in args.protocols:
         for scenario in args.scenarios:
             started = time.monotonic()
             try:
-                receipts.append(failure_case(protocol, scenario, application))
+                receipts.append(failure_case(protocol, scenario, application, binaries))
                 print(f'{protocol}/{scenario}: actual application preservation checks passed', flush=True)
             except Exception as error:
                 receipts.append({'protocol': protocol, 'scenario': scenario, 'result': 'failed',

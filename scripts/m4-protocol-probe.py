@@ -220,7 +220,11 @@ def server_smb():
     from impacket.smb3structs import SMB2_CREATE
     base = Path(os.environ['STILLHARBOUR_PROTOCOL_SCOPE']).resolve()
     token = os.environ['STILLHARBOUR_PROTOCOL_TOKEN']
-    if not base.is_relative_to(Path(tempfile.gettempdir()).resolve()) or not base.name.startswith('stillharbour-m4-protocol-'):
+    owner = os.environ['STILLHARBOUR_PROTOCOL_OWNER']
+    generated_name = (base.name.startswith('stillharbour-m4-protocol-')
+                      or (re.fullmatch(r'[0-9a-f]{32}', owner) is not None
+                          and base.name.startswith(f'stillharbour-m4-failure-{owner}-')))
+    if not base.is_relative_to(Path(tempfile.gettempdir()).resolve()) or not generated_name:
         raise RuntimeError('SMB child scope is not generated.')
     if (base / 'owner').read_text() != os.environ['STILLHARBOUR_PROTOCOL_OWNER']:
         raise RuntimeError('SMB child scope owner mismatch.')

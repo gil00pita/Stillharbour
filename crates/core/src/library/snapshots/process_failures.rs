@@ -1,4 +1,4 @@
-//! Actual generated-only child process exits. These are NOT SIGKILL tests.
+//! Actual generated-only process exits and parent-issued abrupt termination.
 use super::application_tests::{Fixture, wait};
 use super::*;
 use crate::library::{LibraryOptions, WorkerPaths};
@@ -10,6 +10,7 @@ const CHILD_TEST: &str = "library::snapshots::process_failures::snapshot_actual_
 const ROOT_ENV: &str = "STILLHARBOUR_SNAPSHOT_EXIT_ROOT";
 const OWNER_ENV: &str = "STILLHARBOUR_SNAPSHOT_EXIT_OWNER";
 const PHASE_ENV: &str = "STILLHARBOUR_SNAPSHOT_EXIT_PHASE";
+const TERMINATION_ENV: &str = "STILLHARBOUR_SNAPSHOT_TERMINATION";
 const PHASES: [&str; 8] = [
     "staging",
     "catalog_snapshot",
@@ -72,6 +73,22 @@ fn write_owned(path: &Path, bytes: &[u8]) {
         .unwrap();
     file.write_all(bytes).unwrap();
     file.sync_all().unwrap();
+}
+fn terminate_at_proof(root: &Path, phase: &str) -> ! {
+    match std::env::var(TERMINATION_ENV).as_deref() {
+        Ok("exit") => std::process::exit(89),
+        Ok("parent_kill") => {
+            // The preceding proof is fully written and synced before this
+            // separate marker becomes visible to the exact owning parent.
+            write_owned(&root.join(format!("kill-ready-{phase}")), b"ready");
+            let until = Instant::now() + Duration::from_secs(30);
+            while Instant::now() < until {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            panic!("Owning parent did not terminate the generated child");
+        }
+        _ => panic!("Unknown generated process termination mode"),
+    }
 }
 fn load_scope(root: &Path, owner: &str) -> OwnedScope {
     assert!(uuid::Uuid::parse_str(owner).is_ok());
@@ -146,7 +163,7 @@ pub(super) fn phase(workflow: &SnapshotWorkflow, job: &JobRecord, phase: &str) {
         return;
     }
     // Bypass all Rust drops and terminal persistence at the real durable phase.
-    std::process::exit(89);
+    terminate_at_proof(&root, phase);
 }
 
 /// Test-only authorization before changing SQLite backup step size. Never calls
@@ -201,7 +218,7 @@ pub(crate) fn catalog_copy_step(remaining: i32) {
         &root.join("exit-catalog_copy_step.json"),
         &serde_json::to_vec(&proof).unwrap(),
     );
-    std::process::exit(89);
+    terminate_at_proof(&root, "catalog_copy_step");
 }
 fn reopen(root: &Path) -> Arc<Library> {
     let data = root.join("app");
@@ -385,7 +402,7 @@ impl Drop for OwnedChild {
         }
     }
 }
-fn child_exit(root: &Path, owner: &str, phase: &str) {
+fn child_exit(root: &Path, owner: &str, phase: &str, abrupt: bool) {
     let diagnostics = root.join(format!("child-{phase}.stderr"));
     let errors = std::fs::OpenOptions::new()
         .create_new(true)
@@ -398,6 +415,7 @@ fn child_exit(root: &Path, owner: &str, phase: &str) {
             .env(ROOT_ENV, root)
             .env(OWNER_ENV, owner)
             .env(PHASE_ENV, phase)
+            .env(TERMINATION_ENV, if abrupt { "parent_kill" } else { "exit" })
             .env_remove("STILLHARBOUR_M4_GENERATED_REPOSITORY_DRIVE")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -406,23 +424,46 @@ fn child_exit(root: &Path, owner: &str, phase: &str) {
             .unwrap(),
     );
     let until = Instant::now() + Duration::from_secs(180);
+    let mut killed = false;
     loop {
         if let Some(status) = child.0.try_wait().unwrap() {
-            assert_eq!(
-                status.code(),
-                Some(89),
-                "actual child failed before durable {phase} exit: {}",
+            if abrupt && killed {
+                #[cfg(unix)]
                 {
-                    let mut bytes = String::new();
-                    File::open(&diagnostics)
-                        .unwrap()
-                        .take(65536)
-                        .read_to_string(&mut bytes)
-                        .unwrap();
-                    bytes
+                    use std::os::unix::process::ExitStatusExt;
+                    assert_eq!(status.signal(), Some(libc::SIGKILL));
                 }
-            );
+                #[cfg(windows)]
+                assert_eq!(status.code(), Some(1));
+            } else {
+                assert!(
+                    !abrupt,
+                    "Child exited before its owning parent issued termination"
+                );
+                assert_eq!(
+                    status.code(),
+                    Some(89),
+                    "actual child failed before durable {phase} exit: {}",
+                    {
+                        let mut bytes = String::new();
+                        File::open(&diagnostics)
+                            .unwrap()
+                            .take(65536)
+                            .read_to_string(&mut bytes)
+                            .unwrap();
+                        bytes
+                    }
+                );
+            }
             break;
+        }
+        if abrupt && !killed && root.join(format!("kill-ready-{phase}")).is_file() {
+            let proof = read_exit_proof(&root.join(format!("exit-{phase}.json")));
+            assert_eq!(proof.phase, phase);
+            // Child owns the unreaped native process handle/child relationship;
+            // no process-name lookup or caller-supplied PID grants authority.
+            child.0.kill().unwrap();
+            killed = true;
         }
         assert!(Instant::now() < until, "actual child timed out at {phase}");
         std::thread::sleep(Duration::from_millis(25));
@@ -455,6 +496,14 @@ fn tree_bytes(root: &Path) -> BTreeMap<PathBuf, (FileIdentity, String)> {
 #[test]
 #[ignore = "actual process exit/restart requires native OS credentials and verified pinned helpers; generated fixtures only"]
 fn native_snapshot_actual_process_exit_matrix_retains_and_reconciles_without_reupload() {
+    process_matrix(false);
+}
+#[test]
+#[ignore = "actual parent-issued abrupt termination requires native credentials and pinned helpers; generated fixtures only"]
+fn native_snapshot_parent_kill_matrix_retains_and_reconciles_without_reupload() {
+    process_matrix(true);
+}
+fn process_matrix(abrupt: bool) {
     assert!(
         std::env::var_os("STILLHARBOUR_M4_GENERATED_REPOSITORY_DRIVE").is_none(),
         "This matrix owns only one generated system-temp fixture."
@@ -474,6 +523,11 @@ fn native_snapshot_actual_process_exit_matrix_retains_and_reconciles_without_reu
     }
     impl Drop for CredentialCleanup {
         fn drop(&mut self) {
+            if std::thread::panicking() {
+                // The owned fixture is retained on uncertain recovery. Keep
+                // its only OS-backed key reference available for inspection.
+                return;
+            }
             let _ = CredentialStore::delete_owned(
                 &self.catalog,
                 CredentialPurpose::Repository,
@@ -540,7 +594,7 @@ fn native_snapshot_actual_process_exit_matrix_retains_and_reconciles_without_reu
     drop(f.library);
     let _run = OwnedRun(Some(f._run), scope.identity.clone(), scope.volume.clone());
     for phase in PHASES {
-        child_exit(&root, &scope.owner, phase);
+        child_exit(&root, &scope.owner, phase, abrupt);
         let proof = read_exit_proof(&root.join(format!("exit-{phase}.json")));
         assert_eq!(proof.phase, phase);
         if phase == "catalog_copy_step" {

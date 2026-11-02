@@ -1190,7 +1190,8 @@ function SnapshotSchedulePanel({
         <p>
           {schedule.enabled ? 'Enabled' : 'Not enabled or authorization unavailable'} · Next due{' '}
           {schedule.nextDue || 'Not scheduled'} · {schedule.timezone} ·{' '}
-          {schedule.dstPolicy.replaceAll('_', ' ')} · Last run {schedule.lastRun ?? 'Not recorded'}
+          {schedule.dstPolicy.replaceAll('_', ' ')} · Last scheduled attempt{' '}
+          {schedule.lastRun ?? 'Not recorded'}
           {!schedule.fullyQuitSupported && ' · Fully-quit execution unavailable'}
         </p>
       )}

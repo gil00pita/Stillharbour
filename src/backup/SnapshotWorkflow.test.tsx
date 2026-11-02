@@ -439,6 +439,19 @@ it('binds recurring consent to the current exact review and never enables fully-
   expect(within(panel).getByText(/New or changed files/)).toBeVisible();
 });
 
+it('labels the schedule authority timestamp as an attempt without claiming a completed run', async () => {
+  const normal = handler;
+  handler = async (input) =>
+    input.kind === 'schedule_get'
+      ? { kind: 'schedule', data: { ...policy(), lastRun: '2026-11-02T01:02:03Z' } }
+      : normal(input);
+  open();
+  await selectProfile();
+  const panel = screen.getByRole('region', { name: 'Snapshot schedule' });
+  expect(within(panel).getByText(/Last scheduled attempt 2026-11-02T01:02:03Z/)).toBeVisible();
+  expect(within(panel).queryByText(/Last run/)).not.toBeInTheDocument();
+});
+
 it('allows disabling future repeats without a fresh source review when the source is offline', async () => {
   const fallback = handler;
   handler = async (input) =>

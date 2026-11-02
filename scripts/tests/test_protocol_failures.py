@@ -6,8 +6,11 @@ import importlib.util
 import json
 from pathlib import Path
 import secrets
+import socket
 import sys
 import tempfile
+import threading
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -18,6 +21,9 @@ PROBE_SPEC = importlib.util.spec_from_file_location('failure_probe', Path(__file
 FAILURE_PROBE = importlib.util.module_from_spec(PROBE_SPEC)
 with patch.dict(sys.modules, {'m4_failure_server': FAULT}):
     PROBE_SPEC.loader.exec_module(FAILURE_PROBE)
+    PROXY_SPEC = importlib.util.spec_from_file_location('disconnect_proxy', Path(__file__).parents[1] / 'm4_disconnect_proxy.py')
+    PROXY = importlib.util.module_from_spec(PROXY_SPEC)
+    PROXY_SPEC.loader.exec_module(PROXY)
 
 
 @contextlib.contextmanager
@@ -39,6 +45,107 @@ def fixture(scenario):
 
 
 class FaultBoundaryTests(unittest.TestCase):
+    def test_proxy_requires_new_growing_partial_pack_not_existing_or_complete_object(self):
+        with fixture('disconnect_upload') as (base, controller, original):
+            observed = {}
+            self.assertEqual(PROXY.progressing_pack(controller, observed), 0)
+            new = base / 'server/data/aa' / ('b' * 64)
+            new.write_bytes(b'x')
+            self.assertEqual(PROXY.progressing_pack(controller, observed), 0)
+            new.write_bytes(b'x' * 65536)
+            self.assertEqual(PROXY.progressing_pack(controller, observed), 65536)
+            self.assertEqual(PROXY.progressing_pack(controller, observed), 0)
+            new.write_bytes(b'x' * 2097152)
+            self.assertEqual(PROXY.progressing_pack(controller, observed), 0)
+            self.assertEqual(original.read_bytes(), b'unique generated baseline encrypted object')
+
+    def test_proxy_forwards_then_disconnects_owned_sockets_and_reconnects_only_after_disarm(self):
+        with fixture('disconnect_upload') as (base, controller, _):
+            backend = socket.socket()
+            backend.bind(('127.0.0.1', 0))
+            backend.listen(16)
+            backend.settimeout(0.1)
+            stopped = threading.Event()
+
+            def echo():
+                while not stopped.is_set():
+                    try:
+                        stream, _ = backend.accept()
+                    except socket.timeout:
+                        continue
+                    with stream:
+                        stream.settimeout(0.1)
+                        while not stopped.is_set():
+                            try:
+                                data = stream.recv(4096)
+                                if not data:
+                                    break
+                                stream.sendall(data)
+                            except socket.timeout:
+                                continue
+                            except OSError:
+                                break
+
+            worker = threading.Thread(target=echo)
+            worker.start()
+            reserved = socket.socket()
+            reserved.bind(('127.0.0.1', 0))
+            proxy_port = reserved.getsockname()[1]
+            reserved.close()
+            proxy = PROXY.Forwarder(controller, proxy_port, backend.getsockname()[1])
+
+            def round_trip():
+                client = socket.create_connection(('127.0.0.1', proxy_port), timeout=1)
+                client.sendall(b'owned generated echo')
+                client.setblocking(False)
+                received = bytearray()
+                until = time.monotonic() + 5
+                while len(received) < len(b'owned generated echo'):
+                    self.assertLess(time.monotonic(), until)
+                    proxy.step()
+                    try:
+                        part = client.recv(4096)
+                        self.assertTrue(part)
+                        received.extend(part)
+                    except BlockingIOError:
+                        pass
+                self.assertEqual(received, b'owned generated echo')
+                return client
+
+            client = None
+            reconnect = None
+            try:
+                client = round_trip()
+                pack = base / 'server/data/aa' / ('c' * 64)
+                pack.write_bytes(b'x')
+                proxy.step()
+                pack.write_bytes(b'x' * 65536)
+                proxy.step()
+                self.assertTrue(controller.triggered)
+                self.assertEqual(client.recv(1), b'')
+                self.assertFalse(proxy.peers)
+                with socket.create_connection(('127.0.0.1', proxy_port), timeout=1) as refused:
+                    proxy.step()
+                    self.assertEqual(refused.recv(1), b'')
+                (controller.control / 'failure.disarm').write_bytes(controller.owner.encode())
+                proxy.step()
+                reconnect = round_trip()
+                self.assertTrue(controller.disarmed)
+                proof = json.loads((controller.control / 'failure.proxy.json').read_bytes())
+                self.assertGreater(proof['armedForwardedBytes'], 0)
+                self.assertEqual(proof['nativeNewPackBytes'], 65536)
+                self.assertFalse(proof['physicalUnplug'])
+            finally:
+                if client is not None:
+                    client.close()
+                if reconnect is not None:
+                    reconnect.close()
+                proxy.close()
+                stopped.set()
+                worker.join(2)
+                backend.close()
+                self.assertFalse(worker.is_alive())
+
     def test_unresolved_lock_requires_exact_refusals_and_never_earns_recovery(self):
         evidence = {
             'outcome': 'preserved_unresolved_lock', 'helpersStopped': True,

@@ -155,6 +155,10 @@ impl PacedIo {
     pub fn is_paused(&self) -> Result<bool> {
         Ok(self.0.state.lock().map_err(|_| failed())?.paused)
     }
+    #[cfg(test)]
+    pub(crate) fn pending_request_count(&self) -> Result<usize> {
+        Ok(self.0.state.lock().map_err(|_| failed())?.queue.len())
+    }
     /// Does not interrupt an admitted syscall. Resume occurs at a byte boundary.
     pub fn set_paused(&self, paused: bool) -> Result<()> {
         let mut state = self.0.state.lock().map_err(|_| failed())?;

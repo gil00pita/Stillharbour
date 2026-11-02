@@ -117,10 +117,38 @@ impl NativeFixture {
             .unwrap()
             .unwrap()
     }
+    fn authority(&self, record: &ScheduleRecord) -> Option<ScheduleAuthority> {
+        let policy = SnapshotWorkflow::schedule_policy(record).unwrap();
+        schedule_transaction()
+            .unwrap()
+            .read(&ScheduleScope {
+                catalog_id: &self.catalog,
+                instance: &record.instance,
+                profile_id: &self.profile,
+                policy_digest: &policy,
+            })
+            .unwrap()
+    }
     fn due(&self, record: &mut ScheduleRecord, overdue: chrono::Duration) {
         record.view.next_due = (chrono::Utc::now() - overdue).to_rfc3339();
-        // next_due is intentionally outside sealed policy identity. Only the
-        // constructor-owned test catalog/profile is changed, never OS consent.
+        let policy = SnapshotWorkflow::schedule_policy(record).unwrap();
+        let scope = ScheduleScope {
+            catalog_id: &self.catalog,
+            instance: &record.instance,
+            profile_id: &self.profile,
+            policy_digest: &policy,
+        };
+        // Exact constructor-owned native consent AND catalog timing are seeded
+        // together to simulate elapsed time; row-only replay is tested below.
+        let mut transaction = schedule_transaction().unwrap();
+        transaction
+            .authorize(
+                &scope,
+                chrono::DateTime::parse_from_rfc3339(&record.view.next_due)
+                    .unwrap()
+                    .with_timezone(&chrono::Utc),
+            )
+            .unwrap();
         self.fixture
             .library
             .snapshots
@@ -201,16 +229,7 @@ fn native_due_schedule_runs_once_skips_missed_and_revokes_changed_scope() {
     let library = &f.fixture.library;
     let s = &library.snapshots;
     let mut record = f.schedule(true);
-    assert!(
-        crate::backup::credentials::schedule_permit(
-            &f.catalog,
-            &record.instance,
-            &f.profile,
-            &SnapshotWorkflow::schedule_policy(&record).unwrap(),
-            false
-        )
-        .unwrap()
-    );
+    assert!(f.authority(&record).is_some());
     f.due(&mut record, chrono::Duration::hours(2));
     let prior_jobs = s
         .jobs(Some(&f.profile))
@@ -233,6 +252,16 @@ fn native_due_schedule_runs_once_skips_missed_and_revokes_changed_scope() {
     assert!(chrono::DateTime::parse_from_rfc3339(&saved.view.next_due).unwrap() >= earliest);
     s.run_due(library.clone()).unwrap();
     assert_eq!(s.jobs(Some(&f.profile)).unwrap().len(), before + 1);
+    // Replaying only the old catalog timing cannot advance the OS high-water
+    // or hide its real last attempt. The current native authority wins.
+    let advanced = f.authority(&record).unwrap();
+    s.persist_schedule(&record).unwrap();
+    let mirrored = s.schedule_get(&f.profile).unwrap().unwrap();
+    assert_eq!(mirrored.next_due, advanced.next_admissible_utc);
+    assert_eq!(mirrored.last_run, advanced.last_attempt_utc);
+    s.run_due(library.clone()).unwrap();
+    assert_eq!(s.jobs(Some(&f.profile)).unwrap().len(), before + 1);
+    assert_eq!(f.authority(&record).unwrap(), advanced);
     // Recreate the native workflow session. Its real OS permit survives, but
     // the saved row grants no repository execution authority on its own.
     let cold =
@@ -345,32 +374,14 @@ fn native_due_schedule_runs_once_skips_missed_and_revokes_changed_scope() {
     s.run_due(library.clone()).unwrap();
     assert_eq!(s.jobs(Some(&f.profile)).unwrap().len(), expected);
     assert!(!s.schedule_get(&f.profile).unwrap().unwrap().enabled);
-    assert!(
-        !crate::backup::credentials::schedule_permit(
-            &f.catalog,
-            &changed.instance,
-            &f.profile,
-            &SnapshotWorkflow::schedule_policy(&changed).unwrap(),
-            false
-        )
-        .unwrap()
-    );
+    assert!(f.authority(&changed).is_none());
     // Disable remains possible after the whole original root is unavailable.
     let mut offline = f.schedule(true);
     f.due(&mut offline, chrono::Duration::hours(1));
     let renamed = f.fixture.source.with_file_name("generated-offline-root");
     std::fs::rename(&f.fixture.source, &renamed).unwrap();
     assert!(!s.schedule_disable(&f.profile).unwrap().unwrap().enabled);
-    assert!(
-        !crate::backup::credentials::schedule_permit(
-            &f.catalog,
-            &offline.instance,
-            &f.profile,
-            &SnapshotWorkflow::schedule_policy(&offline).unwrap(),
-            false
-        )
-        .unwrap()
-    );
+    assert!(f.authority(&offline).is_none());
     s.run_due(library.clone()).unwrap();
     assert_eq!(s.jobs(Some(&f.profile)).unwrap().len(), expected);
     assert_eq!(
@@ -679,4 +690,121 @@ fn native_snapshot_source_lease_admits_scan_and_refuses_organizer_writer() {
         std::fs::read(f.fixture.source.join("original.txt")).unwrap(),
         original
     );
+}
+
+#[test]
+#[ignore = "actual native OS timing authority; generated fixtures only"]
+fn native_timing_commit_failure_consumes_interval_and_legacy_requires_new_consent() {
+    let f = NativeFixture::new();
+    let s = &f.fixture.library.snapshots;
+    let mut record = f.schedule(true);
+    f.due(&mut record, chrono::Duration::hours(1));
+    let old = f.authority(&record).unwrap();
+    s.state.lock().unwrap().schedule_fail_after_commit = true;
+    assert!(s.run_due(f.fixture.library.clone()).is_err());
+    assert!(s.jobs(Some(&f.profile)).unwrap().is_empty());
+    let advanced = f.authority(&record).unwrap();
+    assert_ne!(advanced.generation, old.generation);
+    assert!(advanced.deadline().unwrap() > chrono::Utc::now());
+    assert!(advanced.last_attempt_utc.is_some());
+    // This models an ambiguous native write/crash before catalog or worker
+    // admission. The row is still old and can be replayed, never the OS deadline.
+    s.persist_schedule(&record).unwrap();
+    let cold = Arc::new(
+        SnapshotWorkflow::new(f.fixture.library.catalog.clone(), s.data.path().unwrap()).unwrap(),
+    );
+    cold.configure_helpers(helper_root()).unwrap();
+    let _stop = StopWorkflow(cold.clone(), f.retain.clone());
+    let selection = Fixture::selection(&f.fixture.backup);
+    cold.dispatch(
+        f.fixture.library.clone(),
+        SnapshotRequest::ProfileOpen {
+            profile_id: f.profile.clone(),
+            selection_id: Some(selection.id.clone()),
+        },
+        Some(selection),
+    )
+    .unwrap();
+    cold.run_due(f.fixture.library.clone()).unwrap();
+    assert!(cold.jobs(Some(&f.profile)).unwrap().is_empty());
+    assert_eq!(
+        cold.schedule_get(&f.profile).unwrap().unwrap().next_due,
+        advanced.next_admissible_utc
+    );
+    let policy = SnapshotWorkflow::schedule_policy(&record).unwrap();
+    let scope = ScheduleScope {
+        catalog_id: &f.catalog,
+        instance: &record.instance,
+        profile_id: &f.profile,
+        policy_digest: &policy,
+    };
+    schedule_transaction()
+        .unwrap()
+        .write_legacy_for_test(&scope)
+        .unwrap();
+    let legacy = cold.schedule_get(&f.profile).unwrap().unwrap();
+    assert!(!legacy.enabled && legacy.next_due.is_empty() && legacy.last_run.is_none());
+    cold.run_due(f.fixture.library.clone()).unwrap();
+    assert!(cold.jobs(Some(&f.profile)).unwrap().is_empty());
+    assert!(f.authority(&record).is_none());
+    // Only an explicitly reviewed native enable creates SHS2, never a read.
+    let renewed = f.schedule(true);
+    assert!(f.authority(&renewed).is_some());
+    assert!(s.schedule_get(&f.profile).unwrap().unwrap().enabled);
+    assert!(s.jobs(Some(&f.profile)).unwrap().is_empty());
+    assert_eq!(
+        std::fs::read(f.fixture.source.join("original.txt")).unwrap(),
+        b"generated preserved original"
+    );
+}
+
+#[test]
+#[ignore = "actual two-catalog native OS consent isolation; generated fixtures only"]
+fn native_imported_catalog_disable_cannot_revoke_original_instance_authority() {
+    let f = NativeFixture::new();
+    let record = f.schedule(true);
+    let authority = f.authority(&record).unwrap();
+    let imported = f.fixture._run.path().join("Imported.stillharbour");
+    f.fixture
+        .library
+        .catalog
+        .snapshot(imported.clone())
+        .unwrap();
+    let data = f.fixture._run.path().join("imported-data");
+    std::fs::create_dir(&data).unwrap();
+    let data = data.canonicalize().unwrap();
+    let library = Library::new(
+        Arc::new(Catalog::open(imported).unwrap()),
+        crate::library::LibraryOptions {
+            data_directory: data.clone(),
+            workers: crate::library::WorkerPaths {
+                executable: data.join("missing-worker"),
+                exiftool: None,
+                working_directory: data.join("worker"),
+            },
+        },
+    )
+    .unwrap();
+    assert_ne!(library.snapshots.instance().unwrap(), record.instance);
+    let view = library.snapshots.schedule_get(&f.profile).unwrap().unwrap();
+    assert!(!view.enabled && view.next_due.is_empty() && view.last_run.is_none());
+    assert!(
+        !library
+            .snapshots
+            .schedule_disable(&f.profile)
+            .unwrap()
+            .unwrap()
+            .enabled
+    );
+    assert_eq!(f.authority(&record).unwrap(), authority);
+    assert!(
+        f.fixture
+            .library
+            .snapshots
+            .schedule_get(&f.profile)
+            .unwrap()
+            .unwrap()
+            .enabled
+    );
+    library.snapshots.cancel_all();
 }

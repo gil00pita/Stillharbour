@@ -15,7 +15,7 @@ A local-first photo library that keeps your originals in ordinary folders.
 **Stillharbour** is a native desktop application built with Tauri, React and Rust. Browse photos across folders, inspect metadata, and organise favourites, ratings and tags in a local SQLite catalog. Your originals stay where they are, and annotations stay in the catalog. No account, telemetry or cloud service is enabled.
 
 > [!IMPORTANT]
-> Stillharbour is in development. Native library evidence covers **macOS Apple Silicon**, with a bounded **Windows local NTFS** scan/preview implementation. Windows network drives and other filesystems remain unavailable; capture/camera metadata and broader format support are not implemented there. Signed installers and clean-machine release validation remain pending. M2 organization and M3 read-only inspection work are present; M4 has started with read-only Backup & Sync comparison. File copying, renaming, moving, deletion and production backup remain unavailable. See the [implementation log](docs/IMPLEMENTATION_LOG.md) for actual checks and open gates.
+> Stillharbour is in development. Native library evidence covers **macOS Apple Silicon**, with a bounded **Windows local NTFS** scan/preview implementation. Windows network drives and other filesystems remain unavailable for library scanning; capture/camera metadata and broader format support are not implemented there. Signed installers and clean-machine release validation remain pending. M2 organization, M3 read-only inspection and M4 comparison/copy/snapshot integration are present. Production copying, renaming, moving, deletion and backup remain gated while native preservation acceptance is collected. See [M4 validation](docs/M4_VALIDATION.md) and the [implementation log](docs/IMPLEMENTATION_LOG.md) for actual checks and open gates.
 
 ## Features
 
@@ -100,7 +100,7 @@ Work proceeds through reviewed milestones. Individual later slices, such as macO
 | [M1 — Read-only library](tasks/M1_READ_ONLY_LIBRARY.md)                      | Implemented native browsing and catalog annotations; platform and performance gates remain                                                     |
 | [M2 — Organization and import](tasks/M2_SAFE_OPERATIONS.md)                  | In progress: previews, companion review, destination preflight, saved template versions and immutable drafts; execution/import/undo gates open |
 | [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Read-only Duplicates, Integrity and Storage; production quarantine awaits M4 recovery                                                          |
-| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | M4A complete and natively validated; copy, snapshots and restore remain gated                                                                  |
+| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | M4A accepted; copy, retained history and snapshots integrated, with production execution gated on native preservation acceptance               |
 | [M5 — Maps, metadata and formats](tasks/M5_MAP_METADATA_FORMATS.md)          | macOS format-preview slice implemented; maps and remaining scope pending                                                                       |
 | [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | Pending packaging, signing and target-platform acceptance                                                                                      |
 

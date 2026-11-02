@@ -176,6 +176,8 @@ impl EventJournal for SyncJournal {
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()> {
         let id = self.job.clone();
         let phase = phase.to_owned();
+        #[cfg(test)]
+        let boundary_phase = phase.clone();
         let text = encode(&evidence)?;
         let item = item
             .map(i64::try_from)
@@ -184,10 +186,17 @@ impl EventJournal for SyncJournal {
         if text.len() > 8192 {
             return Err(failed("Copy event exceeds 8 KiB."));
         }
-        self.catalog.call(move|db|{let tx=db.transaction()?;tx.execute("INSERT INTO backup_sync_events(job_id,ordinal,item,phase,evidence) SELECT ?1,COALESCE(MAX(ordinal),0)+1,?2,?3,?4 FROM backup_sync_events WHERE job_id=?1",params![id,item,format!("copy/{phase}"),text])?;if phase=="item_completed_verified" {tx.execute("UPDATE backup_sync_jobs SET verified_files=verified_files+1,phase='verifying',updated_at=? WHERE id=?",params![now(),id])?;}tx.commit()?;Ok(())})
+        self.catalog.call(move|db|{let tx=db.transaction()?;tx.execute("INSERT INTO backup_sync_events(job_id,ordinal,item,phase,evidence) SELECT ?1,COALESCE(MAX(ordinal),0)+1,?2,?3,?4 FROM backup_sync_events WHERE job_id=?1",params![id,item,format!("copy/{phase}"),text])?;if phase=="item_completed_verified" {tx.execute("UPDATE backup_sync_jobs SET verified_files=verified_files+1,phase='verifying',updated_at=? WHERE id=?",params![now(),id])?;}tx.commit()?;Ok(())})?;
+        #[cfg(test)]
+        tests::control_acceptance::journal_boundary(&self.job, &boundary_phase);
+        Ok(())
     }
 }
 impl CopyJournal for SyncJournal {
+    #[cfg(test)]
+    fn control_boundary(&self, phase: &str) {
+        tests::control_acceptance::journal_boundary(&self.job, phase);
+    }
     fn history_count(&self) -> Result<u64> {
         let id = self.job.clone();
         self.catalog.call(move |db| {

@@ -36,6 +36,10 @@ jobs:
         run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow library::snapshots::process_failures -- --ignored
       - name: Native schedule, multi-root loss and coordination acceptance
         run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow library::snapshots::native_acceptance -- --ignored
+      - name: Damaged and unknown media preserve both snapshot versions
+        run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow library::snapshots::content_preservation -- --ignored
+      - name: Native transfer pause, rate changes and cancellation
+        run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow sync_application_native_controls -- --ignored
       - run: npm run release:check
       - run: npm run desktop:test:build
       - run: npm run desktop:test

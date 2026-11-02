@@ -456,6 +456,17 @@ With catch-up checked, one unchanged-scope run may follow any such interruption;
 it never replays each missed interval. The next deadline is the current
 admission/skip time plus the configured interval. Restart still requires native
 repository/root reauthorization; fully quit processes execute no timer.
+Timing authority uses a versioned OS-backed record containing the approved
+policy digest, next-admissible UTC deadline and last scheduled attempt. Catalog
+`next_due`/`last_run` values are mirrors, not execution grants or trusted display
+values. Serialize enable/disable/read/claim/start admission inside the process;
+the native catalog lifetime lock excludes a second catalog process. Advance and
+read back the OS deadline before catalog/start writes. A failed/ambiguous write
+or crash consumes no duplicate admission and never rolls that deadline backward.
+Legacy digest-only permits require fresh reviewed consent. Derive every authority
+key from the current native catalog instance; disabling an imported copy cannot
+revoke the original catalog's authority.
+
 
 Pinned remote helpers use a 10-second connection timeout, 30-second I/O-idle
 and stuck-request limits, and a 20-second rclone startup limit. Streaming
