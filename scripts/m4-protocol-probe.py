@@ -7,8 +7,10 @@ This is transport evidence, not a production application workflow test.
 """
 import argparse
 import contextlib
+import datetime
 import hashlib
 import importlib.metadata
+import ipaddress
 import json
 import logging
 import os
@@ -19,6 +21,7 @@ import signal
 import shutil
 import socket
 import sqlite3
+import stat
 import subprocess
 import sys
 import tempfile
@@ -33,6 +36,26 @@ def redact(text, environment):
         if any(word in name for word in ('PASS', 'TOKEN')) and value:
             text = text.replace(value, '[fixture-secret]')
     return text
+
+
+def fixture_certificate(base):
+    from cryptography import x509
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, 'Stillharbour disposable loopback')])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    certificate = (x509.CertificateBuilder().subject_name(subject).issuer_name(subject)
+                   .public_key(key.public_key()).serial_number(x509.random_serial_number())
+                   .not_valid_before(now - datetime.timedelta(minutes=5))
+                   .not_valid_after(now + datetime.timedelta(days=1))
+                   .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+                   .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address('127.0.0.1'))]), critical=False)
+                   .add_extension(x509.ExtendedKeyUsage([ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+                   .sign(key, hashes.SHA256()))
+    owned(base, base / 'server.key').write_bytes(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.TraditionalOpenSSL, serialization.NoEncryption()))
+    owned(base, base / 'server.crt').write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
 
 
 def stop_tree(process):
@@ -140,6 +163,9 @@ def server(argv, base, environment, listen_port):
                     raise RuntimeError('Disposable protocol server failed to become ready.')
                 time.sleep(0.05)
         yield process
+    except Exception as error:
+        diagnostic = (base / 'server.log').read_bytes()[-3500:].decode(errors='replace')
+        raise RuntimeError(f'{error}; generated server diagnostic: {redact(diagnostic, environment)}') from error
     finally:
         if process.poll() is None:
             process.terminate()
@@ -161,10 +187,15 @@ def server_smb():
         raise RuntimeError('SMB child scope owner mismatch.')
     root = owned(base, base / 'server')
     logging.getLogger().setLevel(logging.CRITICAL)
+    logging.getLogger('impacket.smbserver').setLevel(logging.ERROR)
     backend = smbserver.SimpleSMBServer(listenAddress='127.0.0.1', listenPort=int(os.environ['STILLHARBOUR_PROTOCOL_PORT']))
     backend.addShare('FIXTURE', str(root), 'Generated Stillharbour protocol fixture', readOnly='no')
     backend.setSMB2Support(True)
     backend.addCredential('fixture', 0, compute_lmhash(token), compute_nthash(token))
+    config = backend.getServer().getServerConfig()
+    config.set('global', 'anonymous_logon', 'no')
+    backend.getServer().setServerConfig(config)
+    backend.getServer().processConfigFile()
     backend.start()
 
 
@@ -249,6 +280,8 @@ def probe(protocol, binaries, versions, allow_ftp):
         (base / 'owner').write_text(owner_nonce)
         remote = base / 'server'
         remote.mkdir()
+        if protocol == 'smb' and sys.platform == 'darwin':
+            (remote / 'repository').mkdir()
         neighbor = remote / 'outside-repository.bin'
         neighbor.write_bytes(b'preserved destination-only neighbor')
         config = base / 'rclone.conf'
@@ -282,10 +315,7 @@ def probe(protocol, binaries, versions, allow_ftp):
             repository = 'rclone:fixture:repository'
         elif protocol in ('ftp', 'ftps'):
             if protocol == 'ftps':
-                openssl = Path('C:/Program Files/Git/usr/bin/openssl.exe') if sys.platform == 'win32' else Path('/usr/bin/openssl')
-                (base / 'openssl.conf').write_text('')
-                ssl_env = {**env, 'OPENSSL_CONF': str(base / 'openssl.conf')}
-                run([openssl, 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', base / 'server.key', '-out', base / 'server.crt', '-days', '1', '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1'], base, ssl_env)
+                fixture_certificate(base)
                 env['RCLONE_CA_CERT'] = str(base / 'server.crt')
             # One transfer + one checker need a third connection for metadata;
             # rclone documents smaller pools as a potential deadlock.
@@ -310,6 +340,10 @@ def probe(protocol, binaries, versions, allow_ftp):
         if protocol != 'local':
             command += ['-o', f'rclone.program={quoted_program}', '-o', 'rclone.timeout=20s', '-o', 'rclone.args=serve restic --stdio --transfers 1 --checkers 1 --buffer-size 64k --multi-thread-streams 0 --contimeout 5s --timeout 15s --retries 1 --low-level-retries 1']
         with manager:
+            if protocol == 'smb' and sys.platform == 'darwin':
+                # Diagnose server/client interoperability before restic applies
+                # its much longer backend retry budget.
+                run([binaries['rclone'], 'lsf', 'fixture:FIXTURE/repository', '--max-depth', '1', '--retries', '1', '--low-level-retries', '1', '--contimeout', '5s', '--timeout', '15s'], base, env, timeout=25)
             source = snapshot_source(base, owner_nonce)
             expected = contents(source)
             run(command + ['init'], base, env)
@@ -377,6 +411,9 @@ def probe(protocol, binaries, versions, allow_ftp):
                 raise RuntimeError('Generated data pack is unexpectedly empty.')
             damaged_pack = bytearray(original_pack)
             damaged_pack[len(damaged_pack)//2] ^= 1
+            # The local restic backend deliberately makes generated packs 0400
+            # on macOS. Change only this owned fixture's mode to inject damage.
+            pack.chmod(stat.S_IMODE(pack.stat().st_mode) | stat.S_IWUSR)
             pack.write_bytes(damaged_pack)
             code, _, _ = run(command + ['check', '--read-data'], base, env, success=False)
             if code == 0:
