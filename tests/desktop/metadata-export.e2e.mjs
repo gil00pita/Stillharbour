@@ -5,7 +5,6 @@ import { native, reviewCatalogMetadata, finishMetadataExports } from './m5-metad
 
 describe('M5 generated native metadata export', () => {
   it('reviews and undoes tags, exports independent catalog/XMP copies and preserves all sources', async function () {
-    if (process.platform !== 'darwin') this.skip();
     this.timeout(120000);
     const directory = '.context/m5-native-metadata';
     await mkdir(directory, { recursive: true });

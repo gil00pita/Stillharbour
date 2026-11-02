@@ -17,3 +17,7 @@ The test-only retained-recovery supervisor continuously drains bounded stderr us
 ## Validation and limits
 
 The existing-empty-output regression failed before the repair; the nine export tests pass afterward on macOS. Existing bound-migration and actual seven-boundary retained-child tests remain the platform regression seams. Record fresh full-suite and Windows outcomes in [M5 validation](../M5_VALIDATION.md). No catalog schema, original-file mutation gate, credentials, root identities or source permissions change.
+
+## Windows compile follow-up
+
+The first repaired-head Foundation/transport runs at c3591f7 failed before tests with `error[E0603]: function checked is private` at portable.rs:105 and :262. The existing validator was `pub(super)`; sharing it with the owned export adapter requires `pub(crate)`. Only that internal visibility changes: the module remains crate-private, its attribute checks are unchanged and no renderer command or filesystem authority is added. Fresh Windows CI must validate this correction before accepting the platform repair.

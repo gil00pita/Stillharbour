@@ -2,6 +2,14 @@
 
 Date: 2026-11-02. Request: “Finish M5”. Implementation covers offline maps, catalog organization, reversible tags, explicit keyword import and reviewed portable-catalog/XMP export. Full milestone acceptance still depends on the explicitly recorded native/platform gates below. M4 preservation authority and M6 release scope remain separate.
 
+## Final acceptance follow-up — 2026-11-02
+
+The renewed “Finish M5” request resumes the remaining gate work under the updated Chakra v3 coding instructions. PR head c3591f7's Windows Foundation [125374281122](https://github.com/gil00pita/Stillharbour/actions/runs/41473892586/job/125374281122) and transport [125374282607](https://github.com/gil00pita/Stillharbour/actions/runs/41473892568/job/125374282607) stop before tests with first error `error[E0603]: function checked is private`. Both call sites use the owned-output validator introduced in ADR-0086; its internal visibility is corrected from parent-only to crate-wide without changing validation or adding public authority. The Mac transport job at c3591f7 passes in 21m12s. Fresh Windows results remain required; no prior failed run is described as passing.
+
+The native map/keyboard/focus/metadata/export scenario passes again on this Mac in **7.1s** (`.context/m5-finish2-map.log`); core Clippy with warnings denied and Rust formatting pass. Both M5 desktop specs now run on Windows as well as macOS in the existing Foundation desktop glob; per-platform results remain required, with no GPU/focus/source assertion removed.
+
+The automation process still reports `AccessibilityTrusted=false`. Actual VoiceOver review requires native permission or an explicit manual reviewer, requested again while independent build/CI work continues. The earlier automated map/keyboard/focus checks remain valid at their recorded build scope. Clean target machines and unsupported format/platform combinations remain explicitly unverified; original-file production gates and M6 remain closed.
+
 ## Acceptance repair checkpoint — 2026-11-02
 
 Request: fix local build errors, close M5 acceptance and repair inherited preservation failures. The owner reports the local desktop build/dev app now works; no reproducible local compiler error is claimed. This checkpoint supersedes the older failed/occluded-host results below while preserving their history.
