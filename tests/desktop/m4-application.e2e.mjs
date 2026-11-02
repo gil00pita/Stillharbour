@@ -294,6 +294,12 @@ describe('M4 application snapshot lifecycle — generated native fixtures', () =
     ])
       assert.equal(audit[key], true, `Native fixture audit: ${key}`);
     assert.equal(audit.restoredFilesCompared, 4);
+    const layout = await browser.execute(() => {
+      const workspace = document.querySelector('.backup-workspace');
+      if (!(workspace instanceof HTMLElement)) throw new Error('Backup workspace is unavailable');
+      return { scrollWidth: workspace.scrollWidth, clientWidth: workspace.clientWidth };
+    });
+    assert.ok(layout.scrollWidth <= layout.clientWidth + 1, JSON.stringify(layout));
     const evidence = await createEvidenceDirectory('.context/m4-application');
     await writeFile(
       `${evidence}/snapshot-lifecycle.json`,

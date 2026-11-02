@@ -5,12 +5,13 @@ use crate::{
     filesystem::DirectoryChain,
 };
 use std::{
-    ffi::OsString,
+    ffi::{OsStr, OsString},
     fs::{File, OpenOptions},
     io::{self, Read, Write},
     os::{
         fd::AsRawFd,
         unix::{
+            ffi::OsStrExt,
             fs::{FileTypeExt, MetadataExt, OpenOptionsExt},
             net::{UnixListener, UnixStream},
         },
@@ -27,6 +28,60 @@ use zeroize::Zeroizing;
 const PATH_ENV: &str = "STILLHARBOUR_RCLONE_COMPLETION_PATH";
 const TOKEN_ENV: &str = "STILLHARBOUR_RCLONE_COMPLETION_TOKEN";
 const MAX_CLIENTS: usize = 16;
+fn native_confstr_directory(name: libc::c_int) -> Result<PathBuf> {
+    let mut buffer = [0u8; 4096];
+    // SAFETY: fixed SDK selector and bounded native output buffer.
+    let size = unsafe { libc::confstr(name, buffer.as_mut_ptr().cast(), buffer.len()) };
+    if size < 2
+        || size > buffer.len()
+        || buffer[..size].iter().position(|b| *b == 0) != Some(size - 1)
+    {
+        return Err(failure());
+    }
+    let path = Path::new(OsStr::from_bytes(&buffer[..size - 1])).to_path_buf();
+    if !path.is_absolute() {
+        return Err(failure());
+    }
+    Ok(path)
+}
+fn native_temp_directory() -> Result<PathBuf> {
+    // USER_DIR has no environment fallback. USER_TEMP_DIR may fall back to
+    // TMPDIR if dirhelper fails, so require Darwin's exact native sibling T
+    // scope before accepting it. Unknown layouts remain unavailable.
+    let local = native_confstr_directory(libc::_CS_DARWIN_USER_DIR)?;
+    let local = local.canonicalize()?;
+    let selected = native_confstr_directory(libc::_CS_DARWIN_USER_TEMP_DIR)?;
+    let expected = qualified_temp_path(&local, &selected)?;
+    let path = expected.canonicalize()?;
+    let metadata = std::fs::symlink_metadata(&path)?;
+    // SAFETY: read-only native identity.
+    if !path.is_absolute()
+        || !metadata.is_dir()
+        || metadata.uid() != unsafe { libc::geteuid() }
+        || metadata.mode() & 0o022 != 0
+    {
+        return Err(failure());
+    }
+    DirectoryChain::open(&path)?;
+    Ok(path)
+}
+fn qualified_temp_path(local: &Path, selected: &Path) -> Result<PathBuf> {
+    let expected = local.parent().ok_or_else(failure)?.join("T");
+    let selected = selected
+        .strip_prefix("/private")
+        .map_or(selected.to_path_buf(), |short| Path::new("/").join(short));
+    let expected_normal = expected
+        .strip_prefix("/private")
+        .map_or(expected.clone(), |short| Path::new("/").join(short));
+    if selected != expected_normal {
+        return Err(failure());
+    }
+    Ok(expected)
+}
+fn socket_path_fits(path: &Path) -> bool {
+    let bytes = path.as_os_str().as_bytes();
+    bytes.len() < 104 && !bytes.contains(&0)
+}
 fn failure() -> AppError {
     AppError::new(
         ErrorCode::WorkerFailed,
@@ -248,9 +303,12 @@ fn serve(
 }
 pub(crate) fn begin(workdir: &Path, cleanup_counter: Arc<AtomicUsize>) -> Result<Lease> {
     let work = DirectoryChain::open(workdir)?;
-    let tree = tempfile::Builder::new().prefix("sh-rc-").tempdir()?;
+    let parent = native_temp_directory()?;
+    let tree = tempfile::Builder::new()
+        .prefix("sh-rc-")
+        .tempdir_in(&parent)?;
     let path = tree.path().canonicalize()?;
-    if !path.starts_with(std::env::temp_dir().canonicalize()?) {
+    if path.parent() != Some(parent.as_path()) {
         return Err(failure());
     }
     let held = OpenOptions::new()
@@ -269,6 +327,9 @@ pub(crate) fn begin(workdir: &Path, cleanup_counter: Arc<AtomicUsize>) -> Result
         _held: held,
     };
     let socket = path.join("s");
+    if !socket_path_fits(&socket) {
+        return Err(failure());
+    }
     let listener = UnixListener::bind(&socket)?;
     // SAFETY: descriptor-relative metadata on this owned socket node. A raced
     // symlink is never followed to an original/user file.
@@ -328,6 +389,9 @@ fn register_at(path: &Path, token: &str) -> Result<UnixStream> {
         return Err(failure());
     }
     let parent = path.parent().ok_or_else(failure)?;
+    if !socket_path_fits(path) || parent.parent() != Some(native_temp_directory()?.as_path()) {
+        return Err(failure());
+    }
     let chain = DirectoryChain::open(parent)?;
     let directory = std::fs::symlink_metadata(parent)?;
     let before = std::fs::symlink_metadata(path)?;

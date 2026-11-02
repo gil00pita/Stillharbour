@@ -17,6 +17,7 @@ import logging
 import os
 from pathlib import Path
 import platform
+import re
 import secrets
 import signal
 import shutil
@@ -61,6 +62,11 @@ def fixture_certificate(base):
     owned(base, base / 'server.crt').write_bytes(certificate.public_bytes(serialization.Encoding.PEM))
 
 
+def application_diagnostics(stderr):
+    pattern = r'STILLHARBOUR_GENERATED_(?:BACKUP_DIAGNOSTIC phase=[a-z_]{1,64} code=[A-Za-z]{1,64}|HELPER_DIAGNOSTIC command=[a-z_]{1,64} exit_code=-?[0-9]{1,12})'
+    return '; '.join(line for line in stderr.splitlines() if re.fullmatch(pattern, line))[:1024]
+
+
 def stop_tree(process):
     if process.poll() is not None:
         return
@@ -72,7 +78,9 @@ def stop_tree(process):
                                 stderr=subprocess.DEVNULL, timeout=10,
                                 creationflags=subprocess.CREATE_NO_WINDOW)
         if result.returncode != 0 and process.poll() is None:
-            process.kill()
+            # Killing only the parent would orphan its descendants and destroy
+            # the ownership tree needed for a subsequent permitted cleanup.
+            raise RuntimeError('Could not stop the owned protocol process tree; retain its generated scope and retry cleanup with process-termination permission.')
     else:
         try:
             os.killpg(process.pid, signal.SIGKILL)
@@ -482,13 +490,14 @@ def probe(protocol, binaries, versions, allow_ftp, application_probe=None):
                 payload = json.dumps({'destination': destination,
                                       'repositoryPassword': env['RESTIC_PASSWORD'],
                                       'transportPassword': token if protocol != 'local' else None})
-                app_code, output, _ = run([application_probe], base, env,
+                app_code, output, app_stderr = run([application_probe], base, env,
                                          input_text=payload, timeout=360, success=False)
                 application = json.loads(output)
                 if app_code != 0 or application.get('passed') is not True:
                     stage = application.get('stage', 'unknown')
                     code = application.get('errorCode', 'unknown')
-                    raise RuntimeError(f'The actual application adapter failed at {stage} ({code}).')
+                    diagnostic = application_diagnostics(app_stderr)
+                    raise RuntimeError(f'The actual application adapter failed at {stage} ({code}).' + (f' {diagnostic}' if diagnostic else ''))
                 def rejected_application(candidate, password):
                     request = json.dumps({'destination': candidate,
                                           'repositoryPassword': env['RESTIC_PASSWORD'],

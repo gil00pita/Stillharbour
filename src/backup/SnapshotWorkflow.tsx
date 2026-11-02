@@ -466,7 +466,9 @@ function SnapshotProfileWorkspace({
           <p>
             {profile.protocol} · {profile.status.replaceAll('_', ' ')}
           </p>
-          <p>Repository identity: {profile.repositoryId ?? 'Not established yet'}</p>
+          <p className="backup-path">
+            Repository identity: {profile.repositoryId ?? 'Not established yet'}
+          </p>
           {profile.hostFingerprint && (
             <p className="backup-path">Configured host fingerprint: {profile.hostFingerprint}</p>
           )}

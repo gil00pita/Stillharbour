@@ -58,6 +58,7 @@ impl Credentials {
             Err(Failure {
                 stage: "credential-cleanup",
                 code: ErrorCode::Io,
+                job: None,
             })
         }
     }
@@ -72,6 +73,7 @@ impl Drop for Credentials {
 struct Failure {
     stage: &'static str,
     code: ErrorCode,
+    job: Option<serde_json::Value>,
 }
 struct RunScope {
     library: Option<Arc<Library>>,
@@ -108,18 +110,21 @@ fn fail(stage: &'static str) -> Failure {
     Failure {
         stage,
         code: ErrorCode::Conflict,
+        job: None,
     }
 }
 fn app<T>(stage: &'static str, value: stillharbour_core::domain::Result<T>) -> Result<T> {
     value.map_err(|error| Failure {
         stage,
         code: error.code,
+        job: None,
     })
 }
 fn io<T>(stage: &'static str, value: std::io::Result<T>) -> Result<T> {
     value.map_err(|_| Failure {
         stage,
         code: ErrorCode::Io,
+        job: None,
     })
 }
 fn require(stage: &'static str, value: bool) -> Result<()> {
@@ -186,7 +191,11 @@ fn wait(library: &Arc<Library>, initial: SnapshotJob) -> Result<SnapshotJob> {
             job.id == initial.id && job.profile_id == initial.profile_id,
         )?;
         if !["queued", "running", "cancel_requested"].contains(&job.state.as_str()) {
-            require("completed-native-job", job.state == "completed_verified")?;
+            if job.state != "completed_verified" {
+                let mut failure = fail("completed-native-job");
+                failure.job = Some(terminal_diagnostics(&job));
+                return Err(failure);
+            }
             require(
                 "earned-evidence",
                 job.included
@@ -201,6 +210,34 @@ fn wait(library: &Arc<Library>, initial: SnapshotJob) -> Result<SnapshotJob> {
         require("job-deadline", Instant::now() < until)?;
         std::thread::sleep(Duration::from_millis(50));
     }
+}
+fn terminal_diagnostics(job: &SnapshotJob) -> serde_json::Value {
+    // Never forward extensible backend strings: only known, public state/phase tokens.
+    let state = match job.state.as_str() {
+        "completed_verified" => "completed_verified",
+        "canceled_with_partial_copies" => "canceled_with_partial_copies",
+        "failed" => "failed",
+        "needs_recovery" => "needs_recovery",
+        _ => "unknown",
+    };
+    let phase = match job.phase.as_str() {
+        "review_validated" => "review_validated",
+        "staging" => "staging",
+        "catalog_snapshot" => "catalog_snapshot",
+        "snapshotting" => "snapshotting",
+        "snapshot_included" => "snapshot_included",
+        "structural_check" => "structural_check",
+        "data_read" => "data_read",
+        "restoring" => "restoring",
+        "comparing" => "comparing",
+        "completed" => "completed",
+        "publication_name_preflight" => "publication_name_preflight",
+        "terminal" => "terminal",
+        _ => "unknown",
+    };
+    json!({"jobState":state,"jobPhase":phase,"included":job.included,
+        "structuralChecked":job.structural_checked,"dataReadVerified":job.data_read_verified,
+        "restoredCompared":job.restored_compared})
 }
 fn execute(library: &Arc<Library>, review: SnapshotReview) -> Result<SnapshotJob> {
     require(
@@ -541,6 +578,39 @@ fn run() -> Result<serde_json::Value> {
 mod tests {
     use super::*;
     #[test]
+    fn terminal_diagnostics_never_forward_unknown_strings_or_job_messages() {
+        let private = "secret-or-private-path";
+        let mut job = SnapshotJob {
+            id: private.into(),
+            profile_id: private.into(),
+            action: private.into(),
+            state: private.into(),
+            phase: private.into(),
+            files: 0,
+            bytes: "0".into(),
+            snapshot_id: None,
+            message: private.into(),
+            started_at: private.into(),
+            finished_at: None,
+            included: true,
+            structural_checked: false,
+            data_read_verified: false,
+            restored_compared: false,
+            source_retained: true,
+            independent_recovery_verified: false,
+        };
+        let diagnostic = terminal_diagnostics(&job);
+        assert_eq!(diagnostic["jobState"], "unknown");
+        assert_eq!(diagnostic["jobPhase"], "unknown");
+        assert!(!diagnostic.to_string().contains(private));
+        job.state = "needs_recovery".into();
+        job.phase = "snapshotting".into();
+        let diagnostic = terminal_diagnostics(&job);
+        assert_eq!(diagnostic["jobState"], "needs_recovery");
+        assert_eq!(diagnostic["jobPhase"], "snapshotting");
+        assert_eq!(diagnostic["included"], true);
+    }
+    #[test]
     fn remote_authority_is_only_loopback_high_port_and_explicit_ftp_consent() {
         let destination = |host: &str, port, insecure_acknowledged| SnapshotDestinationInput::Ftp {
             host: host.into(),
@@ -580,7 +650,7 @@ fn main() {
             // Neither helper output, endpoint settings, passwords nor private paths are printed.
             println!(
                 "{}",
-                json!({"passed":false,"stage":error.stage,"errorCode":error.code})
+                json!({"passed":false,"stage":error.stage,"errorCode":error.code,"job":error.job})
             );
             std::process::exit(1);
         }

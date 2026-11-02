@@ -31,6 +31,8 @@ use std::{
     },
     time::{Duration, Instant},
 };
+#[cfg(test)]
+mod process_failures;
 mod reconcile;
 
 const MAX_FILES: usize = 10_000;
@@ -308,6 +310,13 @@ impl SnapshotWorkflow {
         cancel: &AtomicBool,
         outcome: std::thread::Result<Result<()>>,
     ) -> Result<()> {
+        #[cfg(feature = "fixture-probes")]
+        if let Ok(Err(error)) = &outcome {
+            eprintln!(
+                "STILLHARBOUR_GENERATED_BACKUP_DIAGNOSTIC phase={} code={:?}",
+                job.view.phase, error.code
+            );
+        }
         match outcome {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
@@ -492,6 +501,7 @@ impl SnapshotWorkflow {
         let original_digest = digest(&profile)?;
         let mut roots: BTreeMap<String, RootBinding> = BTreeMap::new();
         let mut versions = Vec::new();
+        let mut record_budget = FileRecordBudget::default();
         let mut seen = BTreeSet::new();
         for file in files {
             id(&file.root_id)?;
@@ -544,7 +554,7 @@ impl SnapshotWorkflow {
                 ));
             }
             let key = blake3::hash(&file.relative_path).to_hex().to_string();
-            versions.push(FileVersion {
+            let version = FileVersion {
                 metadata,
                 id: format!("{}:{key}", file.root_id),
                 root_id: file.root_id.clone(),
@@ -555,7 +565,9 @@ impl SnapshotWorkflow {
                 digest: file.full_digest,
                 archive: format!("roots/{}/{key}.bin", file.root_id),
                 display: format!("Old destination/{}", relative.display()),
-            });
+            };
+            record_budget.admit(&version)?;
+            versions.push(version);
         }
         if roots.len() > 16 {
             return Err(invalid("Too many exact recovery dataset roots."));
@@ -1203,17 +1215,17 @@ mod application_tests {
             }
         }
     }
-    struct Fixture {
-        library: Arc<Library>,
-        _run: tempfile::TempDir,
+    pub(super) struct Fixture {
+        pub(super) library: Arc<Library>,
+        pub(super) _run: tempfile::TempDir,
         external: Option<OwnedExternalRun>,
-        source: PathBuf,
-        backup: PathBuf,
-        output: PathBuf,
-        root: String,
+        pub(super) source: PathBuf,
+        pub(super) backup: PathBuf,
+        pub(super) output: PathBuf,
+        pub(super) root: String,
     }
     impl Fixture {
-        fn new() -> Self {
+        pub(super) fn new() -> Self {
             let run = tempfile::tempdir().unwrap();
             let data = run.path().join("app");
             let source = run.path().join("photos");
@@ -1271,7 +1283,7 @@ mod application_tests {
                 root,
             }
         }
-        fn selection(path: &Path) -> NativeSnapshotSelection {
+        pub(super) fn selection(path: &Path) -> NativeSnapshotSelection {
             let path = path.canonicalize().unwrap();
             let file = native::open_root(&path, None).unwrap();
             NativeSnapshotSelection {
@@ -1318,6 +1330,50 @@ mod application_tests {
                 supersedes: None,
             }
         }
+    }
+    #[test]
+    fn aggregate_file_metadata_budget_uses_encoded_bytes_and_checked_boundary() {
+        let mut budget = FileRecordBudget {
+            bytes: MAX_FILE_RECORD_BYTES - 8,
+        };
+        budget.admit(&"aaaaaa").unwrap(); // JSON string quotes count too.
+        assert_eq!(budget.bytes, MAX_FILE_RECORD_BYTES);
+        assert!(budget.admit(&"a").is_err());
+        assert_eq!(budget.bytes, MAX_FILE_RECORD_BYTES);
+        let mut escaped = FileRecordBudget {
+            bytes: MAX_FILE_RECORD_BYTES - 4,
+        };
+        assert!(escaped.admit(&"\n\n").is_err());
+        assert_eq!(escaped.bytes, MAX_FILE_RECORD_BYTES - 4);
+        let mut overflow = FileRecordBudget { bytes: usize::MAX };
+        assert!(overflow.admit(&0).is_err());
+        assert_eq!(overflow.bytes, usize::MAX);
+    }
+    #[test]
+    fn inventory_path_budget_counts_repeated_native_prefixes_before_reading_payloads() {
+        let f = Fixture::new();
+        let p = f.profile_without_vault();
+        let mut budget = InventoryBudget {
+            names: 16 * 1024 * 1024 - 1024,
+            entries: 0,
+            records: FileRecordBudget::default(),
+        };
+        let relative = (0..12).fold(PathBuf::new(), |path, _| path.join("a".repeat(200)));
+        let mut files = Vec::new();
+        let mut directories = Vec::new();
+        let error = inventory_directory(
+            &p.roots[0],
+            &p.roots[0].binding.open().unwrap(),
+            &relative,
+            12,
+            &mut files,
+            &mut directories,
+            &mut budget,
+            &AtomicBool::new(false),
+        )
+        .unwrap_err();
+        assert!(error.message.contains("16 MiB"));
+        assert!(files.is_empty());
     }
     #[test]
     fn source_containing_live_catalog_and_owned_workspace_is_rejected_without_omission() {
@@ -2212,7 +2268,7 @@ mod application_tests {
         );
     }
     #[cfg(any(windows, target_os = "macos"))]
-    fn wait(library: &Library, id: &str) -> SnapshotJob {
+    pub(super) fn wait(library: &Library, id: &str) -> SnapshotJob {
         let deadline = Instant::now() + Duration::from_secs(240);
         loop {
             let job = library
@@ -3035,10 +3091,35 @@ impl SnapshotWorkflow {
 }
 // The recursive walker carries independent bounded accumulators and a held
 // parent handle. Its arguments are private and never supplied by IPC.
+const MAX_FILE_RECORD_BYTES: usize = 16 * 1024 * 1024;
+#[derive(Default)]
+struct FileRecordBudget {
+    bytes: usize,
+}
+impl FileRecordBudget {
+    fn admit<T: Serialize>(&mut self, version: &T) -> Result<()> {
+        // Native security descriptors are individually bounded; also bound the
+        // aggregate before retaining thousands of repeated large ACL records.
+        let bytes = self
+            .bytes
+            .checked_add(encode(version)?.len())
+            .ok_or_else(|| {
+                invalid("Snapshot file/native-metadata records exceed their aggregate bound.")
+            })?;
+        if bytes > MAX_FILE_RECORD_BYTES {
+            return Err(invalid(
+                "Snapshot file/native-metadata records exceed their aggregate 16 MiB bound; no incomplete scope is approved.",
+            ));
+        }
+        self.bytes = bytes;
+        Ok(())
+    }
+}
 #[derive(Default)]
 struct InventoryBudget {
     names: usize,
     entries: usize,
+    records: FileRecordBudget,
 }
 #[allow(clippy::too_many_arguments)]
 fn inventory_directory(
@@ -3072,9 +3153,10 @@ fn inventory_directory(
         if cancel.load(Ordering::Acquire) {
             return Err(error(ErrorCode::Busy, "Snapshot review canceled."));
         }
+        let path = relative.join(&entry.name);
         names.names = names
             .names
-            .checked_add(entry.name.as_encoded_bytes().len())
+            .checked_add(native::encode_path(&path).len())
             .ok_or_else(|| invalid("Snapshot paths exceed their bound."))?;
         if names.names > 16 * 1024 * 1024 {
             return Err(invalid("Snapshot paths exceed their 16 MiB bound."));
@@ -3092,7 +3174,6 @@ fn inventory_directory(
                 "A link, placeholder or special file prevents a complete snapshot. No partial scope is approved.",
             ));
         }
-        let path = relative.join(&entry.name);
         let mut handle = child(parent, &entry.name, entry.directory)?;
         if entry.directory {
             inventory_directory(
@@ -3130,7 +3211,7 @@ fn inventory_directory(
             let key = blake3::hash(&native::encode_path(&path))
                 .to_hex()
                 .to_string();
-            files.push(FileVersion {
+            let version = FileVersion {
                 metadata,
                 id: format!("{}:{key}", root.id),
                 root_id: root.id.clone(),
@@ -3141,7 +3222,9 @@ fn inventory_directory(
                 digest: full,
                 archive: format!("roots/{}/{key}.bin", root.id),
                 display: format!("{}/{}", root.label, path.display()),
-            });
+            };
+            names.records.admit(&version)?;
+            files.push(version);
         }
     }
     if native::revision(parent)? != revision {
@@ -3172,6 +3255,12 @@ impl Context {
             TIMEOUT,
         )?;
         if result.code != 0 {
+            #[cfg(feature = "fixture-probes")]
+            eprintln!(
+                "STILLHARBOUR_GENERATED_HELPER_DIAGNOSTIC command={} exit_code={}",
+                arguments.first().copied().unwrap_or("unknown"),
+                result.code
+            );
             return Err(error(
                 ErrorCode::WorkerFailed,
                 "The backup helper did not complete successfully. Sources and partial outputs are retained; inspect the job before retry.",
@@ -3542,7 +3631,10 @@ impl SnapshotWorkflow {
     fn phase(&self, job: &mut JobRecord, phase: &str) -> Result<()> {
         job.view.phase = phase.into();
         self.event(&job.view.id,phase,serde_json::json!({"snapshot_id":job.view.snapshot_id,"included":job.view.included,"structural_checked":job.view.structural_checked,"data_read_verified":job.view.data_read_verified,"restored_compared":job.view.restored_compared}))?;
-        self.save_job(job)
+        self.save_job(job)?;
+        #[cfg(test)]
+        process_failures::phase(self, job, phase);
+        Ok(())
     }
     fn start(
         self: &Arc<Self>,
@@ -3667,6 +3759,8 @@ impl SnapshotWorkflow {
             let outcome=std::panic::catch_unwind(std::panic::AssertUnwindSafe(||workflow.execute(&mut job,&review,&cancel)));
             #[cfg(test)]
             if let Ok(Err(error))=&outcome {eprintln!("Generated snapshot fixture phase {}: {:?}",job.view.phase,error);}
+            #[cfg(feature = "fixture-probes")]
+            if let Ok(Err(error))=&outcome {eprintln!("STILLHARBOUR_GENERATED_BACKUP_DIAGNOSTIC phase={} code={:?}",job.view.phase,error.code);}
             match outcome {Ok(Ok(()))=>{},Ok(Err(error))=>{job.view.state=if cancel.load(Ordering::Acquire){"canceled_with_partial_copies"}else{"needs_recovery"}.into();job.view.message=format!("{} Sources, partial outputs and repository locks are retained; the job did not earn complete recovery verification.",error.message);},Err(_)=>{job.view.state="needs_recovery".into();job.view.message="The snapshot worker stopped unexpectedly. Partial outputs and sources are retained.".into();}}
             job.view.finished_at=Some(now());
             let terminal=workflow.phase(&mut job,"terminal");
@@ -3902,6 +3996,8 @@ impl SnapshotWorkflow {
                 )?;
                 Ok(())
             })?;
+            #[cfg(test)]
+            process_failures::phase(self, job, "snapshot_recorded");
             job.view.state = if self
                 .refresh_manifest(&job.profile, &job.manifest, job.private_scope, cancel)
                 .and_then(|mut m| {
@@ -4307,6 +4403,8 @@ impl SnapshotWorkflow {
         )?;
         job.view.restored_compared = true;
         self.event(&job.view.id,"restore_published",serde_json::json!({"path":native::encode_path(&output.path),"identity":output.identity,"volume":output.volume,"files":files.len(),"sources_retained":true}))?;
+        #[cfg(test)]
+        process_failures::phase(self, job, "restore_published");
         Ok(())
     }
 }

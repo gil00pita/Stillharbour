@@ -17,6 +17,8 @@
   margin-block: 24px;
 }
 .backup-scope section {
+  min-width: 0;
+  overflow-wrap: anywhere;
   border: 1px solid var(--border);
   padding: 20px;
   border-radius: 8px;
@@ -99,6 +101,9 @@
   padding-top: 24px;
   border-top: 1px solid var(--border);
   min-width: 0;
+}
+.backup-operation code {
+  overflow-wrap: anywhere;
 }
 .backup-review,
 .backup-decision,
