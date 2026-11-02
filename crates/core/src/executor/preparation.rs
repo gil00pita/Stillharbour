@@ -366,6 +366,7 @@ pub(super) fn project_copy_plan(
             bytes: source.bytes,
             source_location: Some(source.location.clone()),
             destination_location: None,
+            stage_location: None,
             prepared_stage: None,
         };
         file.destination_location = if path.is_empty() {

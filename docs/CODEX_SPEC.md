@@ -400,6 +400,12 @@ Imported filenames and capture-time formatting use the selected saved date polic
 
 ## 13. Backup & Sync and restore
 
+ADR-0078 adds generated retained replacement and disposable protocol labs. Actual evidence and its limits are in [M4_TRANSPORT_TESTS.md](M4_TRANSPORT_TESTS.md); these tests do not enable production application snapshots, replacement or schedules.
+
+ADR-0077 adds separate staging/publication parent proofs to the shared executor and generated M4B transfer/recovery evidence. The closed diagnostic cannot take real-library paths; no production transfer or replacement is enabled by fixture success. The owner has authorized completing M4B–D and publishing a PR; all preservation, native OS/transport and exact-version recovery gates remain mandatory.
+
+M4B began with the owner-authorized backend-only append review described in docs/decisions/ADR-0076-m4b-append-review.md. Fresh native scope validation precedes deterministic source-only copy proposals; destination-only data stays and explicit kept differences remain counted as uncopied source revisions. This initial increment creates no output and exposes no transfer/approval command. Staged-copy, publication and crash-recovery requirements remain mandatory before execution becomes available.
+
 Current M4A implementation scope is recorded in docs/M4_BACKUP_SYNC.md. Its read-only comparison review must retain ambiguous native names and file/folder conflicts without proposing a copy, expose category totals/filtering over the whole bounded report and render per-side observed entry details safely. Conservative Unicode/case warnings do not establish native destination equivalence; metadata observations do not establish companion completeness, fidelity or recovery. M4A policy 3/schema 12 also supply immutable observation history, reviewed superseding profile rebind, potential companion relationships and bounded side-by-side previews. See docs/M4A_VALIDATION.md for the read-only acceptance matrix; all later transfer gates remain separate.
 
 Version 1.1 adds a required readable Safe copy / one-way sync workflow with the base library selected automatically. See docs/BACKUP_SYNC_ADDENDUM.md for compare, retained-version replacement, contextual errors, throttling and M4A-M4D gates. Keep this separate from restic snapshots. Both obey docs/PRESERVATION_CONTRACT.md.
@@ -436,11 +442,68 @@ Display backup age and destination reachability. Distinguish an offline source r
 
 Initially, schedules run while the application/tray process is running, with catch-up after sleep or restart and clear UI disclosure. Jobs while fully quit require separately implemented and tested platform background agents; do not imply they exist. Store schedule timezone and daylight-saving policy. Optional application reminders must not upload photo metadata.
 
+M4 application integration follows [ADR-0079](decisions/ADR-0079-backup-application-workflows.md).
+To satisfy preservation P-04, automatic repeats authorize only the exact reviewed
+manifest/profile digest. Changed files, versions, roots or endpoints need fresh
+review. Schedule consent is sealed in OS storage and bound to the native catalog
+instance; imported or restored records cannot recreate it. The initial schedule
+uses elapsed UTC minutes (no DST shift), at most one unchanged-scope catch-up and
+an explicit running-process-only disclosure. The running timer polls every 15
+seconds. With catch-up unchecked, deadlines more than 30 seconds overdue (two
+polling periods) are skipped, including deadlines missed during sleep, restart
+or another active job. Normal lateness of at most 30 seconds may run once.
+With catch-up checked, one unchanged-scope run may follow any such interruption;
+it never replays each missed interval. The next deadline is the current
+admission/skip time plus the configured interval. Restart still requires native
+repository/root reauthorization; fully quit processes execute no timer.
+Timing authority uses a versioned OS-backed record containing the approved
+policy digest, next-admissible UTC deadline and last scheduled attempt. Catalog
+`next_due`/`last_run` values are mirrors, not execution grants or trusted display
+values. Serialize enable/disable/read/claim/start admission inside the process;
+the native catalog lifetime lock excludes a second catalog process. Advance and
+read back the OS deadline before catalog/start writes. A failed/ambiguous write
+or crash consumes no duplicate admission and never rolls that deadline backward.
+Legacy digest-only permits require fresh reviewed consent. Derive every authority
+key from the current native catalog instance; disabling an imported copy cannot
+revoke the original catalog's authority.
+
+
+Pinned remote helpers use a 10-second connection timeout, 30-second I/O-idle
+and stuck-request limits, and a 20-second rclone startup limit. Streaming
+activity resets the idle limit; these limits do not shorten the existing total
+helper duration allowance. Restic JSON progress is sampled once per five
+seconds within the unchanged bounded output buffers. On the first strictly
+recognized pinned-backend retry/failure report, stop and reap the owned helper
+tree, retain sources, repository objects, locks and partial outputs, and report
+`needs_recovery`. Require inspection and a fresh applicable review; never replay
+backup, unlock, prune or repair to hide the failure. Raw helper diagnostics,
+paths and secrets are not forwarded to the renderer or exported diagnostics.
+
 ### 13.4 Restore
 
 A restore browser selects destination profile, snapshot, roots/folders/photos, and target directory. Default to a new folder, not overwriting an active library. Show expected bytes, path sanitization, platform metadata limitations, and collision handling before restore.
 
 Reject unsafe or escaping paths from repository manifests. After restoration, compare bytes/digests against the backed-up manifest for the selected scope and show results. Restoring the catalog is a separate action with a pre-restore catalog backup and migration checks. Credentials are not restored from a plaintext settings export.
+
+M4's separate catalog action activates after closing and reopening the app. Its
+source is a completed fully compared restore job, authenticated again against
+the concrete repository manifest, or the latest OS-sealed local pre-restore
+catalog of the currently active transaction. Distinguish those source kinds;
+local catalog recovery has no repository snapshot or media-backup claim and
+requires no repository credentials/helpers. A retained return creates a new
+forward activation and preserves the current catalog again. No arbitrary path,
+older transaction chain or pointer rollback is admitted. Initial activation supports the same catalog
+UUID, platform and current schema; older/cross-platform conversion is explicitly
+unsupported until tested. Compare imported schema as bounded data against the
+compiled owned schema before writable access; never execute imported scripts.
+Require fresh native identity/volume confirmation for every root. Review newer
+local edits as a whole-catalog collision, retain an independently validated
+consistent current-catalog backup, and prepare a new exclusive candidate without
+overwriting the live database. Drain admission and freeze catalog writes before
+preparation. OS-backed generation authority and native appdata lifetime ownership
+protect restart selection from replay/tampering; ambiguity retains all catalogs
+and must not create an empty replacement. Prepared is distinct from activated.
+After the barrier, errors require reopening the original session. See ADR-0080.
 
 Release gates require an end-to-end backup -> remove temporary source -> restore -> byte comparison on every advertised transport. A connection test alone does not establish support.
 

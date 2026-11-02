@@ -1,0 +1,11 @@
+{
+  "bundle": {
+    "resources": {
+      "../vendor/exiftool/": "helpers/exiftool/",
+      "../vendor/backup-helpers/windows-x86_64/restic.exe": "helpers/backup/restic.exe",
+      "../vendor/backup-helpers/windows-x86_64/rclone.exe": "helpers/backup/rclone.exe",
+      "../vendor/backup-helper-manifest.json": "helpers/backup/manifest.json",
+      "../vendor/backup-licenses/": "helpers/backup/licenses/"
+    }
+  }
+}

@@ -11,6 +11,34 @@ assert.deepEqual(capability.permissions, ['allow-foundation-request', 'allow-lib
 assert.equal(config.app.withGlobalTauri, undefined);
 assert.equal(capability.remote, undefined);
 assert.deepEqual(config.bundle.resources, { '../vendor/exiftool/': 'helpers/exiftool/' });
+const backupManifest = JSON.parse(readFileSync('vendor/backup-helper-manifest.json', 'utf8'));
+for (const [platform, configName] of [
+  ['windows-x86_64', 'windows'],
+  ['macos-aarch64', 'macos'],
+]) {
+  const platformConfig = JSON.parse(
+    readFileSync(`src-tauri/tauri.${configName}.conf.json`, 'utf8'),
+  );
+  const artifacts = backupManifest.artifacts.filter((artifact) => artifact.platform === platform);
+  assert.equal(artifacts.length, 2);
+  assert.deepEqual(artifacts.map((artifact) => artifact.helper).sort(), ['rclone', 'restic']);
+  assert.deepEqual(platformConfig, {
+    bundle: {
+      resources: {
+        '../vendor/exiftool/': 'helpers/exiftool/',
+        ...Object.fromEntries(
+          artifacts.map((artifact) => [
+            `../vendor/backup-helpers/${platform}/${artifact.executable}`,
+            `helpers/backup/${artifact.executable}`,
+          ]),
+        ),
+        '../vendor/backup-helper-manifest.json': 'helpers/backup/manifest.json',
+        '../vendor/backup-licenses/': 'helpers/backup/licenses/',
+      },
+    },
+  });
+}
+run(process.execPath, ['scripts/backup-helpers.mjs', '--check']);
 assert.equal(config.bundle.externalBin, undefined);
 assert.ok(!config.app.security.csp.includes('unsafe-eval'));
 assert.ok(!config.app.security.csp.includes('https:'));

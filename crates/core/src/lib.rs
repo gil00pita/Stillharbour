@@ -1,9 +1,9 @@
 //! Domain rules and owned adapters. No Tauri or renderer authority lives here.
 pub mod backup;
 pub mod catalog;
+pub mod catalog_restore;
 pub mod contract;
 pub mod domain;
-#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
 pub mod executor;
 pub mod filesystem;
 pub mod inspection;

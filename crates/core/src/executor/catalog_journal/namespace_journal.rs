@@ -565,6 +565,16 @@ fn validate_copy_binding_for(
     binding: &Binding,
     managed: bool,
 ) -> Result<(crate::executor::sources::Snapshot, String)> {
+    if binding
+        .plan
+        .files
+        .iter()
+        .any(|file| file.stage_location.is_some())
+    {
+        return Err(failed(
+            "Organization copy streams cannot adopt separate append staging.",
+        ));
+    }
     let reference = binding
         .namespace
         .as_ref()

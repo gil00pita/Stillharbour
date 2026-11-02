@@ -1,5 +1,15 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0080](decisions/ADR-0080-catalog-restore-activation.md) adds a separate reviewed catalog activation on restart: repository-authenticated restored catalog bytes, fresh native root confirmation, a consistent retained current catalog, a new candidate and an OS-sealed monotonic selector. Imported schema is compared with compiled definitions before data queries; current catalogs are never overwritten or replaced by an empty fallback. Same-platform/current-schema bounds and native acceptance remain explicit.
+
+[ADR-0079](decisions/ADR-0079-backup-application-workflows.md) records schema-13 application integration, native credentials/helpers, verified snapshot restore and OS-sealed recurring timing. Catalog timing-row replay cannot advance scheduled admission, and disabling an imported catalog copy cannot revoke the original instance's authority.
+
+[ADR-0078](decisions/ADR-0078-generated-retained-replacement-and-transport-labs.md) records generated retained replacement, seven actual process exits and disposable pinned-helper transports. All remaining M4 stages are owner-authorized; preservation acceptance gates remain mandatory.
+
+[ADR-0077](decisions/ADR-0077-separate-staging-append-fixture.md) adds separately bound staging to the shared executor and a closed M4B append/recovery lab. Legacy organization streams reject the additional scope. Production copying and remaining M4B–D evidence stay gated; the owner authorized continuing all M4 slices and publishing a PR.
+
+[ADR-0076](decisions/ADR-0076-m4b-append-review.md) starts the owner-authorized M4B increment with a pure append planner and backend-only native revalidation. Every report row participates; differing source revisions need explicit keep-destination decisions and remain counted as uncopied. Reviews grant no execution or recovery authority. Shared executor integration and native transfer gates remain open.
+
 [ADR-0075](decisions/ADR-0075-m4a-review-completion.md) completes the read-only M4A implementation with schema-12 observation history, explicit superseding profile rebind, companion context, an immutable nonexecutable review plan and ID-authorized bounded previews. Native acceptance is tracked in [M4A_VALIDATION.md](M4A_VALIDATION.md); M4B–D remain gated.
 
 [ADR-0074](decisions/ADR-0074-comparison-conflicts-and-review.md) adds conservative native-name/type conflict blocking and full-report category filtering with observed entry details to M4A. Policy 2 reviews remain read-only; schema 11 and profile version 1 are unchanged. Native naming, fidelity, historical baseline and recovery gates remain open.
@@ -325,3 +335,6 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Scan-control branch integration — 2026-11-01
 
 [ADR-0071](decisions/ADR-0071-scan-control-progress.md) integrates the preferred 93fd459 scan behavior with the target's M2/M3 work. Catalog schema 10 adds filename-progress counters without discarding operation/inspection schema or data. The incoming branch's independent schema-4 counter layout keeps its progress and gains the missing target indexes before later migrations. Partial layouts fail closed; pre-migration snapshots and UUID preservation remain mandatory. M2/M3 fixture acceptance remains historical evidence, and this merge does not authorize M4 or real-library mutations.
+
+
+[ADR-0079](decisions/ADR-0079-backup-application-workflows.md) introduces the M4 application integration: schema-13 durable jobs/history, separate backup workflow gate, native-only OS credentials, fixed bundled restic/rclone, source-retaining staging/restore and exact-reviewed-manifest schedules. Actual native/application acceptance is still being collected; essential metadata and independent exact-old recovery must not be inferred from ordinary-byte snapshot success.

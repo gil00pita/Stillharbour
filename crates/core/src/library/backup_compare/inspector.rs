@@ -160,7 +160,11 @@ impl Library {
             ),
         })
     }
-    fn validate_comparison_preview_root(&self, source: &Binding, root_id: &str) -> Result<()> {
+    pub(super) fn validate_comparison_preview_root(
+        &self,
+        source: &Binding,
+        root_id: &str,
+    ) -> Result<()> {
         let root = store::root(&self.catalog, root_id.into())?;
         if root.path != source.path
             || !same_directory(&root.identity, &source.identity)

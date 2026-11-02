@@ -11,10 +11,17 @@ import { RootSetup } from './library/RootSetup';
 import logo from '../assets/branding/stillharbour-logo.svg';
 import { libraryData } from './ipc';
 import { BackupScreen } from './backup/BackupScreen';
+import { useCatalogSwitchState } from './backup/catalogSwitchState';
+import { CatalogSwitchStopped } from './backup/CatalogSwitchStopped';
 
 type AppSection = Section | 'Settings' | InspectionSection | 'Backup & Sync';
 
 export default function App() {
+  const stopped = useCatalogSwitchState();
+  return stopped ? <CatalogSwitchStopped state={stopped} /> : <ConnectedApplication />;
+}
+
+function ConnectedApplication() {
   const app = useFoundation();
   const {
     foundation,
@@ -489,6 +496,7 @@ function WorkspaceContent({
       <BackupScreen
         key={foundation?.catalogId ?? 'catalog'}
         status={status}
+        catalogId={foundation?.catalogId ?? null}
         navigationControl={navigationControl}
         jobsControl={jobsControl}
       />

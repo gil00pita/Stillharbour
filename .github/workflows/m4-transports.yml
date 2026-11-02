@@ -1,0 +1,52 @@
+name: M4 disposable transport evidence
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  CARGO_INCREMENTAL: '0'
+jobs:
+  transports:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Prepare pinned helper binaries
+        run: python scripts/prepare-backup-helpers.py --download
+      - name: Install pinned Rust toolchain
+        run: rustup show
+      - uses: Swatinem/rust-cache@v2
+      - name: Build actual generated application adapter probe
+        run: cargo build --locked -p stillharbour-core --features fixture-probes,backup-workflow --example backup_application_probe
+      - name: Actual pinned macOS helper owner and cancellation tests
+        if: runner.os == 'macOS'
+        run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,backup-workflow rclone_worker::tests::actual_pinned -- --ignored
+      - name: Install hashed development server dependencies
+        run: python -m pip install --require-hashes -r scripts/m4-protocol-requirements.txt
+      - name: Prepare pinned user-mode Windows SMB fixture
+        if: runner.os == 'Windows'
+        run: python scripts/prepare-smb-fixture.py --download
+      - name: Validate helper extraction and process timeout failures
+        run: python -m unittest discover -s scripts/tests
+      - name: Generated backup, remove source, restore and full byte comparison
+        run: python scripts/m4-protocol-probe.py --protocols local sftp ftp ftps smb --allow-insecure-ftp --application-probe target/debug/examples/backup_application_probe --evidence .context/m4-protocol-ci.json
+      - name: Actual transfer failure preservation and explicit recovery outcomes
+        run: python scripts/m4-failure-probe.py --protocols ftp ftps --allow-insecure-ftp --application-probe target/debug/examples/backup_application_probe --evidence .context/m4-failure-ci.json
+      - name: Actual SMB and SFTP upload disconnect and read-only recovery
+        run: python scripts/m4-failure-probe.py --protocols sftp smb --scenarios disconnect_upload --application-probe target/debug/examples/backup_application_probe --evidence .context/m4-application-smb-sftp-disconnect.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m4-transport-evidence-${{ matrix.os }}
+          path: |
+            .context/m4-protocol-ci.json
+            .context/m4-failure-ci.json
+            .context/m4-application-smb-sftp-disconnect.json

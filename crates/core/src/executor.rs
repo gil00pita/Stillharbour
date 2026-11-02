@@ -1,21 +1,71 @@
-//! Central source-retaining copy engine under disposable-fixture capability.
-//! No renderer requests or arbitrary user paths can construct this scope yet.
+//! Central source-retaining copy engine. Application adapters construct native
+//! scopes from backend review and approval; renderer paths never create a plan.
+#[cfg(any(test, feature = "fixture-probes"))]
+pub(crate) mod append_fixture;
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod approval;
+pub(crate) mod snapshot_bridge;
+#[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+pub(crate) mod sync_workflow;
+#[cfg(any(test, feature = "fixture-probes"))]
+pub fn run_append_fixture_probe() -> Result<serde_json::Value> {
+    append_fixture::probe()
+}
+#[cfg(any(test, feature = "fixture-probes"))]
+pub fn run_retained_replacement_fixture_probe() -> Result<serde_json::Value> {
+    append_fixture::retained_probe()
+}
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod catalog_journal;
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod effects;
 #[cfg(any(test, feature = "copy-workflow"))]
 mod fingerprints;
+pub mod key_export;
 mod locations;
 mod native;
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod preparation;
+mod private_output;
 #[cfg(any(test, feature = "fixture-probes"))]
 mod rename_fixture;
 #[cfg(any(test, feature = "fixture-probes"))]
 pub use rename_fixture::GeneratedRenameController;
 #[cfg(any(test, feature = "fixture-probes"))]
 pub use rename_fixture::GeneratedRenameSession;
-#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod resume;
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod sources;
 #[cfg(any(test, feature = "copy-workflow"))]
 mod workflow;
@@ -25,7 +75,6 @@ use crate::{
     jobs::paced_io::{CHUNK_BYTES, IoStep, PacedIo},
     library::native as source_native,
 };
-#[cfg(any(test, feature = "fixture-probes"))]
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 #[cfg(any(test, feature = "fixture-probes"))]
@@ -217,6 +266,8 @@ struct CopyFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     destination_location: Option<locations::Destination>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    stage_location: Option<locations::Destination>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     prepared_stage: Option<PreparedStage>,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -246,13 +297,20 @@ fn failed(message: &str) -> AppError {
     AppError::new(ErrorCode::Conflict, message)
 }
 
-#[cfg(any(test, feature = "fixture-probes"))]
 struct Journal(Connection);
 trait EventJournal {
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()>;
 }
 trait CopyJournal: EventJournal {
     fn history_count(&self) -> Result<u64>;
+    #[cfg(test)]
+    fn control_boundary(&self, _phase: &str) {}
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>>;
     fn deny_writes_for_fixture_fault(&self) -> Result<()> {
         Err(AppError::new(
@@ -261,13 +319,11 @@ trait CopyJournal: EventJournal {
         ))
     }
 }
-#[cfg(any(test, feature = "fixture-probes"))]
 impl EventJournal for Journal {
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()> {
         Journal::append(self, item, phase, evidence)
     }
 }
-#[cfg(any(test, feature = "fixture-probes"))]
 impl CopyJournal for Journal {
     fn history_count(&self) -> Result<u64> {
         let count: i64 = self
@@ -275,6 +331,12 @@ impl CopyJournal for Journal {
             .query_row("SELECT count(*) FROM events", [], |row| row.get(0))?;
         u64::try_from(count).map_err(|_| failed("Invalid journal event count."))
     }
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>> {
         Journal::stage_identity(self, item)
     }
@@ -283,7 +345,6 @@ impl CopyJournal for Journal {
         Ok(())
     }
 }
-#[cfg(any(test, feature = "fixture-probes"))]
 impl Journal {
     fn create(path: &Path, plan: &CopyPlan) -> Result<Self> {
         let journal = Self(Connection::open(path)?);
@@ -298,6 +359,12 @@ impl Journal {
         )?;
         Ok(journal)
     }
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     fn open(path: &Path, expected: &CopyPlan) -> Result<Self> {
         let journal = Self(Connection::open_with_flags(
             path,
@@ -333,6 +400,12 @@ impl Journal {
         )?;
         Ok(())
     }
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>> {
         use rusqlite::OptionalExtension;
         let text:Option<String>=self.0.query_row("SELECT evidence FROM events WHERE item=? AND phase='stage_created' ORDER BY sequence DESC LIMIT 1",[item as i64],|row|row.get(0)).optional()?;
@@ -386,6 +459,18 @@ fn destination_parent(root: &File, plan: &CopyFile) -> Result<File> {
 fn destination_member(root: &File, plan: &CopyFile, parent: &File) -> Result<()> {
     if Object::of(&destination_parent(root, plan)?)? != Object::of(parent)? {
         return Err(failed("A destination parent changed membership."));
+    }
+    Ok(())
+}
+fn staging_parent(root: &File, plan: &CopyFile) -> Result<File> {
+    match &plan.stage_location {
+        Some(location) => location.open(root),
+        None => destination_parent(root, plan),
+    }
+}
+fn staging_member(root: &File, plan: &CopyFile, parent: &File) -> Result<()> {
+    if Object::of(&staging_parent(root, plan)?)? != Object::of(parent)? {
+        return Err(failed("A staging parent changed membership."));
     }
     Ok(())
 }
@@ -507,6 +592,12 @@ struct CopyContext<'a> {
     cancel: &'a AtomicBool,
     validate_scope: &'a dyn Fn() -> Result<()>,
 }
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 struct CopyInputs<'a> {
     source_root: &'a File,
     destination: &'a File,
@@ -546,6 +637,8 @@ impl CopyContext<'_> {
                 return Ok(CopyOutcome::CanceledWithPartialCopies);
             }
             let destination_handle = destination_parent(destination, item)?;
+            let staging_handle = staging_parent(destination, item)?;
+            let staging = &staging_handle;
             let destination_root = *destination;
             let destination = &destination_handle;
             let mut source = read_source(source_root, item)?;
@@ -555,11 +648,11 @@ impl CopyContext<'_> {
                 return Ok(CopyOutcome::Interrupted);
             }
             let mut stage = if let Some(prepared) = &item.prepared_stage {
-                let stage = native::reopen_stage(destination, &item.stage, &prepared.identity())?;
-                prepared.validate_empty(destination, &item.stage, &stage)?;
+                let stage = native::reopen_stage(staging, &item.stage, &prepared.identity())?;
+                prepared.validate_empty(staging, &item.stage, &stage)?;
                 stage
             } else {
-                native::create_file(destination, &item.stage)?
+                native::create_file(staging, &item.stage)?
             };
             let identity = filesystem::identity(&stage)?;
             if identity.links != 1 || identity.volume != plan.destination.volume {
@@ -599,6 +692,8 @@ impl CopyContext<'_> {
                 if io.write_all(&mut stage, &buffer[..count], cancel)? == IoStep::Canceled {
                     return Ok(CopyOutcome::CanceledWithPartialCopies);
                 }
+                #[cfg(test)]
+                journal.control_boundary("copy_chunk");
                 if fault == Some(CopyFault::InjectedDiskFullAfterChunk) {
                     return Err(std::io::Error::from(std::io::ErrorKind::StorageFull).into());
                 }
@@ -618,7 +713,7 @@ impl CopyContext<'_> {
             if stop(fault, CopyFault::AfterFlush) {
                 return Ok(CopyOutcome::Interrupted);
             }
-            let mut verified = native::reopen_stage(destination, &item.stage, &identity)?;
+            let mut verified = native::reopen_stage(staging, &item.stage, &identity)?;
             let IoStep::Completed(witness) = compare(io, &mut source, &mut verified, item, cancel)?
             else {
                 return Ok(CopyOutcome::CanceledWithPartialCopies);
@@ -636,7 +731,8 @@ impl CopyContext<'_> {
             revision(&source, item)?;
             source_member(source_root, item)?;
             destination_member(destination_root, item, destination)?;
-            witness.revalidate(destination, &item.stage, &verified)?;
+            staging_member(destination_root, item, staging)?;
+            witness.revalidate(staging, &item.stage, &verified)?;
             if cancel.load(Ordering::Acquire) {
                 return Ok(CopyOutcome::CanceledWithPartialCopies);
             }
@@ -648,8 +744,14 @@ impl CopyContext<'_> {
             if stop(fault, CopyFault::BeforePublish) {
                 return Ok(CopyOutcome::Interrupted);
             }
-            let mut published =
-                native::publish_new(destination, &item.stage, verified, &item.target, &identity)?;
+            let mut published = native::publish_to(
+                staging,
+                &item.stage,
+                verified,
+                destination,
+                &item.target,
+                &identity,
+            )?;
             if stop(fault, CopyFault::AfterPublish) {
                 return Ok(CopyOutcome::Interrupted);
             }
@@ -703,6 +805,12 @@ impl CopyContext<'_> {
     }
 }
 
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 fn inspect_item(
     plan: &CopyFile,
     index: usize,
@@ -713,12 +821,14 @@ fn inspect_item(
     cancel: &AtomicBool,
 ) -> Result<RecoveredItem> {
     let destination_handle = destination_parent(destination, plan)?;
+    let staging_handle = staging_parent(destination, plan)?;
+    let staging = &staging_handle;
     let destination_root = destination;
     let destination = &destination_handle;
     let mut source = read_source(source_root, plan)?;
     revision(&source, plan)?;
     let published = native::maybe_read(destination, &plan.target)?;
-    let stage = native::maybe_read(destination, &plan.stage)?;
+    let stage = native::maybe_read(staging, &plan.stage)?;
     let expected = journal.stage_identity(index)?;
     if expected.is_none()
         && let Some(prepared) = &plan.prepared_stage
@@ -729,9 +839,10 @@ fn inspect_item(
             ));
         }
         let file = stage.ok_or_else(|| failed("An identified prepared stage is missing."))?;
-        prepared.validate_empty(destination, &plan.stage, &file)?;
+        prepared.validate_empty(staging, &plan.stage, &file)?;
         source_member(source_root, plan)?;
         destination_member(destination_root, plan, destination)?;
+        staging_member(destination_root, plan, staging)?;
         return Ok(RecoveredItem::PreparedEmptyStage);
     }
     match (published, stage, expected) {
@@ -749,7 +860,7 @@ fn inspect_item(
         }
         (None, Some(mut file), Some(expected)) if filesystem::identity(&file)? == expected => {
             if file.metadata()?.len() != plan.bytes {
-                if !native::entry_matches(destination, &plan.stage, &expected)?
+                if !native::entry_matches(staging, &plan.stage, &expected)?
                     || filesystem::identity(&file)? != expected
                 {
                     return Err(failed(
@@ -758,13 +869,15 @@ fn inspect_item(
                 }
                 source_member(source_root, plan)?;
                 destination_member(destination_root, plan, destination)?;
+                staging_member(destination_root, plan, staging)?;
                 return Ok(RecoveredItem::RetainedPartialStage);
             }
             match compare(io, &mut source, &mut file, plan, cancel)? {
                 IoStep::Completed(witness) => {
                     source_member(source_root, plan)?;
                     destination_member(destination_root, plan, destination)?;
-                    witness.revalidate(destination, &plan.stage, &file)?;
+                    staging_member(destination_root, plan, staging)?;
+                    witness.revalidate(staging, &plan.stage, &file)?;
                     Ok(RecoveredItem::StagedVerified)
                 }
                 IoStep::Canceled => Err(failed("Recovery inspection was canceled.")),
@@ -822,6 +935,7 @@ impl CopyFixture {
                 bytes: file.metadata()?.len(),
                 source_location: None,
                 destination_location: None,
+                stage_location: None,
                 prepared_stage: None,
             });
         }

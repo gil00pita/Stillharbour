@@ -3,9 +3,19 @@
 #[cfg(all(feature = "desktop-test", not(debug_assertions)))]
 compile_error!("desktop-test instrumentation must never be compiled into a release build");
 
+#[cfg(feature = "desktop-test")]
+mod backup_fixture;
+mod catalog_admission;
+#[cfg(feature = "desktop-test")]
+mod catalog_test_session;
+mod native_credentials;
+
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU8, Ordering},
+    },
 };
 use stillharbour_core::{
     catalog::Catalog,
@@ -35,9 +45,18 @@ struct MultiSourceFixture {
 
 struct Foundation {
     #[cfg(feature = "desktop-test")]
-    rename_fixture: stillharbour_core::executor::GeneratedRenameController,
+    catalog_restore_picker: Mutex<Option<NativeSelection>>,
     #[cfg(feature = "desktop-test")]
-    _test_data: tempfile::TempDir,
+    catalog_restore_receipt:
+        Arc<Mutex<Option<stillharbour_core::catalog_restore::PreparedCatalogRestore>>>,
+    catalog_admission: Arc<catalog_admission::Admission>,
+    activation: Arc<stillharbour_core::catalog_restore::activation::ActivationStore>,
+    _catalog_selection: Arc<stillharbour_core::catalog_restore::activation::StartupSelection>,
+    appdata: PathBuf,
+    #[cfg(feature = "desktop-test")]
+    backup_application_fixture: Mutex<Option<backup_fixture::ApplicationFixture>>,
+    #[cfg(feature = "desktop-test")]
+    rename_fixture: stillharbour_core::executor::GeneratedRenameController,
     #[cfg(feature = "desktop-test")]
     fixture: Mutex<Option<stillharbour_core::library_fixture::LibraryFixture>>,
     #[cfg(feature = "desktop-test")]
@@ -69,7 +88,88 @@ struct Foundation {
     library: Arc<Library>,
     status: FoundationStatus,
     selection: Mutex<Option<NativeSelection>>,
-    picker: tokio::sync::Mutex<()>,
+    picker: Arc<tokio::sync::Mutex<()>>,
+    credential_gate: Arc<Mutex<()>>,
+    credential_cancel: Arc<AtomicBool>,
+    shutdown: Arc<AtomicU8>,
+    #[cfg(feature = "desktop-test")]
+    _test_data: catalog_test_session::NativeTestData,
+}
+
+fn request_shutdown(app: &tauri::AppHandle, code: i32) {
+    let state = app.state::<Foundation>();
+    if state
+        .shutdown
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
+    state.credential_cancel.store(true, Ordering::Release);
+    state.library.cancel_all();
+    let library = state.library.clone();
+    let gate = state.credential_gate.clone();
+    let picker = state.picker.clone();
+    let shutdown = state.shutdown.clone();
+    let catalog_admission = state.catalog_admission.clone();
+    let app = app.clone();
+    let _shutdown_worker = tauri::async_runtime::spawn_blocking(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            // The admission mutex contains only (). A panicked native request
+            // has already unwound its owned cleanup; poisoning carries no data
+            // that can grant work, and must not permanently prevent quitting.
+            let credential_guard = match gate.try_lock() {
+                Ok(guard) => Some(guard),
+                Err(std::sync::TryLockError::Poisoned(error)) => Some(error.into_inner()),
+                Err(std::sync::TryLockError::WouldBlock) => None,
+            };
+            if let (Some(_credential_guard), Ok(_picker_guard)) =
+                (credential_guard, picker.try_lock())
+                && library.backup_shutdown_ready().unwrap_or(false)
+                && catalog_admission.idle()
+            {
+                shutdown.store(2, Ordering::Release);
+                app.exit(code);
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                shutdown.store(0, Ordering::Release);
+                app.dialog().message("Stillharbour is still stopping backup work or waiting for a native dialog to close. Existing files and partial outputs are retained. Close any native dialog and try quitting again.")
+                    .title("Stillharbour — waiting to stop").show(|_|{});
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    });
+}
+
+fn cleanup_new_credentials(
+    library: &Library,
+    catalog: &str,
+    references: &[(
+        stillharbour_core::backup::credentials::CredentialPurpose,
+        &str,
+    )],
+) -> Result<()> {
+    let mut first_error = None;
+    for (purpose, reference) in references {
+        let result: Result<()> = (|| {
+            // An uncertain reply after an immutable profile commit must never
+            // delete its key. Only unreferenced, just-created references enter
+            // this cleanup path; existing references are never passed here.
+            if !library.snapshot_credential_referenced(*purpose, reference)? {
+                stillharbour_core::backup::credentials::CredentialStore::delete_owned(
+                    catalog, *purpose, reference,
+                )?;
+            }
+            Ok(())
+        })();
+        if first_error.is_none() {
+            first_error = result.err();
+        }
+    }
+    first_error.map_or(Ok(()), Err)
 }
 
 #[tauri::command]
@@ -79,6 +179,19 @@ async fn foundation_request(
     state: State<'_, Foundation>,
     request: FoundationRequest,
 ) -> Result<FoundationResponse> {
+    let catalog_admission = if matches!(&request, FoundationRequest::Status {}) {
+        None
+    } else {
+        Some(state.catalog_admission.enter()?)
+    };
+    if state.credential_cancel.load(Ordering::Acquire)
+        && matches!(&request, FoundationRequest::PickDirectory {})
+    {
+        return Err(AppError::new(
+            ErrorCode::Busy,
+            "Stillharbour is stopping its native work before quitting.",
+        ));
+    }
     if window.label() != "main" {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
@@ -90,6 +203,7 @@ async fn foundation_request(
             let preferences = state.preferences.clone();
             let library = state.library.clone();
             tauri::async_runtime::spawn_blocking(move || {
+                let _catalog_admission = catalog_admission;
                 let mut value = preferences.get()?;
                 if let Some(id) = &value.default_root_id
                     && !library.root_exists(id.clone())?
@@ -107,6 +221,7 @@ async fn foundation_request(
             let store = state.preferences.clone();
             let library = state.library.clone();
             tauri::async_runtime::spawn_blocking(move || {
+                let _catalog_admission = catalog_admission;
                 if let Some(id) = &preferences.default_root_id {
                     library.validate_root_id(id.clone())?;
                 }
@@ -121,10 +236,50 @@ async fn foundation_request(
         }
         FoundationRequest::Status {} => Ok(FoundationResponse::Status(state.status.clone())),
         FoundationRequest::PickDirectory {} => {
+            #[cfg(feature = "desktop-test")]
+            if let Some(native) = state
+                .catalog_restore_picker
+                .lock()
+                .map_err(|_| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "Generated picker state is unavailable.",
+                    )
+                })?
+                .take()
+            {
+                let (identity, volume) = selected_identity(&native)?;
+                let file =
+                    stillharbour_core::library::native::open_root(&native.path, Some(&identity))?;
+                if stillharbour_core::library::native::volume_token(&file)? != volume {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Generated picker root changed.",
+                    ));
+                }
+                let response = DirectorySelection {
+                    id: native.id.clone(),
+                    display_path: native.path.display().to_string(),
+                    identity_available: true,
+                };
+                *state.selection.lock().map_err(|_| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "Generated selection state is unavailable.",
+                    )
+                })? = Some(native);
+                return Ok(FoundationResponse::Directory(Some(response)));
+            }
             let _picker = state
                 .picker
                 .try_lock()
                 .map_err(|_| AppError::new(ErrorCode::Busy, "A folder picker is already open."))?;
+            if state.credential_cancel.load(Ordering::Acquire) {
+                return Err(AppError::new(
+                    ErrorCode::Busy,
+                    "Stillharbour is stopping its native work before quitting.",
+                ));
+            }
             let (sender, receiver) = tokio::sync::oneshot::channel();
             app.dialog()
                 .file()
@@ -132,6 +287,7 @@ async fn foundation_request(
                 .set_title("Select a folder — selection only, no scan")
                 .set_can_create_directories(false)
                 .pick_folder(move |selection| {
+                    let _catalog_admission = catalog_admission;
                     let _ = sender.send(selection);
                 });
             let selected = receiver.await.map_err(|_| {
@@ -146,7 +302,9 @@ async fn foundation_request(
             let path = selected.into_path().map_err(|error| {
                 AppError::new(ErrorCode::InvalidInput, "Select a local folder.").caused_by(error)
             })?;
+            let catalog_admission = state.catalog_admission.enter()?;
             let (response, native) = tauri::async_runtime::spawn_blocking(move || -> Result<_> {
+                let _catalog_admission = catalog_admission;
                 let handle = filesystem::open_directory_readonly(&path)?;
                 let (identity, volume) = match filesystem::identity(&handle) {
                     Ok(identity) => match stillharbour_core::library::native::volume_token(&handle)
@@ -213,19 +371,300 @@ fn selected_identity(selection: &NativeSelection) -> Result<(FileIdentity, Strin
     }
 }
 
+// Blocking native selection is called only from the guarded background dialog
+// workers. No display string becomes a filesystem execution input.
+fn snapshot_folder(
+    window: &tauri::WebviewWindow,
+    title: &str,
+) -> Result<stillharbour_core::library::snapshots::NativeSnapshotSelection> {
+    let selected = window
+        .app_handle()
+        .dialog()
+        .file()
+        .set_parent(window)
+        .set_title(title)
+        .set_can_create_directories(false)
+        .blocking_pick_folder()
+        .ok_or_else(|| {
+            AppError::new(
+                ErrorCode::InvalidInput,
+                "Native folder selection was canceled.",
+            )
+        })?;
+    let path = selected
+        .into_path()
+        .map_err(|_| AppError::new(ErrorCode::InvalidInput, "Choose a local folder."))?
+        .canonicalize()?;
+    let handle = filesystem::open_directory_readonly(&path)?;
+    Ok(
+        stillharbour_core::library::snapshots::NativeSnapshotSelection {
+            id: uuid::Uuid::new_v4().to_string(),
+            path,
+            identity: filesystem::identity(&handle)?,
+            volume: stillharbour_core::library::native::volume_token(&handle)?,
+        },
+    )
+}
+
 #[tauri::command]
 async fn library_request(
     window: tauri::WebviewWindow,
     state: State<'_, Foundation>,
     request: LibraryRequest,
 ) -> Result<LibraryResponse> {
+    let catalog_admission = state.catalog_admission.enter()?;
     if window.label() != "main" {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
             "This window has no library authority.",
         ));
     }
+    if state.credential_cancel.load(Ordering::Acquire) {
+        return Err(AppError::new(
+            ErrorCode::Busy,
+            "Stillharbour is stopping its native work before quitting.",
+        ));
+    }
+    if let LibraryRequest::BackupSnapshots {
+        request:
+            stillharbour_core::backup::snapshots::SnapshotRequest::CatalogRestoreReviewRetained {
+                transaction_id,
+            },
+    } = &request
+    {
+        let transaction_id = transaction_id.clone();
+        let library = state.library.clone();
+        let activation = state.activation.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            let _catalog_admission = catalog_admission;
+            if !library.retained_catalog_restore_available() {
+                return Err(AppError::new(
+                    ErrorCode::MutationUnavailable,
+                    "Retained catalog recovery is disabled by the native workflow gate.",
+                ));
+            }
+            let proof = activation.latest_retained_source(&transaction_id)?;
+            let review = library.review_retained_catalog_restore(proof)?;
+            Ok(LibraryResponse::BackupSnapshots(
+                stillharbour_core::backup::snapshots::SnapshotReply::CatalogRestoreReview(review),
+            ))
+        })
+        .await
+        .map_err(|_| {
+            AppError::new(
+                ErrorCode::WorkerFailed,
+                "The retained catalog review stopped. Existing catalogs remain unchanged.",
+            )
+        })?;
+    }
+    if let LibraryRequest::BackupSnapshots {
+        request:
+            stillharbour_core::backup::snapshots::SnapshotRequest::CatalogRestorePrepare { approval_id },
+    } = &request
+    {
+        let approval_id = approval_id.clone();
+        let library = state.library.clone();
+        let admission = state.catalog_admission.clone();
+        let activation = state.activation.clone();
+        let appdata = state.appdata.clone();
+        #[cfg(feature = "desktop-test")]
+        let fixture_receipt = state.catalog_restore_receipt.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            // Invalid or unsupported consent cannot stop any native work.
+            library.validate_catalog_restore_prepare(&approval_id)?;
+            drop(catalog_admission);
+            let result = (|| {
+                let _requests = admission.close_and_drain()?;
+                let _work = library.quiesce_for_catalog_restore()?;
+                let prepared = library.prepare_catalog_restore(&approval_id, &appdata)?;
+                activation.stage_pending(&prepared)?;
+                #[cfg(feature = "desktop-test")]
+                { *fixture_receipt.lock().map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Generated catalog receipt is unavailable."))? = Some(prepared.clone()); }
+                Ok(LibraryResponse::BackupSnapshots(
+                    stillharbour_core::backup::snapshots::SnapshotReply::CatalogRestorePrepared(
+                        stillharbour_core::backup::snapshots::CatalogRestorePrepared {
+                            transaction_id: prepared.transaction_id,
+                            catalog_id: prepared.catalog_id,
+                            restart_required: true,
+                            current_catalog_retained: true,
+                            message: "The recovered catalog is prepared for the next launch. The current catalog and a consistent pre-restore copy are retained. Close and reopen Stillharbour to activate the reviewed catalog; no catalogs were merged.".into(),
+                        },
+                    ),
+                ))
+            })();
+            result.map_err(|mut error: AppError| {
+                error.message.push_str(" This session is stopped for catalog recovery. Close and reopen Stillharbour; existing catalogs and partial candidates remain retained.");
+                error
+            })
+        }).await.map_err(|_| AppError::new(ErrorCode::WorkerFailed,
+            "Catalog recovery stopped unexpectedly. Close and reopen Stillharbour; existing catalogs and candidates remain retained."))?;
+    }
+    if let LibraryRequest::BackupCredentialExport { profile_id } = &request {
+        let library = state.library.clone();
+        let profile_id = profile_id.clone();
+        let gate = state.credential_gate.clone();
+        let cancel = state.credential_cancel.clone();
+        let app = window.app_handle().clone();
+        let parent = window.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            let _catalog_admission = catalog_admission;
+            let _gate=gate.try_lock().map_err(|_|AppError::new(ErrorCode::Busy,"A native credential dialog is already open."))?;
+            if cancel.load(Ordering::Acquire) {return Err(AppError::new(ErrorCode::Busy,"Stillharbour is stopping native credential work."));}
+            let selection=snapshot_folder(&parent,"Choose a separate folder for the unencrypted recovery key")?;
+            if cancel.load(Ordering::Acquire) {return Err(AppError::new(ErrorCode::Busy,"Recovery-key export stopped before writing."));}
+            let source=library.snapshot_key_export_source(&profile_id,selection)?;
+            if !app.dialog().message("This creates a new UNENCRYPTED file containing the repository password. Store it separately from the backup repository. Anyone with this file can decrypt the snapshots.").title("Stillharbour — export recovery key").parent(&parent)
+                .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCancelCustom("Export key".into(),"Cancel".into())).blocking_show() {
+                return Err(AppError::new(ErrorCode::InvalidInput,"Recovery-key export was canceled."));
+            }
+            if cancel.load(Ordering::Acquire) {return Err(AppError::new(ErrorCode::Busy,"Recovery-key export stopped before writing."));}
+            let selection=source.selection;
+            let saved=stillharbour_core::executor::key_export::export(stillharbour_core::executor::key_export::KeyExport{directory:selection.path,identity:selection.identity,volume:selection.volume,journal_directory:source.journal_directory,label:source.label,secret:source.secret})?;
+            Ok(LibraryResponse::BackupCredentialExported(saved))
+        }).await.map_err(|_|AppError::new(ErrorCode::WorkerFailed,"The native key export stopped unexpectedly."))?;
+    }
+    if let LibraryRequest::BackupCredentialUnlock {
+        profile_id,
+        purpose,
+    } = &request
+    {
+        let library = state.library.clone();
+        let profile_id = profile_id.clone();
+        let purpose = *purpose;
+        let gate = state.credential_gate.clone();
+        let cancel = state.credential_cancel.clone();
+        let parent = window.clone();
+        #[cfg(windows)]
+        let owner = window
+            .hwnd()
+            .map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "The native credential dialog has no parent window.",
+                )
+            })?
+            .0 as usize;
+        #[cfg(not(windows))]
+        let owner = 0usize;
+        return tauri::async_runtime::spawn_blocking(move || {
+            let _catalog_admission = catalog_admission;
+            let _gate = gate.try_lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::Busy,
+                    "A native credential dialog is already open.",
+                )
+            })?;
+            if cancel.load(Ordering::Acquire) {
+                return Err(AppError::new(
+                    ErrorCode::Busy,
+                    "Stillharbour is stopping native credential work.",
+                ));
+            }
+            let target = library.snapshot_credential_target(&profile_id, purpose)?;
+            let selection = if target.needs_local_selection {
+                Some(snapshot_folder(
+                    &parent,
+                    "Select the existing repository parent to recover its credential",
+                )?)
+            } else {
+                None
+            };
+            let catalog_id = target.catalog_id.clone();
+            let additional_purpose = target.additional_purpose;
+            let reference = native_credentials::reenroll(target, owner, &cancel)?;
+            let other_reference = if let Some(other) = additional_purpose {
+                let entered = library
+                    .snapshot_credential_target(&profile_id, other)
+                    .and_then(|target| native_credentials::reenroll(target, owner, &cancel));
+                match entered {
+                    Ok(reference) => Some(reference),
+                    Err(error) => {
+                        stillharbour_core::backup::credentials::CredentialStore::delete_owned(
+                            &catalog_id,
+                            purpose,
+                            &reference,
+                        )?;
+                        return Err(error);
+                    }
+                }
+            } else {
+                None
+            };
+            let rebound = library.snapshot_profile_rebind_credential(
+                &profile_id,
+                purpose,
+                &reference,
+                selection,
+                other_reference.as_deref(),
+            );
+            if rebound.is_err() {
+                let mut references = vec![(purpose, reference.as_str())];
+                if let (Some(other), Some(reference)) =
+                    (additional_purpose, other_reference.as_deref())
+                {
+                    references.push((other, reference));
+                }
+                cleanup_new_credentials(&library, &catalog_id, &references)?;
+            }
+            let profile = rebound?;
+            Ok(LibraryResponse::BackupSnapshots(
+                stillharbour_core::backup::snapshots::SnapshotReply::Profile(profile),
+            ))
+        })
+        .await
+        .map_err(|_| {
+            AppError::new(
+                ErrorCode::WorkerFailed,
+                "The native credential dialog stopped unexpectedly.",
+            )
+        })?;
+    }
+    if let LibraryRequest::BackupCredentialEnroll {
+        purpose,
+        destination,
+    } = &request
+    {
+        let catalog = state._catalog.clone();
+        let purpose = *purpose;
+        let destination = destination.clone();
+        let gate = state.credential_gate.clone();
+        let cancel = state.credential_cancel.clone();
+        #[cfg(windows)]
+        let owner = window
+            .hwnd()
+            .map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "The native credential dialog has no parent window.",
+                )
+            })?
+            .0 as usize;
+        #[cfg(not(windows))]
+        let owner = 0usize;
+        return tauri::async_runtime::spawn_blocking(move || {
+            let _catalog_admission = catalog_admission;
+            let _gate = gate.try_lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::Busy,
+                    "A native credential dialog is already open.",
+                )
+            })?;
+            native_credentials::enroll(&catalog.summary()?.id, purpose, destination, owner, &cancel)
+                .map(LibraryResponse::BackupCredentialRef)
+        })
+        .await
+        .map_err(|_| {
+            AppError::new(
+                ErrorCode::WorkerFailed,
+                "The native credential dialog stopped unexpectedly.",
+            )
+        })?;
+    }
     let selection = match &request {
+        LibraryRequest::BackupSnapshots { request } => request
+            .selection_id()
+            .map(|id| selected(&state, id))
+            .transpose()?,
         LibraryRequest::BackupProfileSave { selection_id, .. }
         | LibraryRequest::BackupCompareStart { selection_id, .. }
         | LibraryRequest::SaveAndScan { selection_id, .. }
@@ -250,8 +689,52 @@ async fn library_request(
         _ => None,
     };
     let library = state.library.clone();
+    let activation = state.activation.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
+        let _catalog_admission = catalog_admission;
         Ok(match request {
+            LibraryRequest::BackupSync { request } => {
+                LibraryResponse::BackupSync(library.backup_sync(request)?)
+            }
+            LibraryRequest::BackupSnapshots { request } => {
+                let native = selection
+                    .as_ref()
+                    .map(|selection| {
+                        let (identity, volume) = selected_identity(selection)?;
+                        Ok::<_, AppError>(
+                            stillharbour_core::library::snapshots::NativeSnapshotSelection {
+                                id: selection.id.clone(),
+                                path: selection.path.clone(),
+                                identity,
+                                volume,
+                            },
+                        )
+                    })
+                    .transpose()?;
+                let mut reply = library.backup_snapshots(request, native)?;
+                if let stillharbour_core::backup::snapshots::SnapshotReply::Capabilities(
+                    capabilities,
+                ) = &mut reply
+                    && library.retained_catalog_restore_available()
+                {
+                    capabilities.latest_retained_catalog_transaction_id =
+                        activation.latest_retained_transaction_id()?;
+                }
+                LibraryResponse::BackupSnapshots(reply)
+            }
+            LibraryRequest::BackupCredentialEnroll { .. } => {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Native credential enrollment must use its guarded dialog.",
+                ));
+            }
+            LibraryRequest::BackupCredentialExport { .. }
+            | LibraryRequest::BackupCredentialUnlock { .. } => {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Recovery credential actions require the native guarded dialog.",
+                ));
+            }
             LibraryRequest::BackupComparisonPreview {
                 run_id,
                 entry_id,
@@ -1120,6 +1603,77 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "m4_application_catalog_quit" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The generated catalog quit action accepts no supplied scope.",
+                ));
+            }
+            let app = window.app_handle().clone();
+            std::thread::Builder::new()
+                .name("generated-catalog-quit".into())
+                .spawn(move || {
+                    // Allow this fixed test response to leave the embedded driver.
+                    // Shutdown itself uses the real native drain/exit handshake.
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    request_shutdown(&app, 0);
+                })?;
+            Ok(serde_json::json!({"quitRequested":true,"nativePid":std::process::id()}))
+        }
+        "m4_application_source"
+        | "m4_application_repository"
+        | "m4_application_restore"
+        | "m4_application_remove_source"
+        | "m4_application_catalog_root_picker"
+        | "m4_application_catalog_audit"
+        | "m4_application_catalog_newer_edit"
+        | "m4_application_catalog_second_edit"
+        | "m4_application_catalog_active_audit"
+        | "m4_application_catalog_session_cleanup"
+        | "m4_application_audit" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The owned application fixture accepts no external scope.",
+                ));
+            }
+            backup_fixture::handle(&state, &action)
+        }
+        "backup_retained_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The generated replacement lab accepts no supplied scope.",
+                ));
+            }
+            tokio::task::spawn_blocking(
+                stillharbour_core::executor::run_retained_replacement_fixture_probe,
+            )
+            .await
+            .map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "The generated replacement lab stopped unexpectedly.",
+                )
+            })?
+        }
+        "backup_append_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The generated append lab accepts no supplied scope.",
+                ));
+            }
+            tokio::task::spawn_blocking(stillharbour_core::executor::run_append_fixture_probe)
+                .await
+                .map_err(|_| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "The generated append lab stopped unexpectedly.",
+                    )
+                })?
+        }
         "organization_rename_arm_hold" => {
             if rows.is_some() {
                 return Err(AppError::new(
@@ -1825,6 +2379,10 @@ async fn test_performance(
 }
 
 fn main() {
+    #[cfg(target_os = "macos")]
+    if let Some(code) = stillharbour_core::backup::rclone_worker::dispatch() {
+        std::process::exit(code);
+    }
     let args: Vec<_> = std::env::args_os().collect();
     if args.get(1).is_some_and(|arg| arg == "--inspection-worker") {
         let result = if args.len() == 5 {
@@ -1939,10 +2497,16 @@ fn main() {
     builder
         .register_asynchronous_uri_scheme_protocol("original", |context, request, responder| {
             let library = context.app_handle().state::<Foundation>().library.clone();
+            let admission = context
+                .app_handle()
+                .state::<Foundation>()
+                .catalog_admission
+                .enter();
             let allowed =
                 context.webview_label() == "main" && request.method() == tauri::http::Method::GET;
             tauri::async_runtime::spawn_blocking(move || {
                 let result = (|| {
+                    let _admission = admission?;
                     if !allowed {
                         return Err(AppError::new(
                             ErrorCode::InvalidInput,
@@ -1984,9 +2548,15 @@ fn main() {
         })
         .register_asynchronous_uri_scheme_protocol("thumbnail", |context, request, responder| {
             let library = context.app_handle().state::<Foundation>().library.clone();
+            let admission = context
+                .app_handle()
+                .state::<Foundation>()
+                .catalog_admission
+                .enter();
             let allowed = context.webview_label() == "main";
             tauri::async_runtime::spawn_blocking(move || {
                 let result = (|| -> Result<Vec<u8>> {
+                    let _admission = admission?;
                     if !allowed {
                         return Err(AppError::new(
                             ErrorCode::InvalidInput,
@@ -2043,18 +2613,42 @@ fn main() {
             #[cfg(not(debug_assertions))]
             let data = app.path().app_local_data_dir()?;
             #[cfg(feature = "desktop-test")]
-            let test_data = tempfile::Builder::new()
-                .prefix("stillharbour-native-test-")
-                .tempdir()?;
+            let test_data = catalog_test_session::NativeTestData::open()?;
             #[cfg(feature = "desktop-test")]
             let data = test_data.path().to_owned();
             std::fs::create_dir_all(&data)?;
+            // Use one native spelling for the held appdata binding, descriptor
+            // paths and SQLite actor. This preserves the same directory/object.
+            let data = data.canonicalize()?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(&data, std::fs::Permissions::from_mode(0o700))?;
             }
-            let catalog = Arc::new(Catalog::open(data.join("Foundation.stillharbour"))?);
+            let startup_error = |error: AppError| {
+                app.dialog().message(format!(
+                    "Catalog recovery could not safely select a catalog. Existing catalogs, pre-restore copies and candidates remain retained.\n\n{}", error.message,
+                )).title("Stillharbour — catalog unavailable").blocking_show();
+                error
+            };
+            let activation = Arc::new(
+                stillharbour_core::catalog_restore::activation::ActivationStore::open(&data)
+                    .map_err(startup_error)?,
+            );
+            let catalog_selection = Arc::new(activation.startup_selection().map_err(startup_error)?);
+            catalog_selection.revalidate().map_err(startup_error)?;
+            let catalog = Arc::new(if catalog_selection.creation_allowed {
+                Catalog::open_bound_seed(catalog_selection.path.clone(), catalog_selection.identity.clone(), catalog_selection.volume.clone())
+            } else {
+                Catalog::open_bound_existing(catalog_selection.path.clone(), catalog_selection.identity.clone(), catalog_selection.volume.clone())
+            }.map_err(startup_error)?);
+            catalog_selection.revalidate().map_err(startup_error)?;
+            if catalog.schema_fingerprint()? != stillharbour_core::catalog::current_schema_fingerprint()? {
+                return Err(startup_error(AppError::new(ErrorCode::InvalidInput,
+                    "The selected catalog schema does not match the compiled application schema; no library workers were started.")).into());
+            }
+            activation.confirm_initialized(&catalog_selection).map_err(startup_error)?;
+            catalog.retain_native_owner(Arc::new((activation.clone(), catalog_selection.clone())))?;
             let summary = catalog.summary()?;
             let packaged = app.path().resolve(
                 "helpers/exiftool/exiftool",
@@ -2077,9 +2671,46 @@ fn main() {
                     },
                 },
             )?;
+            let backup_resources = app
+                .path()
+                .resolve("helpers/backup", tauri::path::BaseDirectory::Resource)?;
+            #[cfg(debug_assertions)]
+            let backup_resources = if backup_resources.is_dir() {
+                backup_resources
+            } else {
+                #[cfg(all(windows, target_arch = "x86_64"))]
+                let platform = "windows-x86_64";
+                #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+                let platform = "macos-aarch64";
+                #[cfg(not(any(
+                    all(windows, target_arch = "x86_64"),
+                    all(target_os = "macos", target_arch = "aarch64")
+                )))]
+                let platform = "unsupported";
+                let fixed = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../vendor/backup-helpers")
+                    .join(platform);
+                fixed.canonicalize().unwrap_or(fixed)
+            };
+            // A missing/changed resource leaves the snapshot capability visibly
+            // unavailable. Read-only catalog startup remains usable. No PATH or
+            // network fallback exists in production.
+            let _backup_capability_unavailable =
+                library.configure_snapshot_helpers(backup_resources).err();
+            library.start_snapshot_schedules()?;
             #[cfg(not(feature = "desktop-test"))]
             library.start_monitoring()?;
             app.manage(Foundation {
+                #[cfg(feature = "desktop-test")]
+                catalog_restore_picker: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                catalog_restore_receipt: Arc::new(Mutex::new(None)),
+                catalog_admission: Arc::new(catalog_admission::Admission::default()),
+                activation,
+                _catalog_selection: catalog_selection,
+                appdata: data.clone(),
+                #[cfg(feature = "desktop-test")]
+                backup_application_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 _test_data: test_data,
                 #[cfg(feature = "desktop-test")]
@@ -2115,7 +2746,10 @@ fn main() {
                     original_mutations_enabled: false,
                 },
                 selection: Mutex::new(None),
-                picker: tokio::sync::Mutex::new(()),
+                picker: Arc::new(tokio::sync::Mutex::new(())),
+                credential_gate: Arc::new(Mutex::new(())),
+                credential_cancel: Arc::new(AtomicBool::new(false)),
+                shutdown: Arc::new(AtomicU8::new(0)),
             });
             let dev_origin = app
                 .config()
@@ -2139,10 +2773,26 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-                window.state::<Foundation>().library.cancel_all();
+            if window.label() == "main"
+                && let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && window
+                    .state::<Foundation>()
+                    .shutdown
+                    .load(Ordering::Acquire)
+                    != 2
+            {
+                api.prevent_close();
+                request_shutdown(window.app_handle(), 0);
             }
         })
-        .run(tauri::generate_context!())
-        .expect("Stillharbour could not start; catalog or native runtime is unavailable");
+        .build(tauri::generate_context!())
+        .expect("Stillharbour could not start; catalog or native runtime is unavailable")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event
+                && app.state::<Foundation>().shutdown.load(Ordering::Acquire) != 2
+            {
+                api.prevent_exit();
+                request_shutdown(app, code.unwrap_or(0));
+            }
+        });
 }

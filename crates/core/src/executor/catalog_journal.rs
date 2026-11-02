@@ -24,6 +24,108 @@ const PLAN_PHASE: &str = "copy_execution_plan_v1";
 const EVENT_PHASE: &str = "copy_execution_event_v1";
 const MAX_RECORD: usize = 65_536;
 const MAX_EVENT: usize = 8192;
+/// Decode a new catalog-backed stream using the same strict state machine.
+/// Callers bind the immutable plan/job before supplying contiguous copy events;
+/// this routine never issues or reconstructs an approval.
+#[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+pub(super) fn decode_copy_events(
+    plan: &CopyPlan,
+    events: Vec<(u64, Option<usize>, String, serde_json::Value)>,
+) -> Result<(Vec<super::resume::Cursor>, bool, String)> {
+    let bound = plan
+        .files
+        .len()
+        .checked_mul(6)
+        .and_then(|n| n.checked_add(3))
+        .ok_or_else(|| failed("The copy stream exceeds its event bound."))?;
+    if events.len() > bound || plan.digest()? != plan.digest {
+        return Err(failed("The copy stream differs from its immutable plan."));
+    }
+    let mut history = History::new(plan);
+    let mut hash = blake3::Hasher::new();
+    hash.update(plan.digest.as_bytes());
+    for (ordinal, item, phase, evidence) in events {
+        if phase.len() > 128
+            || serde_json::to_vec(&evidence)
+                .map_err(|error| failed("Invalid copy event evidence.").caused_by(error))?
+                .len()
+                > MAX_EVENT
+        {
+            return Err(failed("A copy event exceeds its evidence bound."));
+        }
+        let event = Event {
+            ordinal,
+            stream_digest: plan.digest.clone(),
+            item,
+            phase,
+            evidence,
+        };
+        history.apply(&event, plan)?;
+        let encoded = serde_json::to_vec(&event)
+            .map_err(|error| failed("Could not fingerprint copy events.").caused_by(error))?;
+        hash.update(&(encoded.len() as u64).to_le_bytes());
+        hash.update(&encoded);
+    }
+    Ok((
+        history
+            .items
+            .iter()
+            .map(|item| super::resume::Cursor {
+                phase: item.phase,
+                object: item.object.clone(),
+                digest: item.digest.clone(),
+            })
+            .collect(),
+        history.terminal,
+        hash.finalize().to_hex().to_string(),
+    ))
+}
+/// Reuse the production event decoder for the constructor-owned append lab.
+#[cfg(any(test, feature = "fixture-probes"))]
+pub(super) fn append_fixture_history(
+    journal: &super::Journal,
+    plan: &CopyPlan,
+) -> Result<(Vec<super::resume::Cursor>, bool, String)> {
+    let mut history = History::new(plan);
+    let mut hash = blake3::Hasher::new();
+    hash.update(plan.digest.as_bytes());
+    let mut query = journal.0.prepare("SELECT sequence,item,phase,CASE WHEN length(CAST(evidence AS BLOB))<=8192 THEN evidence END FROM events ORDER BY sequence LIMIT ?")?;
+    let mut rows = query.query([plan.files.len() as i64 * 6 + 4])?;
+    while let Some(row) = rows.next()? {
+        let text: Option<String> = row.get(3)?;
+        let text = text.ok_or_else(|| failed("Append event exceeds its bound."))?;
+        let event = Event {
+            ordinal: u64::try_from(row.get::<_, i64>(0)?)
+                .map_err(|_| failed("Invalid append journal ordinal."))?,
+            stream_digest: plan.digest.clone(),
+            item: row
+                .get::<_, Option<i64>>(1)?
+                .map(usize::try_from)
+                .transpose()
+                .map_err(|_| failed("Invalid append journal item."))?,
+            phase: row.get(2)?,
+            evidence: decode(&text, MAX_EVENT)?,
+        };
+        history.apply(&event, plan)?;
+        let encoded = serde_json::to_vec(&event)
+            .map_err(|e| failed("Could not fingerprint append events.").caused_by(e))?;
+        hash.update(&(encoded.len() as u64).to_le_bytes());
+        hash.update(&encoded);
+    }
+    Ok((
+        history
+            .items
+            .iter()
+            .map(|item| super::resume::Cursor {
+                phase: item.phase,
+                object: item.object.clone(),
+                digest: item.digest.clone(),
+            })
+            .collect(),
+        history.terminal,
+        hash.finalize().to_hex().to_string(),
+    ))
+}
 #[cfg(test)]
 #[path = "catalog_journal/import_bundle_tests.rs"]
 mod import_bundle_tests;
@@ -243,6 +345,16 @@ impl CopyJournal for ObservedJournal<'_> {
     }
 }
 fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
+    if binding
+        .plan
+        .files
+        .iter()
+        .any(|file| file.stage_location.is_some())
+    {
+        return Err(failed(
+            "Organization copy streams do not authorize separate staging locations.",
+        ));
+    }
     if binding.namespace.is_some() {
         return namespace_journal::validate_copy_binding(db, binding);
     }
@@ -1034,6 +1146,7 @@ impl Fixture {
                     None
                 },
                 prepared_stage: None,
+                stage_location: None,
             });
         }
         let mut plan = CopyPlan {
@@ -2621,345 +2734,384 @@ mod tests {
     }
     #[test]
     fn import_projected_workflow_reviews_subset_and_separately_approves_both_actions() {
-        if crate::test_process::isolated(
+        projected_import_variant(
             "executor::catalog_journal::tests::import_projected_workflow_reviews_subset_and_separately_approves_both_actions",
-            60,
-        ) {
+            0,
+        );
+    }
+    #[test]
+    fn import_projected_workflow_rechecks_referenced_source() {
+        projected_import_variant(
+            "executor::catalog_journal::tests::import_projected_workflow_rechecks_referenced_source",
+            1,
+        );
+    }
+    #[test]
+    fn import_projected_workflow_refuses_inaccessible_keeper() {
+        projected_import_variant(
+            "executor::catalog_journal::tests::import_projected_workflow_refuses_inaccessible_keeper",
+            2,
+        );
+    }
+    #[test]
+    fn import_projected_workflow_recovers_denied_receipt_and_refuses_changed_output() {
+        projected_import_variant(
+            "executor::catalog_journal::tests::import_projected_workflow_recovers_denied_receipt_and_refuses_changed_output",
+            3,
+        );
+    }
+    #[test]
+    fn import_projected_workflow_recovers_denied_completion_and_refuses_changed_parent() {
+        projected_import_variant(
+            "executor::catalog_journal::tests::import_projected_workflow_recovers_denied_completion_and_refuses_changed_parent",
+            4,
+        );
+    }
+    #[test]
+    fn import_projected_workflow_retains_managed_source_indexing() {
+        projected_import_variant(
+            "executor::catalog_journal::tests::import_projected_workflow_retains_managed_source_indexing",
+            5,
+        );
+    }
+    // Each independent fixture gets its own exact child and liveness deadline.
+    // One aggregate deadline made a healthy sixth fixture time out on busy CI.
+    fn projected_import_variant(case: &str, variant: u8) {
+        assert!(variant < 6);
+        if crate::test_process::isolated(case, 60) {
             return;
         }
         use crate::operations::{CopyAction, CopyApprovalInput, CopyJobState, CopyStartInput};
-        for variant in 0..6 {
-            eprintln!("Generated projected import variant {variant}: setup");
-            let (fixture, workflow, plan, source_root, _) = mixed_import_fixture_with_destination(
-                (variant == 5).then_some(crate::library::model::RootMode::Managed),
-            );
-            if variant == 1 {
+        eprintln!("Generated projected import variant {variant}: setup");
+        let (fixture, workflow, plan, source_root, _) = mixed_import_fixture_with_destination(
+            (variant == 5).then_some(crate::library::model::RootMode::Managed),
+        );
+        if variant == 1 {
+            fixture
+                .library
+                .catalog
+                .call(move |db| {
+                    db.execute(
+                        "UPDATE roots SET mode='referenced' WHERE id=?",
+                        [source_root],
+                    )?;
+                    Ok(())
+                })
+                .unwrap();
+        }
+        let original = fixture
+            .library
+            .organization_copy_manifest_open(fixture.owner.clone(), fixture.manifest.clone())
+            .unwrap();
+        let sources = workflow
+            .import_copy_sources(fixture.owner.clone(), plan.id.clone())
+            .unwrap();
+        let logical = sources
+            .files
+            .iter()
+            .map(|file| file.bytes as u128)
+            .sum::<u128>();
+        let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
+        let identity = crate::filesystem::identity(&selected).unwrap();
+        let volume = crate::library::native::volume_token(&selected).unwrap();
+        drop(selected);
+        let selection = uuid::Uuid::new_v4().to_string();
+        let mut review = workflow
+            .create_import_review(
+                &fixture.library,
+                fixture.owner.clone(),
+                plan.id.clone(),
+                selection.clone(),
+                fixture.destination.clone(),
+                (identity.clone(), volume.clone()),
+            )
+            .unwrap();
+        assert_eq!(review.files.len(), 2);
+        assert_eq!(
+            review.assessment.capacity.logical_bytes,
+            logical.to_string()
+        );
+        assert!(logical < original.selected_bytes.parse::<u128>().unwrap());
+        assert_eq!(review.assessment.manifest_digest, original.digest);
+        assert!(
+            review
+                .files
+                .iter()
+                .all(|file| plan.copy_file_ids.contains(&file.id))
+        );
+        assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
+        let mut final_job = String::new();
+        for action in [CopyAction::PrepareNames, CopyAction::CopyFiles] {
+            eprintln!("Generated projected import variant {variant}: {action:?}");
+            assert_eq!(review.action, action);
+            let approval = workflow
+                .approve(
+                    &fixture.library,
+                    CopyApprovalInput {
+                        review_id: review.id.clone(),
+                        digest: review.digest.clone(),
+                        action,
+                        fidelity_limits_acknowledged: true,
+                    },
+                    selection.clone(),
+                    fixture.destination.clone(),
+                    identity.clone(),
+                    volume.clone(),
+                )
+                .unwrap();
+            if variant == 2 && action == CopyAction::CopyFiles {
+                let keeper = plan.skip_files[0].keeper_asset_id.clone();
                 fixture
                     .library
                     .catalog
                     .call(move |db| {
                         db.execute(
-                            "UPDATE roots SET mode='referenced' WHERE id=?",
-                            [source_root],
+                            "UPDATE assets SET presence='inaccessible' WHERE id=?",
+                            [keeper],
                         )?;
                         Ok(())
                     })
                     .unwrap();
             }
-            let original = fixture
-                .library
-                .organization_copy_manifest_open(fixture.owner.clone(), fixture.manifest.clone())
-                .unwrap();
-            let sources = workflow
-                .import_copy_sources(fixture.owner.clone(), plan.id.clone())
-                .unwrap();
-            let logical = sources
-                .files
-                .iter()
-                .map(|file| file.bytes as u128)
-                .sum::<u128>();
-            let selected = crate::library::native::open_root(&fixture.destination, None).unwrap();
-            let identity = crate::filesystem::identity(&selected).unwrap();
-            let volume = crate::library::native::volume_token(&selected).unwrap();
-            drop(selected);
-            let selection = uuid::Uuid::new_v4().to_string();
-            let mut review = workflow
-                .create_import_review(
-                    &fixture.library,
-                    fixture.owner.clone(),
-                    plan.id.clone(),
+            if action == CopyAction::CopyFiles && (3..=4).contains(&variant) {
+                fixture.library.catalog.call(move|db|{db.execute_batch(if variant==3 {"CREATE TRIGGER deny_import_copy_evidence BEFORE INSERT ON operation_journal WHEN NEW.phase='import_copy_verified_v1' BEGIN SELECT RAISE(ABORT,'owned import receipt denial'); END;"} else {"CREATE TRIGGER deny_import_completion BEFORE UPDATE ON operation_jobs WHEN NEW.state='completed_verified' BEGIN SELECT RAISE(ABORT,'owned import job completion denial'); END;"})?;Ok(())}).unwrap();
+            }
+            let queued = workflow
+                .start(
+                    fixture.library.clone(),
+                    CopyStartInput {
+                        review_id: review.id.clone(),
+                        digest: review.digest.clone(),
+                        approval_id: approval.id,
+                    },
                     selection.clone(),
                     fixture.destination.clone(),
-                    (identity.clone(), volume.clone()),
+                    identity.clone(),
+                    volume.clone(),
                 )
                 .unwrap();
-            assert_eq!(review.files.len(), 2);
+            let finished = wait_operation(|| workflow.job(queued.id.clone()));
             assert_eq!(
-                review.assessment.capacity.logical_bytes,
-                logical.to_string()
-            );
-            assert!(logical < original.selected_bytes.parse::<u128>().unwrap());
-            assert_eq!(review.assessment.manifest_digest, original.digest);
-            assert!(
-                review
-                    .files
-                    .iter()
-                    .all(|file| plan.copy_file_ids.contains(&file.id))
-            );
-            assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 2);
-            let mut final_job = String::new();
-            for action in [CopyAction::PrepareNames, CopyAction::CopyFiles] {
-                eprintln!("Generated projected import variant {variant}: {action:?}");
-                assert_eq!(review.action, action);
-                let approval = workflow
-                    .approve(
-                        &fixture.library,
-                        CopyApprovalInput {
-                            review_id: review.id.clone(),
-                            digest: review.digest.clone(),
-                            action,
-                            fidelity_limits_acknowledged: true,
-                        },
-                        selection.clone(),
-                        fixture.destination.clone(),
-                        identity.clone(),
-                        volume.clone(),
-                    )
-                    .unwrap();
-                if variant == 2 && action == CopyAction::CopyFiles {
-                    let keeper = plan.skip_files[0].keeper_asset_id.clone();
-                    fixture
-                        .library
-                        .catalog
-                        .call(move |db| {
-                            db.execute(
-                                "UPDATE assets SET presence='inaccessible' WHERE id=?",
-                                [keeper],
-                            )?;
-                            Ok(())
-                        })
-                        .unwrap();
-                }
-                if action == CopyAction::CopyFiles && (3..=4).contains(&variant) {
-                    fixture.library.catalog.call(move|db|{db.execute_batch(if variant==3 {"CREATE TRIGGER deny_import_copy_evidence BEFORE INSERT ON operation_journal WHEN NEW.phase='import_copy_verified_v1' BEGIN SELECT RAISE(ABORT,'owned import receipt denial'); END;"} else {"CREATE TRIGGER deny_import_completion BEFORE UPDATE ON operation_jobs WHEN NEW.state='completed_verified' BEGIN SELECT RAISE(ABORT,'owned import job completion denial'); END;"})?;Ok(())}).unwrap();
-                }
-                let queued = workflow
-                    .start(
-                        fixture.library.clone(),
-                        CopyStartInput {
-                            review_id: review.id.clone(),
-                            digest: review.digest.clone(),
-                            approval_id: approval.id,
-                        },
-                        selection.clone(),
-                        fixture.destination.clone(),
-                        identity.clone(),
-                        volume.clone(),
-                    )
-                    .unwrap();
-                let finished = wait_operation(|| workflow.job(queued.id.clone()));
-                assert_eq!(
-                    finished.state,
-                    if action == CopyAction::PrepareNames {
-                        CopyJobState::Prepared
-                    } else if variant == 2 || variant == 3 {
-                        CopyJobState::NeedsAttention
-                    } else if variant == 4 {
-                        CopyJobState::NeedsRecovery
-                    } else {
-                        CopyJobState::CompletedVerified
-                    },
-                    "variant={variant}, action={action:?}, error={:?}",
-                    finished.error
-                );
+                finished.state,
                 if action == CopyAction::PrepareNames {
-                    workflow.discard(&review.id).unwrap();
-                    let reopened = workflow
-                        .reopen_preparation(
+                    CopyJobState::Prepared
+                } else if variant == 2 || variant == 3 {
+                    CopyJobState::NeedsAttention
+                } else if variant == 4 {
+                    CopyJobState::NeedsRecovery
+                } else {
+                    CopyJobState::CompletedVerified
+                },
+                "variant={variant}, action={action:?}, error={:?}",
+                finished.error
+            );
+            if action == CopyAction::PrepareNames {
+                workflow.discard(&review.id).unwrap();
+                let reopened = workflow
+                    .reopen_preparation(
+                        &fixture.library,
+                        finished.id,
+                        selection.clone(),
+                        fixture.destination.clone(),
+                        (identity.clone(), volume.clone()),
+                    )
+                    .unwrap();
+                assert_eq!(reopened.manifest.files.len(), 4);
+                assert_eq!(reopened.import_plan.as_ref().unwrap().id, plan.id);
+                review = reopened.review;
+                assert_eq!(
+                    review.assessment.capacity.logical_bytes,
+                    logical.to_string()
+                );
+            } else {
+                final_job = finished.id.clone();
+                assert_eq!(finished.verified_files, if variant == 2 { 0 } else { 2 });
+                let receipt = workflow.import_copy_receipt(finished.id.clone()).unwrap();
+                assert_eq!(receipt.is_some(), variant < 2 || variant == 5);
+                if let Some(receipt) = receipt {
+                    assert_eq!(receipt.copied_file_ids, plan.copy_file_ids);
+                    assert_eq!(receipt.skipped_files.len(), 2);
+                    assert_eq!(receipt.import_digest, plan.digest);
+                    assert!(receipt.keeper_bytes_read.parse::<u128>().unwrap() > 0);
+                }
+                let job_id = finished.id.clone();
+                let facts:i64=fixture.library.catalog.call(move|db|Ok(db.query_row("SELECT count(*) FROM operation_journal WHERE item_id=? AND phase='import_copy_verified_v1'",[job_id],|row|row.get(0))?)).unwrap();
+                assert_eq!(
+                    facts,
+                    if variant < 2 || variant == 4 || variant == 5 {
+                        1
+                    } else {
+                        0
+                    }
+                );
+                for file in &review.files {
+                    let output = fixture.destination.join(&file.target_path);
+                    if variant == 2 {
+                        assert!(!output.exists());
+                    } else {
+                        assert_eq!(
+                            std::fs::read(output).unwrap(),
+                            std::fs::read(fixture.source.join(&file.source_path)).unwrap()
+                        );
+                    }
+                }
+                if (3..=4).contains(&variant) {
+                    fixture.library.catalog.call(|db|{db.execute_batch("DROP TRIGGER IF EXISTS deny_import_copy_evidence; DROP TRIGGER IF EXISTS deny_import_completion;")?;Ok(())}).unwrap();
+                    let continuation = workflow
+                        .create_continuation_review(
                             &fixture.library,
-                            finished.id,
+                            finished.id.clone(),
                             selection.clone(),
                             fixture.destination.clone(),
                             (identity.clone(), volume.clone()),
                         )
                         .unwrap();
-                    assert_eq!(reopened.manifest.files.len(), 4);
-                    assert_eq!(reopened.import_plan.as_ref().unwrap().id, plan.id);
-                    review = reopened.review;
-                    assert_eq!(
-                        review.assessment.capacity.logical_bytes,
-                        logical.to_string()
-                    );
-                } else {
-                    final_job = finished.id.clone();
-                    assert_eq!(finished.verified_files, if variant == 2 { 0 } else { 2 });
-                    let receipt = workflow.import_copy_receipt(finished.id.clone()).unwrap();
-                    assert_eq!(receipt.is_some(), variant < 2 || variant == 5);
-                    if let Some(receipt) = receipt {
-                        assert_eq!(receipt.copied_file_ids, plan.copy_file_ids);
-                        assert_eq!(receipt.skipped_files.len(), 2);
-                        assert_eq!(receipt.import_digest, plan.digest);
-                        assert!(receipt.keeper_bytes_read.parse::<u128>().unwrap() > 0);
-                    }
-                    let job_id = finished.id.clone();
-                    let facts:i64=fixture.library.catalog.call(move|db|Ok(db.query_row("SELECT count(*) FROM operation_journal WHERE item_id=? AND phase='import_copy_verified_v1'",[job_id],|row|row.get(0))?)).unwrap();
-                    assert_eq!(
-                        facts,
-                        if variant < 2 || variant == 4 || variant == 5 {
-                            1
-                        } else {
-                            0
-                        }
-                    );
-                    for file in &review.files {
-                        let output = fixture.destination.join(&file.target_path);
-                        if variant == 2 {
-                            assert!(!output.exists());
-                        } else {
-                            assert_eq!(
-                                std::fs::read(output).unwrap(),
-                                std::fs::read(fixture.source.join(&file.source_path)).unwrap()
-                            );
-                        }
-                    }
-                    if (3..=4).contains(&variant) {
-                        fixture.library.catalog.call(|db|{db.execute_batch("DROP TRIGGER IF EXISTS deny_import_copy_evidence; DROP TRIGGER IF EXISTS deny_import_completion;")?;Ok(())}).unwrap();
-                        let continuation = workflow
-                            .create_continuation_review(
-                                &fixture.library,
-                                finished.id.clone(),
-                                selection.clone(),
-                                fixture.destination.clone(),
-                                (identity.clone(), volume.clone()),
-                            )
-                            .unwrap();
-                        assert_eq!(continuation.files.len(), 2);
-                        assert_eq!(continuation.assessment.capacity.rounded_data_bytes, "0");
-                        let approval = workflow
-                            .approve_continuation(
-                                &fixture.library,
-                                CopyApprovalInput {
-                                    review_id: continuation.id.clone(),
-                                    digest: continuation.digest.clone(),
-                                    action: CopyAction::CopyFiles,
-                                    fidelity_limits_acknowledged: true,
-                                },
-                                selection.clone(),
-                                fixture.destination.clone(),
-                                (identity.clone(), volume.clone()),
-                            )
-                            .unwrap();
-                        let queued = workflow
-                            .start_continuation(
-                                fixture.library.clone(),
-                                CopyStartInput {
-                                    review_id: continuation.id,
-                                    digest: continuation.digest,
-                                    approval_id: approval.id,
-                                },
-                                selection.clone(),
-                                fixture.destination.clone(),
-                                (identity.clone(), volume.clone()),
-                            )
-                            .unwrap();
-                        let completed = wait_operation(|| workflow.job(queued.id.clone()));
-                        assert_eq!(completed.state, CopyJobState::CompletedVerified);
-                        assert_eq!(completed.review_id, finished.review_id);
-                        assert_ne!(completed.id, finished.id);
-                        final_job = completed.id.clone();
-                        let receipt = workflow.import_copy_receipt(completed.id).unwrap().unwrap();
-                        assert_eq!(receipt.import_plan_id, plan.id);
-                        assert_eq!(receipt.copied_file_ids, plan.copy_file_ids);
-                        assert!(receipt.keeper_bytes_read.parse::<u128>().unwrap() > 0);
-                        assert!(workflow.import_copy_receipt(finished.id).unwrap().is_none());
-                    }
+                    assert_eq!(continuation.files.len(), 2);
+                    assert_eq!(continuation.assessment.capacity.rounded_data_bytes, "0");
+                    let approval = workflow
+                        .approve_continuation(
+                            &fixture.library,
+                            CopyApprovalInput {
+                                review_id: continuation.id.clone(),
+                                digest: continuation.digest.clone(),
+                                action: CopyAction::CopyFiles,
+                                fidelity_limits_acknowledged: true,
+                            },
+                            selection.clone(),
+                            fixture.destination.clone(),
+                            (identity.clone(), volume.clone()),
+                        )
+                        .unwrap();
+                    let queued = workflow
+                        .start_continuation(
+                            fixture.library.clone(),
+                            CopyStartInput {
+                                review_id: continuation.id,
+                                digest: continuation.digest,
+                                approval_id: approval.id,
+                            },
+                            selection.clone(),
+                            fixture.destination.clone(),
+                            (identity.clone(), volume.clone()),
+                        )
+                        .unwrap();
+                    let completed = wait_operation(|| workflow.job(queued.id.clone()));
+                    assert_eq!(completed.state, CopyJobState::CompletedVerified);
+                    assert_eq!(completed.review_id, finished.review_id);
+                    assert_ne!(completed.id, finished.id);
+                    final_job = completed.id.clone();
+                    let receipt = workflow.import_copy_receipt(completed.id).unwrap().unwrap();
+                    assert_eq!(receipt.import_plan_id, plan.id);
+                    assert_eq!(receipt.copied_file_ids, plan.copy_file_ids);
+                    assert!(receipt.keeper_bytes_read.parse::<u128>().unwrap() > 0);
+                    assert!(workflow.import_copy_receipt(finished.id).unwrap().is_none());
                 }
             }
-            assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 3);
-            assert!(fixture.preserved().unwrap());
-            let retained = fixture
-                .library
-                .organization_copy_manifest_open(fixture.owner.clone(), fixture.manifest.clone())
-                .unwrap();
-            assert_eq!(
-                serde_json::to_vec(&original).unwrap(),
-                serde_json::to_vec(&retained).unwrap()
-            );
-            assert!(
-                workflow
-                    .create_import_review(
-                        &fixture.library,
-                        fixture.owner.clone(),
-                        plan.id,
-                        selection,
-                        fixture.destination.clone(),
-                        (identity.clone(), volume.clone())
-                    )
-                    .is_err()
-            );
-            assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 3);
-            let root_count = crate::library::store::roots(&fixture.library.catalog)
-                .unwrap()
-                .len();
-            if variant == 3 {
-                let path = fixture.destination.join(&review.files[0].target_path);
-                let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
-                let mut bytes = std::fs::read(&path).unwrap();
-                bytes[0] ^= 1;
-                std::fs::write(&path, bytes).unwrap();
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .open(&path)
-                    .unwrap()
-                    .set_times(std::fs::FileTimes::new().set_modified(modified))
-                    .unwrap();
-            } else if variant == 4 {
-                let parent = fixture
-                    .destination
-                    .join(&review.output_folder)
-                    .canonicalize()
-                    .unwrap();
-                assert!(parent.starts_with(fixture._run.path().canonicalize().unwrap()));
-                let path = parent.join("unknown-added.txt");
-                std::fs::OpenOptions::new()
-                    .write(true)
-                    .create_new(true)
-                    .open(path)
-                    .unwrap();
-            }
-            let indexed = workflow.index_import_output(
-                fixture.library.clone(),
-                final_job.clone(),
-                fixture.destination.clone(),
-                (identity.clone(), volume.clone()),
-            );
-            if variant < 2 || variant == 5 {
-                let indexed = indexed.unwrap();
-                assert_eq!(indexed.already_registered, variant == 5);
-                assert_eq!(
-                    indexed.root.mode,
-                    if variant == 5 {
-                        crate::library::model::RootMode::Managed
-                    } else {
-                        crate::library::model::RootMode::Referenced
-                    }
-                );
-                assert!(!indexed.original_mutations_enabled);
-                let retry = workflow
-                    .index_import_output(
-                        fixture.library.clone(),
-                        final_job,
-                        fixture.destination.clone(),
-                        (identity, volume),
-                    )
-                    .unwrap();
-                assert!(retry.already_registered);
-                assert_eq!(retry.root.id, indexed.root.id);
-                assert_eq!(
-                    crate::library::store::roots(&fixture.library.catalog)
-                        .unwrap()
-                        .len(),
-                    root_count + usize::from(variant != 5)
-                );
-                if variant != 5 {
-                    assert_eq!(
-                        retry.scan.as_ref().map(|scan| &scan.id),
-                        indexed.scan.as_ref().map(|scan| &scan.id)
-                    );
-                } else {
-                    assert_eq!(retry.root.mode, crate::library::model::RootMode::Managed);
-                }
-            } else {
-                assert!(indexed.is_err());
-                assert_eq!(
-                    crate::library::store::roots(&fixture.library.catalog)
-                        .unwrap()
-                        .len(),
-                    root_count
-                );
-            }
-            assert!(fixture.preserved().unwrap());
         }
+        assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 3);
+        assert!(fixture.preserved().unwrap());
+        let retained = fixture
+            .library
+            .organization_copy_manifest_open(fixture.owner.clone(), fixture.manifest.clone())
+            .unwrap();
+        assert_eq!(
+            serde_json::to_vec(&original).unwrap(),
+            serde_json::to_vec(&retained).unwrap()
+        );
+        assert!(
+            workflow
+                .create_import_review(
+                    &fixture.library,
+                    fixture.owner.clone(),
+                    plan.id,
+                    selection,
+                    fixture.destination.clone(),
+                    (identity.clone(), volume.clone())
+                )
+                .is_err()
+        );
+        assert_eq!(std::fs::read_dir(&fixture.destination).unwrap().count(), 3);
+        let root_count = crate::library::store::roots(&fixture.library.catalog)
+            .unwrap()
+            .len();
+        if variant == 3 {
+            let path = fixture.destination.join(&review.files[0].target_path);
+            let modified = std::fs::metadata(&path).unwrap().modified().unwrap();
+            let mut bytes = std::fs::read(&path).unwrap();
+            bytes[0] ^= 1;
+            std::fs::write(&path, bytes).unwrap();
+            std::fs::OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(modified))
+                .unwrap();
+        } else if variant == 4 {
+            let parent = fixture
+                .destination
+                .join(&review.output_folder)
+                .canonicalize()
+                .unwrap();
+            assert!(parent.starts_with(fixture._run.path().canonicalize().unwrap()));
+            let path = parent.join("unknown-added.txt");
+            std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)
+                .unwrap();
+        }
+        let indexed = workflow.index_import_output(
+            fixture.library.clone(),
+            final_job.clone(),
+            fixture.destination.clone(),
+            (identity.clone(), volume.clone()),
+        );
+        if variant < 2 || variant == 5 {
+            let indexed = indexed.unwrap();
+            assert_eq!(indexed.already_registered, variant == 5);
+            assert_eq!(
+                indexed.root.mode,
+                if variant == 5 {
+                    crate::library::model::RootMode::Managed
+                } else {
+                    crate::library::model::RootMode::Referenced
+                }
+            );
+            assert!(!indexed.original_mutations_enabled);
+            let retry = workflow
+                .index_import_output(
+                    fixture.library.clone(),
+                    final_job,
+                    fixture.destination.clone(),
+                    (identity, volume),
+                )
+                .unwrap();
+            assert!(retry.already_registered);
+            assert_eq!(retry.root.id, indexed.root.id);
+            assert_eq!(
+                crate::library::store::roots(&fixture.library.catalog)
+                    .unwrap()
+                    .len(),
+                root_count + usize::from(variant != 5)
+            );
+            if variant != 5 {
+                assert_eq!(
+                    retry.scan.as_ref().map(|scan| &scan.id),
+                    indexed.scan.as_ref().map(|scan| &scan.id)
+                );
+            } else {
+                assert_eq!(retry.root.mode, crate::library::model::RootMode::Managed);
+            }
+        } else {
+            assert!(indexed.is_err());
+            assert_eq!(
+                crate::library::store::roots(&fixture.library.catalog)
+                    .unwrap()
+                    .len(),
+                root_count
+            );
+        }
+        assert!(fixture.preserved().unwrap());
     }
     #[test]
     fn import_keeper_guard_holds_atomic_copy_and_keeper_scopes_without_partial_leases() {
@@ -3891,7 +4043,10 @@ mod tests {
         load: impl Fn() -> Result<crate::operations::CopyWorkflowJob>,
     ) -> crate::operations::CopyWorkflowJob {
         use crate::operations::CopyJobState;
-        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        // Native flush/lookup latency under the full CI fault matrix is not a
+        // ten-second product guarantee. Keep a bounded wait and state evidence;
+        // the isolated scenario retains its independent process deadline.
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
         loop {
             let current = load().unwrap();
             if !matches!(
@@ -3905,7 +4060,10 @@ mod tests {
             }
             assert!(
                 std::time::Instant::now() < until,
-                "Operation worker did not stop"
+                "Operation worker did not stop: {:?}, {}/{} files verified",
+                current.state,
+                current.verified_files,
+                current.total_files
             );
             std::thread::sleep(std::time::Duration::from_millis(10));
         }

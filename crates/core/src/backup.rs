@@ -2,8 +2,24 @@
 use crate::domain::{AppError, ErrorCode, Result};
 use std::{ffi::OsString, path::Path};
 
+pub mod append;
 pub mod comparison;
+pub mod credentials;
+#[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+pub(crate) mod failure_domains;
+#[cfg(target_os = "macos")]
+pub mod helper_guard;
+pub(crate) mod helper_policy;
+pub(crate) mod helper_retry;
+pub mod helpers;
 pub(crate) mod names;
+pub(crate) mod native_metadata;
+#[cfg(target_os = "macos")]
+pub(crate) mod rclone_completion;
+#[cfg(target_os = "macos")]
+pub mod rclone_worker;
+pub mod snapshots;
+pub mod sync;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Helper {

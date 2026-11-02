@@ -9,6 +9,160 @@ use crate::{
 use std::time::{Duration, Instant};
 
 #[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn append_review_freezes_all_regular_files_without_creating_output_or_authority() {
+    let f = Fixture::new();
+    for (name, bytes) in [
+        ("movie.mp4", b"video".as_slice()),
+        (".hidden", b"opaque"),
+        ("movie.xmp", b"sidecar"),
+    ] {
+        std::fs::write(f.source.join(name), bytes).unwrap();
+    }
+    let run = f.start(CompareMode::Verified);
+    let run = f.wait(&run.id);
+    let plan = f
+        .library
+        .backup_append_review(run.id.clone(), vec![])
+        .unwrap();
+    assert_eq!(plan.copy_files, 3);
+    assert_eq!(plan.copy_bytes, "18");
+    assert!(!plan.execution_available);
+    assert_eq!(
+        plan.digest,
+        f.library
+            .backup_append_review(run.id.clone(), vec![])
+            .unwrap()
+            .digest
+    );
+    assert!(!f.dataset().exists());
+    assert_eq!(std::fs::read_dir(&f.destination).unwrap().count(), 0);
+    assert_eq!(std::fs::read(f.source.join("movie.mp4")).unwrap(), b"video");
+    assert!(
+        f.library
+            .backup_append_review("foreign".into(), vec![])
+            .is_err()
+    );
+    let next = f.start(CompareMode::Verified);
+    f.wait(&next.id);
+    assert!(f.library.backup_append_review(run.id, vec![]).is_err());
+    assert!(!f.dataset().exists());
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn append_review_retains_existing_destination_and_marks_uncopied_differences() {
+    let f = Fixture::new();
+    let dataset = f.dataset();
+    std::fs::create_dir_all(&dataset).unwrap();
+    std::fs::write(f.source.join("new.mp4"), b"new").unwrap();
+    std::fs::write(f.source.join("different.jpg"), b"source").unwrap();
+    std::fs::write(dataset.join("different.jpg"), b"edited").unwrap();
+    std::fs::write(dataset.join("unique.bin"), b"destination only").unwrap();
+    let run = f.start(CompareMode::Verified);
+    let run = f.wait(&run.id);
+    assert!(
+        f.library
+            .backup_append_review(run.id.clone(), vec![])
+            .is_err()
+    );
+    let rows = f
+        .library
+        .backup_comparison_page(run.id.clone(), 0)
+        .unwrap()
+        .entries;
+    let decision = rows
+        .iter()
+        .find(|r| r.display_path == "different.jpg")
+        .unwrap()
+        .id
+        .clone();
+    let plan = f
+        .library
+        .backup_append_review(run.id, vec![decision])
+        .unwrap();
+    assert_eq!(plan.copy_files, 1);
+    assert_eq!(plan.retained_destination_files, 2);
+    assert_eq!(plan.uncopied_source_revisions, 1);
+    assert!(!dataset.join("new.mp4").exists());
+    assert_eq!(
+        std::fs::read(dataset.join("different.jpg")).unwrap(),
+        b"edited"
+    );
+    assert_eq!(
+        std::fs::read(dataset.join("unique.bin")).unwrap(),
+        b"destination only"
+    );
+    assert_eq!(
+        std::fs::read(f.source.join("different.jpg")).unwrap(),
+        b"source"
+    );
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn append_review_rejects_late_arrival_and_changed_source_without_writes() {
+    for change in ["source", "dataset", "new_file", "type"] {
+        let f = Fixture::new();
+        std::fs::write(f.source.join("photo.jpg"), b"original").unwrap();
+        let run = f.start(CompareMode::Verified);
+        let run = f.wait(&run.id);
+        match change {
+            "source" => std::fs::write(f.source.join("photo.jpg"), b"changed!").unwrap(),
+            "dataset" => std::fs::create_dir_all(f.dataset()).unwrap(),
+            "new_file" => std::fs::write(f.source.join("late.xmp"), b"unique").unwrap(),
+            "type" => {
+                std::fs::remove_file(f.source.join("photo.jpg")).unwrap();
+                std::fs::create_dir(f.source.join("photo.jpg")).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            f.library.backup_append_review(run.id, vec![]).is_err(),
+            "{change}"
+        );
+        assert!(!f.dataset().join("photo.jpg").exists());
+    }
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn append_review_rejects_changed_existing_destination_quick_and_revoked_scopes() {
+    let f = Fixture::new();
+    let dataset = f.dataset();
+    std::fs::create_dir_all(&dataset).unwrap();
+    std::fs::write(f.source.join("photo.jpg"), b"same").unwrap();
+    std::fs::write(dataset.join("photo.jpg"), b"same").unwrap();
+    let quick = f.start(CompareMode::Quick);
+    let quick = f.wait(&quick.id);
+    assert!(f.library.backup_append_review(quick.id, vec![]).is_err());
+    let run = f.start(CompareMode::Verified);
+    let run = f.wait(&run.id);
+    std::fs::write(dataset.join("photo.jpg"), b"edit").unwrap();
+    assert!(f.library.backup_append_review(run.id, vec![]).is_err());
+    assert_eq!(std::fs::read(dataset.join("photo.jpg")).unwrap(), b"edit");
+    let run = f.start(CompareMode::Verified);
+    let run = f.wait(&run.id);
+    let lease = Registry::shared()
+        .try_acquire(vec![Scope::new(
+            DirectoryChain::open(&f.source).unwrap(),
+            Access::Write,
+        )])
+        .unwrap();
+    assert_eq!(
+        f.library
+            .backup_append_review(run.id.clone(), vec![])
+            .unwrap_err()
+            .code,
+        ErrorCode::Busy
+    );
+    drop(lease);
+    f.library.backup_compare_cancel(run.id.clone()).unwrap();
+    assert!(f.library.backup_append_review(run.id, vec![]).is_err());
+    assert_eq!(std::fs::read(f.source.join("photo.jpg")).unwrap(), b"same");
+}
+
+#[test]
 fn comparison_directory_link_counts_do_not_replace_native_object_identity() {
     let a = FileIdentity {
         volume: 2,
@@ -866,7 +1020,21 @@ fn comparison_inventory_failures_and_late_changes_never_prove_absence_or_keep_a_
     inventory
         .walk(&root, Path::new(""), &AtomicBool::new(false), 0)
         .unwrap();
+    let observed_time = std::fs::metadata(f.source.join("fixture.bin"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    assert_eq!(inventory.files.len(), 1);
     std::fs::write(f.source.join("fixture.bin"), b"modified").unwrap();
+    // Preserve the same-length scenario but make its native revision change
+    // deterministic: Windows writes can share a filesystem clock tick. This
+    // test exercises revision invalidation, not universal content-change proof.
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(f.source.join("fixture.bin"))
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(observed_time + Duration::from_secs(2)))
+        .unwrap();
     assert!(inventory.validate(&root).is_err());
     let mut denied = Inventory::default();
     denied

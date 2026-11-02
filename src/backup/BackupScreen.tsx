@@ -12,6 +12,10 @@ import type {
 import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import './backup.css';
 import { ComparisonPreviews } from './ComparisonPreviews';
+import { SyncWorkflow } from './SyncWorkflow';
+import { SnapshotWorkflow } from './SnapshotWorkflow';
+import { useCatalogSwitchState } from './catalogSwitchState';
+import { CatalogSwitchStopped } from './CatalogSwitchStopped';
 
 type ComparisonSource = Pick<
   LibraryStatus['roots'][number],
@@ -38,12 +42,24 @@ const summaryKeys = {
   blocked: 'blocked',
 } as const;
 
-export function BackupScreen({
+export function BackupScreen(props: {
+  status: LibraryStatus;
+  catalogId?: string | null;
+  navigationControl: ReactNode;
+  jobsControl: ReactNode;
+}) {
+  const stopped = useCatalogSwitchState();
+  return stopped ? <CatalogSwitchStopped state={stopped} /> : <BackupScreenContent {...props} />;
+}
+
+function BackupScreenContent({
   status,
+  catalogId,
   navigationControl,
   jobsControl,
 }: {
   status: LibraryStatus;
+  catalogId?: string | null;
   navigationControl: ReactNode;
   jobsControl: ReactNode;
 }) {
@@ -54,6 +70,7 @@ export function BackupScreen({
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileRefresh, setProfileRefresh] = useState(0);
   const [controlsBusy, setControlsBusy] = useState(false);
+  const [workspace, setWorkspace] = useState<'safe_copy' | 'snapshots'>('safe_copy');
   useEffect(() => {
     let retired = false;
     void libraryData({ kind: 'backup_profiles' }, 'backup_profiles')
@@ -87,11 +104,55 @@ export function BackupScreen({
       : undefined
     : status.roots.find((root) => root.isBase);
   // Saved profiles retain their source even if the catalog's base changes.
+  const workflowControl = (
+    <div className="backup-mode-control" role="group" aria-label="Backup mode">
+      <button
+        aria-pressed={workspace === 'safe_copy'}
+        disabled={controlsBusy}
+        onClick={() => setWorkspace('safe_copy')}
+      >
+        Safe copy
+      </button>
+      <button
+        aria-pressed={workspace === 'snapshots'}
+        disabled={controlsBusy}
+        onClick={() => setWorkspace('snapshots')}
+      >
+        Versioned backup
+      </button>
+    </div>
+  );
+  if (workspace === 'snapshots')
+    return (
+      <>
+        <header className="toolbar">
+          {navigationControl}
+          <h1>Backup &amp; Sync</h1>
+          <div className="header-actions">
+            {workflowControl}
+            {jobsControl}
+          </div>
+        </header>
+        <SnapshotWorkflow
+          catalogId={catalogId ?? null}
+          status={status}
+          onActivityChange={setControlsBusy}
+        />
+      </>
+    );
   return (
     <BackupWorkspace
-      key={`${selectedId}:${base?.id ?? 'unconfigured'}:${rebindFrom?.id ?? ''}`}
+      key={JSON.stringify([
+        selectedId,
+        base?.id,
+        base?.displayPath,
+        base?.availability,
+        registered?.displayPath,
+        rebindFrom?.id,
+      ])}
       rebindFrom={rebindFrom}
       base={base}
+      currentSourcePath={registered?.displayPath ?? base?.displayPath}
       profile={profile}
       onActivityChange={setControlsBusy}
       onProfileSaved={(value) => {
@@ -160,7 +221,12 @@ export function BackupScreen({
         </section>
       }
       navigationControl={navigationControl}
-      jobsControl={jobsControl}
+      jobsControl={
+        <>
+          {workflowControl}
+          {jobsControl}
+        </>
+      }
     />
   );
 }
@@ -168,6 +234,7 @@ export function BackupScreen({
 function BackupWorkspace({
   rebindFrom,
   base,
+  currentSourcePath,
   profile,
   profileControls,
   onProfileSaved,
@@ -177,6 +244,7 @@ function BackupWorkspace({
 }: {
   rebindFrom: SyncProfile | undefined;
   base: ComparisonSource | undefined;
+  currentSourcePath: string | undefined;
   profile: SyncProfile | undefined;
   profileControls: ReactNode;
   onProfileSaved: (profile: SyncProfile) => void;
@@ -191,7 +259,9 @@ function BackupWorkspace({
   const [offset, setOffset] = useState(0);
   const [category, setCategory] = useState<ComparisonCategory | ''>('');
   const [selected, setSelected] = useState<ComparisonEntry | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [requestBusy, setBusy] = useState(false);
+  const [transferBusy, setTransferBusy] = useState(false);
+  const busy = requestBusy || transferBusy;
   const [profileLabel, setProfileLabel] = useState('');
   const [rebindReviewed, setRebindReviewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +288,9 @@ function BackupWorkspace({
         if (
           !retired &&
           token === generation.current &&
+          latest !== null &&
           latest?.sourceRootId === base?.id &&
+          latest.sourceDisplayPath === currentSourcePath &&
           latest?.profileId === profileId
         )
           setRun(latest);
@@ -229,7 +301,7 @@ function BackupWorkspace({
     return () => {
       retired = true;
     };
-  }, [base?.id, profileId]);
+  }, [base?.id, currentSourcePath, profileId]);
   useEffect(() => {
     if (!runId || !running) return;
     let retired = false;
@@ -338,8 +410,8 @@ function BackupWorkspace({
         )}
         <h2>Compare before copying</h2>
         <p>
-          Library → Destination. Comparison leaves both folders unchanged. Copying, retained
-          replacement and versioned backup are awaiting their safety gates.
+          Library → Destination. Comparison leaves both folders unchanged. Review transfer
+          capabilities, proposed actions and any limits below before approving a copy.
         </p>
         <div className="backup-scope">
           <section aria-label="Fixed source library">
@@ -499,13 +571,10 @@ function BackupWorkspace({
               Cancel comparison
             </button>
           )}
-          <button disabled aria-describedby="backup-gate">
-            Start safe sync
-          </button>
         </div>
-        <p id="backup-gate">
-          Transfers are unavailable during this read-only stage. Comparison is not a backup, an
-          approval, or independent recovery evidence.
+        <p>
+          Comparison is not a backup or an approval. Preparation, copying and recovery each require
+          a separate action review.
         </p>
         {!base && <p role="status">Configure a base library before comparing.</p>}
         {base && base.availability !== 'online' && (
@@ -592,6 +661,7 @@ function BackupWorkspace({
                 <ComparisonTable
                   entries={page.entries}
                   selectedId={selected?.id}
+                  disabled={busy}
                   onSelect={setSelected}
                 />
                 {selected && (
@@ -662,6 +732,12 @@ function BackupWorkspace({
             )}
           </section>
         )}
+        <SyncWorkflow
+          key={run?.id ?? 'no-comparison'}
+          run={run}
+          selected={selected}
+          onActivityChange={setTransferBusy}
+        />
       </div>
     </>
   );
@@ -670,16 +746,18 @@ function BackupWorkspace({
 function ComparisonTable({
   entries,
   selectedId,
+  disabled,
   onSelect,
 }: {
   entries: ComparisonEntry[];
   selectedId: string | undefined;
+  disabled: boolean;
   onSelect: (entry: ComparisonEntry) => void;
 }) {
   return (
     <div className="backup-table">
       <table>
-        <caption>Proposed actions — no transfer is enabled</caption>
+        <caption>Comparison findings and proposed actions</caption>
         <thead>
           <tr>
             <th>Relative path</th>
@@ -693,7 +771,11 @@ function ComparisonTable({
           {entries.map((entry) => (
             <tr key={entry.id}>
               <td className="backup-path">
-                <button aria-pressed={selectedId === entry.id} onClick={() => onSelect(entry)}>
+                <button
+                  disabled={disabled}
+                  aria-pressed={selectedId === entry.id}
+                  onClick={() => onSelect(entry)}
+                >
                   {entry.displayPath}
                 </button>
               </td>

@@ -1,5 +1,11 @@
 # Stillharbour - Acceptance and failure-injection test backlog
 
+M4 continuation, 2026-11-02: ADR-0078 covers generated retained replacement, exact native object/descriptive times, three history versions, fresh-output old restore, seven real child exits, baseline corruption and history collisions. [M4_TRANSPORT_TESTS.md](M4_TRANSPORT_TESTS.md) records actual local/SFTP/FTP/FTPS(TLS1.2)/SMB backup/source-removal/restore checks on Windows. These do not establish production application integration, metadata fidelity, independent recovery, macOS acceptance or all-40-PS completion.
+
+M4B generated executor continuation (ADR-0077, partial PS-007/011–014/018/019/025/027/028/033/037): separate staged/publication parent locators must preserve legacy absent-field hashes, reject adoption by organization streams, retain all original/destination-only bytes, require fresh action-bound continuation and reject corruption or new target occupants. Test every copy boundary with actual child exit and SQLite reopen, plus preparation mutation-to-journal gaps and denial after publication. Instrumented native IPC accepts no supplied scope and saves a generated-only receipt. This is not production append, preparation recovery, independent recovery, metadata-fidelity, physical-I/O, transport or both-platform acceptance without executed evidence.
+
+M4B initial append-review increment (2026-11-01, planning portions of PS-003/007/011/016/018/025/028): generated fixtures must retain hidden/unknown/companion regular files in scope, preserve destination-only and differing files, require explicit ID-bound keep-destination decisions, count uncopied source revisions and cover rows beyond the first page. Quick/incomplete/canceled/foreign reviews, invalid decisions, late dataset/entry arrivals, changed objects and incompatible writer leases must fail without output, approval or execution authority. Digests bind scope/run/decisions independently of presentation order. Backend review tests do not pass transfer, full-byte read-back, native name preparation, fidelity or crash-recovery acceptance. See ADR-0076 and IMPLEMENTATION_LOG.md for actual outcomes.
+
 M4A completion (2026-11-01): validate all read-only requirements in [M4A_VALIDATION.md](M4A_VALIDATION.md), including schema-12 rollback/retained snapshots and 30 migration exits, immutable historical context without equality/approval reuse, reviewed superseding rebind, independent companion evidence and ID-bound paced supervised previews with root/revision invalidation. Native Windows/macOS exact-head receipts and unchanged-tree audits are required. Mutation/restore/protocol/fidelity scenarios remain later M4 gates.
 
 M4A conflict/review continuation (2026-11-01): retain separate native names and observed object kinds. Potential case/Unicode aliases, file/folder/ancestor conflicts and unsupported entries must block affected rows without payload reads, copy proposals or a report digest. Fixture source/destination bytes must remain unchanged. Pure fixtures cover alias descendants and composed/decomposed Unicode; native fixtures cover case/type conflicts. Full-report category totals and filtered offsets must include more than 200 matching rows. Native UI must inspect escaped observations, filter to zero blocked rows and back to source-only rows, clearing prior details. These are conservative warnings, not native destination naming authorization, companion completeness or M4A acceptance. See ADR-0074 and actual platform results in the implementation log.
@@ -167,6 +173,59 @@ Continuous M2/M3 prerequisite coverage, 2026-10-31: existing target review must 
 | AC-071 | Differentiate structural repository check, partial sampled read, full read-data and actual restore comparison. A sampled pass never grants full-library verification status. |
 | AC-072 | Restore a catalog after adding new local edits. Pre-restore backup and collision/migration review protect those edits. Absolute root paths are relinked rather than assumed on another OS. |
 | AC-073 | Quit the app or sleep across a scheduled time. Behavior matches the documented running/tray/catch-up model; no fully-quit scheduling claim without an installed tested background agent. |
+
+AC-072 additionally exercises the separate activation-on-restart action from an
+actual verified restore job. Add newer local catalog edits, reject stale review
+and wrong-root mappings, retain a consistent current-catalog backup, and verify
+the independently openable candidate contains the chosen older records. Require
+fresh native confirmation for every root and preserve original media/sidecars.
+Reject unknown/redefined schema objects, untested schema/platform conversions,
+tampered candidate bytes/native IDs, stale OS handoffs and ambiguous interrupted
+preparation. Test restart selection before any writable catalog open, without
+overwriting the original or creating an empty fallback. UI must distinguish
+prepared/restart-required from activated; failure after quiescence requires
+reopening the retained original. Imported schedules/approvals never execute.
+
+After activating a snapshot catalog, add new local edits and review the latest
+sealed pre-restore catalog with no repository password/helpers available. Use
+explicit retained-source provenance and no snapshot ID. Derive its complete
+root set from the retained catalog, including roots absent from the previous
+snapshot, and confirm each root again. Prepare a new forward candidate, retain
+the current edits in another consistent catalog, activate after reopening, and
+verify both generations remain recoverable. Reject stale generation/transaction
+proofs, pending-selector races, forged provenance and changed retained bytes.
+Existing version-1 descriptor bytes/seals remain unchanged; only snapshot
+provenance is accepted for that version. Bound oversized imported identity and
+revision text in SQL before allocating it in Rust.
+
+AC-073 application checks also require exact reviewed manifest/profile consent:
+changed content, versions, roots or endpoints return to review; imported/restored
+catalog schedules cannot execute. Test elapsed UTC intervals, one unchanged-scope
+catch-up, disabling offline and cancellation on root removal/application exit.
+With catch-up unchecked, test the 30-second polling tolerance exactly: a deadline
+30 seconds overdue may run; one older than 30 seconds is skipped after sleep,
+restart or a busy interval. With catch-up checked, any backlog admits at most one
+unchanged-scope run and the next deadline advances from the current admission
+time. Skipped deadlines similarly advance from the current skip time. No timer
+runs while fully quit, and reopening still requires native authorization.
+Backdate/replay an old catalog row after a real OS claim: it cannot start an
+earlier second job or replace the OS-derived displayed deadline/last attempt.
+Inject a failed return after the native timing write, reopen session state and
+confirm no worker starts from the old row. Reject legacy digest-only permits
+until fresh reviewed consent. Disable a copied catalog's imported policy and
+confirm the original native instance's authority remains unchanged. Native time
+fixtures may seed both their exact OS authority and catalog row; row-only edits
+must never authorize an early run.
+
+AC-069's during-staging fixture must first prove one root item was staged, then
+make the other generated root unreadable and restore its original permissions
+through the held native file. Revalidate the canonical constructor-owned run,
+ordered native ancestor objects and exact source entry before each permission
+change. Directory containment uses stable volume/file IDs, not mutable directory
+link counts; regular files still require their exact identity and single link.
+Creating unrelated staging siblings must not invalidate that authority. A fixture
+failure before actual denial supplies no unreadable-root acceptance evidence.
+
 | AC-074 | Photos have valid zero coordinates, missing coordinates, identical coordinates and positions across the antimeridian. Missing GPS does not become (0,0); viewport results/clusters remain correct. |
 | AC-075 | Clicking a map cluster and switching to timeline preserves date/root filters and selection. Large queries use bounded data; markers do not explode into one DOM node per library asset. |
 | AC-076 | Go offline and inspect network logs. No unapproved photo metadata upload; map clearly reports unavailable tiles; attribution and provider cache/offline policy are respected. |

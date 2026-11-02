@@ -495,6 +495,23 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    BackupSync {
+        request: crate::backup::sync::SyncRequest,
+    },
+    BackupSnapshots {
+        request: crate::backup::snapshots::SnapshotRequest,
+    },
+    BackupCredentialEnroll {
+        purpose: crate::backup::credentials::CredentialPurpose,
+        destination: Option<crate::backup::snapshots::SnapshotDestinationInput>,
+    },
+    BackupCredentialExport {
+        profile_id: String,
+    },
+    BackupCredentialUnlock {
+        profile_id: String,
+        purpose: crate::backup::credentials::CredentialPurpose,
+    },
     BackupProfiles {},
     BackupProfileRebind {
         prior_id: String,
@@ -889,6 +906,10 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    BackupSync(crate::backup::sync::SyncReply),
+    BackupSnapshots(crate::backup::snapshots::SnapshotReply),
+    BackupCredentialRef(String),
+    BackupCredentialExported(String),
     BackupComparisonPreview(crate::backup::comparison::ComparisonPreview),
     BackupProfiles(Vec<crate::backup::comparison::SyncProfile>),
     BackupProfile(crate::backup::comparison::SyncProfile),
