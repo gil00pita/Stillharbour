@@ -54,7 +54,7 @@ Implementation is present; milestone acceptance is **not certified complete** wh
 
 ## Acceptance repairs — 2026-11-02
 
-The owner requests build/preservation repairs and completion of remaining checks. [M5 validation](../docs/M5_VALIDATION.md) records the resolved ten macOS preservation failures, native foreground graphics/keyboard/focus and reviewed-export checks, the accessible export label, and the separate Windows CI repairs. Actual VoiceOver review still needs macOS Accessibility permission or a manual reviewer; fresh Windows/platform evidence remains required. M5 is not certified complete from automated frontend or Mac-only checks. Original-file production gates remain disabled; stop before M6.
+The owner requests build/preservation repairs and completion of remaining checks. [M5 validation](../docs/M5_VALIDATION.md) records the resolved ten macOS preservation failures, native foreground graphics/keyboard/focus and reviewed-export checks, the accessible export label, and the separate Windows CI repairs. macOS app-control trust is now verified and the owner reports enabling VoiceOver AppleScript; actual spoken-output review still needs an unlocked session or a manual reviewer. Fresh Windows/platform evidence remains required. M5 is not certified complete from automated frontend or Mac-only checks. Original-file production gates remain disabled; stop before M6.
 
 ## Windows native metadata completion — 2026-11-02
 
