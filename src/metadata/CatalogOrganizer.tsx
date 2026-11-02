@@ -78,6 +78,14 @@ export function CatalogOrganizer({
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
   }, []);
+  function focusSection(id: string) {
+    // Complete the native button activation before moving focus into the scroll region.
+    requestAnimationFrame(() => {
+      const heading = dialog.current?.querySelector<HTMLElement>(`#${id}`);
+      heading?.focus({ preventScroll: true });
+      heading?.scrollIntoView({ block: 'start' });
+    });
+  }
   async function change(operation: () => Promise<void>, message: string) {
     const epoch = generation.current;
     setBusy(true);
@@ -139,12 +147,8 @@ export function CatalogOrganizer({
           <h2 id="catalog-organizer-title">Albums, searches &amp; tags</h2>
           <p>Organize your catalog. Originals stay in their folders.</p>
           <nav className="catalog-section-links" aria-label="Organization sections">
-            <Button onClick={() => document.getElementById('collections-title')?.focus()}>
-              Albums &amp; searches
-            </Button>
-            <Button onClick={() => document.getElementById('categories-title')?.focus()}>
-              Tag categories
-            </Button>
+            <Button onClick={() => focusSection('collections-title')}>Albums &amp; searches</Button>
+            <Button onClick={() => focusSection('categories-title')}>Tag categories</Button>
           </nav>
         </div>
         <Button disabled={busy} onClick={onClose}>

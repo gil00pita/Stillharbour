@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { AssetQuery, CatalogCollection, LibraryRoot } from '../bindings';
 import { Button } from '../components/ui/controls';
 
@@ -36,10 +36,26 @@ function FilterSummary({
 }) {
   return (
     <dl className="catalog-filter-summary">
-      {Object.entries(query)
+      {(Object.keys(labels) as Array<keyof AssetQuery>)
+        .map((key) => [key, query[key]] as const)
         .filter(([, value]) => value !== null && value !== undefined && value !== '')
         .map(([key, value]) => {
-          let display = typeof value === 'object' ? JSON.stringify(value) : String(value);
+          let display = String(value);
+          if (key === 'mapBounds' && query.mapBounds) {
+            const { west, east, south, north } = query.mapBounds;
+            display = `Longitude ${west}° to ${east}°; latitude ${south}° to ${north}°`;
+          }
+          if (key === 'mapCell' && query.mapCell) {
+            const { zoom, x, y } = query.mapCell;
+            display = `Selected region: zoom ${zoom}, column ${x}, row ${y}`;
+          }
+          if (key === 'location')
+            display =
+              value === 'known'
+                ? 'With usable location'
+                : value === 'unavailable'
+                  ? 'Without usable location'
+                  : 'Any location';
           if (typeof value === 'boolean') display = value ? 'Yes' : 'No';
           if (key === 'rootId')
             display =
@@ -92,14 +108,29 @@ export function SavedSearchReview({
   onApply: (query: AssetQuery) => Promise<void>;
 }) {
   const [proposed, setProposed] = useState<AssetQuery | null>(null);
+  const review = useRef<HTMLElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const opened = useRef(false);
+  useEffect(() => {
+    if (proposed) {
+      opened.current = true;
+      review.current?.focus({ preventScroll: true });
+      review.current?.scrollIntoView?.({ block: 'start' });
+    } else if (opened.current) trigger.current?.focus();
+  }, [proposed]);
   if (!proposed)
     return (
-      <Button onClick={() => setProposed(structuredClone(query))}>
+      <Button ref={trigger} onClick={() => setProposed(structuredClone(query))}>
         Replace saved filters with current filters
       </Button>
     );
   return (
-    <section className="catalog-search-review" aria-label="Review saved search filters">
+    <section
+      ref={review}
+      tabIndex={-1}
+      className="catalog-search-review"
+      aria-label="Review saved search filters"
+    >
       <h4>
         Replace filters for <bdi>{current.name}</bdi>?
       </h4>

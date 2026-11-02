@@ -1918,7 +1918,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 16);
+    assert.equal(status.data.catalogSchema, 17);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -2197,7 +2197,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 16);
+      assert.equal(receipt.catalogJournal.catalogSchema, 17);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',
@@ -3179,7 +3179,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     const picker = await browser.tauri.mock('foundation_request');
     try {
       await picker.mockReturnValue({ kind: 'directory', data: selection });
-      await $('button.primary').click();
+      // Match pointer order; the embedded driver's click-then-focus otherwise
+      // takes focus back from the setup form after its real mount handler.
+      await browser.execute(() => {
+        const button = document.querySelector('button.primary');
+        button.focus();
+        button.click();
+      });
       await $('.selected-folder').waitForDisplayed();
       assert.equal(await $('.root-setup input[required]').isFocused(), true);
       await $('.root-setup input[required]').setValue('Generated test library');

@@ -2,6 +2,18 @@
 
 Date: 2026-11-02. Request: “Finish M5”. Implementation covers offline maps, catalog organization, reversible tags, explicit keyword import and reviewed portable-catalog/XMP export. Full milestone acceptance still depends on the explicitly recorded native/platform gates below. M4 preservation authority and M6 release scope remain separate.
 
+## Latest M5 acceptance work
+
+At 0d97e14, both transport jobs pass (Windows 16m26s; macOS 19m56s). Windows core/preservation checks pass, but native desktop fails on stale schema expectations, missing screenshot folders and the dimensions-only GPS adapter. Mac M5 map and metadata/export scenarios pass in real Foundation CI; remaining Foundation failures include the same stale harness assumptions and a setup-field focus failure with cascading dependent cases. Those tests retain their assertions while correcting the schema/directory/pointer-order assumptions.
+
+[ADR-0087](decisions/ADR-0087-supervised-windows-exif-metadata.md) implements actual bounded Windows EXIF/GPS in the supervised stdin worker and refreshes the old policy on explicit rescan. Three parser regressions and a separate source-geometry/date-offset case pass, plus legacy-policy regression 1/1; fresh native/CI proof remains required. No fabricated GPS or removed source/format/focus assertion is used.
+
+The first full workspace attempt after EXIF records 506 passed / one native provenance EINVAL / fifteen opt-ins (319.95s). Isolated and sixty bounded repetitions pass; static syscall-specific diagnostics and preservation of OS-provided fixture provenance are added with all assertions retained. Six native metadata cases then pass (0.06s); a new full run remains required.
+
+The complete serial local `npm run check` at the preceding correction passes, including 474 frontend cases, 503 Rust core cases/15 opt-ins, two desktop unit cases, all 28 integrations and doctests (`.context/m5-finish2-check.log`); release checks pass. This closes the earlier concurrent-build rustdoc error at that source checkpoint. Subsequent EXIF and concurrent UI changes require their own final checks.
+
+The user enabled macOS app-control permission; native `AccessibilityTrusted=true` is verified. They also report enabling VoiceOver AppleScript control, but actual scripting still returns -1708/-1728 and the Utility's native checkbox read remains off. Actual spoken-output/manual review remains unclosed; AX-tree/DOM inspection is not substituted for it. macOS 27 names the app-control pane Device Control and Data Access. Clean-machine/unverified format and production-mutation/M6 limits remain unchanged.
+
 ## Final acceptance follow-up — 2026-11-02
 
 The renewed “Finish M5” request resumes the remaining gate work under the updated Chakra v3 coding instructions. PR head c3591f7's Windows Foundation [125374281122](https://github.com/gil00pita/Stillharbour/actions/runs/41473892586/job/125374281122) and transport [125374282607](https://github.com/gil00pita/Stillharbour/actions/runs/41473892568/job/125374282607) stop before tests with first error `error[E0603]: function checked is private`. Both call sites use the owned-output validator introduced in ADR-0086; its internal visibility is corrected from parent-only to crate-wide without changing validation or adding public authority. The Mac transport job at c3591f7 passes in 21m12s. Fresh Windows results remain required; no prior failed run is described as passing.

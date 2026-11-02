@@ -29,7 +29,11 @@ it('reviews the exact replacement filters and allows canceling without a write',
     within(screen.getByRole('region', { name: 'Replacement filters' })).getByText('Harbour'),
   ).toBeVisible();
   expect(onApply).not.toHaveBeenCalled();
+  expect(screen.getByRole('region', { name: 'Review saved search filters' })).toHaveFocus();
   fireEvent.click(screen.getByRole('button', { name: 'Keep saved filters' }));
+  expect(
+    screen.getByRole('button', { name: 'Replace saved filters with current filters' }),
+  ).toHaveFocus();
   expect(onApply).not.toHaveBeenCalled();
   fireEvent.click(
     screen.getByRole('button', { name: 'Replace saved filters with current filters' }),

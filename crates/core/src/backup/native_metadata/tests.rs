@@ -256,20 +256,39 @@ fn native_metadata_preserves_provenance_bytes_under_a_distinct_versioned_policy(
     let fixture = Fixture::new();
     let name = c"com.apple.provenance";
     let supplied = b"owned native provenance fixture";
-    // SAFETY: only a generated fixture is changed to establish the test input.
-    assert_eq!(
-        unsafe {
-            libc::fsetxattr(
-                fixture.original.as_raw_fd(),
-                name.as_ptr(),
-                supplied.as_ptr().cast(),
-                supplied.len(),
-                0,
-                0,
-            )
-        },
-        0
-    );
+    // Retain OS-provided provenance rather than replacing it with a synthetic
+    // value. Older hosts without automatic provenance need a fixture value.
+    // SAFETY: generated descriptor, fixed C name, size-zero read-only query.
+    let existing = unsafe {
+        libc::fgetxattr(
+            fixture.original.as_raw_fd(),
+            name.as_ptr(),
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+        )
+    };
+    if existing < 0 {
+        assert_eq!(
+            std::io::Error::last_os_error().raw_os_error(),
+            Some(libc::ENOATTR)
+        );
+        // SAFETY: only the generated fixture, with proven absent provenance.
+        assert_eq!(
+            unsafe {
+                libc::fsetxattr(
+                    fixture.original.as_raw_fd(),
+                    name.as_ptr(),
+                    supplied.as_ptr().cast(),
+                    supplied.len(),
+                    0,
+                    0,
+                )
+            },
+            0
+        );
+    }
     fn bytes(file: &File) -> Vec<u8> {
         use std::os::fd::AsRawFd;
         let mut value = vec![0u8; 4096];

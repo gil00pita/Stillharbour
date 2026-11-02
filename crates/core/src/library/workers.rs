@@ -240,58 +240,36 @@ pub async fn metadata(
     bytes: Vec<u8>,
     cancel: Arc<AtomicBool>,
 ) -> Result<Metadata> {
+    let mut command;
     if cfg!(windows) {
-        // Windows uses the existing supervised baseline decoder for dimensions.
-        // Capture/camera/EXIF metadata is unavailable, never fabricated from mtime.
-        let digest = blake3::hash(&bytes).to_hex().to_string();
-        let mut command = Command::new(&paths.executable);
+        command = Command::new(&paths.executable);
+        command.arg("--metadata-worker-stdin-v1");
+    } else {
+        let script = paths.exiftool.as_ref().ok_or_else(|| {
+            AppError::new(
+                ErrorCode::Unsupported,
+                "The packaged metadata helper is unavailable on this platform.",
+            )
+        })?;
+        let library = script
+            .parent()
+            .ok_or_else(|| invalid("Invalid metadata helper layout."))?
+            .join("lib");
+        let mut include = std::ffi::OsString::from("-I");
+        include.push(library);
+        command = Command::new("/usr/bin/perl");
         command
-            .args(["--media-worker-stdin-v2", "32", "0"])
-            .env_clear()
-            .current_dir(&paths.working_directory);
-        let output = run(
-            command,
-            WorkerInput::Bytes(bytes),
-            crate::rendition::wire_budget(32)?,
-            true,
-            cancel,
-        )
-        .await?;
-        let report = crate::rendition::read_frame(&output, 32)?;
-        let (width, height) = report
-            .display_dimensions
-            .unwrap_or((report.source_width, report.source_height));
-        return Ok(Metadata {
-            width: Some(width), height: Some(height), source: "unavailable".into(),
-            raw: r#"[{"StillharbourMetadataPolicy":"windows-basic-v1","CaptureMetadata":"unavailable"}]"#.into(),
-            digest: Some(digest), ..Default::default()
-        });
+            .arg(include)
+            .arg(script)
+            .args(crate::backup::metadata_stdin_arguments());
     }
-    let script = paths.exiftool.as_ref().ok_or_else(|| {
-        AppError::new(
-            ErrorCode::Unsupported,
-            "The packaged metadata helper is unavailable on this platform.",
-        )
-    })?;
-    let library = script
-        .parent()
-        .ok_or_else(|| invalid("Invalid metadata helper layout."))?
-        .join("lib");
-    let mut command = Command::new("/usr/bin/perl");
-    let mut include = std::ffi::OsString::from("-I");
-    include.push(library);
-    command
-        .arg(include)
-        .arg(script)
-        .args(crate::backup::metadata_stdin_arguments())
-        .env_clear()
-        .current_dir(&paths.working_directory);
+    command.env_clear().current_dir(&paths.working_directory);
     let digest = blake3::hash(&bytes).to_hex().to_string();
     let output = run(
         command,
         WorkerInput::Bytes(bytes),
         1024 * 1024,
-        false,
+        cfg!(windows),
         cancel,
     )
     .await?;

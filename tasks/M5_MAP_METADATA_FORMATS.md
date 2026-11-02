@@ -55,3 +55,7 @@ Implementation is present; milestone acceptance is **not certified complete** wh
 ## Acceptance repairs — 2026-11-02
 
 The owner requests build/preservation repairs and completion of remaining checks. [M5 validation](../docs/M5_VALIDATION.md) records the resolved ten macOS preservation failures, native foreground graphics/keyboard/focus and reviewed-export checks, the accessible export label, and the separate Windows CI repairs. Actual VoiceOver review still needs macOS Accessibility permission or a manual reviewer; fresh Windows/platform evidence remains required. M5 is not certified complete from automated frontend or Mac-only checks. Original-file production gates remain disabled; stop before M6.
+
+## Windows native metadata completion — 2026-11-02
+
+ADR-0087 fills the dimensions-only Windows adapter gap with real bounded EXIF/GPS in the supervised worker, including reference signs and valid zero coordinates. Legacy rows refresh through authorized read-only rescans. Native M5 tests execute on both target OSes, and the default desktop harness retains its source/focus assertions while updating schema/directory/pointer-order assumptions. M5 validation tracks fresh CI, actual VoiceOver/manual evidence and explicit unsupported-format limits. No M6 or production original-file mutation is enabled.

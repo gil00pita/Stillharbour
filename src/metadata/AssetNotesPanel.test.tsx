@@ -206,3 +206,22 @@ it('refuses new drafts at the session limit without evicting existing work', asy
   expect(drafts.size).toBe(240);
   expect(drafts.get('0')?.caption).toBe('Draft 0');
 });
+
+it('locks the draft during an explicitly requested reload until the saved state arrives', async () => {
+  render(<AssetNotesPanel assetId="generated" />);
+  await screen.findByLabelText('Caption');
+  fireEvent.change(screen.getByLabelText('Caption'), { target: { value: 'Discard this draft' } });
+  let finish: ((value: AssetNotes) => void) | undefined;
+  vi.mocked(metadata).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve as (value: AssetNotes) => void;
+      }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Reload saved notes' }));
+  expect(screen.getByLabelText('Caption')).toBeDisabled();
+  expect(screen.getByLabelText('Mark as rejected')).toBeDisabled();
+  finish?.({ ...notes, version: 4, caption: 'Latest saved notes' });
+  await waitFor(() => expect(screen.getByLabelText('Caption')).toHaveValue('Latest saved notes'));
+  expect(screen.getByLabelText('Caption')).toBeEnabled();
+});

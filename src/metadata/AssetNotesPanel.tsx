@@ -19,6 +19,7 @@ function Notes({ assetId }: { assetId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reloading, setReloading] = useState(false);
   const [attempt, retry] = useState(0);
   useEffect(() => {
     let active = true;
@@ -36,6 +37,9 @@ function Notes({ assetId }: { assetId: string }) {
       })
       .catch((error) => {
         if (active) setError(errorMessage(error));
+      })
+      .finally(() => {
+        if (active) setReloading(false);
       });
     return () => {
       active = false;
@@ -105,7 +109,7 @@ function Notes({ assetId }: { assetId: string }) {
                 value={caption}
                 maxLength={4096}
                 rows={4}
-                disabled={busy}
+                disabled={busy || reloading}
                 onChange={(event) => edit(event.target.value, rejected)}
               />
             </label>
@@ -113,7 +117,7 @@ function Notes({ assetId }: { assetId: string }) {
               <input
                 type="checkbox"
                 checked={rejected}
-                disabled={busy}
+                disabled={busy || reloading}
                 onChange={(event) => edit(caption, event.target.checked)}
               />
               Mark as rejected
@@ -121,8 +125,8 @@ function Notes({ assetId }: { assetId: string }) {
             <p className="help">
               This review flag stays in the catalog. Original files and sidecars stay unchanged.
             </p>
-            <Button type="submit" disabled={busy || !dirty}>
-              {busy ? 'Saving notes…' : 'Save caption & review'}
+            <Button type="submit" disabled={busy || reloading || !dirty}>
+              {reloading ? 'Reloading notes…' : busy ? 'Saving notes…' : 'Save caption & review'}
             </Button>
             <details>
               <summary>Embedded keywords · last observed</summary>
@@ -151,10 +155,11 @@ function Notes({ assetId }: { assetId: string }) {
       {(error || dirty) && (
         <>
           <Button
-            disabled={busy}
+            disabled={busy || reloading}
             onClick={() => {
               setNotice('');
               reloadRequested.current = true;
+              setReloading(true);
               retry((value) => value + 1);
             }}
           >

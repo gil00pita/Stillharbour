@@ -102,6 +102,20 @@ export async function reviewCatalogMetadata(directory) {
   });
   assert.equal(search.kind, 'search');
   assert.ok(search.query.mapBounds);
+  await browser.waitUntil(async () =>
+    $('button=Replace saved filters with current filters').isEnabled(),
+  );
+  await $('button=Replace saved filters with current filters').click();
+  await $('section[aria-label="Review saved search filters"]').waitForDisplayed();
+  await browser.saveScreenshot(`${directory}/saved-search-review.png`);
+  await browser.setWindowSize(660, 560);
+  await browser.saveScreenshot(`${directory}/saved-search-review-minimum.png`);
+  await $('button=Keep saved filters').click();
+  const unchangedSearch = (await catalogMetadata({ kind: 'collections' })).find(
+    (value) => value.id === search.id,
+  );
+  assert.equal(unchangedSearch.version, search.version, 'Canceling filter review does not write');
+  await browser.setWindowSize(1180, 780);
   await browser.waitUntil(async () => $('button=Create tag category').isEnabled());
   await setField('Tag label', 'Generated parent');
   await $('button=Create tag category').click();
@@ -133,6 +147,9 @@ export async function reviewCatalogMetadata(directory) {
     button.focus();
     button.click();
   });
+  await browser.waitUntil(async () =>
+    browser.execute(() => document.activeElement.id === 'categories-title'),
+  );
   const minimum = await browser.execute(() => {
     const node = document.querySelector('.catalog-organizer');
     const header = node.querySelector('header').getBoundingClientRect();

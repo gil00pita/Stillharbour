@@ -35,7 +35,7 @@ npm test -- src/metadata src/library/BatchToolbar.test.tsx
 npm run desktop:test:map
 ```
 
-The native map command builds/stages its own instrumented executable and now also exercises metadata organization. It scans only its constructor-owned generated EXIF JPEG/companion fixture and accepts no personal-library path. The combined GPS scenario is macOS-only; do not infer Windows native coverage from portable SQL tests. Production frontend rebuilding must follow instrumented testing before release checks.
+The native map command builds/stages its own instrumented executable and now also exercises metadata organization. It scans only its constructor-owned generated EXIF JPEG/companion fixture and accepts no personal-library path. The combined GPS and separate metadata/export scenarios now execute on both target OSes; actual per-platform receipts in M5 validation determine acceptance, not portable SQL tests. Production frontend rebuilding must follow instrumented testing before release checks.
 
 Actual local evidence: eleven metadata core cases pass in 0.84s, including stale updates, history rollback, consistent independently openable snapshots, offline video membership, exact selections, rescans, hostile saved-filter data and hierarchy bounds. The initial integer conversion compile errors, strict Clippy nested-if warning and frozen-fixture FK cleanup error were corrected; no preservation assertion was removed.
 

@@ -239,7 +239,11 @@ pub(super) fn restore(file: &File, metadata: &NativeMetadata) -> Result<()> {
                 )
             } != 0
             {
-                return Err(error());
+                return Err(AppError::new(
+                    ErrorCode::Io,
+                    "Native provenance restoration was refused; the original is unchanged.",
+                )
+                .caused_by(std::io::Error::last_os_error()));
             }
         }
         // Protected OS attributes can acknowledge writes without installing
@@ -287,7 +291,11 @@ pub(super) fn restore(file: &File, metadata: &NativeMetadata) -> Result<()> {
         )
     } != 0
     {
-        return Err(error());
+        return Err(AppError::new(
+            ErrorCode::Io,
+            "Native creation-time restoration failed; the original is unchanged.",
+        )
+        .caused_by(std::io::Error::last_os_error()));
     }
     let times = [
         libc::timespec {

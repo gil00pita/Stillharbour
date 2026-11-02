@@ -1,10 +1,14 @@
 import { resolve } from 'node:path';
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
 import { waitForProcessExit } from './tests/catalog-desktop/session-owner.mjs';
 const app = resolve(`target/debug/stillharbour${process.platform === 'win32' ? '.exe' : ''}`);
 
 export const config = {
   runner: 'local',
+  async onPrepare() {
+    await mkdir('.context/screenshots', { recursive: true });
+  },
   specs: ['./tests/desktop/**/*.e2e.mjs'],
   maxInstances: 1,
   services: [

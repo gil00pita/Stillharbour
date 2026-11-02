@@ -547,6 +547,14 @@ pub struct Metadata {
     pub raw: String,
     pub digest: Option<String>,
 }
+pub fn legacy_windows_metadata(catalog: &Catalog, id: String, revision: String) -> Result<bool> {
+    catalog.call(move |db| {
+        Ok(db.query_row(
+            "SELECT coalesce(CASE WHEN json_valid(raw_metadata) THEN json_extract(raw_metadata,'$[0].StillharbourMetadataPolicy') END='windows-basic-v1',0) FROM assets WHERE id=? AND revision=?",
+            params![id, revision], |r| r.get(0),
+        )?)
+    })
+}
 pub fn metadata(
     catalog: &Catalog,
     id: String,
@@ -1608,6 +1616,50 @@ pub fn preview_dimensions(
 #[cfg(test)]
 mod preview_policy_tests {
     use super::*;
+    #[test]
+    fn legacy_metadata_refresh_is_revision_bound_and_preserves_observations() {
+        let owned = tempfile::tempdir().unwrap();
+        let catalog = Catalog::open(owned.path().join("Fixture.stillharbour")).unwrap();
+        catalog.call(|db| {
+            db.execute("INSERT INTO roots(id,label,native_path,display_path,mode,is_base,platform,volume,device,inode,availability,filter) VALUES('root','Fixture',x'01','Fixture','referenced',1,'fixture','fixture','fixture','fixture','offline','{}')", [])?;
+            db.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,presence,is_media,seen_scan) VALUES('fixture','root',x'01','photo.jpg',x'','','photo.jpg','photo','jpg','fixture',1,'revision','2026-11-02','','unavailable','ready','ready','present',1,'fixture')", [])?;
+            Ok(())
+        }).unwrap();
+        for (raw, legacy) in [
+            (
+                r#"[{"StillharbourMetadataPolicy":"windows-basic-v1"}]"#,
+                true,
+            ),
+            (
+                r#"[{"StillharbourMetadataPolicy":"windows-exif-v2"}]"#,
+                false,
+            ),
+            ("not JSON", false),
+        ] {
+            let before = raw.to_owned();
+            catalog
+                .call(move |db| {
+                    db.execute("UPDATE assets SET raw_metadata=?", [&before])?;
+                    Ok(())
+                })
+                .unwrap();
+            assert_eq!(
+                legacy_windows_metadata(&catalog, "fixture".into(), "revision".into()).unwrap(),
+                legacy
+            );
+            assert!(legacy_windows_metadata(&catalog, "fixture".into(), "stale".into()).is_err());
+            let retained = catalog
+                .call(|db| {
+                    Ok(db.query_row(
+                        "SELECT raw_metadata FROM assets WHERE id='fixture'",
+                        [],
+                        |r| r.get::<_, String>(0),
+                    )?)
+                })
+                .unwrap();
+            assert_eq!(retained, raw);
+        }
+    }
     #[test]
     fn display_projection_matches_oriented_previews_without_rewriting_legacy_rows() {
         let mut db = Connection::open_in_memory().unwrap();
