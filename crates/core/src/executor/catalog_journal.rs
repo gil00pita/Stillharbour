@@ -24,6 +24,62 @@ const PLAN_PHASE: &str = "copy_execution_plan_v1";
 const EVENT_PHASE: &str = "copy_execution_event_v1";
 const MAX_RECORD: usize = 65_536;
 const MAX_EVENT: usize = 8192;
+/// Decode a new catalog-backed stream using the same strict state machine.
+/// Callers bind the immutable plan/job before supplying contiguous copy events;
+/// this routine never issues or reconstructs an approval.
+#[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+pub(super) fn decode_copy_events(
+    plan: &CopyPlan,
+    events: Vec<(u64, Option<usize>, String, serde_json::Value)>,
+) -> Result<(Vec<super::resume::Cursor>, bool, String)> {
+    let bound = plan
+        .files
+        .len()
+        .checked_mul(6)
+        .and_then(|n| n.checked_add(3))
+        .ok_or_else(|| failed("The copy stream exceeds its event bound."))?;
+    if events.len() > bound || plan.digest()? != plan.digest {
+        return Err(failed("The copy stream differs from its immutable plan."));
+    }
+    let mut history = History::new(plan);
+    let mut hash = blake3::Hasher::new();
+    hash.update(plan.digest.as_bytes());
+    for (ordinal, item, phase, evidence) in events {
+        if phase.len() > 128
+            || serde_json::to_vec(&evidence)
+                .map_err(|error| failed("Invalid copy event evidence.").caused_by(error))?
+                .len()
+                > MAX_EVENT
+        {
+            return Err(failed("A copy event exceeds its evidence bound."));
+        }
+        let event = Event {
+            ordinal,
+            stream_digest: plan.digest.clone(),
+            item,
+            phase,
+            evidence,
+        };
+        history.apply(&event, plan)?;
+        let encoded = serde_json::to_vec(&event)
+            .map_err(|error| failed("Could not fingerprint copy events.").caused_by(error))?;
+        hash.update(&(encoded.len() as u64).to_le_bytes());
+        hash.update(&encoded);
+    }
+    Ok((
+        history
+            .items
+            .iter()
+            .map(|item| super::resume::Cursor {
+                phase: item.phase,
+                object: item.object.clone(),
+                digest: item.digest.clone(),
+            })
+            .collect(),
+        history.terminal,
+        hash.finalize().to_hex().to_string(),
+    ))
+}
 /// Reuse the production event decoder for the constructor-owned append lab.
 #[cfg(any(test, feature = "fixture-probes"))]
 pub(super) fn append_fixture_history(

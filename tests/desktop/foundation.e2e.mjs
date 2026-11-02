@@ -25,7 +25,7 @@ async function reviewBackupComparison(evidence, existingPicker) {
     await picker.mockReturnValue({ kind: 'directory', data: destination });
     await $('button[aria-label="Backup & Sync"]').click();
     await $('.backup-workspace').waitForDisplayed();
-    assert.equal(await $('button=Start safe sync').isEnabled(), false);
+    assert.equal(await $('button=Review append plan').isEnabled(), false);
     await $('button=Choose destination').click();
     await browser.waitUntil(async () => $('button=Compare').isEnabled());
     await $('input[maxlength="80"]').setValue('Generated native comparison');
@@ -1918,7 +1918,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 12);
+    assert.equal(status.data.catalogSchema, 13);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -2197,7 +2197,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 12);
+      assert.equal(receipt.catalogJournal.catalogSchema, 13);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',

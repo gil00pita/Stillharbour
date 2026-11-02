@@ -329,7 +329,7 @@ def contents(source):
     return result
 
 
-def probe(protocol, binaries, versions, allow_ftp):
+def probe(protocol, binaries, versions, allow_ftp, application_probe=None):
     if protocol == 'ftp' and not allow_ftp:
         raise RuntimeError('Plain FTP testing requires --allow-insecure-ftp explicitly.')
     with tempfile.TemporaryDirectory(prefix='stillharbour-m4-protocol-') as temporary:
@@ -461,6 +461,62 @@ def probe(protocol, binaries, versions, allow_ftp):
                 if after_config != good_config:
                     raise RuntimeError('Positive credential control did not recover after the negative test.')
                 credential_rejected = True
+            application = None
+            application_credential_rejected = None
+            application_trust_rejected = None
+            if application_probe is not None:
+                destination = {'kind': protocol}
+                if protocol == 'local':
+                    destination['selection_id'] = 'owned-local-fixture'
+                else:
+                    destination.update({'host': '127.0.0.1', 'port': listen_port,
+                                        'user': 'fixture', 'remote_path': ''})
+                    if protocol == 'sftp':
+                        destination['host_key'] = ' '.join(public)
+                    elif protocol == 'ftps':
+                        destination['ca_certificate_pem'] = (base / 'server.crt').read_text()
+                    elif protocol == 'ftp':
+                        destination['insecure_acknowledged'] = True
+                    elif protocol == 'smb':
+                        destination.update({'domain': 'WORKGROUP', 'share': 'FIXTURE'})
+                payload = json.dumps({'destination': destination,
+                                      'repositoryPassword': env['RESTIC_PASSWORD'],
+                                      'transportPassword': token if protocol != 'local' else None})
+                app_code, output, _ = run([application_probe], base, env,
+                                         input_text=payload, timeout=360, success=False)
+                application = json.loads(output)
+                if app_code != 0 or application.get('passed') is not True:
+                    stage = application.get('stage', 'unknown')
+                    code = application.get('errorCode', 'unknown')
+                    raise RuntimeError(f'The actual application adapter failed at {stage} ({code}).')
+                def rejected_application(candidate, password):
+                    request = json.dumps({'destination': candidate,
+                                          'repositoryPassword': env['RESTIC_PASSWORD'],
+                                          'transportPassword': password})
+                    status, result, _ = run([application_probe], base, env,
+                                            input_text=request, timeout=240, success=False)
+                    result = json.loads(result)
+                    # A parser/setup failure or timeout is not an authentication
+                    # rejection. The actual queued native backup must stop.
+                    return (status != 0 and result.get('passed') is False
+                            and result.get('stage') == 'completed-native-job'
+                            and result.get('errorCode') == 'CONFLICT')
+                if protocol != 'local':
+                    application_credential_rejected = rejected_application(destination, secrets.token_urlsafe(32))
+                    if not application_credential_rejected:
+                        raise RuntimeError('The actual application did not reject incorrect transport credentials at its native job boundary.')
+                if protocol == 'sftp':
+                    wrong_key = Ed25519PrivateKey.generate().public_key().public_bytes(
+                        serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH).decode().split()[:2]
+                    untrusted_destination = {**destination, 'host_key': ' '.join(wrong_key)}
+                    application_trust_rejected = rejected_application(untrusted_destination, token)
+                elif protocol == 'ftps':
+                    application_trust_rejected = rejected_application(
+                        {**destination, 'ca_certificate_pem': None}, token)
+                if protocol in ('sftp', 'ftps') and not application_trust_rejected:
+                    raise RuntimeError('The actual application did not reject untrusted transport identity at its native job boundary.')
+                if protocol != 'local' and config_read_control(binaries, protocol, base, env) != good_config:
+                    raise RuntimeError('The same server/config positive control failed after application negative tests.')
             # Damage only a pack in this run's generated repository, after the
             # good restore has been verified. Never repair, unlock or prune it.
             packs = sorted((remote / 'repository' / 'data').rglob('*'))
@@ -493,6 +549,9 @@ def probe(protocol, binaries, versions, allow_ftp):
                     'credentialTrustPositiveControl': protocol != 'local',
                     'plainFtpExplicitlyAcknowledged': protocol == 'ftp', 'loopbackOnly': True,
                     'tlsServerPolicy': 'TLS1.2, control/data TLS required, certificate verified' if protocol == 'ftps' else None,
+                    'applicationAdapter': application,
+                    'applicationIncorrectCredentialRejected': application_credential_rejected,
+                    'applicationUntrustedEndpointRejected': application_trust_rejected,
                     'productionApplicationAcceptance': False, 'physicalIoCapClaimed': False}
 
 
@@ -501,6 +560,7 @@ def main():
     parser.add_argument('--protocols', nargs='+', choices=['local', 'sftp', 'ftp', 'ftps', 'smb'], default=['local'])
     parser.add_argument('--allow-insecure-ftp', action='store_true')
     parser.add_argument('--evidence', type=Path, default=ROOT / '.context/m4-protocol-receipt.json')
+    parser.add_argument('--application-probe', type=Path, help='Built generated-only Rust application adapter probe under target/.')
     parser.add_argument('--smb-server', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--ftp-server', action='store_true', help=argparse.SUPPRESS)
     args = parser.parse_args()
@@ -514,10 +574,17 @@ def main():
     if not evidence.is_relative_to(ROOT / '.context'):
         raise SystemExit('Evidence must stay in the workspace .context directory.')
     binaries, versions = helpers()
+    application_probe = args.application_probe.resolve() if args.application_probe else None
+    if application_probe is not None:
+        if sys.platform == 'win32' and not application_probe.suffix:
+            application_probe = application_probe.with_suffix('.exe')
+        expected_name = 'backup_application_probe.exe' if sys.platform == 'win32' else 'backup_application_probe'
+        if not application_probe.is_relative_to(ROOT / 'target') or application_probe.name != expected_name or not application_probe.is_file() or application_probe.is_symlink():
+            raise SystemExit('The application probe must be the built owned example under target/.')
     receipts = []
     for protocol in args.protocols:
         try:
-            receipts.append(probe(protocol, binaries, versions, args.allow_insecure_ftp))
+            receipts.append(probe(protocol, binaries, versions, args.allow_insecure_ftp, application_probe))
             print(f'{protocol}: full data-read / removed generated source / restored bytes verified', flush=True)
         except Exception as error:
             receipts.append({'protocol': protocol, 'result': 'failed', 'reason': str(error), 'productionApplicationAcceptance': False})

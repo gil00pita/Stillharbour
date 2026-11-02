@@ -173,6 +173,11 @@ Continuous M2/M3 prerequisite coverage, 2026-10-31: existing target review must 
 | AC-071 | Differentiate structural repository check, partial sampled read, full read-data and actual restore comparison. A sampled pass never grants full-library verification status. |
 | AC-072 | Restore a catalog after adding new local edits. Pre-restore backup and collision/migration review protect those edits. Absolute root paths are relinked rather than assumed on another OS. |
 | AC-073 | Quit the app or sleep across a scheduled time. Behavior matches the documented running/tray/catch-up model; no fully-quit scheduling claim without an installed tested background agent. |
+
+AC-073 application checks also require exact reviewed manifest/profile consent:
+changed content, versions, roots or endpoints return to review; imported/restored
+catalog schedules cannot execute. Test elapsed UTC intervals, one unchanged-scope
+catch-up, disabling offline and cancellation on root removal/application exit.
 | AC-074 | Photos have valid zero coordinates, missing coordinates, identical coordinates and positions across the antimeridian. Missing GPS does not become (0,0); viewport results/clusters remain correct. |
 | AC-075 | Clicking a map cluster and switching to timeline preserves date/root filters and selection. Large queries use bounded data; markers do not explode into one DOM node per library asset. |
 | AC-076 | Go offline and inspect network logs. No unapproved photo metadata upload; map clearly reports unavailable tiles; attribution and provider cache/offline policy are respected. |

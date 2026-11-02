@@ -85,6 +85,9 @@ impl Drop for MaintenanceGuard<'_> {
 }
 
 pub struct Library {
+    pub(super) snapshots: Arc<super::snapshots::SnapshotWorkflow>,
+    #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+    pub(crate) sync_workflow: Arc<crate::executor::sync_workflow::SyncWorkflow>,
     pub(super) comparisons: super::backup_compare::CompareJobs,
     pub(super) inspections: Arc<super::inspection_jobs::InspectionJobs>,
     monitor: Mutex<Option<super::monitor::Monitor>>,
@@ -237,6 +240,9 @@ impl Library {
         }
     }
     fn stop_library_jobs(&self, root_id: &str) -> Result<()> {
+        self.snapshots.cancel_root(root_id)?;
+        #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+        self.sync_workflow.cancel_root(root_id)?;
         #[cfg(any(test, feature = "copy-workflow"))]
         self.copy_workflow.cancel_root(root_id)?;
         if let Some(active) = self.active.lock().map_err(|_| lock_error())?.as_ref()
@@ -291,12 +297,33 @@ impl Library {
         let permit = loop {
             if let Some(root_id) = removing {
                 self.stop_library_jobs(root_id)?;
+                if self.snapshots.root_busy(root_id)? {
+                    if Instant::now() >= deadline {
+                        return Err(AppError::new(
+                            ErrorCode::Busy,
+                            "Snapshot work is still stopping. The library is retained; try removal after it stops.",
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                    continue;
+                }
                 #[cfg(any(test, feature = "copy-workflow"))]
                 if self.copy_workflow.has_active_root(root_id)? {
                     if Instant::now() >= deadline {
                         return Err(AppError::new(
                             ErrorCode::Busy,
                             "Organization work is still stopping. The library is retained; try removal again.",
+                        ));
+                    }
+                    std::thread::sleep(Duration::from_millis(20));
+                    continue;
+                }
+                #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+                if self.sync_workflow.has_active_root(root_id)? {
+                    if Instant::now() >= deadline {
+                        return Err(AppError::new(
+                            ErrorCode::Busy,
+                            "Readable-copy work is still stopping. The library is retained; try removal after it stops.",
                         ));
                     }
                     std::thread::sleep(Duration::from_millis(20));
@@ -452,6 +479,15 @@ impl Library {
         super::operation_jobs::recover(&catalog)?;
         super::inspection_store::recover(&catalog)?;
         let library = Arc::new(Self {
+            #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+            sync_workflow: Arc::new(crate::executor::sync_workflow::SyncWorkflow::new(
+                catalog.clone(),
+                options.data_directory.clone(),
+            )?),
+            snapshots: Arc::new(super::snapshots::SnapshotWorkflow::new(
+                catalog.clone(),
+                options.data_directory.clone(),
+            )?),
             comparisons: super::backup_compare::CompareJobs::default(),
             inspections: Arc::new(super::inspection_jobs::InspectionJobs::default()),
             #[cfg(any(test, feature = "copy-workflow"))]
@@ -904,6 +940,9 @@ impl Library {
         Err(invalid("This scan is no longer running."))
     }
     pub fn cancel_all(&self) {
+        #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+        self.sync_workflow.cancel_all();
+        self.snapshots.cancel_all();
         self.comparisons.stop();
         if let Ok(active) = self.original_cancel.lock()
             && let Some(cancel) = active.as_ref()
@@ -1095,6 +1134,27 @@ impl Library {
         }
         let permit = self.scan_gate.try_start()?;
         self.ensure_work_admission()?;
+        self.stop_library_jobs(&id)?;
+        if self.snapshots.root_busy(&id)? {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Snapshot work is stopping. The current root is retained; retry relinking after it stops.",
+            ));
+        }
+        #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+        if self.sync_workflow.has_active_root(&id)? {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Readable-copy work is stopping. The current root is retained; retry relinking after it stops.",
+            ));
+        }
+        #[cfg(any(test, feature = "copy-workflow"))]
+        if self.copy_workflow.has_active_root(&id)? {
+            return Err(AppError::new(
+                ErrorCode::Busy,
+                "Organization work is stopping. The current root is retained; retry relinking after it stops.",
+            ));
+        }
         store::relink(&self.catalog, id.clone(), canonical, identity, volume)?;
         self.start_with_permit(id, root.view.filter, permit)
     }
@@ -1559,6 +1619,9 @@ impl Library {
 }
 impl Drop for Library {
     fn drop(&mut self) {
+        #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+        self.sync_workflow.cancel_all();
+        self.snapshots.cancel_all();
         self.comparisons.stop();
         if let Ok(state) = self.monitor.lock()
             && let Some(monitor) = state.as_ref()

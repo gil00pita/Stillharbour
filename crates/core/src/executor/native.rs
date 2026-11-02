@@ -1,5 +1,5 @@
-//! Owned-output primitives, currently reachable only through disposable executor
-//! fixtures. No existing original/destination replacement or deletion API.
+//! Handle-relative owned-output primitives. Application adapters bind scope,
+//! review, approval and journals before effects; no renderer path interface.
 use crate::{
     domain::{AppError, ErrorCode, Result},
     filesystem::{self, FileIdentity},
@@ -7,11 +7,23 @@ use crate::{
 };
 use std::fs::File;
 #[derive(Clone, Copy, PartialEq, Eq)]
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) enum EntryKind {
     File,
     Directory,
     Unsupported,
 }
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) struct Entry {
     pub object: super::Object,
     pub kind: EntryKind,
@@ -30,6 +42,12 @@ fn name(value: &str) -> Result<()> {
 }
 
 /// Inspect only this held directory; never recurse into unknown entries.
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) fn verify_entries(parent: &File, expected: &[(super::Object, EntryKind)]) -> Result<()> {
     let mut remaining: std::collections::BTreeMap<_, _> = expected
         .iter()
@@ -78,6 +96,12 @@ pub(super) fn verify_entries(parent: &File, expected: &[(super::Object, EntryKin
     Ok(())
 }
 
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) fn lookup(parent: &File, leaf: &str) -> Result<Option<Entry>> {
     name(leaf)?;
     #[cfg(windows)]
@@ -141,6 +165,17 @@ pub(super) fn lookup(parent: &File, leaf: &str) -> Result<Option<Entry>> {
 
 #[cfg(windows)]
 fn open(parent: &File, leaf: &str, directory: bool, create: bool) -> Result<File> {
+    open_with_security(parent, leaf, directory, create, std::ptr::null())
+}
+
+#[cfg(windows)]
+pub(super) fn open_with_security(
+    parent: &File,
+    leaf: &str,
+    directory: bool,
+    create: bool,
+    security: *const std::ffi::c_void,
+) -> Result<File> {
     use std::{
         mem::size_of,
         os::windows::{
@@ -170,7 +205,7 @@ fn open(parent: &File, leaf: &str, directory: bool, create: bool) -> Result<File
         RootDirectory: parent.as_raw_handle(),
         ObjectName: &string,
         Attributes: OBJ_CASE_INSENSITIVE,
-        SecurityDescriptor: std::ptr::null(),
+        SecurityDescriptor: security.cast(),
         SecurityQualityOfService: std::ptr::null(),
     };
     let mut handle = std::ptr::null_mut();
@@ -351,7 +386,12 @@ pub(super) fn reopen_stage(parent: &File, leaf: &str, expected: &FileIdentity) -
     }
     Ok(file)
 }
-#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) fn reopen_append_stage(
     parent: &File,
     leaf: &str,
@@ -402,6 +442,12 @@ pub(super) fn read(parent: &File, leaf: &str) -> Result<File> {
     }
 }
 
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) fn maybe_read(parent: &File, leaf: &str) -> Result<Option<File>> {
     name(leaf)?;
     #[cfg(windows)]
@@ -421,6 +467,12 @@ pub(super) fn maybe_read(parent: &File, leaf: &str) -> Result<Option<File>> {
     }
     read(parent, leaf).map(Some)
 }
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) fn maybe_metadata(parent: &File, leaf: &str) -> Result<Option<File>> {
     name(leaf)?;
     let Some(entry) = lookup(parent, leaf)? else {
@@ -476,6 +528,12 @@ pub(super) fn entry_matches(parent: &File, leaf: &str, expected: &FileIdentity) 
     }
 }
 
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) fn publish_new(
     parent: &File,
     stage: &str,

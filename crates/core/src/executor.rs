@@ -1,8 +1,17 @@
-//! Central source-retaining copy engine under disposable-fixture capability.
-//! No renderer requests or arbitrary user paths can construct this scope yet.
+//! Central source-retaining copy engine. Application adapters construct native
+//! scopes from backend review and approval; renderer paths never create a plan.
 #[cfg(any(test, feature = "fixture-probes"))]
 pub(crate) mod append_fixture;
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod approval;
+pub(crate) mod snapshot_bridge;
+#[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+pub(crate) mod sync_workflow;
 #[cfg(any(test, feature = "fixture-probes"))]
 pub fn run_append_fixture_probe() -> Result<serde_json::Value> {
     append_fixture::probe()
@@ -11,21 +20,52 @@ pub fn run_append_fixture_probe() -> Result<serde_json::Value> {
 pub fn run_retained_replacement_fixture_probe() -> Result<serde_json::Value> {
     append_fixture::retained_probe()
 }
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod catalog_journal;
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod effects;
 #[cfg(any(test, feature = "copy-workflow"))]
 mod fingerprints;
+pub mod key_export;
 mod locations;
 mod native;
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod preparation;
+mod private_output;
 #[cfg(any(test, feature = "fixture-probes"))]
 mod rename_fixture;
 #[cfg(any(test, feature = "fixture-probes"))]
 pub use rename_fixture::GeneratedRenameController;
 #[cfg(any(test, feature = "fixture-probes"))]
 pub use rename_fixture::GeneratedRenameSession;
-#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod resume;
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 mod sources;
 #[cfg(any(test, feature = "copy-workflow"))]
 mod workflow;
@@ -35,7 +75,6 @@ use crate::{
     jobs::paced_io::{CHUNK_BYTES, IoStep, PacedIo},
     library::native as source_native,
 };
-#[cfg(any(test, feature = "fixture-probes"))]
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 #[cfg(any(test, feature = "fixture-probes"))]
@@ -258,13 +297,18 @@ fn failed(message: &str) -> AppError {
     AppError::new(ErrorCode::Conflict, message)
 }
 
-#[cfg(any(test, feature = "fixture-probes"))]
 struct Journal(Connection);
 trait EventJournal {
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()>;
 }
 trait CopyJournal: EventJournal {
     fn history_count(&self) -> Result<u64>;
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>>;
     fn deny_writes_for_fixture_fault(&self) -> Result<()> {
         Err(AppError::new(
@@ -273,13 +317,11 @@ trait CopyJournal: EventJournal {
         ))
     }
 }
-#[cfg(any(test, feature = "fixture-probes"))]
 impl EventJournal for Journal {
     fn append(&self, item: Option<usize>, phase: &str, evidence: serde_json::Value) -> Result<()> {
         Journal::append(self, item, phase, evidence)
     }
 }
-#[cfg(any(test, feature = "fixture-probes"))]
 impl CopyJournal for Journal {
     fn history_count(&self) -> Result<u64> {
         let count: i64 = self
@@ -287,6 +329,12 @@ impl CopyJournal for Journal {
             .query_row("SELECT count(*) FROM events", [], |row| row.get(0))?;
         u64::try_from(count).map_err(|_| failed("Invalid journal event count."))
     }
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>> {
         Journal::stage_identity(self, item)
     }
@@ -295,7 +343,6 @@ impl CopyJournal for Journal {
         Ok(())
     }
 }
-#[cfg(any(test, feature = "fixture-probes"))]
 impl Journal {
     fn create(path: &Path, plan: &CopyPlan) -> Result<Self> {
         let journal = Self(Connection::open(path)?);
@@ -310,6 +357,12 @@ impl Journal {
         )?;
         Ok(journal)
     }
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     fn open(path: &Path, expected: &CopyPlan) -> Result<Self> {
         let journal = Self(Connection::open_with_flags(
             path,
@@ -345,6 +398,12 @@ impl Journal {
         )?;
         Ok(())
     }
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     fn stage_identity(&self, item: usize) -> Result<Option<filesystem::FileIdentity>> {
         use rusqlite::OptionalExtension;
         let text:Option<String>=self.0.query_row("SELECT evidence FROM events WHERE item=? AND phase='stage_created' ORDER BY sequence DESC LIMIT 1",[item as i64],|row|row.get(0)).optional()?;
@@ -531,6 +590,12 @@ struct CopyContext<'a> {
     cancel: &'a AtomicBool,
     validate_scope: &'a dyn Fn() -> Result<()>,
 }
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 struct CopyInputs<'a> {
     source_root: &'a File,
     destination: &'a File,
@@ -736,6 +801,12 @@ impl CopyContext<'_> {
     }
 }
 
+#[cfg(any(
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 fn inspect_item(
     plan: &CopyFile,
     index: usize,

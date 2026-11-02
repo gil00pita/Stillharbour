@@ -2,7 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { beforeEach, expect, it, vi } from 'vitest';
 import { BackupScreen } from './BackupScreen';
 import { libraryData, pickDirectory } from '../ipc';
-import type { ComparisonRun, LibraryStatus, SyncProfile } from '../bindings';
+import type {
+  ComparisonRun,
+  LibraryStatus,
+  SyncProfile,
+  SyncRequest,
+  SyncReply,
+  SyncJob,
+} from '../bindings';
 
 vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
@@ -53,6 +60,21 @@ function report(state: ComparisonRun['state'] = 'needs_review'): ComparisonRun {
     },
   };
 }
+function readOnlySync(request: SyncRequest): SyncReply {
+  if (request.kind === 'capabilities')
+    return {
+      kind: 'capabilities',
+      data: {
+        executionAvailable: false,
+        retainedReplacementAvailable: false,
+        reason: 'Native transfer gates are pending.',
+        ioScope: 'Shared application-owned I/O',
+        bytesPerSecond: '10485760',
+      },
+    };
+  if (request.kind === 'list') return { kind: 'jobs', data: [] };
+  throw new Error('Unexpected safe-copy request in comparison fixture.');
+}
 beforeEach(() => {
   vi.mocked(pickDirectory).mockReset().mockResolvedValue({
     id: 'selection',
@@ -62,6 +84,9 @@ beforeEach(() => {
   vi.mocked(libraryData)
     .mockReset()
     .mockImplementation(async (request) => {
+      if (request.kind === 'backup_snapshots' && request.request.kind === 'profiles')
+        return { kind: 'profiles', data: [] };
+      if (request.kind === 'backup_sync') return readOnlySync(request.request);
       if (request.kind === 'backup_profiles') return [];
       if (request.kind === 'backup_comparison_latest') return null;
       if (request.kind === 'backup_comparison_page')
@@ -135,7 +160,7 @@ it('saves only the native destination selection and requires a fresh profile com
     ),
   );
   expect(screen.getByRole('button', { name: 'Choose destination' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: 'Start safe sync' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review append plan' })).toBeDisabled();
   expect(
     vi
       .mocked(libraryData)
@@ -189,7 +214,7 @@ it('keeps a reopened profile on its bound root when the base changes and blocks 
 it('binds the source and sends only the native selection ID and verified policy', async () => {
   open();
   expect(screen.getByText('Family')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Start safe sync' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review append plan' })).toBeDisabled();
   expect(screen.queryByRole('button', { name: /choose source/i })).not.toBeInTheDocument();
   await compare();
   await screen.findByText('different content');
@@ -199,7 +224,7 @@ it('binds the source and sends only the native selection ID and verified policy'
   );
   expect(screen.getByText('<script>hostile</script>.xmp')).toBeVisible();
   expect(document.querySelector('.backup-workspace script')).toBeNull();
-  expect(screen.getByRole('button', { name: 'Start safe sync' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: /^Start / })).not.toBeInTheDocument();
 });
 it('retires the previous review after changing comparison policy', async () => {
   open();
@@ -242,7 +267,7 @@ it('inspects escaped observations and clears details when filtering the entire r
   );
   expect(await screen.findByText('Entries 0–0 of 0')).toBeVisible();
   expect(screen.queryByRole('region', { name: 'Entry details' })).not.toBeInTheDocument();
-  expect(screen.getByRole('button', { name: 'Start safe sync' })).toBeDisabled();
+  expect(screen.queryByRole('button', { name: /^Start / })).not.toBeInTheDocument();
 });
 it('shows offline scope and cannot mistake it for an empty library', () => {
   open({ ...status, roots: [{ ...status.roots[0]!, availability: 'offline' }] });
@@ -261,7 +286,11 @@ it('surfaces picker and comparison failures without reporting success', async ()
 });
 it('reopens and cancels the active backend run without starting another job', async () => {
   vi.mocked(libraryData).mockImplementation(async (request) =>
-    request.kind === 'backup_profiles' ? [] : report('comparing'),
+    request.kind === 'backup_profiles'
+      ? []
+      : request.kind === 'backup_sync'
+        ? readOnlySync(request.request)
+        : report('comparing'),
   );
   open();
   const cancel = await screen.findByRole('button', { name: 'Cancel comparison' });
@@ -277,31 +306,49 @@ it('reopens and cancels the active backend run without starting another job', as
     vi.mocked(libraryData).mock.calls.some(([request]) => request.kind === 'backup_compare_start'),
   ).toBe(false);
 });
-it('discards a late response when the base-root binding changes', async () => {
-  let finish!: (value: ComparisonRun) => void;
-  vi.mocked(libraryData).mockImplementation(async (request) =>
-    request.kind === 'backup_profiles'
-      ? []
-      : request.kind === 'backup_comparison_latest'
-        ? null
-        : new Promise<ComparisonRun>((resolve) => {
-            finish = resolve;
-          }),
-  );
-  const view = open();
-  await compare();
-  await waitFor(() => expect(finish).toBeDefined());
-  view.rerender(
-    <BackupScreen
-      status={{ ...status, roots: [{ ...status.roots[0]!, id: 'other', label: 'Other base' }] }}
-      navigationControl={null}
-      jobsControl={null}
-    />,
-  );
-  finish(report());
-  await screen.findByText('Other base');
-  expect(screen.queryByText('Read-only comparison finished.')).not.toBeInTheDocument();
-});
+it.each(['identity', 'path', 'availability'])(
+  'discards a late response when the base-root %s changes',
+  async (changed) => {
+    let finish!: (value: ComparisonRun) => void;
+    vi.mocked(libraryData).mockImplementation(async (request) =>
+      request.kind === 'backup_profiles'
+        ? []
+        : request.kind === 'backup_sync'
+          ? readOnlySync(request.request)
+          : request.kind === 'backup_comparison_latest'
+            ? null
+            : new Promise<ComparisonRun>((resolve) => {
+                finish = resolve;
+              }),
+    );
+    const view = open();
+    await compare();
+    await waitFor(() => expect(finish).toBeDefined());
+    view.rerender(
+      <BackupScreen
+        status={{
+          ...status,
+          roots: [
+            {
+              ...status.roots[0]!,
+              label: 'Other base',
+              ...(changed === 'identity'
+                ? { id: 'other' }
+                : changed === 'path'
+                  ? { displayPath: '/relinked/base' }
+                  : { availability: 'offline' }),
+            },
+          ],
+        }}
+        navigationControl={null}
+        jobsControl={null}
+      />,
+    );
+    finish(report());
+    await screen.findByText('Other base');
+    expect(screen.queryByText('Read-only comparison finished.')).not.toBeInTheDocument();
+  },
+);
 
 it('requires explicit scope review before creating a replacement profile binding', async () => {
   const profile = savedProfile();
@@ -343,5 +390,71 @@ it('requires explicit scope review before creating a replacement profile binding
       'backup_profile',
     ),
   );
-  expect(screen.getByRole('button', { name: 'Start safe sync' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Review append plan' })).toBeDisabled();
+});
+
+it('does not resurrect a stored profile comparison after the same root ID is relinked', async () => {
+  const profile = savedProfile();
+  const fallback = vi.mocked(libraryData).getMockImplementation()!;
+  vi.mocked(libraryData).mockImplementation(async (request, kind) => {
+    if (request.kind === 'backup_profiles') return [profile];
+    if (request.kind === 'backup_comparison_latest') return { ...report(), profileId: profile.id };
+    return fallback(request, kind);
+  });
+  open({ ...status, roots: [{ ...status.roots[0]!, displayPath: '/relinked/same-id' }] });
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Saved comparison' })).toBeEnabled(),
+  );
+  fireEvent.change(screen.getByRole('combobox', { name: 'Saved comparison' }), {
+    target: { value: profile.id },
+  });
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(libraryData)
+        .mock.calls.filter(([input]) => input.kind === 'backup_comparison_latest').length,
+    ).toBeGreaterThan(1),
+  );
+  expect(screen.queryByText('Read-only comparison finished.')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Review append plan' })).toBeDisabled();
+});
+
+it('keeps the inspected comparison entry fixed while a durable transfer is active', async () => {
+  let active = false;
+  const fallback = vi.mocked(libraryData).getMockImplementation()!;
+  const job: SyncJob = {
+    id: 'active-transfer',
+    runId: 'run',
+    sourceRootId: 'base',
+    action: 'copy_files',
+    state: 'running',
+    phase: 'copying',
+    createdAt: '2026-11-02',
+    updatedAt: '2026-11-02',
+    sourceDisplayPath: '/generated/source',
+    datasetDisplayPath: '/generated/dest',
+    totalFiles: 1,
+    verifiedFiles: 0,
+    copyBytes: '4',
+    uncopiedSourceRevisions: 0,
+    retainedDestinationFiles: 0,
+    readyReviewId: null,
+    bytesPerSecond: '10485760',
+    message: 'Generated transfer in progress.',
+  };
+  vi.mocked(libraryData).mockImplementation(async (request, kind) => {
+    if (request.kind === 'backup_sync' && request.request.kind === 'list' && active)
+      return { kind: 'jobs', data: [job] };
+    return fallback(request, kind);
+  });
+  open();
+  await compare();
+  const entry = await screen.findByRole('button', { name: '<script>hostile</script>.xmp' });
+  fireEvent.click(entry);
+  expect(screen.getByRole('region', { name: 'Entry details' })).toBeVisible();
+  active = true;
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh safe-copy history' }));
+  await screen.findByText('Generated transfer in progress.');
+  await waitFor(() => expect(entry).toBeDisabled());
+  expect(screen.getByRole('region', { name: 'Entry details' })).toBeVisible();
 });

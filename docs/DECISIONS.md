@@ -331,3 +331,6 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Scan-control branch integration — 2026-11-01
 
 [ADR-0071](decisions/ADR-0071-scan-control-progress.md) integrates the preferred 93fd459 scan behavior with the target's M2/M3 work. Catalog schema 10 adds filename-progress counters without discarding operation/inspection schema or data. The incoming branch's independent schema-4 counter layout keeps its progress and gains the missing target indexes before later migrations. Partial layouts fail closed; pre-migration snapshots and UUID preservation remain mandatory. M2/M3 fixture acceptance remains historical evidence, and this merge does not authorize M4 or real-library mutations.
+
+
+[ADR-0079](decisions/ADR-0079-backup-application-workflows.md) introduces the M4 application integration: schema-13 durable jobs/history, separate backup workflow gate, native-only OS credentials, fixed bundled restic/rclone, source-retaining staging/restore and exact-reviewed-manifest schedules. Actual native/application acceptance is still being collected; essential metadata and independent exact-old recovery must not be inferred from ordinary-byte snapshot success.

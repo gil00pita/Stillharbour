@@ -11,19 +11,30 @@ const LIMIT: usize = 64;
 const LIFETIME: Duration = Duration::from_secs(600);
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(super) enum Action {
+    #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+    PrepareSyncNames,
+    #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+    CopySyncFiles,
+    #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+    ResumeSyncFiles,
     #[cfg(any(test, feature = "fixture-probes"))]
     RenameFixture,
     #[cfg(any(test, feature = "fixture-probes"))]
     RelocateFixture,
     #[cfg(any(test, feature = "fixture-probes"))]
     ContinueRelocationFixture,
-    #[cfg(any(test, feature = "fixture-probes"))]
+    #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
     ReplaceRetaining,
-    #[cfg(any(test, feature = "fixture-probes"))]
+    #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
     RestoreRetained,
     PrepareNames,
     CopyFiles,
-    #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+    #[cfg(any(
+        test,
+        feature = "fixture-probes",
+        feature = "copy-workflow",
+        feature = "backup-workflow"
+    ))]
     ResumeFiles,
     #[cfg(any(test, feature = "copy-workflow"))]
     RecordImportSkip,

@@ -3,9 +3,16 @@
 #[cfg(all(feature = "desktop-test", not(debug_assertions)))]
 compile_error!("desktop-test instrumentation must never be compiled into a release build");
 
+#[cfg(feature = "desktop-test")]
+mod backup_fixture;
+mod native_credentials;
+
 use std::{
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, AtomicU8, Ordering},
+    },
 };
 use stillharbour_core::{
     catalog::Catalog,
@@ -35,9 +42,9 @@ struct MultiSourceFixture {
 
 struct Foundation {
     #[cfg(feature = "desktop-test")]
-    rename_fixture: stillharbour_core::executor::GeneratedRenameController,
+    backup_application_fixture: Mutex<Option<backup_fixture::ApplicationFixture>>,
     #[cfg(feature = "desktop-test")]
-    _test_data: tempfile::TempDir,
+    rename_fixture: stillharbour_core::executor::GeneratedRenameController,
     #[cfg(feature = "desktop-test")]
     fixture: Mutex<Option<stillharbour_core::library_fixture::LibraryFixture>>,
     #[cfg(feature = "desktop-test")]
@@ -69,7 +76,86 @@ struct Foundation {
     library: Arc<Library>,
     status: FoundationStatus,
     selection: Mutex<Option<NativeSelection>>,
-    picker: tokio::sync::Mutex<()>,
+    picker: Arc<tokio::sync::Mutex<()>>,
+    credential_gate: Arc<Mutex<()>>,
+    credential_cancel: Arc<AtomicBool>,
+    shutdown: Arc<AtomicU8>,
+    #[cfg(feature = "desktop-test")]
+    _test_data: tempfile::TempDir,
+}
+
+fn request_shutdown(app: &tauri::AppHandle, code: i32) {
+    let state = app.state::<Foundation>();
+    if state
+        .shutdown
+        .compare_exchange(0, 1, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
+    state.credential_cancel.store(true, Ordering::Release);
+    state.library.cancel_all();
+    let library = state.library.clone();
+    let gate = state.credential_gate.clone();
+    let picker = state.picker.clone();
+    let shutdown = state.shutdown.clone();
+    let app = app.clone();
+    let _shutdown_worker = tauri::async_runtime::spawn_blocking(move || {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+        loop {
+            // The admission mutex contains only (). A panicked native request
+            // has already unwound its owned cleanup; poisoning carries no data
+            // that can grant work, and must not permanently prevent quitting.
+            let credential_guard = match gate.try_lock() {
+                Ok(guard) => Some(guard),
+                Err(std::sync::TryLockError::Poisoned(error)) => Some(error.into_inner()),
+                Err(std::sync::TryLockError::WouldBlock) => None,
+            };
+            if let (Some(_credential_guard), Ok(_picker_guard)) =
+                (credential_guard, picker.try_lock())
+                && library.backup_shutdown_ready().unwrap_or(false)
+            {
+                shutdown.store(2, Ordering::Release);
+                app.exit(code);
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                shutdown.store(0, Ordering::Release);
+                app.dialog().message("Stillharbour is still stopping backup work or waiting for a native dialog to close. Existing files and partial outputs are retained. Close any native dialog and try quitting again.")
+                    .title("Stillharbour — waiting to stop").show(|_|{});
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+    });
+}
+
+fn cleanup_new_credentials(
+    library: &Library,
+    catalog: &str,
+    references: &[(
+        stillharbour_core::backup::credentials::CredentialPurpose,
+        &str,
+    )],
+) -> Result<()> {
+    let mut first_error = None;
+    for (purpose, reference) in references {
+        let result: Result<()> = (|| {
+            // An uncertain reply after an immutable profile commit must never
+            // delete its key. Only unreferenced, just-created references enter
+            // this cleanup path; existing references are never passed here.
+            if !library.snapshot_credential_referenced(*purpose, reference)? {
+                stillharbour_core::backup::credentials::CredentialStore::delete_owned(
+                    catalog, *purpose, reference,
+                )?;
+            }
+            Ok(())
+        })();
+        if first_error.is_none() {
+            first_error = result.err();
+        }
+    }
+    first_error.map_or(Ok(()), Err)
 }
 
 #[tauri::command]
@@ -79,6 +165,14 @@ async fn foundation_request(
     state: State<'_, Foundation>,
     request: FoundationRequest,
 ) -> Result<FoundationResponse> {
+    if state.credential_cancel.load(Ordering::Acquire)
+        && matches!(&request, FoundationRequest::PickDirectory {})
+    {
+        return Err(AppError::new(
+            ErrorCode::Busy,
+            "Stillharbour is stopping its native work before quitting.",
+        ));
+    }
     if window.label() != "main" {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
@@ -125,6 +219,12 @@ async fn foundation_request(
                 .picker
                 .try_lock()
                 .map_err(|_| AppError::new(ErrorCode::Busy, "A folder picker is already open."))?;
+            if state.credential_cancel.load(Ordering::Acquire) {
+                return Err(AppError::new(
+                    ErrorCode::Busy,
+                    "Stillharbour is stopping its native work before quitting.",
+                ));
+            }
             let (sender, receiver) = tokio::sync::oneshot::channel();
             app.dialog()
                 .file()
@@ -213,6 +313,41 @@ fn selected_identity(selection: &NativeSelection) -> Result<(FileIdentity, Strin
     }
 }
 
+// Blocking native selection is called only from the guarded background dialog
+// workers. No display string becomes a filesystem execution input.
+fn snapshot_folder(
+    window: &tauri::WebviewWindow,
+    title: &str,
+) -> Result<stillharbour_core::library::snapshots::NativeSnapshotSelection> {
+    let selected = window
+        .app_handle()
+        .dialog()
+        .file()
+        .set_parent(window)
+        .set_title(title)
+        .set_can_create_directories(false)
+        .blocking_pick_folder()
+        .ok_or_else(|| {
+            AppError::new(
+                ErrorCode::InvalidInput,
+                "Native folder selection was canceled.",
+            )
+        })?;
+    let path = selected
+        .into_path()
+        .map_err(|_| AppError::new(ErrorCode::InvalidInput, "Choose a local folder."))?
+        .canonicalize()?;
+    let handle = filesystem::open_directory_readonly(&path)?;
+    Ok(
+        stillharbour_core::library::snapshots::NativeSnapshotSelection {
+            id: uuid::Uuid::new_v4().to_string(),
+            path,
+            identity: filesystem::identity(&handle)?,
+            volume: stillharbour_core::library::native::volume_token(&handle)?,
+        },
+    )
+}
+
 #[tauri::command]
 async fn library_request(
     window: tauri::WebviewWindow,
@@ -225,7 +360,175 @@ async fn library_request(
             "This window has no library authority.",
         ));
     }
+    if state.credential_cancel.load(Ordering::Acquire) {
+        return Err(AppError::new(
+            ErrorCode::Busy,
+            "Stillharbour is stopping its native work before quitting.",
+        ));
+    }
+    if let LibraryRequest::BackupCredentialExport { profile_id } = &request {
+        let library = state.library.clone();
+        let profile_id = profile_id.clone();
+        let gate = state.credential_gate.clone();
+        let cancel = state.credential_cancel.clone();
+        let app = window.app_handle().clone();
+        let parent = window.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            let _gate=gate.try_lock().map_err(|_|AppError::new(ErrorCode::Busy,"A native credential dialog is already open."))?;
+            if cancel.load(Ordering::Acquire) {return Err(AppError::new(ErrorCode::Busy,"Stillharbour is stopping native credential work."));}
+            let selection=snapshot_folder(&parent,"Choose a separate folder for the unencrypted recovery key")?;
+            if cancel.load(Ordering::Acquire) {return Err(AppError::new(ErrorCode::Busy,"Recovery-key export stopped before writing."));}
+            let source=library.snapshot_key_export_source(&profile_id,selection)?;
+            if !app.dialog().message("This creates a new UNENCRYPTED file containing the repository password. Store it separately from the backup repository. Anyone with this file can decrypt the snapshots.").title("Stillharbour — export recovery key").parent(&parent)
+                .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCancelCustom("Export key".into(),"Cancel".into())).blocking_show() {
+                return Err(AppError::new(ErrorCode::InvalidInput,"Recovery-key export was canceled."));
+            }
+            if cancel.load(Ordering::Acquire) {return Err(AppError::new(ErrorCode::Busy,"Recovery-key export stopped before writing."));}
+            let selection=source.selection;
+            let saved=stillharbour_core::executor::key_export::export(stillharbour_core::executor::key_export::KeyExport{directory:selection.path,identity:selection.identity,volume:selection.volume,journal_directory:source.journal_directory,label:source.label,secret:source.secret})?;
+            Ok(LibraryResponse::BackupCredentialExported(saved))
+        }).await.map_err(|_|AppError::new(ErrorCode::WorkerFailed,"The native key export stopped unexpectedly."))?;
+    }
+    if let LibraryRequest::BackupCredentialUnlock {
+        profile_id,
+        purpose,
+    } = &request
+    {
+        let library = state.library.clone();
+        let profile_id = profile_id.clone();
+        let purpose = *purpose;
+        let gate = state.credential_gate.clone();
+        let cancel = state.credential_cancel.clone();
+        let parent = window.clone();
+        #[cfg(windows)]
+        let owner = window
+            .hwnd()
+            .map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "The native credential dialog has no parent window.",
+                )
+            })?
+            .0 as usize;
+        #[cfg(not(windows))]
+        let owner = 0usize;
+        return tauri::async_runtime::spawn_blocking(move || {
+            let _gate = gate.try_lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::Busy,
+                    "A native credential dialog is already open.",
+                )
+            })?;
+            if cancel.load(Ordering::Acquire) {
+                return Err(AppError::new(
+                    ErrorCode::Busy,
+                    "Stillharbour is stopping native credential work.",
+                ));
+            }
+            let target = library.snapshot_credential_target(&profile_id, purpose)?;
+            let selection = if target.needs_local_selection {
+                Some(snapshot_folder(
+                    &parent,
+                    "Select the existing repository parent to recover its credential",
+                )?)
+            } else {
+                None
+            };
+            let catalog_id = target.catalog_id.clone();
+            let additional_purpose = target.additional_purpose;
+            let reference = native_credentials::reenroll(target, owner, &cancel)?;
+            let other_reference = if let Some(other) = additional_purpose {
+                let entered = library
+                    .snapshot_credential_target(&profile_id, other)
+                    .and_then(|target| native_credentials::reenroll(target, owner, &cancel));
+                match entered {
+                    Ok(reference) => Some(reference),
+                    Err(error) => {
+                        stillharbour_core::backup::credentials::CredentialStore::delete_owned(
+                            &catalog_id,
+                            purpose,
+                            &reference,
+                        )?;
+                        return Err(error);
+                    }
+                }
+            } else {
+                None
+            };
+            let rebound = library.snapshot_profile_rebind_credential(
+                &profile_id,
+                purpose,
+                &reference,
+                selection,
+                other_reference.as_deref(),
+            );
+            if rebound.is_err() {
+                let mut references = vec![(purpose, reference.as_str())];
+                if let (Some(other), Some(reference)) =
+                    (additional_purpose, other_reference.as_deref())
+                {
+                    references.push((other, reference));
+                }
+                cleanup_new_credentials(&library, &catalog_id, &references)?;
+            }
+            let profile = rebound?;
+            Ok(LibraryResponse::BackupSnapshots(
+                stillharbour_core::backup::snapshots::SnapshotReply::Profile(profile),
+            ))
+        })
+        .await
+        .map_err(|_| {
+            AppError::new(
+                ErrorCode::WorkerFailed,
+                "The native credential dialog stopped unexpectedly.",
+            )
+        })?;
+    }
+    if let LibraryRequest::BackupCredentialEnroll {
+        purpose,
+        destination,
+    } = &request
+    {
+        let catalog = state._catalog.clone();
+        let purpose = *purpose;
+        let destination = destination.clone();
+        let gate = state.credential_gate.clone();
+        let cancel = state.credential_cancel.clone();
+        #[cfg(windows)]
+        let owner = window
+            .hwnd()
+            .map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "The native credential dialog has no parent window.",
+                )
+            })?
+            .0 as usize;
+        #[cfg(not(windows))]
+        let owner = 0usize;
+        return tauri::async_runtime::spawn_blocking(move || {
+            let _gate = gate.try_lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::Busy,
+                    "A native credential dialog is already open.",
+                )
+            })?;
+            native_credentials::enroll(&catalog.summary()?.id, purpose, destination, owner, &cancel)
+                .map(LibraryResponse::BackupCredentialRef)
+        })
+        .await
+        .map_err(|_| {
+            AppError::new(
+                ErrorCode::WorkerFailed,
+                "The native credential dialog stopped unexpectedly.",
+            )
+        })?;
+    }
     let selection = match &request {
+        LibraryRequest::BackupSnapshots { request } => request
+            .selection_id()
+            .map(|id| selected(&state, id))
+            .transpose()?,
         LibraryRequest::BackupProfileSave { selection_id, .. }
         | LibraryRequest::BackupCompareStart { selection_id, .. }
         | LibraryRequest::SaveAndScan { selection_id, .. }
@@ -252,6 +555,39 @@ async fn library_request(
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         Ok(match request {
+            LibraryRequest::BackupSync { request } => {
+                LibraryResponse::BackupSync(library.backup_sync(request)?)
+            }
+            LibraryRequest::BackupSnapshots { request } => {
+                let native = selection
+                    .as_ref()
+                    .map(|selection| {
+                        let (identity, volume) = selected_identity(selection)?;
+                        Ok::<_, AppError>(
+                            stillharbour_core::library::snapshots::NativeSnapshotSelection {
+                                id: selection.id.clone(),
+                                path: selection.path.clone(),
+                                identity,
+                                volume,
+                            },
+                        )
+                    })
+                    .transpose()?;
+                LibraryResponse::BackupSnapshots(library.backup_snapshots(request, native)?)
+            }
+            LibraryRequest::BackupCredentialEnroll { .. } => {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Native credential enrollment must use its guarded dialog.",
+                ));
+            }
+            LibraryRequest::BackupCredentialExport { .. }
+            | LibraryRequest::BackupCredentialUnlock { .. } => {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Recovery credential actions require the native guarded dialog.",
+                ));
+            }
             LibraryRequest::BackupComparisonPreview {
                 run_id,
                 entry_id,
@@ -1120,6 +1456,19 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "m4_application_source"
+        | "m4_application_repository"
+        | "m4_application_restore"
+        | "m4_application_remove_source"
+        | "m4_application_audit" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The owned application fixture accepts no external scope.",
+                ));
+            }
+            backup_fixture::handle(&state, &action)
+        }
         "backup_retained_fixture" => {
             if rows.is_some() {
                 return Err(AppError::new(
@@ -1859,6 +2208,10 @@ async fn test_performance(
 }
 
 fn main() {
+    #[cfg(target_os = "macos")]
+    if let Some(code) = stillharbour_core::backup::rclone_worker::dispatch() {
+        std::process::exit(code);
+    }
     let args: Vec<_> = std::env::args_os().collect();
     if args.get(1).is_some_and(|arg| arg == "--inspection-worker") {
         let result = if args.len() == 5 {
@@ -2111,9 +2464,38 @@ fn main() {
                     },
                 },
             )?;
+            let backup_resources = app
+                .path()
+                .resolve("helpers/backup", tauri::path::BaseDirectory::Resource)?;
+            #[cfg(debug_assertions)]
+            let backup_resources = if backup_resources.is_dir() {
+                backup_resources
+            } else {
+                #[cfg(all(windows, target_arch = "x86_64"))]
+                let platform = "windows-x86_64";
+                #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+                let platform = "macos-aarch64";
+                #[cfg(not(any(
+                    all(windows, target_arch = "x86_64"),
+                    all(target_os = "macos", target_arch = "aarch64")
+                )))]
+                let platform = "unsupported";
+                let fixed = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("../vendor/backup-helpers")
+                    .join(platform);
+                fixed.canonicalize().unwrap_or(fixed)
+            };
+            // A missing/changed resource leaves the snapshot capability visibly
+            // unavailable. Read-only catalog startup remains usable. No PATH or
+            // network fallback exists in production.
+            let _backup_capability_unavailable =
+                library.configure_snapshot_helpers(backup_resources).err();
+            library.start_snapshot_schedules()?;
             #[cfg(not(feature = "desktop-test"))]
             library.start_monitoring()?;
             app.manage(Foundation {
+                #[cfg(feature = "desktop-test")]
+                backup_application_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]
                 _test_data: test_data,
                 #[cfg(feature = "desktop-test")]
@@ -2149,7 +2531,10 @@ fn main() {
                     original_mutations_enabled: false,
                 },
                 selection: Mutex::new(None),
-                picker: tokio::sync::Mutex::new(()),
+                picker: Arc::new(tokio::sync::Mutex::new(())),
+                credential_gate: Arc::new(Mutex::new(())),
+                credential_cancel: Arc::new(AtomicBool::new(false)),
+                shutdown: Arc::new(AtomicU8::new(0)),
             });
             let dev_origin = app
                 .config()
@@ -2173,10 +2558,26 @@ fn main() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-                window.state::<Foundation>().library.cancel_all();
+            if window.label() == "main"
+                && let tauri::WindowEvent::CloseRequested { api, .. } = event
+                && window
+                    .state::<Foundation>()
+                    .shutdown
+                    .load(Ordering::Acquire)
+                    != 2
+            {
+                api.prevent_close();
+                request_shutdown(window.app_handle(), 0);
             }
         })
-        .run(tauri::generate_context!())
-        .expect("Stillharbour could not start; catalog or native runtime is unavailable");
+        .build(tauri::generate_context!())
+        .expect("Stillharbour could not start; catalog or native runtime is unavailable")
+        .run(|app, event| {
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = event
+                && app.state::<Foundation>().shutdown.load(Ordering::Acquire) != 2
+            {
+                api.prevent_exit();
+                request_shutdown(app, code.unwrap_or(0));
+            }
+        });
 }

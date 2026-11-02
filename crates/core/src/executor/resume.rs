@@ -43,7 +43,12 @@ pub(super) struct Review {
     digest: String,
 }
 impl Review {
-    #[cfg(any(test, feature = "copy-workflow"))]
+    #[cfg(any(
+        test,
+        feature = "copy-workflow",
+        feature = "backup-workflow",
+        feature = "fixture-probes"
+    ))]
     pub(super) fn digest(&self) -> &str {
         &self.digest
     }

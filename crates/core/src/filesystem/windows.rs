@@ -388,9 +388,9 @@ pub(crate) fn metadata_child(parent: &File, name: &OsStr) -> Result<File> {
     }
     Ok(file)
 }
-/// Attribute-only observation of an executor-owned output while its writer
-/// holds DELETE access for no-replace publication. No data or mutation right.
-#[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]
+/// Read-only bytes/security observation of an executor-owned output while its
+/// writer holds DELETE access. Write/delete sharing admits that owned writer;
+/// this observer receives no filesystem mutation right.
 pub(crate) fn owned_metadata_child(parent: &File, name: &OsStr) -> Result<File> {
     validate_component(name)?;
     let id = entry_id(parent, name)?;
@@ -399,7 +399,7 @@ pub(crate) fn owned_metadata_child(parent: &File, name: &OsStr) -> Result<File> 
         id,
         false,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        true,
+        false,
     )?;
     if entry_id(parent, name)? != id {
         return Err(AppError::new(

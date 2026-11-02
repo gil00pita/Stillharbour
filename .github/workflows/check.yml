@@ -5,6 +5,8 @@ on:
     branches: [main]
 permissions:
   contents: read
+env:
+  CARGO_INCREMENTAL: '0'
 jobs:
   native:
     strategy:
@@ -22,7 +24,14 @@ jobs:
         run: rustup show
       - uses: Swatinem/rust-cache@v2
       - run: npm ci
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Prepare reviewed host backup resources
+        run: node scripts/backup-helpers.mjs --download
       - run: npm run check
+      - name: Actual generated snapshot application recovery tests
+        run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow library::snapshots::application_tests -- --ignored
       - run: npm run release:check
       - run: npm run desktop:test:build
       - run: npm run desktop:test
@@ -36,6 +45,7 @@ jobs:
             .context/screenshots
             .context/m4b-append/**/m4b-append.json
             .context/m4c-retained/**/m4c-retained.json
+            .context/m4-application
             .context/wdio
             .context/gallery/**/warm-scroll.json
             .context/gallery/**/preparation-pause.json

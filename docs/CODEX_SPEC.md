@@ -442,6 +442,14 @@ Display backup age and destination reachability. Distinguish an offline source r
 
 Initially, schedules run while the application/tray process is running, with catch-up after sleep or restart and clear UI disclosure. Jobs while fully quit require separately implemented and tested platform background agents; do not imply they exist. Store schedule timezone and daylight-saving policy. Optional application reminders must not upload photo metadata.
 
+M4 application integration follows [ADR-0079](decisions/ADR-0079-backup-application-workflows.md).
+To satisfy preservation P-04, automatic repeats authorize only the exact reviewed
+manifest/profile digest. Changed files, versions, roots or endpoints need fresh
+review. Schedule consent is sealed in OS storage and bound to the native catalog
+instance; imported or restored records cannot recreate it. The initial schedule
+uses elapsed UTC minutes (no DST shift), at most one unchanged-scope catch-up and
+an explicit running-process-only disclosure.
+
 ### 13.4 Restore
 
 A restore browser selects destination profile, snapshot, roots/folders/photos, and target directory. Default to a new folder, not overwriting an active library. Show expected bytes, path sanitization, platform metadata limitations, and collision handling before restore.

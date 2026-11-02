@@ -85,8 +85,136 @@
   min-width: 160px;
   max-width: 320px;
 }
+.backup-mode-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.backup-mode-control button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.backup-operation {
+  margin-block: 28px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  min-width: 0;
+}
+.backup-review,
+.backup-decision,
+.backup-helper-limits {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-block: 20px;
+  min-width: 0;
+}
+.backup-review {
+  background: var(--surface);
+}
+.backup-review fieldset,
+.backup-io form {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+  margin-block: 20px;
+}
+.backup-review legend {
+  font-weight: 600;
+  padding-inline: 6px;
+}
+.backup-review label,
+.backup-io label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.backup-review label:has(> input[type='checkbox']),
+.backup-decision label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.backup-review input[type='checkbox'],
+.backup-decision input[type='checkbox'] {
+  flex: 0 0 auto;
+  margin-top: 4px;
+}
+.backup-review input:not([type='checkbox']),
+.backup-review textarea,
+.backup-review select,
+.backup-io input {
+  width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: inherit;
+  padding: 8px 10px;
+  font: inherit;
+}
+.backup-review textarea {
+  resize: vertical;
+  min-height: 100px;
+}
+.backup-review .backup-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.backup-form-grid > fieldset {
+  grid-column: 1 / -1;
+}
+.backup-review-totals,
+.backup-evidence {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+}
+.backup-review-totals dt,
+.backup-evidence dt {
+  color: var(--muted);
+}
+.backup-review-totals dd,
+.backup-evidence dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+}
+.backup-job-list {
+  list-style: none;
+  margin: 16px 0;
+  padding: 0;
+  display: grid;
+  gap: 16px;
+}
+.backup-job {
+  border: 1px solid var(--border);
+  padding: 16px;
+  border-radius: 8px;
+  min-width: 0;
+}
+.backup-job h4,
+.backup-job h5 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+}
+.backup-job small,
+.backup-review small,
+.backup-helper-limits {
+  color: var(--muted);
+}
+.backup-review .backup-table {
+  max-height: 360px;
+}
 @media (max-width: 850px) {
   .backup-scope {
+    grid-template-columns: 1fr;
+  }
+  .backup-review .backup-form-grid,
+  .backup-review-totals,
+  .backup-evidence {
     grid-template-columns: 1fr;
   }
 }
