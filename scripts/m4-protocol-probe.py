@@ -196,6 +196,29 @@ def server_smb():
     config.set('global', 'anonymous_logon', 'no')
     backend.getServer().setServerConfig(config)
     backend.getServer().processConfigFile()
+    # The test server's public hooks record numeric operations/statuses only.
+    # Never emit packets, auth challenges/responses, keys or file names.
+    trace_count = 0
+    for command in range(19):
+        original = backend.getServer().hookSmb2Command(command, None)
+        if original is None:
+            continue
+        def traced(*arguments, command=command, original=original):
+            nonlocal trace_count
+            trace_count += 1
+            report = trace_count <= 128
+            if report:
+                print(f'SMB2 operation={command} enter', flush=True)
+            try:
+                response = original(*arguments)
+            except Exception as error:
+                if report:
+                    print(f'SMB2 operation={command} errorType={type(error).__name__}', flush=True)
+                raise
+            if report:
+                print(f'SMB2 operation={command} status={int(response[2])}', flush=True)
+            return response
+        backend.getServer().hookSmb2Command(command, traced)
     backend.start()
 
 
