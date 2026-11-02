@@ -6,6 +6,7 @@ password and source belongs to this invocation. Receipts contain no secrets.
 This is transport evidence, not a production application workflow test.
 """
 import argparse
+import base64
 import contextlib
 import datetime
 import hashlib
@@ -26,6 +27,8 @@ import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
+import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_LIMIT = 16 * 1024 * 1024
@@ -139,8 +142,31 @@ def port():
         return sock.getsockname()[1]
 
 
+def config_read_control(binaries, protocol, base, environment):
+    remote = 'fixture:FIXTURE/repository' if protocol == 'smb' else 'fixture:repository'
+    listen_port = port()
+    password = secrets.token_urlsafe(24)
+    control_env = {**environment, 'RCLONE_USER': 'fixture-http', 'RCLONE_PASS': password}
+    command = [binaries['rclone'], 'serve', 'restic', '--addr', f'127.0.0.1:{listen_port}', '--transfers', '1', '--checkers', '1', '--buffer-size', '64k', '--multi-thread-streams', '0', '--retries', '1', '--low-level-retries', '1', '--contimeout', '5s', '--timeout', '15s', remote]
+    # Use the same REST object-read adapter as the actual stdio helper. HTTP/1
+    # loopback is test-only, Basic-authenticated, and serves encrypted repo bytes.
+    with server(command, base, control_env, listen_port, allow_failed_start=True) as process:
+        if process is None:
+            return None
+        authorization = base64.b64encode(f'fixture-http:{password}'.encode()).decode()
+        request = urllib.request.Request(f'http://127.0.0.1:{listen_port}/config', headers={'Authorization': f'Basic {authorization}'})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                body = response.read(OUTPUT_LIMIT + 1)
+                if len(body) > OUTPUT_LIMIT:
+                    raise RuntimeError('Config control exceeded its output bound.')
+                return body if response.status == 200 else None
+        except urllib.error.HTTPError:
+            return None
+
+
 @contextlib.contextmanager
-def server(argv, base, environment, listen_port):
+def server(argv, base, environment, listen_port, *, allow_failed_start=False):
     log = open(base / 'server.log', 'ab')
     process = subprocess.Popen([str(a) for a in argv], cwd=base, env=environment,
                                stdin=subprocess.DEVNULL, stdout=log, stderr=log,
@@ -150,6 +176,9 @@ def server(argv, base, environment, listen_port):
         deadline = time.monotonic() + 20
         while True:
             if process.poll() is not None:
+                if allow_failed_start:
+                    yield None
+                    return
                 diagnostic = (base/'server.log').read_bytes()[-3500:].decode(errors='replace')
                 for name,value in environment.items():
                     if any(word in name for word in ('PASS','TOKEN')) and value:
@@ -363,10 +392,6 @@ def probe(protocol, binaries, versions, allow_ftp):
         if protocol != 'local':
             command += ['-o', f'rclone.program={quoted_program}', '-o', 'rclone.timeout=20s', '-o', 'rclone.args=serve restic --stdio --transfers 1 --checkers 1 --buffer-size 64k --multi-thread-streams 0 --contimeout 5s --timeout 15s --retries 1 --low-level-retries 1']
         with manager:
-            if protocol == 'smb' and sys.platform == 'darwin':
-                # Diagnose server/client interoperability before restic applies
-                # its much longer backend retry budget.
-                run([binaries['rclone'], 'lsf', 'fixture:FIXTURE/repository', '--max-depth', '1', '--retries', '1', '--low-level-retries', '1', '--contimeout', '5s', '--timeout', '15s'], base, env, timeout=25)
             source = snapshot_source(base, owner_nonce)
             expected = contents(source)
             run(command + ['init'], base, env)
@@ -397,20 +422,24 @@ def probe(protocol, binaries, versions, allow_ftp):
             _, snapshots, _ = run(command + ['snapshots'], base, env)
             if snapshot_id not in {item['id'] for item in json.loads(snapshots)}:
                 raise RuntimeError('Source removal unexpectedly erased snapshot history.')
+            if protocol != 'local':
+                good_config = config_read_control(binaries, protocol, base, env)
+                if good_config != (remote / 'repository/config').read_bytes():
+                    raise RuntimeError('Positive credential/trust control differs from the generated repository config.')
             trust_rejected = None
             if protocol == 'sftp':
                 trusted = trust.read_text()
                 trust.write_text('')
-                code, _, _ = run([binaries['rclone'], 'lsd', 'fixture:', '--retries', '1', '--low-level-retries', '1','--contimeout','5s','--timeout','15s'], base, env, success=False)
+                rejected_config = config_read_control(binaries, protocol, base, env)
                 trust.write_text(trusted)
-                if code == 0:
+                if rejected_config is not None:
                     raise RuntimeError('Unknown SFTP host was incorrectly accepted.')
                 trust_rejected = True
             elif protocol == 'ftps':
                 untrusted = dict(env)
                 del untrusted['RCLONE_CA_CERT']
-                code, _, _ = run([binaries['rclone'], 'lsd', 'fixture:', '--retries', '1', '--low-level-retries', '1','--contimeout','5s','--timeout','15s'], base, untrusted, success=False)
-                if code == 0:
+                rejected_config = config_read_control(binaries, protocol, base, untrusted)
+                if rejected_config is not None:
                     raise RuntimeError('Untrusted FTPS certificate was incorrectly accepted.')
                 trust_rejected = True
             credential_rejected = None
@@ -418,9 +447,12 @@ def probe(protocol, binaries, versions, allow_ftp):
                 invalid = dict(env)
                 _, wrong, _ = run([binaries['rclone'], 'obscure', '-'], base, env, input_text=secrets.token_urlsafe(32))
                 invalid['RCLONE_CONFIG_FIXTURE_PASS'] = wrong.strip()
-                code, _, _ = run([binaries['rclone'], 'lsd', 'fixture:', '--retries', '1', '--low-level-retries', '1', '--contimeout', '5s', '--timeout', '15s'], base, invalid, success=False)
-                if code == 0:
+                rejected_config = config_read_control(binaries, protocol, base, invalid)
+                if rejected_config is not None:
                     raise RuntimeError('Incorrect protocol credential was accepted.')
+                after_config = config_read_control(binaries, protocol, base, env)
+                if after_config != good_config:
+                    raise RuntimeError('Positive credential control did not recover after the negative test.')
                 credential_rejected = True
             # Damage only a pack in this run's generated repository, after the
             # good restore has been verified. Never repair, unlock or prune it.
@@ -451,6 +483,7 @@ def probe(protocol, binaries, versions, allow_ftp):
                     'catalogSnapshotKind': 'generated SQLite fixture', 'snapshotRetainedAfterSourceRemoval': True,
                     'destinationOnlyPreserved': True, 'untrustedEndpointRejected': trust_rejected,
                     'incorrectCredentialRejected': credential_rejected, 'corruptedPackRejected': True,
+                    'credentialTrustPositiveControl': protocol != 'local',
                     'plainFtpExplicitlyAcknowledged': protocol == 'ftp', 'loopbackOnly': True,
                     'tlsServerPolicy': 'TLS1.2, control/data TLS required, certificate verified' if protocol == 'ftps' else None,
                     'productionApplicationAcceptance': False, 'physicalIoCapClaimed': False}
