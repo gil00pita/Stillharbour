@@ -70,3 +70,21 @@ servers do not provide independent-device proof. Windows uses fixed read-only
 storage controls; macOS traverses native IOKit physical ancestry. Observations are
 ephemeral and rechecked, not imported catalog authority. Native validation remains
 required before claiming either classifier supported.
+
+
+## Pinned helper failure and resource policy (2026-11-02)
+
+Remote commands use one shared fixed argument policy with a 10-second connect
+timeout, a 30-second I/O-idle timeout, one high-level rclone attempt and two
+low-level attempts. Restic bounds rclone startup at 20 seconds and stuck requests
+at 30 seconds. Healthy streaming activity resets idle timing; the existing total
+helper deadline remains. Restic progress is sampled every five seconds so
+heartbeats cannot exhaust bounded output merely because a healthy job is long.
+
+The adapter observes only the pinned backend's recognized retry/failure header
+shapes. A monotonic failure signal stops and reaps the owned process tree and
+waits for nested native completion; a late report also defeats a zero exit code.
+This yields `needs_recovery` with sources, partial copies, repository objects and
+locks retained. It authorizes inspection, never an automatic backup replay,
+unlock, prune or repair. The observer neither exposes raw output nor treats
+source filenames or JSON progress as executable/error-control instructions.

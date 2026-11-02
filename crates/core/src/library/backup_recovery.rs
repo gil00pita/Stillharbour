@@ -5,6 +5,14 @@ use super::Library;
 use crate::{backup::snapshots::SnapshotReview, domain::Result};
 
 impl Library {
+    pub(crate) fn retained_recovery_proof(
+        &self,
+        scope: &crate::executor::sync_workflow::RetainedRecoveryScope<'_>,
+        evidence_id: &str,
+    ) -> Result<crate::backup::sync::RecoveryProof> {
+        self.snapshots.verify_retained_recovery(scope, evidence_id)
+    }
+
     pub(crate) fn backup_old_destination_review(
         &self,
         run_id: String,

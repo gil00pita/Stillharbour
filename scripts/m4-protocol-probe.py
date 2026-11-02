@@ -267,11 +267,17 @@ def server_smb():
 
 
 def server_ftp():
+    if (os.environ.get('STILLHARBOUR_FAILURE_SCENARIO')
+            and (ROOT / '.context/m4-failure-stop').is_file()):
+        print('STILLHARBOUR_GENERATED_FAULT phase=paused', flush=True)
+        return
     from pyftpdlib.authorizers import DummyAuthorizer
     from pyftpdlib.handlers import FTPHandler, TLS_FTPHandler
     from pyftpdlib.servers import FTPServer
     base = Path(os.environ['STILLHARBOUR_PROTOCOL_SCOPE']).resolve()
-    if not base.is_relative_to(Path(tempfile.gettempdir()).resolve()) or not base.name.startswith('stillharbour-m4-protocol-'):
+    failure = os.environ.get('STILLHARBOUR_FAILURE_SCENARIO')
+    prefix = ('stillharbour-m4-failure-' if failure else 'stillharbour-m4-protocol-')
+    if not base.is_relative_to(Path(tempfile.gettempdir()).resolve()) or not base.name.startswith(prefix):
         raise RuntimeError('FTP child scope is not generated.')
     if (base / 'owner').read_text() != os.environ['STILLHARBOUR_PROTOCOL_OWNER']:
         raise RuntimeError('FTP child scope owner mismatch.')
@@ -279,6 +285,11 @@ def server_ftp():
     authorizer.add_user('fixture', os.environ['STILLHARBOUR_PROTOCOL_TOKEN'], str(owned(base, base / 'server')), perm='elradfmwMT')
     secure = os.environ['STILLHARBOUR_PROTOCOL_TYPE'] == 'ftps'
     handler = TLS_FTPHandler if secure else FTPHandler
+    controller = None
+    if failure:
+        from m4_failure_server import attach
+        handler, authorizer, controller = attach(handler, authorizer, base,
+                                                os.environ['STILLHARBOUR_PROTOCOL_OWNER'], failure)
     handler.authorizer = authorizer
     handler.permit_foreign_addresses = False
     handler.masquerade_address = '127.0.0.1'
@@ -299,6 +310,11 @@ def server_ftp():
         handler.ssl_context = context
     logging.getLogger().setLevel(logging.ERROR)
     with FTPServer(('127.0.0.1', int(os.environ['STILLHARBOUR_PROTOCOL_PORT'])), handler) as backend:
+        # Constructor logging setup must not turn generated file/command traces
+        # back on. Fault receipts use fixed phase/numeric markers only.
+        logging.getLogger('pyftpdlib').setLevel(logging.ERROR)
+        if controller is not None:
+            backend.ioloop.call_every(0.02, controller.poll)
         backend.serve_forever()
 
 

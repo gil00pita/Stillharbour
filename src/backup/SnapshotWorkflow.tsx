@@ -1172,6 +1172,7 @@ function SnapshotSchedulePanel({
             />
             Allow one catch-up after sleep or restart when the reviewed manifest is unchanged
           </label>
+          <p>If unchecked, missed deadlines more than 30 seconds overdue are skipped.</p>
           <label>
             <input
               type="checkbox"

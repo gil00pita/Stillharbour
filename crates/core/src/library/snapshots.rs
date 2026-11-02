@@ -32,15 +32,55 @@ use std::{
     time::{Duration, Instant},
 };
 #[cfg(test)]
-mod process_failures;
+mod native_acceptance;
+#[cfg(test)]
+pub(crate) mod process_failures;
 mod reconcile;
+#[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
+mod retained_recovery;
 
 const MAX_FILES: usize = 10_000;
 const MAX_RECORD: usize = 32 * 1024 * 1024;
 const MAX_REVIEWS: usize = 32;
 const TIMEOUT: Duration = Duration::from_secs(3600);
 const REVIEW_AGE: Duration = Duration::from_secs(600);
+const NO_COMPLETED_SNAPSHOT_MESSAGE: &str = "No existing completed snapshot is visible for this job tag. Partial copies and repository locks remain untouched; no upload was replayed.";
+const REPOSITORY_LOCKED_MESSAGE: &str = "The backup repository is locked. Sources, repository objects and locks are retained; inspect the repository before retrying.";
+const FAILURE_RETENTION_SUFFIX: &str = " Sources, partial outputs and repository locks are retained; the job did not earn complete recovery verification.";
+#[cfg(feature = "fixture-probes")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SnapshotFixtureFailure {
+    RepositoryLocked,
+    NoCompletedSnapshotVisible,
+}
+#[cfg(feature = "fixture-probes")]
+pub fn snapshot_fixture_error(error: &AppError) -> Option<SnapshotFixtureFailure> {
+    if error.code == ErrorCode::Busy && error.message == REPOSITORY_LOCKED_MESSAGE {
+        Some(SnapshotFixtureFailure::RepositoryLocked)
+    } else if error.code == ErrorCode::Conflict && error.message == NO_COMPLETED_SNAPSHOT_MESSAGE {
+        Some(SnapshotFixtureFailure::NoCompletedSnapshotVisible)
+    } else {
+        None
+    }
+}
+
 const FIDELITY: &str = "Ordinary file bytes and the consistent catalog are verified separately from native metadata. Original or destination changes require fresh exact-version recovery with certified essential metadata and an independently verified physical failure domain.";
+// Two timer polls tolerate ordinary dispatch latency. Missed intervals after
+// sleep, restart or another active job are skipped when catch-up is unchecked.
+fn skip_missed_schedule(
+    catch_up: bool,
+    due: chrono::DateTime<chrono::Utc>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> bool {
+    !catch_up && due < now - chrono::Duration::seconds(30)
+}
+fn source_stage_error(root: &str, mut error: AppError) -> AppError {
+    error.message = format!(
+        "Source root {root} did not finish staging; its included scope remains unverified. {}",
+        error.message
+    );
+    error
+}
 fn error(code: ErrorCode, message: &str) -> AppError {
     AppError::new(code, message)
 }
@@ -274,7 +314,11 @@ struct Active {
     roots: Vec<String>,
     cancel: Arc<AtomicBool>,
 }
+#[cfg(test)]
+type TestPhaseHook = Arc<dyn Fn(&SnapshotWorkflow, &JobRecord, &str) + Send + Sync>;
 struct State {
+    #[cfg(test)]
+    test_phase: Option<TestPhaseHook>,
     terminal_failures: BTreeMap<String, SnapshotJob>,
     helpers: Option<PinnedHelpers>,
     authorized: BTreeSet<String>,
@@ -292,7 +336,6 @@ struct ScheduleRecord {
     instance: String,
 }
 pub(crate) struct SnapshotWorkflow {
-    started: chrono::DateTime<chrono::Utc>,
     catalog: Arc<Catalog>,
     data: Binding,
     state: Mutex<State>,
@@ -623,7 +666,6 @@ impl SnapshotWorkflow {
     pub(crate) fn new(catalog: Arc<Catalog>, data_directory: PathBuf) -> Result<Self> {
         let file = native::open_root(&data_directory, None)?;
         Ok(Self {
-            started: chrono::Utc::now(),
             catalog,
             data: Binding::capture(
                 data_directory,
@@ -631,6 +673,8 @@ impl SnapshotWorkflow {
                 native::volume_token(&file)?,
             )?,
             state: Mutex::new(State {
+                #[cfg(test)]
+                test_phase: None,
                 terminal_failures: BTreeMap::new(),
                 helpers: None,
                 authorized: BTreeSet::new(),
@@ -760,7 +804,7 @@ impl SnapshotWorkflow {
     fn capabilities(&self) -> SnapshotCapabilities {
         let helpers = self.helpers().is_ok();
         let enabled = cfg!(any(test, feature = "backup-workflow"));
-        SnapshotCapabilities{helpers_available:helpers,credentials_available:CredentialStore::available(),backup_available:helpers&&enabled,restore_available:helpers&&enabled,schedule_available:helpers&&enabled,protocols:vec!["local".into(),"sftp".into(),"ftps".into(),"ftp".into(),"smb".into()],unavailable_reason:if !enabled{Some("Snapshot execution is disabled until native application recovery gates pass.".into())}else if !helpers{Some("Verified bundled restic/rclone resources are unavailable.".into())}else{None},helper_limits:"Original staging and byte comparison share the application-issued I/O budget. Helpers run serially with one transfer/checker, 64 KiB buffers, multi-thread transfers disabled and a 10 MiB/s network cap. Helper internal local reads, metadata and physical I/O are not capped.".into(),schedule_limits:"Exact reviewed manifests only, every 15–10080 elapsed minutes in UTC. Changed content/root/endpoint needs fresh review. Runs only while app/tray is alive; fully quit execution is unavailable.".into()}
+        SnapshotCapabilities{helpers_available:helpers,credentials_available:CredentialStore::available(),backup_available:helpers&&enabled,restore_available:helpers&&enabled,schedule_available:helpers&&enabled,protocols:vec!["local".into(),"sftp".into(),"ftps".into(),"ftp".into(),"smb".into()],unavailable_reason:if !enabled{Some("Snapshot execution is disabled until native application recovery gates pass.".into())}else if !helpers{Some("Verified bundled restic/rclone resources are unavailable.".into())}else{None},helper_limits:"Original staging and byte comparison share the application-issued I/O budget. Helpers run serially with one transfer/checker, 64 KiB buffers, multi-thread transfers disabled and a 10 MiB/s network cap. Helper internal local reads, metadata and physical I/O are not capped. Remote connection/idle limits are 10s/30s; startup is bounded at 20s and recognized backend retry/failure reports stop for inspection. Progress samples every 5s; the existing total helper deadline remains.".into(),schedule_limits:"Exact reviewed manifests only, every 15–10080 elapsed minutes in UTC. Catch-up admits at most one run; unchecked catch-up skips deadlines more than 30 seconds overdue after sleep, restart or a busy interval. Changed content/root/endpoint needs fresh review. Runs only while app/tray is alive; fully quit execution is unavailable.".into()}
     }
     fn require_execution(&self) -> Result<()> {
         if self.stopped.load(Ordering::Acquire) {
@@ -2385,6 +2429,37 @@ impl Library {
     pub fn start_snapshot_schedules(self: &Arc<Self>) -> Result<()> {
         self.snapshots.tick(self.clone())
     }
+    #[cfg(feature = "fixture-probes")]
+    pub fn snapshot_fixture_failure(&self, job_id: &str) -> Result<Option<SnapshotFixtureFailure>> {
+        id(job_id)?;
+        let job = self
+            .snapshots
+            .jobs(None)?
+            .into_iter()
+            .find(|job| job.id == job_id)
+            .ok_or_else(|| invalid("The generated fixture job was not found."))?;
+        let exact = job.message == REPOSITORY_LOCKED_MESSAGE
+            || job.message.strip_suffix(FAILURE_RETENTION_SUFFIX)
+                == Some(REPOSITORY_LOCKED_MESSAGE);
+        if job.state != "needs_recovery"
+            || !job.source_retained
+            || job.independent_recovery_verified
+        {
+            return Ok(None);
+        }
+        if exact {
+            return Ok(Some(SnapshotFixtureFailure::RepositoryLocked));
+        }
+        Ok((job.action == "reconcile"
+            && job.snapshot_id.is_none()
+            && !job.included
+            && !job.structural_checked
+            && !job.data_read_verified
+            && !job.restored_compared
+            && job.message == NO_COMPLETED_SNAPSHOT_MESSAGE)
+            .then_some(SnapshotFixtureFailure::NoCompletedSnapshotVisible))
+    }
+
     pub fn configure_snapshot_helpers(&self, path: PathBuf) -> Result<()> {
         self.snapshots.configure_helpers(path)
     }
@@ -3254,6 +3329,9 @@ impl Context {
             cancel,
             TIMEOUT,
         )?;
+        if result.code == 11 {
+            return Err(error(ErrorCode::Busy, REPOSITORY_LOCKED_MESSAGE));
+        }
         if result.code != 0 {
             #[cfg(feature = "fixture-probes")]
             eprintln!(
@@ -3299,6 +3377,7 @@ impl SnapshotWorkflow {
         env.insert("RESTIC_PASSWORD".into(), repository.as_str()?.into());
         env.insert("RESTIC_READ_CONCURRENCY".into(), "1".into());
         env.insert("GOMAXPROCS".into(), "2".into());
+        env.insert("RESTIC_PROGRESS_FPS".into(), "0.2".into());
         let repo = if let Some(local) = &binding.local {
             local.open()?;
             let expected = p
@@ -3377,8 +3456,29 @@ impl SnapshotWorkflow {
             "10240".into(),
         ];
         if binding.local.is_none() {
+            args.extend([
+                "--stuck-request-timeout".into(),
+                crate::backup::helper_policy::RESTIC_STUCK_REQUEST.into(),
+            ]);
+            args.extend([
+                "-o".into(),
+                format!(
+                    "rclone.timeout={}",
+                    crate::backup::helper_policy::RESTIC_RCLONE_STARTUP
+                )
+                .into(),
+            ]);
             args.extend(["-o".into(), "rclone.connections=1".into()]);
-            args.extend(["-o".into(),format!("rclone.program={}",helpers.rclone_program()?).into(),"-o".into(),"rclone.args=serve restic --stdio --transfers=1 --checkers=1 --buffer-size=64k --multi-thread-streams=0".into()]);
+            args.extend([
+                "-o".into(),
+                format!("rclone.program={}", helpers.rclone_program()?).into(),
+                "-o".into(),
+                format!(
+                    "rclone.args={}",
+                    crate::backup::helper_policy::RCLONE_STDIO_ARGS.join(" ")
+                )
+                .into(),
+            ]);
         } else {
             args.extend(["-o".into(), "local.connections=1".into()]);
         }
@@ -3633,8 +3733,18 @@ impl SnapshotWorkflow {
         self.event(&job.view.id,phase,serde_json::json!({"snapshot_id":job.view.snapshot_id,"included":job.view.included,"structural_checked":job.view.structural_checked,"data_read_verified":job.view.data_read_verified,"restored_compared":job.view.restored_compared}))?;
         self.save_job(job)?;
         #[cfg(test)]
-        process_failures::phase(self, job, phase);
+        {
+            process_failures::phase(self, job, phase);
+            self.test_phase(job, phase);
+        }
         Ok(())
+    }
+    #[cfg(test)]
+    fn test_phase(&self, job: &JobRecord, phase: &str) {
+        let hook = self.state.lock().unwrap().test_phase.clone();
+        if let Some(hook) = hook {
+            hook(self, job, phase);
+        }
     }
     fn start(
         self: &Arc<Self>,
@@ -3761,7 +3871,7 @@ impl SnapshotWorkflow {
             if let Ok(Err(error))=&outcome {eprintln!("Generated snapshot fixture phase {}: {:?}",job.view.phase,error);}
             #[cfg(feature = "fixture-probes")]
             if let Ok(Err(error))=&outcome {eprintln!("STILLHARBOUR_GENERATED_BACKUP_DIAGNOSTIC phase={} code={:?}",job.view.phase,error.code);}
-            match outcome {Ok(Ok(()))=>{},Ok(Err(error))=>{job.view.state=if cancel.load(Ordering::Acquire){"canceled_with_partial_copies"}else{"needs_recovery"}.into();job.view.message=format!("{} Sources, partial outputs and repository locks are retained; the job did not earn complete recovery verification.",error.message);},Err(_)=>{job.view.state="needs_recovery".into();job.view.message="The snapshot worker stopped unexpectedly. Partial outputs and sources are retained.".into();}}
+            match outcome {Ok(Ok(()))=>{},Ok(Err(error))=>{job.view.state=if cancel.load(Ordering::Acquire){"canceled_with_partial_copies"}else{"needs_recovery"}.into();job.view.message=format!("{}{FAILURE_RETENTION_SUFFIX}",error.message);},Err(_)=>{job.view.state="needs_recovery".into();job.view.message="The snapshot worker stopped unexpectedly. Partial outputs and sources are retained.".into();}}
             job.view.finished_at=Some(now());
             let terminal=workflow.phase(&mut job,"terminal");
             if let Ok(mut state)=workflow.state.lock() {
@@ -3881,18 +3991,17 @@ impl SnapshotWorkflow {
                         digest: f.digest.clone(),
                     })
                     .collect::<Vec<_>>();
-                bridge::copy(
-                    &root.binding.root()?,
-                    &target,
-                    &files,
-                    &[],
-                    &journals,
-                    cancel,
-                    &|| {
-                        root.binding.open()?;
-                        Ok(())
-                    },
-                )?;
+                let source = root
+                    .binding
+                    .root()
+                    .map_err(|error| source_stage_error(&root.id, error))?;
+                bridge::copy(&source, &target, &files, &[], &journals, cancel, &|| {
+                    root.binding.open()?;
+                    Ok(())
+                })
+                .map_err(|error| source_stage_error(&root.id, error))?;
+                #[cfg(test)]
+                self.test_phase(job, "source_staged");
             }
             if self
                 .refresh_manifest(&job.profile, &job.manifest, job.private_scope, cancel)?
@@ -4722,11 +4831,13 @@ impl SnapshotWorkflow {
                 revoked?;
                 continue;
             }
-            if !record.view.catch_up
-                && chrono::DateTime::parse_from_rfc3339(&record.view.next_due)
+            if skip_missed_schedule(
+                record.view.catch_up,
+                chrono::DateTime::parse_from_rfc3339(&record.view.next_due)
                     .map_err(|_| invalid("Invalid schedule due time."))?
-                    < self.started
-            {
+                    .with_timezone(&chrono::Utc),
+                chrono::Utc::now(),
+            ) {
                 record.view.next_due = (chrono::Utc::now()
                     + chrono::Duration::minutes(i64::from(record.view.interval_minutes)))
                 .to_rfc3339();

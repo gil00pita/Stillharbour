@@ -34,7 +34,7 @@ fn native_socket_parent_does_not_use_long_work_or_inherited_helper_temp_paths() 
 fn fixture() -> tempfile::TempDir {
     let root = tempfile::Builder::new()
         .prefix("stillharbour-completion-")
-        .tempdir()
+        .tempdir_in(std::env::temp_dir().canonicalize().unwrap())
         .unwrap();
     assert!(
         root.path()

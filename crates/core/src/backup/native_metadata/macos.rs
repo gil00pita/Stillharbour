@@ -54,6 +54,9 @@ fn no_extra(file: &File) -> Result<()> {
             "macOS extended attributes or a resource fork are present; this no-extra-stream policy cannot authorize replacement.",
         ));
     }
+    no_acl(file)
+}
+fn no_acl(file: &File) -> Result<()> {
     // SAFETY: borrowed fd; Darwin returns an allocated opaque ACL or null/error.
     let acl = Acl(unsafe { acl_get_fd_np(file.as_raw_fd(), 0x100) });
     if acl.0.is_null() {
@@ -87,6 +90,39 @@ fn no_extra(file: &File) -> Result<()> {
         -1 if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINVAL) => Ok(()),
         _ => Err(error()),
     }
+}
+pub(super) fn private_directory(file: &File) -> Result<(u32, u32, u32)> {
+    let value = stat(file)?;
+    // SAFETY: read-only native current user identity.
+    if !file.metadata()?.is_dir()
+        || value.st_uid != unsafe { libc::geteuid() }
+        || value.st_mode & 0o022 != 0
+    {
+        return Err(unsupported(
+            "Private output requires a user-owned directory with no group or other write permissions.",
+        ));
+    }
+    no_acl(file)?;
+    Ok((
+        value.st_uid,
+        value.st_gid,
+        u32::from(value.st_mode) & 0o7777,
+    ))
+}
+pub(super) fn private_file(file: &File) -> Result<()> {
+    let value = stat(file)?;
+    // SAFETY: read-only native identity. Owner-only mode was installed atomically
+    // at creation; extended inherited permissions may never be cleared later.
+    if !file.metadata()?.is_file()
+        || value.st_uid != unsafe { libc::geteuid() }
+        || value.st_mode & 0o077 != 0
+        || value.st_nlink != 1
+    {
+        return Err(unsupported(
+            "New private output did not establish owner-only native permissions.",
+        ));
+    }
+    no_acl(file)
 }
 pub(super) fn inspect(file: &File) -> Result<NativeMetadata> {
     no_extra(file)?;

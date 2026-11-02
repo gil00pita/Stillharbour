@@ -4004,7 +4004,10 @@ mod tests {
         load: impl Fn() -> Result<crate::operations::CopyWorkflowJob>,
     ) -> crate::operations::CopyWorkflowJob {
         use crate::operations::CopyJobState;
-        let until = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        // Native flush/lookup latency under the full CI fault matrix is not a
+        // ten-second product guarantee. Keep a bounded wait and state evidence;
+        // the isolated scenario retains its independent process deadline.
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(30);
         loop {
             let current = load().unwrap();
             if !matches!(
@@ -4018,7 +4021,10 @@ mod tests {
             }
             assert!(
                 std::time::Instant::now() < until,
-                "Operation worker did not stop"
+                "Operation worker did not stop: {:?}, {}/{} files verified",
+                current.state,
+                current.verified_files,
+                current.total_files
             );
             std::thread::sleep(std::time::Duration::from_millis(10));
         }

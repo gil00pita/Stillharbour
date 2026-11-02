@@ -4,6 +4,8 @@
 use super::*;
 use crate::backup::native_metadata::MetadataManifest;
 use std::time::{SystemTime, UNIX_EPOCH};
+mod evidence;
+pub(crate) use evidence::RetainedRecoveryScope;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -266,7 +268,15 @@ impl SyncWorkflow {
         }
         let proof = match override_proof {
             Some(proof) => proof,
-            None => library.sync_recovery_proof(&files, &retained.evidence_id)?,
+            None => {
+                let facts = self.retained_facts(&retained.operation_id, binding)?;
+                if facts.old_intents.is_empty() {
+                    library.sync_recovery_proof(&files, &retained.evidence_id)?
+                } else {
+                    let scope = RetainedRecoveryScope::new(self, library, binding)?;
+                    library.retained_recovery_proof(&scope, &retained.evidence_id)?
+                }
+            }
         };
         if proof.evidence_id != retained.evidence_id
             || proof.scope_digest.len() != 64

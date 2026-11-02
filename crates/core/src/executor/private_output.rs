@@ -2,9 +2,17 @@
 use super::*;
 
 pub(super) fn create(parent: &File, leaf: &str) -> Result<File> {
-    #[cfg(unix)]
+    #[cfg(target_os = "macos")]
     {
-        super::native::create_file(parent, leaf)
+        // An inherited allow ACL can override mode 0600. Refuse such a parent
+        // before create; clearing it later cannot revoke a reader opened in the
+        // exposure window. Verify the new object before returning it to the
+        // only caller that can write secret bytes.
+        let private = crate::backup::native_metadata::private_directory(parent)?;
+        let file = super::native::create_file(parent, leaf)?;
+        private.revalidate(parent)?;
+        crate::backup::native_metadata::verify_private_file(&file)?;
+        Ok(file)
     }
     #[cfg(windows)]
     {
@@ -192,5 +200,13 @@ pub(super) fn create(parent: &File, leaf: &str) -> Result<File> {
             return Err(fail());
         }
         Ok(file)
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        let _ = (parent, leaf);
+        Err(AppError::new(
+            ErrorCode::Unsupported,
+            "Private recovery-key outputs have not been validated on this OS.",
+        ))
     }
 }

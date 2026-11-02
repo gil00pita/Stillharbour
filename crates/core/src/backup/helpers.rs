@@ -42,6 +42,11 @@ pub(crate) struct HelperOutput {
 fn failed(message: &str) -> AppError {
     AppError::new(ErrorCode::WorkerFailed, message)
 }
+fn backend_failed() -> AppError {
+    failed(
+        "The backup backend reported a retry or failure. Sources and partial outputs are retained; inspect the job before a fresh review.",
+    )
+}
 fn invalid(message: &str) -> AppError {
     AppError::new(ErrorCode::InvalidInput, message)
 }
@@ -311,12 +316,19 @@ impl PinnedHelpers {
         };
         let Running { child, tree, .. } = &mut running;
         let over = Arc::new(AtomicBool::new(false));
+        let (observer, backend_failure) = if matches!(helper, Helper::Restic) {
+            let (observer, failed) = super::helper_retry::Observer::new();
+            (Some(observer), Some(failed))
+        } else {
+            (None, None)
+        };
         let out = read_pipe(
             child
                 .stdout
                 .take()
                 .ok_or_else(|| failed("Helper stdout is unavailable."))?,
             over.clone(),
+            None,
         );
         let err = read_pipe(
             child
@@ -324,6 +336,7 @@ impl PinnedHelpers {
                 .take()
                 .ok_or_else(|| failed("Helper stderr is unavailable."))?,
             over.clone(),
+            observer,
         );
         if let Some(input) = input {
             use std::io::Write;
@@ -344,6 +357,12 @@ impl PinnedHelpers {
             }
             if over.load(Ordering::Acquire) {
                 break Some(failed("Backup helper output exceeded its bound."));
+            }
+            if backend_failure
+                .as_ref()
+                .is_some_and(|flag| flag.load(Ordering::Acquire))
+            {
+                break Some(backend_failed());
             }
             if Instant::now() > deadline {
                 break Some(AppError::new(
@@ -378,6 +397,14 @@ impl PinnedHelpers {
         if let Some(error) = stopped {
             return Err(error);
         }
+        // The reader may observe the final report after the child exits. A
+        // zero exit code never overrides a pinned backend failure report.
+        if backend_failure
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Acquire))
+        {
+            return Err(backend_failed());
+        }
         if over.load(Ordering::Acquire) {
             return Err(failed("Backup helper output exceeded its bound."));
         }
@@ -411,16 +438,31 @@ impl Drop for Running {
 fn read_pipe(
     mut input: impl Read + Send + 'static,
     over: Arc<AtomicBool>,
+    mut observer: Option<super::helper_retry::Observer>,
 ) -> std::thread::JoinHandle<Result<Vec<u8>>> {
     std::thread::spawn(move || {
         let mut bytes = Vec::new();
-        input
-            .by_ref()
-            .take((LIMIT + 1) as u64)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > LIMIT {
-            over.store(true, Ordering::Release);
-            bytes.truncate(LIMIT);
+        let mut chunk = [0u8; 4096];
+        loop {
+            let capacity = ((LIMIT + 1) - bytes.len()).min(chunk.len());
+            let count = match input.read(&mut chunk[..capacity]) {
+                Ok(0) => break,
+                Ok(count) => count,
+                Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(error) => return Err(error.into()),
+            };
+            if let Some(observer) = &mut observer {
+                observer.feed(&chunk[..count]);
+            }
+            bytes.extend_from_slice(&chunk[..count]);
+            if bytes.len() > LIMIT {
+                over.store(true, Ordering::Release);
+                bytes.truncate(LIMIT);
+                break;
+            }
+        }
+        if let Some(observer) = &mut observer {
+            observer.finish();
         }
         Ok(bytes)
     })
@@ -787,5 +829,50 @@ mod process_tree {
         }
         // SAFETY: successful waitid initialized the zeroed structure.
         Ok(unsafe { information.assume_init().si_pid() } != 0)
+    }
+}
+
+#[cfg(test)]
+mod pipe_tests {
+    use super::*;
+    struct Chunked(std::io::Cursor<Vec<u8>>);
+    impl Read for Chunked {
+        fn read(&mut self, bytes: &mut [u8]) -> std::io::Result<usize> {
+            let limit = bytes.len().min(3);
+            self.0.read(&mut bytes[..limit])
+        }
+    }
+    #[test]
+    fn stderr_observer_receives_split_headers_and_final_unterminated_reports() {
+        let data =
+            b"Save(<data/0123456789>) returned error, retrying after 1s: generated unlogged detail"
+                .to_vec();
+        let (observer, failed) = super::super::helper_retry::Observer::new();
+        let over = Arc::new(AtomicBool::new(false));
+        let result = read_pipe(
+            Chunked(std::io::Cursor::new(data.clone())),
+            over.clone(),
+            Some(observer),
+        )
+        .join()
+        .unwrap()
+        .unwrap();
+        assert!(failed.load(Ordering::Acquire));
+        assert!(!over.load(Ordering::Acquire));
+        assert_eq!(result, data);
+    }
+    #[test]
+    fn output_limit_is_signaled_before_pipe_join_and_retained_data_is_bounded() {
+        let over = Arc::new(AtomicBool::new(false));
+        let result = read_pipe(
+            std::io::Cursor::new(vec![b'x'; LIMIT + 128]),
+            over.clone(),
+            None,
+        )
+        .join()
+        .unwrap()
+        .unwrap();
+        assert!(over.load(Ordering::Acquire));
+        assert_eq!(result.len(), LIMIT);
     }
 }

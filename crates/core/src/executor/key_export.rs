@@ -16,6 +16,14 @@ pub struct KeyExport {
 }
 
 pub fn export(scope: KeyExport) -> Result<String> {
+    export_with_intent_hook(scope, || {})
+}
+
+fn same_directory_identity(a: &filesystem::FileIdentity, b: &filesystem::FileIdentity) -> bool {
+    a.volume == b.volume && a.file == b.file
+}
+
+fn export_with_intent_hook(scope: KeyExport, after_intent: impl FnOnce()) -> Result<String> {
     use std::io::{Read, Write};
     if scope.label.len() > 512 || scope.label.chars().any(char::is_control) {
         return Err(failed("The recovery-key label is invalid."));
@@ -27,7 +35,12 @@ pub fn export(scope: KeyExport) -> Result<String> {
         if actual.volume != scope.identity.volume
             || actual.file != scope.identity.file
             || source_native::volume_token(current.leaf())? != scope.volume
-            || current.identities() != output.identities()
+            || current.identities().len() != output.identities().len()
+            || !current
+                .identities()
+                .iter()
+                .zip(output.identities())
+                .all(|(a, b)| same_directory_identity(a, b))
         {
             return Err(failed(
                 "The selected recovery-key directory changed. Retain any partial output for review.",
@@ -37,7 +50,12 @@ pub fn export(scope: KeyExport) -> Result<String> {
     };
     validate()?;
     let journal = output_chain(&scope.journal_directory)?;
-    if journal.identities().last() == output.identities().last() {
+    if journal
+        .identities()
+        .last()
+        .zip(output.identities().last())
+        .is_some_and(|(a, b)| same_directory_identity(a, b))
+    {
         return Err(failed(
             "Recovery keys require a separate selected directory.",
         ));
@@ -57,6 +75,7 @@ pub fn export(scope: KeyExport) -> Result<String> {
     log.write_all(&intent)?;
     log.write_all(b"\n")?;
     log.sync_all()?;
+    after_intent();
     validate()?;
     let mut file = private_output::create(output.leaf(), &leaf)?;
     let identity = filesystem::identity(&file)?;
@@ -97,14 +116,21 @@ mod tests {
         std::fs::create_dir(&journals).unwrap();
         std::fs::write(output.join("neighbor.txt"), b"keep existing neighbor").unwrap();
         let directory = source_native::open_root(&output, None).unwrap();
-        let saved = export(KeyExport {
-            directory: output.clone(),
-            identity: filesystem::identity(&directory).unwrap(),
-            volume: source_native::volume_token(&directory).unwrap(),
-            journal_directory: journals.clone(),
-            label: "Generated test profile".into(),
-            secret: Secret::fixture("generated-only-secret"),
-        })
+        let saved = export_with_intent_hook(
+            KeyExport {
+                directory: output.clone(),
+                identity: filesystem::identity(&directory).unwrap(),
+                volume: source_native::volume_token(&directory).unwrap(),
+                journal_directory: journals.clone(),
+                label: "Generated test profile".into(),
+                secret: Secret::fixture("generated-only-secret"),
+            },
+            || {
+                // Changing an ancestor's directory link count is ordinary concurrent
+                // activity, not a replacement of the selected native directory.
+                std::fs::create_dir(base.join("concurrent-owned-directory")).unwrap();
+            },
+        )
         .unwrap();
         assert!(
             std::fs::read_to_string(&saved)
@@ -189,6 +215,63 @@ mod tests {
                 assert_eq!(info.AceCount, 2);
                 windows_sys::Win32::Foundation::LocalFree(descriptor);
             }
+        }
+    }
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn recovery_key_export_refuses_actual_inherited_acl_before_secret_creation() {
+        use std::os::unix::fs::OpenOptionsExt;
+        let owned = tempfile::Builder::new()
+            .prefix("stillharbour-key-acl-")
+            .tempdir_in(std::env::temp_dir().canonicalize().unwrap())
+            .unwrap();
+        let base = owned.path().canonicalize().unwrap();
+        assert!(base.starts_with(std::env::temp_dir().canonicalize().unwrap()));
+        std::fs::write(base.join("owner"), uuid::Uuid::new_v4().to_string()).unwrap();
+        let output = base.join("private-output");
+        let journals = base.join("journals");
+        std::fs::create_dir(&output).unwrap();
+        std::fs::create_dir(&journals).unwrap();
+        let parent = source_native::open_root(&output, None).unwrap();
+        crate::backup::native_metadata::private_directory(&parent).unwrap();
+        // Fixed native chmod arguments apply ONLY to this asserted generated
+        // directory. No shell interpolation or privilege changes are involved.
+        assert!(std::process::Command::new("/bin/chmod").args(["+a","everyone allow read,readattr,readextattr,readsecurity,file_inherit,directory_inherit"]).arg(&output).status().unwrap().success());
+        assert!(crate::backup::native_metadata::private_directory(&parent).is_err());
+        let inherited = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(output.join("inherited-empty"))
+            .unwrap();
+        assert!(
+            crate::backup::native_metadata::verify_private_file(&inherited).is_err(),
+            "0600 alone must not certify a file with inherited ACL entries"
+        );
+        assert_eq!(inherited.metadata().unwrap().len(), 0);
+        drop(inherited);
+        let result = export(KeyExport {
+            directory: output.clone(),
+            identity: filesystem::identity(&parent).unwrap(),
+            volume: source_native::volume_token(&parent).unwrap(),
+            journal_directory: journals.clone(),
+            label: "Generated inherited-ACL refusal".into(),
+            secret: Secret::fixture("generated-secret-must-not-be-written"),
+        });
+        assert!(result.is_err());
+        let names = std::fs::read_dir(&output)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<Vec<_>>();
+        assert_eq!(names, vec![std::ffi::OsString::from("inherited-empty")]);
+        for entry in std::fs::read_dir(journals).unwrap() {
+            let bytes = std::fs::read(entry.unwrap().path()).unwrap();
+            assert!(
+                !bytes
+                    .windows(b"generated-secret-must-not-be-written".len())
+                    .any(|window| window == b"generated-secret-must-not-be-written")
+            );
         }
     }
     #[test]

@@ -17,6 +17,7 @@ use std::{
 
 mod preparation;
 mod retained;
+pub(crate) use retained::RetainedRecoveryScope;
 mod storage;
 #[cfg(test)]
 mod tests;

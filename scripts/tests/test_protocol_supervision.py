@@ -32,6 +32,7 @@ class SupervisionTests(unittest.TestCase):
         process.pid = 5678
         process.poll.return_value = None
         with patch.object(PROBE.sys, 'platform', 'win32'), \
+                patch.object(PROBE.subprocess, 'CREATE_NO_WINDOW', 0, create=True), \
                 patch.dict(PROBE.os.environ, {'SystemRoot': 'C:\\Windows'}), \
                 patch.object(PROBE.subprocess, 'run', return_value=Mock(returncode=1)):
             with self.assertRaisesRegex(RuntimeError, 'Could not stop the owned protocol process tree'):

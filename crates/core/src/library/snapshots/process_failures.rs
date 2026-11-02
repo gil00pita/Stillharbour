@@ -10,9 +10,10 @@ const CHILD_TEST: &str = "library::snapshots::process_failures::snapshot_actual_
 const ROOT_ENV: &str = "STILLHARBOUR_SNAPSHOT_EXIT_ROOT";
 const OWNER_ENV: &str = "STILLHARBOUR_SNAPSHOT_EXIT_OWNER";
 const PHASE_ENV: &str = "STILLHARBOUR_SNAPSHOT_EXIT_PHASE";
-const PHASES: [&str; 7] = [
+const PHASES: [&str; 8] = [
     "staging",
     "catalog_snapshot",
+    "catalog_copy_step",
     "snapshotting",
     "snapshot_included",
     "comparing",
@@ -39,6 +40,18 @@ struct ExitProof {
     review: String,
     snapshot: Option<String>,
     action: String,
+    #[serde(default)]
+    catalog_pages_remaining: Option<i32>,
+}
+fn read_exit_proof(path: &Path) -> ExitProof {
+    let mut bytes = Vec::new();
+    File::open(path)
+        .unwrap()
+        .take(8193)
+        .read_to_end(&mut bytes)
+        .unwrap();
+    assert!(bytes.len() <= 8192);
+    serde_json::from_slice(&bytes).unwrap()
 }
 fn helpers() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -89,7 +102,8 @@ pub(super) fn phase(workflow: &SnapshotWorkflow, job: &JobRecord, phase: &str) {
         return;
     };
     let requested = std::env::var(PHASE_ENV).unwrap();
-    if requested != phase {
+    let prepare_catalog = requested == "catalog_copy_step" && phase == "catalog_snapshot";
+    if requested != phase && !prepare_catalog {
         return;
     }
     assert!(PHASES.contains(&phase));
@@ -109,17 +123,84 @@ pub(super) fn phase(workflow: &SnapshotWorkflow, job: &JobRecord, phase: &str) {
         }
     );
     let proof = ExitProof {
-        phase: phase.into(),
+        phase: if prepare_catalog {
+            requested
+        } else {
+            phase.into()
+        },
         job: job.view.id.clone(),
         review: job.review_id.clone(),
         snapshot: job.view.snapshot_id.clone(),
         action: job.view.action.clone(),
+        catalog_pages_remaining: None,
     };
     write_owned(
-        &root.join(format!("exit-{phase}.json")),
+        &root.join(if prepare_catalog {
+            "catalog-copy-prepared.json".into()
+        } else {
+            format!("exit-{phase}.json")
+        }),
         &serde_json::to_vec(&proof).unwrap(),
     );
+    if prepare_catalog {
+        return;
+    }
     // Bypass all Rust drops and terminal persistence at the real durable phase.
+    std::process::exit(89);
+}
+
+/// Test-only authorization before changing SQLite backup step size. Never calls
+/// the actor recursively: the supplied connection is its current source.
+pub(crate) fn catalog_copy_requested(source: &Connection, destination: &Path) -> bool {
+    if std::env::var(PHASE_ENV).ok().as_deref() != Some("catalog_copy_step") {
+        return false;
+    }
+    let Some(root) = std::env::var_os(ROOT_ENV) else {
+        return false;
+    };
+    let owner = std::env::var(OWNER_ENV).unwrap();
+    let root = PathBuf::from(root).canonicalize().unwrap();
+    let scope = load_scope(&root, &owner);
+    let catalog: String = source
+        .query_row(
+            "SELECT uuid FROM catalog_identity WHERE singleton=1",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(catalog, scope.catalog);
+    let app = native::open_root(&root.join("app"), None).unwrap();
+    let identity = filesystem::identity(&app).unwrap();
+    let chain = DirectoryChain::open(destination.parent().unwrap()).unwrap();
+    assert!(
+        chain
+            .identities()
+            .iter()
+            .any(|id| id.volume == identity.volume && id.file == identity.file)
+    );
+    assert!(destination.starts_with(root.join("app")));
+    let prepared = read_exit_proof(&root.join("catalog-copy-prepared.json"));
+    assert_eq!(prepared.phase, "catalog_copy_step");
+    assert_eq!(prepared.action, "backup");
+    true
+}
+
+pub(crate) fn catalog_copy_step(remaining: i32) {
+    assert!(
+        remaining > 0,
+        "This exit must occur before the SQLite copy is complete"
+    );
+    let root = PathBuf::from(std::env::var_os(ROOT_ENV).unwrap())
+        .canonicalize()
+        .unwrap();
+    let owner = std::env::var(OWNER_ENV).unwrap();
+    let _scope = load_scope(&root, &owner);
+    let mut proof = read_exit_proof(&root.join("catalog-copy-prepared.json"));
+    proof.catalog_pages_remaining = Some(remaining);
+    write_owned(
+        &root.join("exit-catalog_copy_step.json"),
+        &serde_json::to_vec(&proof).unwrap(),
+    );
     std::process::exit(89);
 }
 fn reopen(root: &Path) -> Arc<Library> {
@@ -252,10 +333,17 @@ fn snapshot_actual_process_exit_child() {
     );
 }
 struct OwnedChild(Child);
-struct OwnedRun(Option<tempfile::TempDir>);
+struct OwnedRun(Option<tempfile::TempDir>, FileIdentity, String);
 impl Drop for OwnedRun {
     fn drop(&mut self) {
-        if std::thread::panicking()
+        let boundary = self.0.as_ref().is_some_and(|run| {
+            native::open_root(run.path(), Some(&self.1))
+                .ok()
+                .is_some_and(|root| {
+                    native::volume_token(&root).is_ok_and(|volume| volume == self.2)
+                })
+        });
+        if (std::thread::panicking() || !boundary)
             && let Some(run) = self.0.take()
         {
             let _ = run.keep();
@@ -450,14 +538,18 @@ fn native_snapshot_actual_process_exit_matrix_retains_and_reconciles_without_reu
     );
     let source_before = tree_bytes(&f.source);
     drop(f.library);
-    let _run = OwnedRun(Some(f._run));
+    let _run = OwnedRun(Some(f._run), scope.identity.clone(), scope.volume.clone());
     for phase in PHASES {
         child_exit(&root, &scope.owner, phase);
-        let proof: ExitProof = serde_json::from_slice(
-            &std::fs::read(root.join(format!("exit-{phase}.json"))).unwrap(),
-        )
-        .unwrap();
+        let proof = read_exit_proof(&root.join(format!("exit-{phase}.json")));
         assert_eq!(proof.phase, phase);
+        if phase == "catalog_copy_step" {
+            assert!(
+                proof
+                    .catalog_pages_remaining
+                    .is_some_and(|remaining| remaining > 0)
+            );
+        }
         assert_eq!(tree_bytes(&f.source), source_before);
         assert_eq!(
             std::fs::read(root.join("backup/neighbor.txt")).unwrap(),
@@ -581,6 +673,10 @@ fn native_snapshot_actual_process_exit_matrix_retains_and_reconciles_without_reu
                 let done = wait(&library, &job.id);
                 assert_eq!(done.state, "needs_recovery");
                 assert!(done.snapshot_id.is_none());
+            }
+            if phase == "catalog_copy_step" {
+                let restored = fresh_restore(&library, &scope, &root, &scope.baseline_snapshot);
+                assert!(restored.is_dir());
             }
         }
         assert_eq!(

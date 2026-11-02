@@ -183,9 +183,7 @@ impl SnapshotWorkflow {
             }
             None if ids.len() == 1 => ids.remove(0),
             None if ids.is_empty() => {
-                return Err(conflict(
-                    "No existing completed snapshot is visible for this job tag. Partial copies and repository locks remain untouched; no upload was replayed.",
-                ));
+                return Err(conflict(NO_COMPLETED_SNAPSHOT_MESSAGE));
             }
             None => {
                 return Err(error(

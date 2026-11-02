@@ -24,15 +24,7 @@ pub const ROLE: &str = "--stillharbour-rclone-stdio-v1";
 pub(crate) const ROOT_ENV: &str = "STILLHARBOUR_RCLONE_HELPER_ROOT";
 pub(crate) const OWNER_ENV: &str = "STILLHARBOUR_RCLONE_OWNER_PID";
 pub(crate) const SCOPE_ENV: &str = "STILLHARBOUR_RCLONE_SCOPE";
-const FLAGS: [&str; 7] = [
-    "serve",
-    "restic",
-    "--stdio",
-    "--transfers=1",
-    "--checkers=1",
-    "--buffer-size=64k",
-    "--multi-thread-streams=0",
-];
+use super::helper_policy::RCLONE_STDIO_ARGS as FLAGS;
 fn denied() -> io::Error {
     io::Error::new(
         io::ErrorKind::PermissionDenied,
@@ -280,7 +272,7 @@ pub fn dispatch() -> Option<i32> {
     if args.next().as_deref() != Some(OsStr::new(ROLE)) {
         return None;
     }
-    Some(run(args.take(10).collect()).unwrap_or(126))
+    Some(run(args.take(FLAGS.len() + 2).collect()).unwrap_or(126))
 }
 
 #[cfg(test)]

@@ -336,6 +336,9 @@ fn validate(connection: &Connection) -> Result<()> {
 }
 
 fn snapshot(source: &Connection, destination: &Path) -> Result<()> {
+    #[cfg(test)]
+    let partial_copy =
+        crate::library::snapshots::process_failures::catalog_copy_requested(source, destination);
     let parent = destination.parent().ok_or_else(|| {
         AppError::new(ErrorCode::InvalidInput, "Snapshot requires a local parent.")
     })?;
@@ -346,8 +349,18 @@ fn snapshot(source: &Connection, destination: &Path) -> Result<()> {
         {
             let backup = Backup::new(source, &mut target)?;
             let mut done = false;
+            let pages = 128;
+            #[cfg(test)]
+            let pages = if partial_copy { 1 } else { pages };
             for _ in 0..200 {
-                if backup.step(128)? == StepResult::Done {
+                let step = backup.step(pages)?;
+                #[cfg(test)]
+                if partial_copy && step == StepResult::More {
+                    crate::library::snapshots::process_failures::catalog_copy_step(
+                        backup.progress().remaining,
+                    );
+                }
+                if step == StepResult::Done {
                     done = true;
                     break;
                 }

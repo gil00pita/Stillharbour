@@ -178,6 +178,12 @@ AC-073 application checks also require exact reviewed manifest/profile consent:
 changed content, versions, roots or endpoints return to review; imported/restored
 catalog schedules cannot execute. Test elapsed UTC intervals, one unchanged-scope
 catch-up, disabling offline and cancellation on root removal/application exit.
+With catch-up unchecked, test the 30-second polling tolerance exactly: a deadline
+30 seconds overdue may run; one older than 30 seconds is skipped after sleep,
+restart or a busy interval. With catch-up checked, any backlog admits at most one
+unchanged-scope run and the next deadline advances from the current admission
+time. Skipped deadlines similarly advance from the current skip time. No timer
+runs while fully quit, and reopening still requires native authorization.
 | AC-074 | Photos have valid zero coordinates, missing coordinates, identical coordinates and positions across the antimeridian. Missing GPS does not become (0,0); viewport results/clusters remain correct. |
 | AC-075 | Clicking a map cluster and switching to timeline preserves date/root filters and selection. Large queries use bounded data; markers do not explode into one DOM node per library asset. |
 | AC-076 | Go offline and inspect network logs. No unapproved photo metadata upload; map clearly reports unavailable tiles; attribution and provider cache/offline policy are respected. |

@@ -873,6 +873,69 @@ fn sync_application_retained_move_publication_and_commit_boundaries_require_fres
 
 #[test]
 #[cfg(any(windows, target_os = "macos"))]
+fn retained_recovery_scope_accepts_only_complete_journal_owned_old_objects() {
+    // Synthetic admission reaches executor boundaries only. This test issues
+    // no snapshot certificate and proves neither audit nor disk independence.
+    for fault in [Fault::RetainedOldMoved, Fault::RetainedCompleted] {
+        let (f, run, entry) = retained_fixture();
+        let evidence = "e".repeat(64);
+        synthetic_retained_proof(&f, &evidence);
+        let review = f
+            .workflow
+            .review_replacement(&f.library, run, entry, evidence)
+            .unwrap();
+        let approval = f.approved(&review);
+        *f.workflow.fault.lock().unwrap() = Some(fault);
+        let job = f.workflow.start(f.library.clone(), approval.id).unwrap();
+        assert_eq!(f.wait(&job.id).state, SyncState::NeedsRecovery);
+        let binding = f.workflow.binding(&job.id).unwrap();
+        let scope = RetainedRecoveryScope::new(&f.workflow, &f.library, &binding).unwrap();
+        let originals = scope.originals();
+        let current = scope.current().unwrap();
+        assert_eq!(originals.len(), 2);
+        assert_eq!(current.len(), 2);
+        for (index, object) in current.iter().enumerate() {
+            let mut digest_input = object.file().try_clone().unwrap();
+            digest_input.seek(SeekFrom::Start(0)).unwrap();
+            assert_eq!(object.index(), index);
+            assert_eq!(
+                filesystem::identity(object.file()).unwrap(),
+                originals[index].identity
+            );
+            assert_eq!(
+                crate::executor::snapshot_bridge::digest(
+                    &mut digest_input,
+                    &AtomicBool::new(false)
+                )
+                .unwrap(),
+                originals[index].full_digest
+            );
+        }
+        let expected_old_digest = originals[0].full_digest.clone();
+        drop(current);
+        drop(scope);
+        let history = f
+            .destination
+            .join(format!(".stillharbour-retained-{}", job.id));
+        let missing = history.join("old-0.retained");
+        let asserted = history.join("arbitrarily-asserted-old.retained");
+        std::fs::rename(&missing, &asserted).unwrap();
+        // Same native object and bytes elsewhere do not grant path authority;
+        // absence of one companion cannot produce a partial-group proof.
+        assert!(RetainedRecoveryScope::new(&f.workflow, &f.library, &binding).is_err());
+        assert!(asserted.is_file());
+        assert_eq!(
+            blake3::hash(&std::fs::read(&asserted).unwrap())
+                .to_hex()
+                .to_string(),
+            expected_old_digest
+        );
+        f.audit();
+    }
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
 fn sync_application_copy_faults_reconcile_existing_stream_with_fresh_approval() {
     for fault in COPY_FAULTS {
         let f = Fixture::new();

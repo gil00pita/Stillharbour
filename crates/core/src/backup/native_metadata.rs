@@ -18,6 +18,44 @@ mod tests;
 mod windows;
 
 const MAX_METADATA: usize = 256 * 1024;
+#[cfg(target_os = "macos")]
+pub(crate) struct PrivateDirectoryWitness {
+    identity: FileIdentity,
+    policy: (u32, u32, u32),
+}
+#[cfg(target_os = "macos")]
+pub(crate) fn private_directory(parent: &File) -> Result<PrivateDirectoryWitness> {
+    let identity = filesystem::identity(parent)?;
+    let revision = native::revision(parent)?;
+    let policy = macos::private_directory(parent)?;
+    if filesystem::identity(parent)? != identity || native::revision(parent)? != revision {
+        return Err(changed());
+    }
+    Ok(PrivateDirectoryWitness { identity, policy })
+}
+#[cfg(target_os = "macos")]
+impl PrivateDirectoryWitness {
+    pub(crate) fn revalidate(&self, parent: &File) -> Result<()> {
+        let current = private_directory(parent)?;
+        if current.identity.volume != self.identity.volume
+            || current.identity.file != self.identity.file
+            || current.policy != self.policy
+        {
+            return Err(changed());
+        }
+        Ok(())
+    }
+}
+#[cfg(target_os = "macos")]
+pub(crate) fn verify_private_file(file: &File) -> Result<()> {
+    let identity = filesystem::identity(file)?;
+    let revision = native::revision(file)?;
+    macos::private_file(file)?;
+    if filesystem::identity(file)? != identity || native::revision(file)? != revision {
+        return Err(changed());
+    }
+    Ok(())
+}
 fn unsupported(message: &str) -> AppError {
     AppError::new(ErrorCode::Unsupported, message)
 }

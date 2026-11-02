@@ -448,7 +448,25 @@ manifest/profile digest. Changed files, versions, roots or endpoints need fresh
 review. Schedule consent is sealed in OS storage and bound to the native catalog
 instance; imported or restored records cannot recreate it. The initial schedule
 uses elapsed UTC minutes (no DST shift), at most one unchanged-scope catch-up and
-an explicit running-process-only disclosure.
+an explicit running-process-only disclosure. The running timer polls every 15
+seconds. With catch-up unchecked, deadlines more than 30 seconds overdue (two
+polling periods) are skipped, including deadlines missed during sleep, restart
+or another active job. Normal lateness of at most 30 seconds may run once.
+With catch-up checked, one unchanged-scope run may follow any such interruption;
+it never replays each missed interval. The next deadline is the current
+admission/skip time plus the configured interval. Restart still requires native
+repository/root reauthorization; fully quit processes execute no timer.
+
+Pinned remote helpers use a 10-second connection timeout, 30-second I/O-idle
+and stuck-request limits, and a 20-second rclone startup limit. Streaming
+activity resets the idle limit; these limits do not shorten the existing total
+helper duration allowance. Restic JSON progress is sampled once per five
+seconds within the unchanged bounded output buffers. On the first strictly
+recognized pinned-backend retry/failure report, stop and reap the owned helper
+tree, retain sources, repository objects, locks and partial outputs, and report
+`needs_recovery`. Require inspection and a fresh applicable review; never replay
+backup, unlock, prune or repair to hide the failure. Raw helper diagnostics,
+paths and secrets are not forwarded to the renderer or exported diagnostics.
 
 ### 13.4 Restore
 
