@@ -208,6 +208,8 @@ def server(argv, base, environment, listen_port, *, allow_failed_start=False):
 def server_smb():
     from impacket import smbserver
     from impacket.ntlm import compute_lmhash, compute_nthash
+    from impacket.nt_errors import STATUS_NO_SUCH_FILE, STATUS_OBJECT_NAME_NOT_FOUND
+    from impacket.smb3structs import SMB2_CREATE
     base = Path(os.environ['STILLHARBOUR_PROTOCOL_SCOPE']).resolve()
     token = os.environ['STILLHARBOUR_PROTOCOL_TOKEN']
     if not base.is_relative_to(Path(tempfile.gettempdir()).resolve()) or not base.name.startswith('stillharbour-m4-protocol-'):
@@ -244,6 +246,11 @@ def server_smb():
                 if report:
                     print(f'SMB2 operation={command} errorType={type(error).__name__}', flush=True)
                 raise
+            # This fixture uses the Windows-compatible missing-name status for
+            # CREATE only. The pinned client does not classify Impacket's other
+            # ENOENT status as missing. Signing/encoding still belongs upstream.
+            if command == SMB2_CREATE and response[2] == STATUS_NO_SUCH_FILE:
+                response = (response[0], response[1], STATUS_OBJECT_NAME_NOT_FOUND)
             if report:
                 print(f'SMB2 operation={command} status={int(response[2])}', flush=True)
             return response
@@ -477,7 +484,7 @@ def probe(protocol, binaries, versions, allow_ftp):
                 raise RuntimeError('Destination-only neighbor changed.')
             return {'protocol': protocol, 'result': 'passed', 'nativeOs': sys.platform, 'osVersion': platform.version(),
                     'restic': versions['resticVersion'], 'rclone': versions['rcloneVersion'],
-                    'server': ('SMBLibrary 1.5.7 (user-mode, SMB1 disabled)' if sys.platform=='win32' else f'Impacket {importlib.metadata.version("impacket")}') if protocol == 'smb' else f'pyftpdlib {importlib.metadata.version("pyftpdlib")}' if protocol in ('ftp','ftps') else f'rclone {versions["rcloneVersion"]}' if protocol != 'local' else 'native local filesystem',
+                    'server': ('SMBLibrary 1.5.7 (user-mode, SMB1 disabled)' if sys.platform=='win32' else f'Impacket {importlib.metadata.version("impacket")} + fixture CREATE missing-name status mapping') if protocol == 'smb' else f'pyftpdlib {importlib.metadata.version("pyftpdlib")}' if protocol in ('ftp','ftps') else f'rclone {versions["rcloneVersion"]}' if protocol != 'local' else 'native local filesystem',
                     'sourceRemoved': True, 'restoredFiles': len(expected), 'fullByteCompared': True,
                     'structuralCheck': True, 'fullDataRead': True, 'catalogSnapshotIndependentlyOpenable': True,
                     'catalogSnapshotKind': 'generated SQLite fixture', 'snapshotRetainedAfterSourceRemoval': True,

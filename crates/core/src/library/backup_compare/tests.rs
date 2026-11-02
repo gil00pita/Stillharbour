@@ -1020,7 +1020,21 @@ fn comparison_inventory_failures_and_late_changes_never_prove_absence_or_keep_a_
     inventory
         .walk(&root, Path::new(""), &AtomicBool::new(false), 0)
         .unwrap();
+    let observed_time = std::fs::metadata(f.source.join("fixture.bin"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    assert_eq!(inventory.files.len(), 1);
     std::fs::write(f.source.join("fixture.bin"), b"modified").unwrap();
+    // Preserve the same-length scenario but make its native revision change
+    // deterministic: Windows writes can share a filesystem clock tick. This
+    // test exercises revision invalidation, not universal content-change proof.
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(f.source.join("fixture.bin"))
+        .unwrap()
+        .set_times(std::fs::FileTimes::new().set_modified(observed_time + Duration::from_secs(2)))
+        .unwrap();
     assert!(inventory.validate(&root).is_err());
     let mut denied = Inventory::default();
     denied
