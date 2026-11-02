@@ -442,3 +442,22 @@ fn owned_export_exit_child() {
     f.save(review).unwrap();
     panic!("The requested process-exit boundary was not reached");
 }
+
+#[test]
+fn portable_build_never_adopts_an_existing_empty_output() {
+    let f = Fixture::new();
+    let work = f.owned.path().join("private-build-review");
+    std::fs::create_dir(&work).unwrap();
+    let output = work.join("existing.stillharbour");
+    std::fs::write(&output, b"").unwrap();
+    let folder = work.clone();
+    let target = output.clone();
+    assert!(
+        f.library
+            .catalog
+            .call(move |db| portable::build(db, &folder, &target))
+            .is_err()
+    );
+    assert_eq!(std::fs::metadata(output).unwrap().len(), 0);
+    f.audit();
+}

@@ -487,9 +487,14 @@ fn open_database(path: &Path, expected: Option<&ExistingCatalog>) -> Result<Cata
     };
     let path = bound_path.as_deref().unwrap_or(path);
     let parents = if expected.is_some() {
-        Some(crate::filesystem::DirectoryChain::open(
-            path.parent().expect("validated catalog parent"),
-        )?)
+        let parent = path.parent().expect("validated catalog parent");
+        // This writable catalog creates retained snapshots in its parent.
+        // Share writes only at that leaf; deny-delete ancestor guards remain.
+        #[cfg(windows)]
+        let chain = crate::filesystem::DirectoryChain::open_for_owned_publication(parent)?;
+        #[cfg(not(windows))]
+        let chain = crate::filesystem::DirectoryChain::open(parent)?;
+        Some(chain)
     } else {
         None
     };

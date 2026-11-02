@@ -1,5 +1,7 @@
 //! Darwin descriptor metadata. Policy v1 proves NO extended ACL/xattrs/resource
 //! fork and preserves ownership, POSIX permissions, birth and modification time.
+//! Policy v2 additionally captures/verifies bounded opaque OS provenance bytes;
+//! it never ignores attributes, strips provenance or trusts setter success.
 use super::*;
 use std::{
     ffi::c_void,
@@ -43,18 +45,70 @@ fn stat(file: &File) -> Result<libc::stat> {
     // SAFETY: successful fstat initialized the whole structure.
     Ok(unsafe { value.assume_init() })
 }
-fn no_extra(file: &File) -> Result<()> {
-    // SAFETY: size-zero query never writes through the null buffer.
+fn provenance(file: &File) -> Result<Option<Vec<u8>>> {
+    const NAME: &std::ffi::CStr = c"com.apple.provenance";
+    // SAFETY: size-zero descriptor query never writes through the null buffer.
     let size = unsafe { libc::flistxattr(file.as_raw_fd(), std::ptr::null_mut(), 0, 0) };
     if size < 0 {
         return Err(error());
     }
-    if size != 0 {
+    if size == 0 {
+        return Ok(None);
+    }
+    // Admit exactly one fixed name, never a broader allowlist or omitted stream.
+    if size as usize != NAME.to_bytes_with_nul().len() {
+        return Err(extra());
+    }
+    let mut names = vec![0u8; size as usize];
+    // SAFETY: live borrowed descriptor and bounded writable name buffer.
+    let read =
+        unsafe { libc::flistxattr(file.as_raw_fd(), names.as_mut_ptr().cast(), names.len(), 0) };
+    if read != size {
+        return Err(changed());
+    }
+    if names != NAME.to_bytes_with_nul() {
+        return Err(extra());
+    }
+    // SAFETY: fixed native C name and size-zero descriptor query.
+    let length = unsafe {
+        libc::fgetxattr(
+            file.as_raw_fd(),
+            NAME.as_ptr(),
+            std::ptr::null_mut(),
+            0,
+            0,
+            0,
+        )
+    };
+    if length < 0 {
+        return Err(error());
+    }
+    if length as usize > MAX_PROVENANCE {
         return Err(unsupported(
-            "macOS extended attributes or a resource fork are present; this no-extra-stream policy cannot authorize replacement.",
+            "Native provenance exceeds its 4096 byte preservation bound.",
         ));
     }
-    no_acl(file)
+    let mut value = vec![0u8; length as usize];
+    // SAFETY: bounded live value buffer; only an existing descriptor is read.
+    let read = unsafe {
+        libc::fgetxattr(
+            file.as_raw_fd(),
+            NAME.as_ptr(),
+            value.as_mut_ptr().cast(),
+            value.len(),
+            0,
+            0,
+        )
+    };
+    if read != length {
+        return Err(changed());
+    }
+    Ok(Some(value))
+}
+fn extra() -> AppError {
+    unsupported(
+        "macOS extended attributes or a resource fork outside the versioned provenance policy are present; strict replacement is unavailable.",
+    )
 }
 fn no_acl(file: &File) -> Result<()> {
     // SAFETY: borrowed fd; Darwin returns an allocated opaque ACL or null/error.
@@ -125,7 +179,8 @@ pub(super) fn private_file(file: &File) -> Result<()> {
     no_acl(file)
 }
 pub(super) fn inspect(file: &File) -> Result<NativeMetadata> {
-    no_extra(file)?;
+    let provenance = provenance(file)?;
+    no_acl(file)?;
     let value = stat(file)?;
     if value.st_flags != 0 {
         return Err(unsupported(
@@ -141,6 +196,7 @@ pub(super) fn inspect(file: &File) -> Result<NativeMetadata> {
         created_nanoseconds: value.st_birthtime_nsec,
         modified_seconds: value.st_mtime,
         modified_nanoseconds: value.st_mtime_nsec,
+        provenance,
     })
 }
 pub(super) fn restore(file: &File, metadata: &NativeMetadata) -> Result<()> {
@@ -153,11 +209,45 @@ pub(super) fn restore(file: &File, metadata: &NativeMetadata) -> Result<()> {
         created_nanoseconds,
         modified_seconds,
         modified_nanoseconds,
+        provenance: expected_provenance,
     } = metadata
     else {
         return Err(unsupported("Metadata belongs to another native OS."));
     };
-    no_extra(file)?;
+    let actual_provenance = provenance(file)?;
+    no_acl(file)?;
+    if expected_provenance.is_none() && actual_provenance.is_some() {
+        return Err(unsupported(
+            "The v1 no-extra-stream policy cannot restore into a target with native provenance.",
+        ));
+    }
+    if let Some(value) = expected_provenance {
+        if value.len() > MAX_PROVENANCE {
+            return Err(invalid("Invalid native provenance bound."));
+        }
+        if actual_provenance.as_ref() != Some(value) {
+            // SAFETY: fixed C name and captured bounded bytes, NEW owned output
+            // only. No original descriptor or pathname reaches this operation.
+            if unsafe {
+                libc::fsetxattr(
+                    file.as_raw_fd(),
+                    c"com.apple.provenance".as_ptr(),
+                    value.as_ptr().cast(),
+                    value.len(),
+                    0,
+                    0,
+                )
+            } != 0
+            {
+                return Err(error());
+            }
+        }
+        // Protected OS attributes can acknowledge writes without installing
+        // the requested value. Only independently observed bytes count.
+        if provenance(file)?.as_ref() != Some(value) {
+            return Err(changed());
+        }
+    }
     if *flags != 0 {
         return Err(unsupported("Nonzero native file flags are unsupported."));
     }

@@ -150,6 +150,17 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             ].includes(new URL(url).hostname),
         );
         assert.deepEqual(external, []);
+        await browser.execute(() => document.querySelector('.map-basemap canvas').focus());
+        await browser.keys('=');
+        await browser.waitUntil(async () => {
+          const count = Number((await $('.map-photo-heading p').getText()).match(/^(\d+)/)?.[1]);
+          return count > 0 && count < 6 && (await $('button[aria-label="Zoom out"]').isEnabled());
+        });
+        const keyboardZoomVerified = true;
+        await $('button=Whole world').click();
+        await browser.waitUntil(
+          async () => !(await $('button[aria-label="Zoom out"]').isEnabled()),
+        );
         await $('button[aria-label="Zoom in"]').click();
         await browser.waitUntil(async () => {
           const count = Number((await $('.map-photo-heading p').getText()).match(/^(\d+)/)?.[1]);
@@ -205,6 +216,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
               crossing,
               zero,
               selectedCount,
+              keyboardZoomVerified,
               metadataEvidence,
               exportEvidence,
               externalResources: external,

@@ -111,3 +111,7 @@ it('offers cancellation while native work is pending without inventing a complet
   expect(await screen.findByRole('alert')).toHaveTextContent('canceled');
   expect(screen.queryByRole('button', { name: 'Save reviewed export' })).not.toBeInTheDocument();
 });
+it('exposes the export type as a labelled native select for keyboard and screen-reader users', () => {
+  panel();
+  expect(screen.getByRole('combobox', { name: 'Export type' })).toHaveValue('catalog');
+});

@@ -26,7 +26,7 @@ async function catalogMetadata(request) {
   const reply = (await native({ kind: 'catalog_metadata', request })).data;
   return reply.data;
 }
-export async function reviewCatalogMetadata(directory, { assertNativeFocus = true } = {}) {
+export async function reviewCatalogMetadata(directory) {
   await $('button[aria-label="Photos"]').click();
   await $('button=Add to album').waitForDisplayed();
   await $('button=Add to album').click();
@@ -122,7 +122,17 @@ export async function reviewCatalogMetadata(directory, { assertNativeFocus = tru
   await browser.waitUntil(async () => $('button=Close').isEnabled());
   await browser.saveScreenshot(`${directory}/catalog-organization.png`);
   await browser.setWindowSize(660, 560);
-  await $('nav[aria-label="Organization sections"]').$('button=Tag categories').click();
+  // The pinned embedded driver's click implementation focuses AFTER click,
+  // overriding the application's focus destination. Match real pointer order:
+  // focus the action first, then let the actual application handler move focus.
+  await browser.execute(() => {
+    const button = [
+      ...document.querySelectorAll('nav[aria-label="Organization sections"] button'),
+    ].find((node) => node.textContent === 'Tag categories');
+    if (!button) throw new Error('Missing category navigation action.');
+    button.focus();
+    button.click();
+  });
   const minimum = await browser.execute(() => {
     const node = document.querySelector('.catalog-organizer');
     const header = node.querySelector('header').getBoundingClientRect();
@@ -144,8 +154,8 @@ export async function reviewCatalogMetadata(directory, { assertNativeFocus = tru
     'Title and Close remain visible after scrolling',
   );
   assert.ok(minimum.scrollTop > 0, 'Organization body scrolls independently');
-  if (assertNativeFocus) assert.equal(minimum.focusedSection, 'categories-title');
-  minimum.focusAcceptanceAsserted = assertNativeFocus;
+  assert.equal(minimum.focusedSection, 'categories-title');
+  minimum.focusAcceptanceAsserted = true;
   assert.ok(minimum.contentWidth <= minimum.width + 1, 'Catalog dialog fits minimum width');
   await browser.saveScreenshot(`${directory}/catalog-minimum.png`);
   await browser.setWindowSize(1180, 780);

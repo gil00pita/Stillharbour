@@ -80,7 +80,37 @@ pub(super) fn build(source: &Connection, folder: &Path, destination: &Path) -> R
         [],
         |r| r.get(0),
     )?;
-    let mut output = Connection::open(destination)?;
+    // Allocate only a new output in the backend-owned private review folder.
+    // Retain write access for FlushFileBuffers on Windows, and deny delete
+    // sharing there while SQLite opens its separate connection.
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true).write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        use windows_sys::Win32::Storage::FileSystem::*;
+        options
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_OPEN_NO_RECALL);
+    }
+    let file = options.open(destination)?;
+    #[cfg(windows)]
+    let file = filesystem::windows::checked(file)?;
+    let identity = filesystem::identity(&file)?;
+    if !file.metadata()?.is_file() || identity.links != 1 {
+        return Err(conflict());
+    }
+    let mut output = Connection::open_with_flags(
+        destination,
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+    )?;
     crate::catalog::initialize_portable(&mut output, &id)?;
     output.execute_batch("PRAGMA foreign_keys=OFF;PRAGMA trusted_schema=OFF;PRAGMA synchronous=FULL;PRAGMA journal_mode=DELETE;")?;
     let tx = output.transaction()?;
@@ -226,7 +256,16 @@ pub(super) fn build(source: &Connection, folder: &Path, destination: &Path) -> R
     }
     output.execute_batch("PRAGMA foreign_keys=ON;")?;
     output.close().map_err(|(_, e)| AppError::from(e))?;
-    let file = File::open(destination)?;
+    options.write(false).create_new(false);
+    let current = options.open(destination)?;
+    #[cfg(windows)]
+    let current = filesystem::windows::checked(current)?;
+    if !equal(&identity, &filesystem::identity(&current)?)
+        || filesystem::identity(&file)?.links != 1
+    {
+        return Err(conflict());
+    }
+    drop(current);
     if file.metadata()?.len() > 512 * 1024 * 1024 {
         return Err(invalid(
             "Portable catalog exceeds the 512 MiB export bound.",

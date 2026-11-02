@@ -713,3 +713,19 @@ The existing AC-077 clean-machine and full AC-079 manual screen-reader gates rem
 - No usable location hides empty geography, retains filters and photo actions, and reports only its matching unlocated total.
 
 These UI checks do not establish Windows, screen-reader, crash-recovery or original-file preservation acceptance.
+
+## M5 acceptance repair regressions — 2026-11-02
+
+| Case | Required behavior | Evidence |
+| --- | --- | --- |
+| M5-A01 | Sole bounded macOS provenance is captured/restored exactly under v2; a successful native setter without matching read-back never suffices. | Descriptor-based native test and changed-byte digest/comparison regression. |
+| M5-A02 | V1 digests retain exact old serialization; v1+provenance, v2 missing bytes and values over 4096 bytes fail. | Fixed legacy byte fixture and negative native manifest tests. |
+| M5-A03 | Unknown source/target attributes, resource forks and ACL/flag limitations stay explicit; restoration cannot strip an unsupported target or change its source. | Existing unsupported-source cases plus new target revision/attribute audit. |
+| M5-A04 | Native navigation verifies the application's focus destination after focus-before-click, preserving the section-heading assertion. | The pinned embedded driver's click-then-focus behavior is isolated in the fixture; no direct heading focus or assertion bypass. |
+| M5-A05 | Export type has a real programmatic label, in addition to its visible text. | Accessible-name component regression, red before explicit label/control ID binding. |
+
+Actual counts, native build scope and remaining manual/platform gates are recorded in [M5 validation](M5_VALIDATION.md). These cases do not certify VoiceOver solely from DOM/component checks.
+
+M5-A06 — Portable catalog generation exclusively allocates a new owned output; an existing empty file is retained untouched. Flush the held writable output, verify native identity/link count and independently reopen its compiled schema/UUID. Windows export and bound historical migration snapshot tests must pass with no-delete sharing retained.
+
+M5-A07 — Actual retained-replacement child exits preserve all seven fault-boundary exit-code, byte/history and fresh-approval assertions. Supervision drains at most 64 KiB of retained stderr while the child runs and has a finite sixty-second deadline; a Mac pass or timeout extension alone is not Windows acceptance.

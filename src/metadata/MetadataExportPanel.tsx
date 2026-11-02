@@ -1,6 +1,6 @@
 import { Field } from '@chakra-ui/react';
 import { ExportHistory } from './ExportHistory';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type {
   AssetSelection,
   DirectorySelection,
@@ -19,6 +19,7 @@ export function MetadataExportPanel({
   selectionCount: number;
   onBusy: (busy: boolean) => void;
 }) {
+  const kindId = useId();
   const [kind, setKind] = useState<MetadataExportKind>('catalog');
   const [directory, setDirectory] = useState<DirectorySelection | null>(null);
   const [review, setReview] = useState<MetadataExportReview | null>(null);
@@ -95,8 +96,9 @@ export function MetadataExportPanel({
         replaced. Catalog copies contain organization and references, not your photo backup.
       </p>
       <Field.Root>
-        <Field.Label>Export type</Field.Label>
+        <Field.Label htmlFor={kindId}>Export type</Field.Label>
         <Select
+          id={kindId}
           value={kind}
           disabled={busy}
           onChange={(event) => {

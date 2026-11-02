@@ -51,3 +51,7 @@ The owner separately requested the latest Chakra UI using their supplied boilerp
 “Finish M5” authorizes the remaining bounded milestone implementation. [ADR-0084](../docs/decisions/ADR-0084-reviewed-metadata-exports-and-tag-history.md) adds schema-17 exact tag review/merge/removal/undo, explicit keyword import overrides and new-output portable catalog/XMP export with native authority, retained plans, conflict detection and completion receipts. [M5 validation](../docs/M5_VALIDATION.md) is the current implementation/evidence record; earlier slice statements above remain historical.
 
 Implementation is present; milestone acceptance is **not certified complete** while the recorded platform/manual/preservation checks remain unclosed. Formats without clean target-machine evidence remain explicitly unverified, as required by this gate. No production original-file mutation is enabled. Stop before M6.
+
+## Acceptance repairs — 2026-11-02
+
+The owner requests build/preservation repairs and completion of remaining checks. [M5 validation](../docs/M5_VALIDATION.md) records the resolved ten macOS preservation failures, native foreground graphics/keyboard/focus and reviewed-export checks, the accessible export label, and the separate Windows CI repairs. Actual VoiceOver review still needs macOS Accessibility permission or a manual reviewer; fresh Windows/platform evidence remains required. M5 is not certified complete from automated frontend or Mac-only checks. Original-file production gates remain disabled; stop before M6.

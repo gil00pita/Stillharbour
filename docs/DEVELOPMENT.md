@@ -657,3 +657,9 @@ Run the focused `catalog_metadata::`, `metadata_export::` and `catalog::` comman
 ### Critique-driven UI regression scope
 
 For the 2026-11-02 draft/dialog/search/map polish, run src/metadata and src/map component suites plus the normal frontend checks. Native map/metadata helpers assert the stationary dialog header at minimum width and draft retention across Info closure before explicit saving. Keep these generated-fixture assertions when reorganizing the desktop harness. Draft memory is owned by a catalog-keyed provider in App.tsx; it is neither global nor a persisted catalog write.
+
+## Native preservation acceptance repair
+
+[ADR-0085](decisions/ADR-0085-exact-native-provenance-preservation.md) records macOS provenance policy v2 and v1 digest compatibility. Reproduce with `node scripts/cargo.mjs test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow backup::native_metadata::tests`, then the `executor::sync_workflow::tests` filter and full documented workspace checks. Never ignore OS attributes or replace failures with unconditional fixture success.
+
+The pinned embedded driver's `click_element` implementation calls `click()` before `focus()`, which can overwrite the app's intentional focus destination. The generated M5 navigation fixture explicitly focuses its action before clicking, then asserts the real application moved focus to the section heading. It does not directly focus the destination or bypass the assertion. Native graphics testing needs an awake/unlocked visible session; `document.visibilityState` and an actual animation-frame observation distinguish a suspended host from a map failure. Real screen-reader automation additionally requires macOS Accessibility trust; component accessible-name checks do not establish VoiceOver acceptance.

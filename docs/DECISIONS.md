@@ -348,3 +348,6 @@ The owner continued to M2 and selected organization templates/previews as the pr
 
 
 2026-11-02 — Owner-requested [Chakra UI adoption](decisions/ADR-0083-chakra-ui-design-system.md) pins Chakra 3.37.0 and Emotion 11.14.0. The supplied boilerplate informs the provider/theme/recipe separation. Standard controls use the Stillharbour token system while native dialogs and specialized photo controls preserve their interactions. No Next.js, state library, schema or permission expansion. [UI_FRAMEWORK.md](UI_FRAMEWORK.md) records scope and evidence; milestone gates remain open.
+
+[ADR-0085](decisions/ADR-0085-exact-native-provenance-preservation.md) fixes the inherited macOS metadata admission limitation with exact, bounded opaque provenance capture/read-back under a distinct v2 policy. V1 digest serialization and unsupported-stream/ACL/flag protections remain intact; no original-file production gate is enabled.
+[ADR-0086](decisions/ADR-0086-owned-catalog-flushing-and-publication.md) retains writable owned-output handles for durable flushing and permits catalog-parent write sharing for retained snapshot publication; original-file guards and production gates remain unchanged.

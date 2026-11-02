@@ -58,7 +58,7 @@ describe('M5 generated native metadata export', () => {
       await browser.execute(() =>
         document.querySelector('.asset-check[aria-label="Select South.jpg"]').click(),
       );
-      const metadata = await reviewCatalogMetadata(directory, { assertNativeFocus: false });
+      const metadata = await reviewCatalogMetadata(directory);
       const exports = await finishMetadataExports(directory);
       const audit = await browser.tauri.execute(({ core }) =>
         core.invoke('test_library_fixture', { verify: true }),
@@ -78,7 +78,7 @@ describe('M5 generated native metadata export', () => {
             audit,
             originalMutationsEnabled: false,
             graphicsCapabilityAsserted: false,
-            nativeFocusCapabilityAsserted: false,
+            nativeFocusCapabilityAsserted: true,
           },
           null,
           2,

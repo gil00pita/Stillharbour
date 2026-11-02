@@ -18,6 +18,10 @@ mod tests;
 mod windows;
 
 const MAX_METADATA: usize = 256 * 1024;
+const MAX_PROVENANCE: usize = 4096;
+const POLICY_V1: &str = "essential-no-extra-streams-v1-owner-permissions-creation-modification";
+const POLICY_MAC_PROVENANCE_V2: &str =
+    "essential-macos-provenance-v2-owner-permissions-creation-modification";
 #[cfg(target_os = "macos")]
 pub(crate) struct PrivateDirectoryWitness {
     identity: FileIdentity,
@@ -121,6 +125,9 @@ enum NativeMetadata {
         created_nanoseconds: i64,
         modified_seconds: i64,
         modified_nanoseconds: i64,
+        // Omitted when absent to retain byte-for-byte v1 digest serialization.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        provenance: Option<Vec<u8>>,
     },
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -141,9 +148,21 @@ impl MetadataManifest {
             ));
         }
         let metadata = inspect_native(file)?;
+        let provenance = matches!(
+            &metadata,
+            NativeMetadata::Macos {
+                provenance: Some(_),
+                ..
+            }
+        );
         let manifest = Self {
-            version: 1,
-            policy: "essential-no-extra-streams-v1-owner-permissions-creation-modification".into(),
+            version: if provenance { 2 } else { 1 },
+            policy: if provenance {
+                POLICY_MAC_PROVENANCE_V2
+            } else {
+                POLICY_V1
+            }
+            .into(),
             origin,
             metadata,
         };
@@ -154,11 +173,19 @@ impl MetadataManifest {
         Ok(manifest)
     }
     fn validate(&self) -> Result<()> {
-        if self.version != 1
-            || self.policy
-                != "essential-no-extra-streams-v1-owner-permissions-creation-modification"
-            || self.origin.links != 1
-        {
+        let provenance = matches!(
+            &self.metadata,
+            NativeMetadata::Macos {
+                provenance: Some(_),
+                ..
+            }
+        );
+        let (version, policy) = if provenance {
+            (2, POLICY_MAC_PROVENANCE_V2)
+        } else {
+            (1, POLICY_V1)
+        };
+        if self.version != version || self.policy != policy || self.origin.links != 1 {
             return Err(invalid(
                 "Unsupported essential metadata policy or origin binding.",
             ));
@@ -200,9 +227,13 @@ impl MetadataManifest {
                 flags,
                 created_nanoseconds,
                 modified_nanoseconds,
+                provenance,
                 ..
             } => {
-                if *mode & !0o7777 != 0
+                if provenance
+                    .as_ref()
+                    .is_some_and(|value| value.len() > MAX_PROVENANCE)
+                    || *mode & !0o7777 != 0
                     || *flags != 0
                     || !(0..1_000_000_000).contains(created_nanoseconds)
                     || !(0..1_000_000_000).contains(modified_nanoseconds)
@@ -238,6 +269,12 @@ impl MetadataManifest {
         match &self.metadata {
             NativeMetadata::Windows { .. } => {
                 "Metadata policy v1 records owner/group, ordinary allow/deny DACL, mandatory integrity label, attributes and creation/modification times. Named streams, extended attributes and advanced ACL entries are unsupported. Audit-security fidelity remains unknown unless the current native read rights prove the supported no-audit-content policy; no privileges are enabled."
+            }
+            NativeMetadata::Macos {
+                provenance: Some(_),
+                ..
+            } => {
+                "Metadata policy v2 records UID/GID, POSIX permissions, creation/modification times and exact bounded com.apple.provenance bytes with independent native read-back. Other xattrs, resource forks, extended ACL entries/flags and file flags remain unsupported. A target whose provenance cannot match exactly cannot authorize strict replacement."
             }
             NativeMetadata::Macos { .. } => {
                 "Metadata policy v1 records UID/GID, POSIX permissions, creation/modification times and proven absence of extended ACL entries/flags, xattrs, resource forks and file flags. Unsupported native metadata blocks strict replacement."
@@ -296,6 +333,7 @@ impl MetadataManifest {
                         created_nanoseconds: f,
                         modified_seconds: g,
                         modified_nanoseconds: h,
+                        provenance: q,
                     },
                     NativeMetadata::Macos {
                         uid: i,
@@ -306,15 +344,17 @@ impl MetadataManifest {
                         created_nanoseconds: n,
                         modified_seconds: o,
                         modified_nanoseconds: p,
+                        provenance: r,
                     },
                 ) => format!(
-                    "Metadata field mismatch: owner={},group={},permissions={},flags={},creation_time={},modification_time={}",
+                    "Metadata field mismatch: owner={},group={},permissions={},flags={},creation_time={},modification_time={},provenance={}",
                     a != i,
                     b != j,
                     c != k,
                     d != l,
                     (e, f) != (m, n),
-                    (g, h) != (o, p)
+                    (g, h) != (o, p),
+                    q != r
                 ),
                 _ => "Metadata platform/policy mismatch.".into(),
             };
