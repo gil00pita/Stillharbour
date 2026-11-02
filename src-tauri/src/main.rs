@@ -6,6 +6,8 @@ compile_error!("desktop-test instrumentation must never be compiled into a relea
 #[cfg(feature = "desktop-test")]
 mod backup_fixture;
 mod catalog_admission;
+#[cfg(feature = "desktop-test")]
+mod catalog_test_session;
 mod native_credentials;
 
 use std::{
@@ -91,7 +93,7 @@ struct Foundation {
     credential_cancel: Arc<AtomicBool>,
     shutdown: Arc<AtomicU8>,
     #[cfg(feature = "desktop-test")]
-    _test_data: tempfile::TempDir,
+    _test_data: catalog_test_session::NativeTestData,
 }
 
 fn request_shutdown(app: &tauri::AppHandle, code: i32) {
@@ -425,6 +427,38 @@ async fn library_request(
     }
     if let LibraryRequest::BackupSnapshots {
         request:
+            stillharbour_core::backup::snapshots::SnapshotRequest::CatalogRestoreReviewRetained {
+                transaction_id,
+            },
+    } = &request
+    {
+        let transaction_id = transaction_id.clone();
+        let library = state.library.clone();
+        let activation = state.activation.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            let _catalog_admission = catalog_admission;
+            if !library.retained_catalog_restore_available() {
+                return Err(AppError::new(
+                    ErrorCode::MutationUnavailable,
+                    "Retained catalog recovery is disabled by the native workflow gate.",
+                ));
+            }
+            let proof = activation.latest_retained_source(&transaction_id)?;
+            let review = library.review_retained_catalog_restore(proof)?;
+            Ok(LibraryResponse::BackupSnapshots(
+                stillharbour_core::backup::snapshots::SnapshotReply::CatalogRestoreReview(review),
+            ))
+        })
+        .await
+        .map_err(|_| {
+            AppError::new(
+                ErrorCode::WorkerFailed,
+                "The retained catalog review stopped. Existing catalogs remain unchanged.",
+            )
+        })?;
+    }
+    if let LibraryRequest::BackupSnapshots {
+        request:
             stillharbour_core::backup::snapshots::SnapshotRequest::CatalogRestorePrepare { approval_id },
     } = &request
     {
@@ -655,6 +689,7 @@ async fn library_request(
         _ => None,
     };
     let library = state.library.clone();
+    let activation = state.activation.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         let _catalog_admission = catalog_admission;
         Ok(match request {
@@ -676,7 +711,16 @@ async fn library_request(
                         )
                     })
                     .transpose()?;
-                LibraryResponse::BackupSnapshots(library.backup_snapshots(request, native)?)
+                let mut reply = library.backup_snapshots(request, native)?;
+                if let stillharbour_core::backup::snapshots::SnapshotReply::Capabilities(
+                    capabilities,
+                ) = &mut reply
+                    && library.retained_catalog_restore_available()
+                {
+                    capabilities.latest_retained_catalog_transaction_id =
+                        activation.latest_retained_transaction_id()?;
+                }
+                LibraryResponse::BackupSnapshots(reply)
             }
             LibraryRequest::BackupCredentialEnroll { .. } => {
                 return Err(AppError::new(
@@ -1559,12 +1603,34 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "m4_application_catalog_quit" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The generated catalog quit action accepts no supplied scope.",
+                ));
+            }
+            let app = window.app_handle().clone();
+            std::thread::Builder::new()
+                .name("generated-catalog-quit".into())
+                .spawn(move || {
+                    // Allow this fixed test response to leave the embedded driver.
+                    // Shutdown itself uses the real native drain/exit handshake.
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    request_shutdown(&app, 0);
+                })?;
+            Ok(serde_json::json!({"quitRequested":true,"nativePid":std::process::id()}))
+        }
         "m4_application_source"
         | "m4_application_repository"
         | "m4_application_restore"
         | "m4_application_remove_source"
         | "m4_application_catalog_root_picker"
         | "m4_application_catalog_audit"
+        | "m4_application_catalog_newer_edit"
+        | "m4_application_catalog_second_edit"
+        | "m4_application_catalog_active_audit"
+        | "m4_application_catalog_session_cleanup"
         | "m4_application_audit" => {
             if rows.is_some() {
                 return Err(AppError::new(
@@ -2547,9 +2613,7 @@ fn main() {
             #[cfg(not(debug_assertions))]
             let data = app.path().app_local_data_dir()?;
             #[cfg(feature = "desktop-test")]
-            let test_data = tempfile::Builder::new()
-                .prefix("stillharbour-native-test-")
-                .tempdir()?;
+            let test_data = catalog_test_session::NativeTestData::open()?;
             #[cfg(feature = "desktop-test")]
             let data = test_data.path().to_owned();
             std::fs::create_dir_all(&data)?;

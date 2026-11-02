@@ -70,6 +70,7 @@ enum Request {
 struct CatalogDatabase {
     connection: Connection,
     _lock: CatalogLock,
+    _parents: Option<crate::filesystem::DirectoryChain>,
 }
 struct CatalogLock(std::fs::File);
 impl Drop for CatalogLock {
@@ -238,6 +239,79 @@ impl Catalog {
         Ok(())
     }
 
+    /// Fixed generated-fixture catalog edits. No original-file operation or SQL
+    /// string is accepted, and production builds omit this test support.
+    #[cfg(feature = "fixture-probes")]
+    pub fn fixture_catalog_recovery_edit(&self, root_id: &str, second: bool) -> Result<()> {
+        uuid::Uuid::parse_str(root_id).map_err(|_| {
+            AppError::new(ErrorCode::InvalidInput, "Invalid generated root identity.")
+        })?;
+        let root_id = root_id.to_owned();
+        self.call(move |db| {
+            let tx = db.transaction()?;
+            let label = if second {
+                "Generated second newer catalog edit"
+            } else {
+                "Generated first newer catalog edit"
+            };
+            if tx.execute(
+                "UPDATE roots SET label=?1 WHERE id=?2 AND label='Generated M4 application scope'",
+                rusqlite::params![label, root_id],
+            )? != 1
+            {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "This is not the unchanged generated catalog fixture root.",
+                ));
+            }
+            tx.execute(
+                "UPDATE library_state SET revision=revision+1 WHERE singleton=1",
+                [],
+            )?;
+            tx.commit()?;
+            Ok(())
+        })
+    }
+
+    #[cfg(feature = "fixture-probes")]
+    pub fn fixture_catalog_recovery_label(&self, root_id: &str) -> Result<String> {
+        uuid::Uuid::parse_str(root_id).map_err(|_| {
+            AppError::new(ErrorCode::InvalidInput, "Invalid generated root identity.")
+        })?;
+        let root_id = root_id.to_owned();
+        self.call(move |db| Ok(db.query_row("SELECT CASE WHEN length(CAST(label AS BLOB))<=128 THEN label END FROM roots WHERE id=?", [root_id], |row| row.get(0))?))
+    }
+
+    #[cfg(feature = "fixture-probes")]
+    pub fn fixture_catalog_recovery_root_binding(
+        &self,
+        root_id: &str,
+    ) -> Result<crate::catalog_restore::CatalogRootMapping> {
+        uuid::Uuid::parse_str(root_id).map_err(|_| {
+            AppError::new(ErrorCode::InvalidInput, "Invalid generated root identity.")
+        })?;
+        let root_id = root_id.to_owned();
+        self.call(move |db| {
+            let (path, device, inode, volume, platform): (Vec<u8>,String,String,String,String) = db.query_row(
+                "SELECT CASE WHEN length(native_path)<=32768 THEN native_path END,CASE WHEN length(device)<=20 THEN device END,CASE WHEN length(inode)<=20 THEN inode END,CASE WHEN length(volume)<=4096 THEN volume END,CASE WHEN length(platform)<=32 THEN platform END FROM roots WHERE id=?",
+                [&root_id], |r| Ok((r.get(0)?,r.get(1)?,r.get(2)?,r.get(3)?,r.get(4)?)),
+            )?;
+            let invalid = || AppError::new(ErrorCode::InvalidInput, "Generated native root binding is invalid.");
+            if platform != std::env::consts::OS { return Err(invalid()); }
+            crate::library::native::decode_path(&path)?;
+            Ok(crate::catalog_restore::CatalogRootMapping {
+                root_id, path,
+                identity: crate::filesystem::FileIdentity {
+                    volume: device.parse().map_err(|_| invalid())?,
+                    file: inode.parse().map_err(|_| invalid())?,
+                    // Root rows persist native device/inode, not mutable nlink.
+                    links: 1,
+                },
+                volume,
+            })
+        })
+    }
+
     pub fn summary(&self) -> Result<CatalogSummary> {
         let (reply, response) = mpsc::sync_channel(1);
         self.sender
@@ -346,6 +420,28 @@ fn open_database(path: &Path, expected: Option<&ExistingCatalog>) -> Result<Cata
             "SQLite must include the WAL-reset fix (3.51.3 or newer).",
         ));
     }
+    // Resolve inherited OS parent aliases (notably macOS /var -> /private/var)
+    // before SQLite NOFOLLOW, without resolving away a forbidden leaf symlink.
+    let bound_path = if let Some(expected) = expected {
+        expected.validate(path)?;
+        let parent = path.parent().ok_or_else(|| {
+            AppError::new(ErrorCode::InvalidInput, "Catalog requires a local parent.")
+        })?;
+        let leaf = path.file_name().ok_or_else(|| {
+            AppError::new(ErrorCode::InvalidInput, "Catalog requires a file name.")
+        })?;
+        Some(std::fs::canonicalize(parent)?.join(leaf))
+    } else {
+        None
+    };
+    let path = bound_path.as_deref().unwrap_or(path);
+    let parents = if expected.is_some() {
+        Some(crate::filesystem::DirectoryChain::open(
+            path.parent().expect("validated catalog parent"),
+        )?)
+    } else {
+        None
+    };
     let lock = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -359,15 +455,32 @@ fn open_database(path: &Path, expected: Option<&ExistingCatalog>) -> Result<Cata
     if let Some(expected) = expected {
         expected.validate(path)?;
     }
-    let mut flags = OpenFlags::SQLITE_OPEN_READ_WRITE
-        | OpenFlags::SQLITE_OPEN_NO_MUTEX
-        | OpenFlags::SQLITE_OPEN_NOFOLLOW;
+    let mut flags = OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX;
     if expected.is_none() {
         flags |= OpenFlags::SQLITE_OPEN_CREATE;
+    } else {
+        flags |= OpenFlags::SQLITE_OPEN_NOFOLLOW;
     }
     let mut connection = Connection::open_with_flags(path, flags)?;
     if let Some(expected) = expected {
         expected.validate(path)?;
+    }
+    if let Some(parents) = &parents {
+        let current = crate::filesystem::DirectoryChain::open(
+            path.parent().expect("validated catalog parent"),
+        )?;
+        if current.identities().len() != parents.identities().len()
+            || current
+                .identities()
+                .iter()
+                .zip(parents.identities())
+                .any(|(current, held)| current.volume != held.volume || current.file != held.file)
+        {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The selected catalog parent changed during opening.",
+            ));
+        }
     }
     connection.busy_timeout(Duration::from_secs(2))?;
     connection.execute_batch(
@@ -448,6 +561,7 @@ fn open_database(path: &Path, expected: Option<&ExistingCatalog>) -> Result<Cata
     Ok(CatalogDatabase {
         connection,
         _lock: lock,
+        _parents: parents,
     })
 }
 
@@ -694,6 +808,29 @@ mod tests {
         drop(file);
         assert!(Catalog::open_bound_existing(path.clone(), identity, volume).is_err());
         assert_eq!(std::fs::metadata(path).unwrap().len(), 0);
+    }
+    #[test]
+    #[cfg(unix)]
+    fn catalog_restore_bound_open_resolves_parent_alias_but_rejects_leaf_symlink() {
+        let owned = tempfile::tempdir().unwrap();
+        let real = owned.path().join("real");
+        std::fs::create_dir(&real).unwrap();
+        let alias = owned.path().join("parent-alias");
+        std::os::unix::fs::symlink(&real, &alias).unwrap();
+        let path = alias.join("Generated.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let catalog_id = catalog.summary().unwrap().id;
+        drop(catalog);
+        let file = std::fs::File::open(&path).unwrap();
+        let identity = crate::filesystem::identity(&file).unwrap();
+        let volume = crate::library::native::volume_token(&file).unwrap();
+        drop(file);
+        let catalog = Catalog::open_bound_existing(path, identity.clone(), volume.clone()).unwrap();
+        assert_eq!(catalog.summary().unwrap().id, catalog_id);
+        drop(catalog);
+        let leaf_alias = real.join("Leaf.stillharbour");
+        std::os::unix::fs::symlink(real.join("Generated.stillharbour"), &leaf_alias).unwrap();
+        assert!(Catalog::open_bound_existing(leaf_alias, identity, volume).is_err());
     }
     #[test]
     #[cfg(unix)]

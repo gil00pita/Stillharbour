@@ -496,6 +496,7 @@ function WorkspaceContent({
       <BackupScreen
         key={foundation?.catalogId ?? 'catalog'}
         status={status}
+        catalogId={foundation?.catalogId ?? null}
         navigationControl={navigationControl}
         jobsControl={jobsControl}
       />

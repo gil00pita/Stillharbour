@@ -35,6 +35,17 @@ export function CatalogSwitchStopped({ state }: { state: CatalogSwitchState }) {
         may reject an invalid or incomplete switch; it does not silently create an empty catalog.
       </p>
       <p>
+        {state.sourceKind === 'retained_pre_restore' ? (
+          <>
+            Source: Local catalog saved before switch <code>{state.retainedTransactionId}</code>
+          </>
+        ) : (
+          <>
+            Source: Verified snapshot restore <code>{state.restoreJobId}</code>
+          </>
+        )}
+      </p>
+      <p>
         Catalog UUID: <code>{state.catalogId}</code>
       </p>
     </main>

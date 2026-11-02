@@ -49,8 +49,14 @@ pub struct PreparedCatalogRestore {
     pub version: u32,
     pub transaction_id: String,
     pub catalog_id: String,
-    pub source_restore_job_id: String,
-    pub source_snapshot_id: String,
+    #[serde(default)]
+    pub source_kind: crate::backup::snapshots::CatalogRestoreSourceKind,
+    pub source_restore_job_id: Option<String>,
+    pub source_snapshot_id: Option<String>,
+    #[serde(default)]
+    pub retained_transaction_id: Option<String>,
+    #[serde(default)]
+    pub retained_generation: Option<String>,
     pub source_catalog_revision: String,
     pub candidate_catalog_revision: String,
     pub current_catalog_revision: String,
@@ -60,11 +66,50 @@ pub struct PreparedCatalogRestore {
     pub candidate: CatalogFileBinding,
     pub roots: Vec<CatalogRootMapping>,
 }
+impl PreparedCatalogRestore {
+    pub fn validate_provenance(&self) -> Result<()> {
+        use crate::backup::snapshots::CatalogRestoreSourceKind::*;
+        let uuid =
+            |value: &str| uuid::Uuid::parse_str(value).is_ok_and(|id| id.to_string() == value);
+        let concrete =
+            |value: &str| value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit());
+        let generation = |value: &str| {
+            value.len() <= 20 && value.parse::<u64>().is_ok_and(|n| n.to_string() == value)
+        };
+        if !uuid(&self.transaction_id) || !uuid(&self.catalog_id) || !matches!(self.version, 1 | 2)
+        {
+            return Err(rejected());
+        }
+        let valid = match self.source_kind {
+            VerifiedSnapshotRestore => {
+                self.source_restore_job_id.as_deref().is_some_and(uuid)
+                    && self.source_snapshot_id.as_deref().is_some_and(concrete)
+                    && self.retained_transaction_id.is_none()
+                    && self.retained_generation.is_none()
+            }
+            RetainedPreRestore => {
+                self.version == 2
+                    && self.source_restore_job_id.is_none()
+                    && self.source_snapshot_id.is_none()
+                    && self.retained_transaction_id.as_deref().is_some_and(uuid)
+                    && self.retained_generation.as_deref().is_some_and(generation)
+            }
+        };
+        if !valid {
+            return Err(rejected());
+        }
+        Ok(())
+    }
+}
 fn rejected() -> AppError {
     AppError::new(
         ErrorCode::InvalidInput,
         "The catalog is outside the reviewed current-schema activation contract; no imported schema was executed.",
     )
+}
+fn bounded_text(db: &Connection, sql: &str) -> Result<String> {
+    db.query_row(sql, [], |row| row.get::<_, Option<String>>(0))?
+        .ok_or_else(rejected)
 }
 /// Bounds are enforced in SQLite before values cross into Rust allocations.
 pub fn schema_objects(db: &Connection) -> Result<Vec<SchemaObject>> {
@@ -126,34 +171,36 @@ pub fn validate_catalog(
     {
         return Err(rejected());
     }
-    let actual: String = db.query_row(
-        "SELECT uuid FROM catalog_identity WHERE singleton=1",
-        [],
-        |r| r.get(0),
+    let actual = bounded_text(
+        &db,
+        "SELECT CASE WHEN length(CAST(uuid AS BLOB))=36 THEN uuid END FROM catalog_identity WHERE singleton=1",
     )?;
     let check: String = db.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
     if actual != catalog_id || check != "ok" || db.prepare("PRAGMA foreign_key_check")?.exists([])?
     {
         return Err(rejected());
     }
-    let revision = db.query_row(
-        "SELECT CAST(revision AS TEXT) FROM library_state WHERE singleton=1",
-        [],
-        |r| r.get(0),
+    let revision = bounded_text(
+        &db,
+        "SELECT CASE WHEN typeof(revision)='integer' AND revision>=0 AND length(CAST(revision AS BLOB))<=20 THEN CAST(revision AS TEXT) END FROM library_state WHERE singleton=1",
     )?;
     let mut roots = Vec::new();
-    let mut statement=db.prepare("SELECT CASE WHEN length(id)=36 THEN id END,CASE WHEN length(native_path)<=32768 THEN native_path END,CASE WHEN length(device)<=32 THEN device END,CASE WHEN length(inode)<=32 THEN inode END,CASE WHEN length(volume)<=4096 THEN volume END,CASE WHEN length(platform)<=32 THEN platform END FROM roots ORDER BY id LIMIT 33")?;
+    let mut statement=db.prepare("SELECT CASE WHEN length(CAST(id AS BLOB))=36 THEN id END,CASE WHEN typeof(native_path)='blob' AND length(native_path)<=32768 THEN native_path END,CASE WHEN length(CAST(device AS BLOB))<=20 THEN device END,CASE WHEN length(CAST(inode AS BLOB))<=20 THEN inode END,CASE WHEN length(CAST(volume AS BLOB))<=4096 THEN volume END,CASE WHEN length(CAST(platform AS BLOB))<=32 THEN platform END FROM roots ORDER BY id LIMIT 33")?;
     for row in statement.query_map([], |r| {
         Ok((
-            r.get::<_, String>(0)?,
-            r.get::<_, Vec<u8>>(1)?,
-            r.get::<_, String>(2)?,
-            r.get::<_, String>(3)?,
-            r.get::<_, String>(4)?,
-            r.get::<_, String>(5)?,
+            r.get::<_, Option<String>>(0)?,
+            r.get::<_, Option<Vec<u8>>>(1)?,
+            r.get::<_, Option<String>>(2)?,
+            r.get::<_, Option<String>>(3)?,
+            r.get::<_, Option<String>>(4)?,
+            r.get::<_, Option<String>>(5)?,
         ))
     })? {
-        let (root_id, path, device, inode, volume, platform) = row?;
+        let (Some(root_id), Some(path), Some(device), Some(inode), Some(volume), Some(platform)) =
+            row?
+        else {
+            return Err(rejected());
+        };
         if platform != std::env::consts::OS {
             return Err(AppError::new(
                 ErrorCode::Unsupported,
@@ -302,15 +349,13 @@ pub fn validate_current_revision(
     {
         return Err(rejected());
     }
-    let actual: String = db.query_row(
-        "SELECT uuid FROM catalog_identity WHERE singleton=1",
-        [],
-        |r| r.get(0),
+    let actual = bounded_text(
+        &db,
+        "SELECT CASE WHEN length(CAST(uuid AS BLOB))=36 THEN uuid END FROM catalog_identity WHERE singleton=1",
     )?;
-    let revision: String = db.query_row(
-        "SELECT CAST(revision AS TEXT) FROM library_state WHERE singleton=1",
-        [],
-        |r| r.get(0),
+    let revision = bounded_text(
+        &db,
+        "SELECT CASE WHEN typeof(revision)='integer' AND revision>=0 AND length(CAST(revision AS BLOB))<=20 THEN CAST(revision AS TEXT) END FROM library_state WHERE singleton=1",
     )?;
     let after = capture_current(&path)?;
     if actual != catalog_id
@@ -323,9 +368,88 @@ pub fn validate_current_revision(
     Ok(())
 }
 
+/// Exact generated native-GUI audit, never a general SQL or path capability.
+#[cfg(feature = "fixture-probes")]
+pub fn fixture_catalog_label(
+    binding: &CatalogFileBinding,
+    catalog_id: &str,
+    root_id: &str,
+) -> Result<String> {
+    for value in [catalog_id, root_id] {
+        if uuid::Uuid::parse_str(value).is_err() {
+            return Err(rejected());
+        }
+    }
+    let path = binding.native_path()?;
+    let held = filesystem::open_readonly(&path)?;
+    if filesystem::identity(&held)? != binding.identity {
+        return Err(rejected());
+    }
+    validate_frozen(binding)?;
+    validate_catalog(
+        &path,
+        catalog_id,
+        &crate::catalog::current_schema_fingerprint()?,
+    )?;
+    let db = Connection::open_with_flags(
+        &path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    db.execute_batch("PRAGMA trusted_schema=OFF; PRAGMA query_only=ON;")?;
+    let label=db.query_row("SELECT CASE WHEN length(CAST(label AS BLOB))<=128 THEN label END FROM roots WHERE id=?",[root_id],|row|row.get::<_,Option<String>>(0))?.ok_or_else(rejected)?;
+    validate_frozen(binding)?;
+    Ok(label)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn imported_identity_and_revision_fields_are_bounded_before_allocation() {
+        let run = tempfile::tempdir().unwrap();
+        let root = run.path().canonicalize().unwrap();
+        let source = root.join("source");
+        std::fs::create_dir(&source).unwrap();
+        let catalog = crate::catalog::Catalog::open(root.join("generated.stillharbour")).unwrap();
+        let held = native::open_root(&source, None).unwrap();
+        crate::library::store::add_root(
+            &catalog,
+            source,
+            filesystem::identity(&held).unwrap(),
+            native::volume_token(&held).unwrap(),
+            "Generated".into(),
+            crate::library::model::RootMode::Referenced,
+            crate::library::model::ScanFilter::default(),
+        )
+        .unwrap();
+        let schema = catalog.schema_fingerprint().unwrap();
+        let catalog_id = catalog.summary().unwrap().id;
+        let cases = [
+            "UPDATE catalog_identity SET uuid=?1",
+            "UPDATE library_state SET revision=?1",
+            "UPDATE roots SET id=?1",
+            "UPDATE roots SET device=?1",
+            "UPDATE roots SET inode=?1",
+            "UPDATE roots SET platform=?1",
+            "UPDATE roots SET volume=?1",
+        ];
+        for (index, sql) in cases.iter().enumerate() {
+            let path = root.join(format!("oversized-{index}.stillharbour"));
+            catalog.snapshot(path.clone()).unwrap();
+            let db = Connection::open(&path).unwrap();
+            db.execute(sql, ["x".repeat(256 * 1024)]).unwrap();
+            db.close().unwrap();
+            let frozen = capture_file(&path).unwrap();
+            assert_eq!(
+                validate_catalog(&path, &catalog_id, &schema)
+                    .err()
+                    .unwrap()
+                    .code,
+                ErrorCode::InvalidInput
+            );
+            validate_frozen(&frozen).unwrap();
+        }
+    }
     #[test]
     fn imported_schema_text_is_compared_as_data_before_catalog_queries() {
         let run = tempfile::tempdir().unwrap();

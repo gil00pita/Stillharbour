@@ -45,6 +45,8 @@ jobs:
       - run: npm run release:check
       - run: npm run desktop:test:build
       - run: npm run desktop:test
+      - name: Native catalog activation and retained edits across three launches
+        run: npm run desktop:test:catalog
       - name: Native cross-volume generated fixtures
         run: npm run native:cross-volume
       - uses: actions/upload-artifact@v4
@@ -56,6 +58,8 @@ jobs:
             .context/m4b-append/**/m4b-append.json
             .context/m4c-retained/**/m4c-retained.json
             .context/m4-application
+            .context/m4-catalog-restart
+            .context/wdio-catalog-restart
             .context/wdio
             .context/gallery/**/warm-scroll.json
             .context/gallery/**/preparation-pause.json

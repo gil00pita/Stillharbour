@@ -41,6 +41,9 @@ pub enum SnapshotDestinationInput {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SnapshotRequest {
+    CatalogRestoreReviewRetained {
+        transaction_id: String,
+    },
     CatalogRestoreReview {
         restore_job_id: String,
     },
@@ -152,6 +155,9 @@ impl SnapshotRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SnapshotCapabilities {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub latest_retained_catalog_transaction_id: Option<String>,
     pub helpers_available: bool,
     pub credentials_available: bool,
     pub backup_available: bool,
@@ -312,8 +318,10 @@ pub struct CatalogRestoreRoot {
 pub struct CatalogRestoreReview {
     pub id: String,
     pub digest: String,
-    pub restore_job_id: String,
-    pub snapshot_id: String,
+    pub source_kind: CatalogRestoreSourceKind,
+    pub restore_job_id: Option<String>,
+    pub snapshot_id: Option<String>,
+    pub retained_transaction_id: Option<String>,
     pub catalog_id: String,
     pub schema: u32,
     pub current_revision: String,
@@ -321,6 +329,13 @@ pub struct CatalogRestoreReview {
     pub roots: Vec<CatalogRestoreRoot>,
     pub approval_available: bool,
     pub warning: String,
+}
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum CatalogRestoreSourceKind {
+    #[default]
+    VerifiedSnapshotRestore,
+    RetainedPreRestore,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

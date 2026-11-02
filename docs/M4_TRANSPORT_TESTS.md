@@ -67,6 +67,17 @@ Reconnect remains refused until the native job stops and the exact disarm marker
 
 The Python fault/supervision cases include actual echo forwarding, owned connection closure, reconnect only after disarm, and rejection of existing/non-growing/complete packs as interruption evidence. The proxy uses [Python 3.13 selectors](https://docs.python.org/3.13/library/selectors.html) and bounded [socket send operations](https://docs.python.org/3.13/library/socket.html#socket.socket.send).
 
-Checkpoint `3278459` CI passes the Windows transport suite and the actual macOS SFTP disconnect case. Its macOS SMB disconnect case fails: the proxy sampled a temporary repository lock after restic had removed it, crashed with `FileNotFoundError`, and never earned fault evidence. That run remains failed evidence. The corrected progress monitor filters for eligible NEW data packs before querying metadata; a vanished NEW pack earns no evidence and resets its growth witness. It never relaxes the final frozen OLD-object audit. Dedicated regressions cover disappearing locks/packs and rejection of a missing baseline object. Actual macOS SMB retest remains required; a Windows rerun cannot substitute for it.
+Checkpoint `3278459` CI passes the Windows transport suite and the actual macOS SFTP disconnect case. Its macOS SMB disconnect case fails: the proxy sampled a temporary repository lock after restic had removed it, crashed with `FileNotFoundError`, and never earned fault evidence. That run remains failed evidence. The corrected progress monitor filters for eligible NEW data packs before querying metadata; a vanished NEW pack earns no evidence and resets its growth witness. It never relaxes the final frozen OLD-object audit. Dedicated regressions cover disappearing locks/packs and rejection of a missing baseline object. That checkpoint did not establish macOS SMB acceptance.
 
-The corrected Windows SMB application rerun passes in 59.796 seconds (`.context/m4-smb-proxy-transient-fixed-windows.json`): 1048576 native new-pack bytes and 1072503 armed forwarded bytes precede the owned disconnect. All earlier encrypted objects, source/history/neighbors and helper-stop audits pass; recovery remains explicitly locked and unresolved. All fifteen Python fault/supervision regressions pass after the race fix. macOS SMB remains pending its corrected CI run.
+The corrected Windows SMB application rerun passes in 59.796 seconds (`.context/m4-smb-proxy-transient-fixed-windows.json`): 1048576 native new-pack bytes and 1072503 armed forwarded bytes precede the owned disconnect. All earlier encrypted objects, source/history/neighbors and helper-stop audits pass; recovery remains explicitly locked and unresolved. All fifteen Python fault/supervision regressions pass after the race fix.
+
+Corrected checkpoint `2b3c245` CI passes the actual SMB and SFTP cases on both operating systems. Downloaded receipts are under `.context/ci-2b3c245-transports/m4-transport-evidence-{macos-15,windows-latest}/m4-application-smb-sftp-disconnect.json`:
+
+| OS      | Protocol | Seconds | Native new-pack bytes | Armed forwarded bytes |
+| ------- | -------- | ------: | --------------------: | --------------------: |
+| macOS   | SFTP     |  65.294 |                258048 |                282440 |
+| macOS   | SMB      |  69.958 |                 65536 |                 89105 |
+| Windows | SFTP     |  43.648 |                258048 |                283337 |
+| Windows | SMB      |  45.559 |               1048576 |               1072463 |
+
+All four outcomes are `preserved_unresolved_lock`: frozen old-object, source, history/neighbor and helper-stop audits pass; post-fault recovery remains blocked and no unlock or backup replay occurs. These are actual per-platform application/proxy results, not physical unplug or strict independent-recovery certificates. The earlier macOS failure remains retained separately.

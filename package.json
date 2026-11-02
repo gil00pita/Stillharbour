@@ -21,6 +21,7 @@
     "desktop:build": "npm run tauri -- build --bundles app",
     "desktop:test:build": "npm run tauri -- build --debug --no-bundle --features desktop-test --config src-tauri/tauri.test.conf.json",
     "desktop:test": "wdio run wdio.conf.mjs",
+    "desktop:test:catalog": "node --test tests/catalog-desktop/session-owner.node-test.mjs && wdio run wdio.catalog.conf.mjs",
     "desktop:test:formats": "wdio run wdio.formats.conf.mjs",
     "formats:build": "node scripts/cargo.mjs build --locked --release -p stillharbour-core --features fixture-probes --example format_probe",
     "formats:test": "python3 scripts/formats/run.py",

@@ -7,7 +7,7 @@ import type {
   SnapshotRequest,
 } from '../bindings';
 import { libraryData, pickDirectory } from '../ipc';
-import { CatalogRestore } from './CatalogRestore';
+import { CatalogRestore, RetainedCatalogRestore } from './CatalogRestore';
 import { catalogSwitchStore } from './catalogSwitchState';
 
 vi.mock('./catalogSwitchState', async (original) => ({
@@ -43,6 +43,8 @@ const job: SnapshotJob = {
 function initialReview(): CatalogRestoreReview {
   return {
     id: 'catalog-review',
+    sourceKind: 'verified_snapshot_restore',
+    retainedTransactionId: null,
     digest: 'a'.repeat(64),
     restoreJobId: job.id,
     snapshotId: job.snapshotId!,
@@ -68,7 +70,10 @@ beforeEach(() => {
   vi.clearAllMocks();
   current = initialReview();
   handler = async (request) => {
-    if (request.kind === 'catalog_restore_review')
+    if (
+      request.kind === 'catalog_restore_review' ||
+      request.kind === 'catalog_restore_review_retained'
+    )
       return { kind: 'catalog_restore_review', data: current };
     if (request.kind === 'catalog_restore_map') {
       current = {
@@ -432,7 +437,10 @@ it.each(['prepared', 'lost'] as const)(
     fireEvent.click(screen.getByRole('button', { name: 'Prepare catalog switch' }));
     expect(catalogSwitchStore.begin).toHaveBeenCalledWith({
       catalogId,
+      sourceKind: current.sourceKind,
       restoreJobId: job.id,
+      snapshotId: job.snapshotId,
+      retainedTransactionId: null,
       reviewDigest: current.digest,
     });
     view.unmount();
@@ -462,3 +470,109 @@ it.each(['prepared', 'lost'] as const)(
       );
   },
 );
+
+function retainedReview(): CatalogRestoreReview {
+  return {
+    ...initialReview(),
+    sourceKind: 'retained_pre_restore',
+    restoreJobId: null,
+    snapshotId: null,
+    retainedTransactionId: 'latest-native-transaction',
+  };
+}
+function openRetained(transactionId = 'latest-native-transaction') {
+  return render(
+    <RetainedCatalogRestore
+      transactionId={transactionId}
+      catalogId={catalogId}
+      disabled={false}
+      onActivityChange={activity}
+    />,
+  );
+}
+async function loadRetained() {
+  fireEvent.click(screen.getByRole('button', { name: 'Review latest retained catalog' }));
+  await screen.findByText('newer-current-revision');
+}
+it('reviews only the native latest retained source without inventing snapshot or job identity', async () => {
+  current = retainedReview();
+  openRetained();
+  expect(libraryData).not.toHaveBeenCalled();
+  await loadRetained();
+  expect(screen.getByText(/Source: Local catalog saved before switch/)).toBeVisible();
+  expect(screen.queryByText(job.snapshotId!)).not.toBeInTheDocument();
+  expect(screen.queryByText(job.id)).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Approve catalog switch' })).toBeDisabled();
+  expect(libraryData).toHaveBeenCalledWith(
+    {
+      kind: 'backup_snapshots',
+      request: {
+        kind: 'catalog_restore_review_retained',
+        transaction_id: 'latest-native-transaction',
+      },
+    },
+    'backup_snapshots',
+  );
+  expect(kinds()).not.toContain('catalog_restore_review');
+});
+it('creates a new reviewed and approved retained-source preparation that preserves current edits again', async () => {
+  current = retainedReview();
+  openRetained();
+  await loadRetained();
+  await mapRoots();
+  expect(screen.getByText(/preserved again in a new transaction/)).toBeVisible();
+  fireEvent.click(
+    screen.getByRole('checkbox', { name: /I reviewed these exact catalog revisions/ }),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Approve catalog switch' }));
+  await screen.findByRole('button', { name: 'Prepare catalog switch' });
+  expect(kinds()).not.toContain('catalog_restore_prepare');
+  fireEvent.click(screen.getByRole('button', { name: 'Prepare catalog switch' }));
+  await screen.findByText(/Pending restart. The current catalog is retained/);
+  expect(catalogSwitchStore.begin).toHaveBeenCalledWith({
+    catalogId,
+    sourceKind: 'retained_pre_restore',
+    restoreJobId: null,
+    snapshotId: null,
+    retainedTransactionId: 'latest-native-transaction',
+    reviewDigest: current.digest,
+  });
+});
+it.each(['sourceKind', 'restoreJobId', 'snapshotId', 'retainedTransactionId'] as const)(
+  'rejects retained review with mismatched %s attribution',
+  async (field) => {
+    current = {
+      ...retainedReview(),
+      [field]: field === 'sourceKind' ? 'verified_snapshot_restore' : 'wrong-source-identity',
+    } as CatalogRestoreReview;
+    openRetained();
+    fireEvent.click(screen.getByRole('button', { name: 'Review latest retained catalog' }));
+    await screen.findByRole('alert');
+    expect(
+      screen.queryByRole('button', { name: 'Approve catalog switch' }),
+    ).not.toBeInTheDocument();
+  },
+);
+it('retires an old retained-source response when the latest native transaction changes', async () => {
+  let finish!: (reply: SnapshotReply) => void;
+  current = retainedReview();
+  handler = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  const view = openRetained();
+  fireEvent.click(screen.getByRole('button', { name: 'Review latest retained catalog' }));
+  view.rerender(
+    <RetainedCatalogRestore
+      transactionId="newer-native-transaction"
+      catalogId={catalogId}
+      disabled={false}
+      onActivityChange={activity}
+    />,
+  );
+  await act(async () => {
+    finish({ kind: 'catalog_restore_review', data: current });
+  });
+  expect(screen.queryByText('newer-current-revision')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Review latest retained catalog' })).toBeEnabled();
+});

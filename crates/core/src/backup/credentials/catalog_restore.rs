@@ -169,6 +169,10 @@ pub(crate) fn confirm_initialized(scope: &str, expected: &Authority) -> Result<A
 pub(crate) fn delete_owned_fixture(scope: &str) -> Result<()> {
     platform::delete(&key(scope)?)
 }
+#[cfg(feature = "fixture-probes")]
+pub(crate) fn delete_generated_session(scope: &str) -> Result<()> {
+    platform::delete(&key(scope)?)
+}
 
 #[cfg(test)]
 mod tests {

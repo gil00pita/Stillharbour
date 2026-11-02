@@ -186,6 +186,18 @@ overwriting the original or creating an empty fallback. UI must distinguish
 prepared/restart-required from activated; failure after quiescence requires
 reopening the retained original. Imported schedules/approvals never execute.
 
+After activating a snapshot catalog, add new local edits and review the latest
+sealed pre-restore catalog with no repository password/helpers available. Use
+explicit retained-source provenance and no snapshot ID. Derive its complete
+root set from the retained catalog, including roots absent from the previous
+snapshot, and confirm each root again. Prepare a new forward candidate, retain
+the current edits in another consistent catalog, activate after reopening, and
+verify both generations remain recoverable. Reject stale generation/transaction
+proofs, pending-selector races, forged provenance and changed retained bytes.
+Existing version-1 descriptor bytes/seals remain unchanged; only snapshot
+provenance is accepted for that version. Bound oversized imported identity and
+revision text in SQL before allocating it in Rust.
+
 AC-073 application checks also require exact reviewed manifest/profile consent:
 changed content, versions, roots or endpoints return to review; imported/restored
 catalog schedules cannot execute. Test elapsed UTC intervals, one unchanged-scope

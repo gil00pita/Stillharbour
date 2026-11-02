@@ -487,7 +487,12 @@ Reject unsafe or escaping paths from repository manifests. After restoration, co
 
 M4's separate catalog action activates after closing and reopening the app. Its
 source is a completed fully compared restore job, authenticated again against
-the concrete repository manifest. Initial activation supports the same catalog
+the concrete repository manifest, or the latest OS-sealed local pre-restore
+catalog of the currently active transaction. Distinguish those source kinds;
+local catalog recovery has no repository snapshot or media-backup claim and
+requires no repository credentials/helpers. A retained return creates a new
+forward activation and preserves the current catalog again. No arbitrary path,
+older transaction chain or pointer rollback is admitted. Initial activation supports the same catalog
 UUID, platform and current schema; older/cross-platform conversion is explicitly
 unsupported until tested. Compare imported schema as bounded data against the
 compiled owned schema before writable access; never execute imported scripts.

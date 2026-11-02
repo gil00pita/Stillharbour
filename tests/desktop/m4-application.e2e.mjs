@@ -357,6 +357,10 @@ describe('M4 application snapshot lifecycle — generated native fixtures', () =
         .find((node) => node.textContent.startsWith('Exact review digest:'))
         ?.querySelector('code')?.textContent;
       return {
+        sourceKind: panel.getAttribute('data-catalog-source'),
+        restoreJobId: panel.getAttribute('data-restore-job-id'),
+        snapshotId: panel.getAttribute('data-snapshot-id'),
+        retainedTransactionId: panel.getAttribute('data-retained-transaction-id'),
         catalogId: facts[0],
         schema: facts[1],
         currentRevision: facts[2],
@@ -365,6 +369,10 @@ describe('M4 application snapshot lifecycle — generated native fixtures', () =
       };
     });
     assert.equal(catalogReview.catalogId, source.catalogId);
+    assert.equal(catalogReview.sourceKind, 'verified_snapshot_restore');
+    assert.equal(catalogReview.restoreJobId, restored.id);
+    assert.equal(catalogReview.snapshotId, record.id);
+    assert.equal(catalogReview.retainedTransactionId, null);
     assert.match(catalogReview.digest, /^[a-f0-9]{64}$/);
     assert.ok(catalogReview.currentRevision);
     assert.ok(catalogReview.restoredRevision);

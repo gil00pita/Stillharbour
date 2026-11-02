@@ -1007,3 +1007,68 @@ it('discovers scheduled work through bounded metadata refreshes without overlapp
     vi.useRealTimers();
   }
 });
+
+it.each(['pending', 'failed'] as const)(
+  'shows the local retained action independently of %s snapshot profiles and unavailable helpers',
+  async (profileState) => {
+    const normal = handler;
+    handler = async (request) => {
+      if (request.kind === 'capabilities')
+        return {
+          kind: 'capabilities',
+          data: {
+            ...capabilities,
+            latestRetainedCatalogTransactionId: 'latest-native-transaction',
+            helpersAvailable: false,
+            credentialsAvailable: false,
+            backupAvailable: false,
+            restoreAvailable: false,
+            scheduleAvailable: false,
+            unavailableReason: 'Snapshot helpers are unavailable',
+          },
+        };
+      if (request.kind === 'profiles') {
+        if (profileState === 'failed') throw new Error('Repository credentials unavailable');
+        return await new Promise<SnapshotReply>(() => {});
+      }
+      if (request.kind === 'catalog_restore_review_retained')
+        return {
+          kind: 'catalog_restore_review',
+          data: {
+            id: 'local-retained-review',
+            digest: 'a'.repeat(64),
+            sourceKind: 'retained_pre_restore',
+            restoreJobId: null,
+            snapshotId: null,
+            retainedTransactionId: 'latest-native-transaction',
+            catalogId: profile.catalogId,
+            schema: 17,
+            currentRevision: 'current-local',
+            restoredRevision: 'prior-local',
+            roots: [],
+            approvalAvailable: false,
+            warning: 'Current edits will be preserved separately',
+          },
+        };
+      return normal(request);
+    };
+    render(
+      <SnapshotWorkflow status={status} catalogId={profile.catalogId} onActivityChange={vi.fn()} />,
+    );
+    const button = await screen.findByRole('button', { name: 'Review latest retained catalog' });
+    expect(button).toBeEnabled();
+    fireEvent.click(button);
+    await screen.findByText('current-local');
+    expect(libraryData).toHaveBeenCalledWith(
+      {
+        kind: 'backup_snapshots',
+        request: {
+          kind: 'catalog_restore_review_retained',
+          transaction_id: 'latest-native-transaction',
+        },
+      },
+      'backup_snapshots',
+    );
+    expect(screen.getByRole('combobox', { name: 'Snapshot profile' })).toHaveValue('');
+  },
+);

@@ -39,7 +39,37 @@ export function CatalogRestore({
   return (
     <CatalogRestoreWorkspace
       key={`${catalogId}:${job.id}:${job.snapshotId}`}
-      job={job}
+      source={{
+        kind: 'verified_snapshot_restore',
+        restoreJobId: job.id,
+        snapshotId: job.snapshotId,
+      }}
+      catalogId={catalogId}
+      disabled={disabled}
+      onActivityChange={onActivityChange}
+    />
+  );
+}
+
+type CatalogSource =
+  | { kind: 'verified_snapshot_restore'; restoreJobId: string; snapshotId: string }
+  | { kind: 'retained_pre_restore'; transactionId: string };
+
+export function RetainedCatalogRestore({
+  transactionId,
+  catalogId,
+  disabled,
+  onActivityChange,
+}: {
+  transactionId: string;
+  catalogId: string;
+  disabled: boolean;
+  onActivityChange: (scopeId: string, active: boolean) => void;
+}) {
+  return (
+    <CatalogRestoreWorkspace
+      key={`${catalogId}:retained:${transactionId}`}
+      source={{ kind: 'retained_pre_restore', transactionId }}
       catalogId={catalogId}
       disabled={disabled}
       onActivityChange={onActivityChange}
@@ -48,16 +78,21 @@ export function CatalogRestore({
 }
 
 function CatalogRestoreWorkspace({
-  job,
+  source,
   catalogId,
   disabled,
   onActivityChange,
 }: {
-  job: SnapshotJob;
+  source: CatalogSource;
   catalogId: string;
   disabled: boolean;
-  onActivityChange: (jobId: string, active: boolean) => void;
+  onActivityChange: (scopeId: string, active: boolean) => void;
 }) {
+  const activityKey =
+    source.kind === 'verified_snapshot_restore'
+      ? source.restoreJobId
+      : `retained:${source.transactionId}`;
+  const retained = source.kind === 'retained_pre_restore';
   const [review, setReview] = useState<CatalogRestoreReview | null>(null);
   const [approval, setApproval] = useState<CatalogRestoreApproval | null>(null);
   const [prepared, setPrepared] = useState<CatalogRestorePrepared | null>(null);
@@ -72,17 +107,25 @@ function CatalogRestoreWorkspace({
     alive.current = true;
     return () => {
       alive.current = false;
-      onActivityChange(job.id, false);
+      onActivityChange(activityKey, false);
     };
-  }, [job.id, onActivityChange]);
+  }, [activityKey, onActivityChange]);
   useEffect(() => {
-    onActivityChange(job.id, busy || Boolean(prepared) || uncertain);
-  }, [job.id, busy, prepared, uncertain, onActivityChange]);
+    onActivityChange(activityKey, busy || Boolean(prepared) || uncertain);
+  }, [activityKey, busy, prepared, uncertain, onActivityChange]);
 
   function validate(value: CatalogRestoreReview) {
+    const sourceMatches =
+      value.sourceKind === source.kind &&
+      (source.kind === 'verified_snapshot_restore'
+        ? value.restoreJobId === source.restoreJobId &&
+          value.snapshotId === source.snapshotId &&
+          value.retainedTransactionId === null
+        : value.restoreJobId === null &&
+          value.snapshotId === null &&
+          value.retainedTransactionId === source.transactionId);
     if (
-      value.restoreJobId !== job.id ||
-      value.snapshotId !== job.snapshotId ||
+      !sourceMatches ||
       value.catalogId !== catalogId ||
       !value.id ||
       !/^[a-fA-F0-9]{64}$/.test(value.digest) ||
@@ -115,22 +158,43 @@ function CatalogRestoreWorkspace({
   const blocked = disabled || busy || Boolean(prepared) || uncertain;
   const ready = review?.approvalAvailable && review.roots.every((root) => root.confirmed);
   return (
-    <section className="backup-review" aria-label="Restored catalog switch">
-      <h5>Use this restored catalog</h5>
+    <section
+      className="backup-review"
+      aria-label={retained ? 'Retained catalog switch' : 'Restored catalog switch'}
+      data-catalog-source={review?.sourceKind}
+      data-restore-job-id={review?.restoreJobId ?? undefined}
+      data-snapshot-id={review?.snapshotId ?? undefined}
+      data-retained-transaction-id={review?.retainedTransactionId ?? undefined}
+    >
+      <h5>
+        {retained ? 'Use the catalog saved before the latest switch' : 'Use this restored catalog'}
+      </h5>
+      {retained && (
+        <p>
+          This local retained source comes from the latest activated catalog switch. Current edits
+          will be preserved again in a new transaction; it does not need repository credentials or
+          backup helpers.
+        </p>
+      )}
       <p>
-        Review switching Stillharbour to this restored catalog. The current catalog and its newer
-        edits must be preserved separately; edits are not merged.
+        Review switching Stillharbour to this {retained ? 'retained' : 'restored'} catalog. The
+        current catalog and its newer edits must be preserved separately; edits are not merged.
       </p>
       {!prepared && !uncertain && (
         <button
           disabled={blocked}
           onClick={() =>
-            void action('Inspecting current and restored catalogs…', async () => {
+            void action('Inspecting current and selected catalogs…', async () => {
               setApproval(null);
               setAcknowledged(false);
               setReview(null);
               const value = await snapshotRequest(
-                { kind: 'catalog_restore_review', restore_job_id: job.id },
+                source.kind === 'verified_snapshot_restore'
+                  ? { kind: 'catalog_restore_review', restore_job_id: source.restoreJobId }
+                  : {
+                      kind: 'catalog_restore_review_retained',
+                      transaction_id: source.transactionId,
+                    },
                 'catalog_restore_review',
               );
               if (!alive.current) return;
@@ -139,14 +203,37 @@ function CatalogRestoreWorkspace({
             })
           }
         >
-          {review ? 'Refresh catalog switch review' : 'Review catalog switch'}
+          {retained
+            ? review
+              ? 'Refresh retained catalog review'
+              : 'Review latest retained catalog'
+            : review
+              ? 'Refresh catalog switch review'
+              : 'Review catalog switch'}
         </button>
       )}
       {review && (
         <>
+          <p>
+            {review.sourceKind === 'retained_pre_restore' ? (
+              <>
+                Source: Local catalog saved before switch{' '}
+                <code>{review.retainedTransactionId}</code>
+              </>
+            ) : (
+              <>
+                Source: Verified snapshot <code>{review.snapshotId}</code> restored by job{' '}
+                <code>{review.restoreJobId}</code>
+              </>
+            )}
+          </p>
           <dl className="backup-evidence">
             <div>
-              <dt>Current and restored catalog UUID</dt>
+              <dt>
+                {retained
+                  ? 'Current and retained catalog UUID'
+                  : 'Current and restored catalog UUID'}
+              </dt>
               <dd>
                 <code>{review.catalogId}</code>
               </dd>
@@ -162,7 +249,7 @@ function CatalogRestoreWorkspace({
               </dd>
             </div>
             <div>
-              <dt>Restored catalog revision</dt>
+              <dt>{retained ? 'Retained catalog revision' : 'Restored catalog revision'}</dt>
               <dd>
                 <code>{review.restoredRevision}</code>
               </dd>
@@ -288,7 +375,10 @@ function CatalogRestoreWorkspace({
                       try {
                         ticket = catalogSwitchStore.begin({
                           catalogId,
-                          restoreJobId: job.id,
+                          sourceKind: review.sourceKind,
+                          restoreJobId: review.restoreJobId,
+                          snapshotId: review.snapshotId,
+                          retainedTransactionId: review.retainedTransactionId,
                           reviewDigest: review.digest,
                         });
                         const value = await snapshotRequest(

@@ -1,6 +1,8 @@
 //! Generated activation-layer tests, distinct from actual backup/prepare proof.
 #![cfg(any(windows, target_os = "macos"))]
 use super::*;
+#[path = "retained_tests.rs"]
+mod retained_tests;
 use crate::catalog::Catalog;
 use std::{
     process::{Child, Command, Stdio},
@@ -104,8 +106,12 @@ impl Fixture {
             version: 1,
             transaction_id,
             catalog_id,
-            source_restore_job_id: uuid::Uuid::new_v4().to_string(),
-            source_snapshot_id: "a".repeat(64),
+            source_kind:
+                crate::backup::snapshots::CatalogRestoreSourceKind::VerifiedSnapshotRestore,
+            source_restore_job_id: Some(uuid::Uuid::new_v4().to_string()),
+            source_snapshot_id: Some("a".repeat(64)),
+            retained_transaction_id: None,
+            retained_generation: None,
             source_catalog_revision: validated.revision.clone(),
             candidate_catalog_revision: validated.revision.clone(),
             current_catalog_revision: validated.revision,
@@ -145,11 +151,32 @@ impl Drop for Fixture {
 fn activation_lock_initial_seed_and_truncation_never_fall_back_empty() {
     let mut fixture = Fixture::new();
     let path = fixture.path();
+    let scope = fixture.store.as_ref().unwrap().scope.clone();
+    let confirmed = authority::read(&scope).unwrap().unwrap();
+    assert!(
+        !confirmed.initializing,
+        "confirmation must persist before close"
+    );
     assert!(matches!(ActivationStore::open(&path),Err(e) if e.code==ErrorCode::CatalogInUse));
     fixture.close();
+    assert_eq!(
+        authority::read(&scope).unwrap().as_ref(),
+        Some(&confirmed),
+        "closing the actor and native ownership must retain confirmed OS authority"
+    );
     let store = ActivationStore::open(&path).unwrap();
+    assert_eq!(store.scope, scope, "native appdata scope changed on reopen");
+    assert_eq!(
+        authority::read(&scope).unwrap().as_ref(),
+        Some(&confirmed),
+        "reopening native ownership must retain confirmed OS authority"
+    );
     let selected = store.startup_selection().unwrap();
-    assert!(!selected.creation_allowed);
+    assert!(
+        !selected.creation_allowed,
+        "confirmed generation {} must never become a creation selection (selected generation {})",
+        confirmed.generation, selected.generation
+    );
     drop(selected);
     drop(store);
     OpenOptions::new()

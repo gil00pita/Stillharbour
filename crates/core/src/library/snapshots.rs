@@ -816,7 +816,7 @@ impl SnapshotWorkflow {
     fn capabilities(&self) -> SnapshotCapabilities {
         let helpers = self.helpers().is_ok();
         let enabled = cfg!(any(test, feature = "backup-workflow"));
-        SnapshotCapabilities{helpers_available:helpers,credentials_available:CredentialStore::available(),backup_available:helpers&&enabled,restore_available:helpers&&enabled,schedule_available:helpers&&enabled,protocols:vec!["local".into(),"sftp".into(),"ftps".into(),"ftp".into(),"smb".into()],unavailable_reason:if !enabled{Some("Snapshot execution is disabled until native application recovery gates pass.".into())}else if !helpers{Some("Verified bundled restic/rclone resources are unavailable.".into())}else{None},helper_limits:"Original staging and byte comparison share the application-issued I/O budget. Helpers run serially with one transfer/checker, 64 KiB buffers, multi-thread transfers disabled and a 10 MiB/s network cap. Helper internal local reads, metadata and physical I/O are not capped. Remote connection/idle limits are 10s/30s; startup is bounded at 20s and recognized backend retry/failure reports stop for inspection. Progress samples every 5s; the existing total helper deadline remains.".into(),schedule_limits:"Exact reviewed manifests only, every 15–10080 elapsed minutes in UTC. Catch-up admits at most one run; unchecked catch-up skips deadlines more than 30 seconds overdue after sleep, restart or a busy interval. Changed content/root/endpoint needs fresh review. Runs only while app/tray is alive; fully quit execution is unavailable.".into()}
+        SnapshotCapabilities{latest_retained_catalog_transaction_id:None,helpers_available:helpers,credentials_available:CredentialStore::available(),backup_available:helpers&&enabled,restore_available:helpers&&enabled,schedule_available:helpers&&enabled,protocols:vec!["local".into(),"sftp".into(),"ftps".into(),"ftp".into(),"smb".into()],unavailable_reason:if !enabled{Some("Snapshot execution is disabled until native application recovery gates pass.".into())}else if !helpers{Some("Verified bundled restic/rclone resources are unavailable.".into())}else{None},helper_limits:"Original staging and byte comparison share the application-issued I/O budget. Helpers run serially with one transfer/checker, 64 KiB buffers, multi-thread transfers disabled and a 10 MiB/s network cap. Helper internal local reads, metadata and physical I/O are not capped. Remote connection/idle limits are 10s/30s; startup is bounded at 20s and recognized backend retry/failure reports stop for inspection. Progress samples every 5s; the existing total helper deadline remains.".into(),schedule_limits:"Exact reviewed manifests only, every 15–10080 elapsed minutes in UTC. Catch-up admits at most one run; unchecked catch-up skips deadlines more than 30 seconds overdue after sleep, restart or a busy interval. Changed content/root/endpoint needs fresh review. Runs only while app/tray is alive; fully quit execution is unavailable.".into()}
     }
     fn require_execution(&self) -> Result<()> {
         if self.stopped.load(Ordering::Acquire) {
@@ -2943,6 +2943,9 @@ impl SnapshotWorkflow {
     ) -> Result<SnapshotReply> {
         use SnapshotRequest::*;
         match request {
+            CatalogRestoreReviewRetained { .. } => Err(unavailable(
+                "Retained catalog review requires the native latest-selector authority.",
+            )),
             CatalogRestoreReview { restore_job_id } => Ok(SnapshotReply::CatalogRestoreReview(
                 self.catalog_restore_review(&restore_job_id)?,
             )),

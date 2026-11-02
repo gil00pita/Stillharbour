@@ -139,6 +139,16 @@ impl CredentialStore {
     ) -> Result<()> {
         platform::delete(&account(catalog_id, purpose, reference)?)
     }
+    /// Generated native-fixture assertion only. A locked/unavailable store is
+    /// an error, never evidence that an exact scoped credential is absent.
+    #[cfg(feature = "fixture-probes")]
+    pub fn fixture_owned_absent(
+        catalog_id: &str,
+        purpose: CredentialPurpose,
+        reference: &str,
+    ) -> Result<bool> {
+        Ok(platform::get(&account(catalog_id, purpose, reference)?)?.is_none())
+    }
 }
 // Native recurring consent and its timing authority are separate from the catalog.
 mod schedules;

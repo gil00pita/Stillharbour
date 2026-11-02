@@ -44,6 +44,7 @@ const summaryKeys = {
 
 export function BackupScreen(props: {
   status: LibraryStatus;
+  catalogId?: string | null;
   navigationControl: ReactNode;
   jobsControl: ReactNode;
 }) {
@@ -53,10 +54,12 @@ export function BackupScreen(props: {
 
 function BackupScreenContent({
   status,
+  catalogId,
   navigationControl,
   jobsControl,
 }: {
   status: LibraryStatus;
+  catalogId?: string | null;
   navigationControl: ReactNode;
   jobsControl: ReactNode;
 }) {
@@ -130,7 +133,11 @@ function BackupScreenContent({
             {jobsControl}
           </div>
         </header>
-        <SnapshotWorkflow status={status} onActivityChange={setControlsBusy} />
+        <SnapshotWorkflow
+          catalogId={catalogId ?? null}
+          status={status}
+          onActivityChange={setControlsBusy}
+        />
       </>
     );
   return (

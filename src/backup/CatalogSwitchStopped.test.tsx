@@ -14,7 +14,14 @@ vi.mock('../ipc', async (original) => ({
   getPreferences: vi.fn(),
   libraryData: vi.fn(),
 }));
-const context = { catalogId: 'catalog-1', restoreJobId: 'restore-1', reviewDigest: 'a'.repeat(64) };
+const context = {
+  sourceKind: 'verified_snapshot_restore' as const,
+  snapshotId: '1'.repeat(64),
+  retainedTransactionId: null,
+  catalogId: 'catalog-1',
+  restoreJobId: 'restore-1',
+  reviewDigest: 'a'.repeat(64),
+};
 const prepared: CatalogRestorePrepared = {
   transactionId: 'transaction-1',
   catalogId: context.catalogId,
@@ -50,6 +57,32 @@ it('ignores a completion from another preparation ticket', () => {
   expect(store.getSnapshot()?.phase).toBe('preparing');
   store.prepared(ticket, prepared);
   expect(store.getSnapshot()).toMatchObject({ phase: 'prepared', prepared });
+});
+it('keeps retained source identity explicit and rejects invented snapshot or job attribution', () => {
+  const retained = {
+    ...context,
+    sourceKind: 'retained_pre_restore' as const,
+    restoreJobId: null,
+    snapshotId: null,
+    retainedTransactionId: 'latest-native-transaction',
+  };
+  for (const invalid of [
+    { ...retained, restoreJobId: 'invented-job' },
+    { ...retained, snapshotId: 'invented-snapshot' },
+    { ...retained, retainedTransactionId: null },
+  ]) {
+    expect(() => createCatalogSwitchStore().begin(invalid)).toThrow(/source attribution/);
+  }
+  const store = createCatalogSwitchStore();
+  const ticket = store.begin(retained);
+  store.prepared(ticket, prepared);
+  expect(store.getSnapshot()).toMatchObject({
+    phase: 'prepared',
+    sourceKind: 'retained_pre_restore',
+    restoreJobId: null,
+    snapshotId: null,
+    retainedTransactionId: 'latest-native-transaction',
+  });
 });
 it('renders an uncertain stopped session without an activation badge or retry controls', () => {
   render(

@@ -1,6 +1,7 @@
 //! Same-catalog, current-schema activation review. Preparation never replaces
 //! the active SQLite file. The shell must freeze admission before calling it.
 use super::*;
+use crate::catalog_restore::activation::RetainedCatalogSource;
 use crate::catalog_restore::{
     self as activation, CatalogFileBinding, CatalogRootMapping, PreparedCatalogRestore,
 };
@@ -18,6 +19,7 @@ struct ActivationReview {
     mappings: BTreeMap<String, CatalogRootMapping>,
     schema: Vec<activation::SchemaObject>,
     created: Instant,
+    retained: Option<Arc<RetainedCatalogSource>>,
 }
 const ACTIVATION_WARNING: &str = "Activation selects the complete restored catalog after closing and reopening Stillharbour. Current catalog edits are retained in a separate consistent pre-restore catalog; records are not merged. Every root must be confirmed again. Saved schedules and mutation approvals do not grant execution authority.";
 fn at_phase(phase: &str, mut failure: AppError) -> AppError {
@@ -29,8 +31,11 @@ fn at_phase(phase: &str, mut failure: AppError) -> AppError {
 }
 fn view_digest(review: &ActivationReview) -> Result<String> {
     digest(&(
-        review.view.restore_job_id.as_str(),
-        review.view.snapshot_id.as_str(),
+        review.view.source_kind,
+        &review.view.restore_job_id,
+        &review.view.snapshot_id,
+        &review.view.retained_transaction_id,
+        review.retained.as_ref().map(|proof| proof.generation()),
         review.view.current_revision.as_str(),
         review.view.restored_revision.as_str(),
         &review.source,
@@ -47,6 +52,9 @@ fn require_fresh(workflow: &SnapshotWorkflow, review: &ActivationReview) -> Resu
         ));
     }
     activation::validate_frozen(&review.source)?;
+    if let Some(proof) = &review.retained {
+        proof.revalidate()?;
+    }
     if workflow.catalog.schema_fingerprint()? != review.schema {
         return Err(conflict(
             "The active catalog schema changed after activation review.",
@@ -205,12 +213,14 @@ impl SnapshotWorkflow {
         }
         let validated = activation::validate_catalog(&source.native_path()?, &summary.id, &schema)?;
         let roots = validated.roots;
-        let mut review = ActivationReview {
+        let review = ActivationReview {
             view: CatalogRestoreReview {
                 id: uuid::Uuid::new_v4().to_string(),
                 digest: String::new(),
-                restore_job_id: job_id.into(),
-                snapshot_id: snapshot,
+                source_kind: CatalogRestoreSourceKind::VerifiedSnapshotRestore,
+                restore_job_id: Some(job_id.into()),
+                snapshot_id: Some(snapshot),
+                retained_transaction_id: None,
                 catalog_id: summary.id,
                 schema: summary.schema,
                 current_revision: store::revision(&self.catalog)?,
@@ -235,7 +245,14 @@ impl SnapshotWorkflow {
             mappings: BTreeMap::new(),
             schema,
             created: Instant::now(),
+            retained: None,
         };
+        self.remember_catalog_restore_review(review)
+    }
+    fn remember_catalog_restore_review(
+        &self,
+        mut review: ActivationReview,
+    ) -> Result<CatalogRestoreReview> {
         review.view.digest = view_digest(&review)?;
         require_fresh(self, &review)?;
         let view = review.view.clone();
@@ -254,6 +271,101 @@ impl SnapshotWorkflow {
         }
         state.reviews.insert(view.id.clone(), review);
         Ok(view)
+    }
+    fn review_retained_catalog_restore(
+        &self,
+        proof: Arc<RetainedCatalogSource>,
+    ) -> Result<CatalogRestoreReview> {
+        if !self.retained_catalog_restore_available() {
+            return Err(unavailable(
+                "Retained local catalog activation is disabled by the native workflow gate.",
+            ));
+        }
+        if !self.idle()? {
+            return Err(error(
+                ErrorCode::Busy,
+                "Finish snapshot work before reviewing retained catalog activation.",
+            ));
+        }
+        let _lease = Registry::shared().try_acquire(vec![Scope::new(
+            DirectoryChain::open(&self.data.path()?)?,
+            Access::Write,
+        )])?;
+        proof.revalidate()?;
+        let current = activation::capture_current(self.catalog.native_path())?;
+        let expected = proof.current();
+        if current.path != expected.path
+            || current.identity != expected.identity
+            || current.volume != expected.volume
+        {
+            return Err(conflict(
+                "The retained source belongs to another native active catalog instance.",
+            ));
+        }
+        let summary = self.catalog.summary()?;
+        if summary.id != proof.catalog_id() {
+            return Err(conflict(
+                "The retained source belongs to another catalog identity.",
+            ));
+        }
+        let schema = self.catalog.schema_fingerprint()?;
+        if schema != crate::catalog::current_schema_fingerprint()? {
+            return Err(conflict(
+                "The active catalog schema differs from the compiled current schema.",
+            ));
+        }
+        let source = proof.source().clone();
+        let validated = activation::validate_catalog(&source.native_path()?, &summary.id, &schema)?;
+        if validated.revision != proof.revision()
+            || encode(&validated.roots)? != encode(&proof.roots())?
+        {
+            return Err(conflict(
+                "The retained catalog roots or revision differ from the native sealed source.",
+            ));
+        }
+        let roots = validated.roots;
+        let view = CatalogRestoreReview {
+            id: uuid::Uuid::new_v4().to_string(),
+            digest: String::new(),
+            source_kind: CatalogRestoreSourceKind::RetainedPreRestore,
+            restore_job_id: None,
+            snapshot_id: None,
+            retained_transaction_id: Some(proof.transaction_id().into()),
+            catalog_id: summary.id,
+            schema: summary.schema,
+            current_revision: store::revision(&self.catalog)?,
+            restored_revision: validated.revision,
+            roots: roots
+                .iter()
+                .map(|root| CatalogRestoreRoot {
+                    root_id: root.root_id.clone(),
+                    label: format!("Library root {}", root.root_id),
+                    saved_display_path: native::decode_path(&root.path)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| "Unsupported native path".into()),
+                    confirmed_display_path: None,
+                    confirmed: false,
+                })
+                .collect(),
+            approval_available: false,
+            warning: format!(
+                "This source is the latest sealed local pre-restore catalog, not repository snapshot or media-backup evidence. {ACTIVATION_WARNING}"
+            ),
+        };
+        self.remember_catalog_restore_review(ActivationReview {
+            view,
+            source,
+            roots,
+            mappings: BTreeMap::new(),
+            schema,
+            created: Instant::now(),
+            retained: Some(proof),
+        })
+    }
+    fn retained_catalog_restore_available(&self) -> bool {
+        cfg!(any(test, feature = "backup-workflow"))
+            && CredentialStore::available()
+            && !self.stopped.load(Ordering::Acquire)
     }
     pub(super) fn catalog_restore_map(
         &self,
@@ -359,15 +471,19 @@ impl SnapshotWorkflow {
 }
 
 impl Library {
+    pub fn retained_catalog_restore_available(&self) -> bool {
+        self.snapshots.retained_catalog_restore_available()
+    }
+    pub fn review_retained_catalog_restore(
+        &self,
+        proof: Arc<RetainedCatalogSource>,
+    ) -> Result<CatalogRestoreReview> {
+        self.snapshots.review_retained_catalog_restore(proof)
+    }
     /// Validate without consuming approval or stopping any work. The shell calls
     /// this before acquiring its irreversible global activation barrier.
     pub fn validate_catalog_restore_prepare(&self, approval_id: &str) -> Result<()> {
         id(approval_id)?;
-        if !self.snapshots.capabilities().restore_available {
-            return Err(unavailable(
-                "Native catalog activation is unavailable in this session.",
-            ));
-        }
         let review = {
             let state = self
                 .snapshots
@@ -390,6 +506,13 @@ impl Library {
             }
             review.clone()
         };
+        if !self.retained_catalog_restore_available()
+            || (review.retained.is_none() && !self.snapshots.capabilities().restore_available)
+        {
+            return Err(unavailable(
+                "Native catalog activation is unavailable in this session.",
+            ));
+        }
         require_fresh(&self.snapshots, &review)?;
         for mapping in review.mappings.values() {
             Binding::capture(
@@ -499,7 +622,7 @@ impl SnapshotWorkflow {
                 "Current catalog edits changed during preparation; retained catalogs remain untouched.",
             ));
         }
-        activation::validate_frozen(&review.source)?;
+        require_fresh(self, &review)?;
         let source_path = review.source.native_path()?;
         let source_parent = source_path
             .parent()
@@ -544,11 +667,12 @@ impl SnapshotWorkflow {
             &journals,
             &AtomicBool::new(false),
             &|| {
-                activation::validate_frozen(&review.source)?;
+                require_fresh(self, &review)?;
                 Ok(())
             },
         )
         .map_err(|e| at_phase("candidate publication", e))?;
+        require_fresh(self, &review)?;
         let candidate_path = transaction.path.join("candidate.stillharbour");
         activation::validate_catalog(&candidate_path, &review.view.catalog_id, &review.schema)?;
         // All SQL is compiled application SQL, after exact owned-schema equality.
@@ -579,11 +703,14 @@ impl SnapshotWorkflow {
         let candidate = activation::capture_file(&candidate_path)?;
         let current = activation::capture_current(self.catalog.native_path())?;
         let prepared = PreparedCatalogRestore {
-            version: 1,
+            version: 2,
             transaction_id,
             catalog_id: review.view.catalog_id,
             source_restore_job_id: review.view.restore_job_id,
             source_snapshot_id: review.view.snapshot_id,
+            source_kind: review.view.source_kind,
+            retained_transaction_id: review.view.retained_transaction_id,
+            retained_generation: review.retained.as_ref().map(|proof| proof.generation()),
             source_catalog_revision: review.view.restored_revision,
             candidate_catalog_revision: candidate_validated.revision,
             current_catalog_revision: review.view.current_revision,
@@ -593,6 +720,7 @@ impl SnapshotWorkflow {
             candidate,
             roots: review.mappings.into_values().collect(),
         };
+        prepared.validate_provenance()?;
         bridge::write_new(&transaction, "prepared.json", encode(&prepared)?.as_bytes())?;
         #[cfg(unix)]
         filesystem::sync_directory(&transaction.path)?;
@@ -609,6 +737,7 @@ mod tests {
         catalog: String,
         credential: String,
         replacement: Option<String>,
+        authority_scope: Option<String>,
     }
     impl Drop for Run {
         fn drop(&mut self) {
@@ -633,6 +762,11 @@ mod tests {
                     reference,
                 )
                 .is_err()
+            {
+                self.fixture._run.disable_cleanup(true);
+            }
+            if let Some(scope) = &self.authority_scope
+                && crate::backup::credentials::catalog_restore::delete_owned_fixture(scope).is_err()
             {
                 self.fixture._run.disable_cleanup(true);
             }
@@ -671,6 +805,7 @@ mod tests {
             catalog,
             credential,
             replacement: None,
+            authority_scope: None,
         };
         let f = &run.fixture;
         let selected = Fixture::selection(&f.backup);
@@ -808,7 +943,10 @@ mod tests {
             .prepare_catalog_restore(&approval.id, &appdata)
             .unwrap();
         assert_eq!(prepared.catalog_id, run.catalog);
-        assert_eq!(prepared.source_restore_job_id, restored.id);
+        assert_eq!(
+            prepared.source_restore_job_id.as_deref(),
+            Some(restored.id.as_str())
+        );
         assert_eq!(prepared.current_catalog_revision, mapped.current_revision);
         assert_ne!(
             prepared.current_catalog_revision,
@@ -857,6 +995,331 @@ mod tests {
         assert_eq!(
             std::fs::read(f.source.join("hidden-source/companion.xmp")).unwrap(),
             b"generated sidecar outside gallery filter"
+        );
+    }
+    #[test]
+    #[ignore = "Actual pinned snapshot activation followed by OS-only retained return without helpers or repository keys"]
+    fn native_latest_retained_catalog_reactivation_preserves_both_generations_of_local_edits() {
+        use crate::catalog_restore::activation::ActivationStore;
+        assert!(std::env::var_os("STILLHARBOUR_M4_GENERATED_REPOSITORY_DRIVE").is_none());
+        let mut fixture = Fixture::new();
+        let appdata = fixture.library.options.data_directory.clone();
+        let options = fixture.library.options.clone();
+        let catalog_id = fixture.library.catalog.summary().unwrap().id;
+        fixture
+            .library
+            .catalog
+            .snapshot(appdata.join("Foundation.stillharbour"))
+            .unwrap();
+        fixture.library.cancel_all();
+        let native_store = Arc::new(ActivationStore::open(&appdata).unwrap());
+        let selected = native_store.startup_selection().unwrap();
+        let catalog = Arc::new(
+            Catalog::open_bound_existing(
+                selected.path.clone(),
+                selected.identity.clone(),
+                selected.volume.clone(),
+            )
+            .unwrap(),
+        );
+        catalog.retain_native_owner(native_store.clone()).unwrap();
+        native_store.confirm_initialized(&selected).unwrap();
+        drop(selected);
+        fixture.library = Library::new(catalog, options.clone()).unwrap();
+        let credential = CredentialStore::store(
+            &catalog_id,
+            CredentialPurpose::Repository,
+            &uuid::Uuid::new_v4().to_string(),
+        )
+        .unwrap();
+        let mut run = Run {
+            fixture,
+            catalog: catalog_id,
+            credential,
+            replacement: None,
+            authority_scope: Some(native_store.fixture_authority_scope().into()),
+        };
+        let helpers = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../vendor/backup-helpers")
+            .join(if cfg!(windows) {
+                "windows-x86_64"
+            } else {
+                "macos-aarch64"
+            })
+            .canonicalize()
+            .unwrap();
+        run.fixture
+            .library
+            .configure_snapshot_helpers(helpers)
+            .unwrap();
+        let selected = Fixture::selection(&run.fixture.backup);
+        let profile = run
+            .fixture
+            .library
+            .snapshots
+            .profile_create(
+                &run.fixture.library,
+                "Generated retained return".into(),
+                vec![run.fixture.root.clone()],
+                run.credential.clone(),
+                None,
+                SnapshotDestinationInput::Local {
+                    selection_id: selected.id.clone(),
+                },
+                Some(selected),
+            )
+            .unwrap();
+        let backup = start(
+            &run.fixture,
+            run.fixture
+                .library
+                .snapshots
+                .review(run.fixture.library.snapshots.profile(&profile.id).unwrap())
+                .unwrap(),
+            "backup",
+        );
+        let restored = start(
+            &run.fixture,
+            run.fixture
+                .library
+                .snapshots
+                .restore_review(
+                    &run.fixture.library,
+                    run.fixture.library.snapshots.profile(&profile.id).unwrap(),
+                    backup.snapshot_id.as_ref().unwrap(),
+                    Fixture::selection(&run.fixture.output),
+                )
+                .unwrap(),
+            "restore",
+        );
+        let extra = run
+            .fixture
+            ._run
+            .path()
+            .canonicalize()
+            .unwrap()
+            .join("newer-generated-root");
+        std::fs::create_dir(&extra).unwrap();
+        std::fs::write(
+            extra.join("unique.bin"),
+            b"new root bytes never rewritten by catalog return",
+        )
+        .unwrap();
+        let held = native::open_root(&extra, None).unwrap();
+        let extra_id = store::add_root(
+            &run.fixture.library.catalog,
+            extra.clone(),
+            filesystem::identity(&held).unwrap(),
+            native::volume_token(&held).unwrap(),
+            "Newer generated root".into(),
+            crate::library::model::RootMode::Referenced,
+            crate::library::model::ScanFilter::default(),
+        )
+        .unwrap();
+        drop(held);
+        run.fixture.library.catalog.call(|db|{db.execute("UPDATE roots SET label='first newer local edit' WHERE label='Generated source'",[])?;db.execute("UPDATE library_state SET revision=revision+1 WHERE singleton=1",[])?;Ok(())}).unwrap();
+        let review = run
+            .fixture
+            .library
+            .snapshots
+            .catalog_restore_review(&restored.id)
+            .unwrap();
+        assert_eq!(review.roots.len(), 1);
+        let review = run
+            .fixture
+            .library
+            .snapshots
+            .catalog_restore_map(
+                &review.id,
+                &run.fixture.root,
+                Fixture::selection(&run.fixture.source),
+            )
+            .unwrap();
+        let approval = run
+            .fixture
+            .library
+            .snapshots
+            .catalog_restore_approve(&review.id, &review.digest)
+            .unwrap();
+        run.fixture
+            .library
+            .validate_catalog_restore_prepare(&approval.id)
+            .unwrap();
+        let guard = run.fixture.library.quiesce_for_catalog_restore().unwrap();
+        let first = run
+            .fixture
+            .library
+            .prepare_catalog_restore(&approval.id, &appdata)
+            .unwrap();
+        native_store.stage_pending(&first).unwrap();
+        drop(guard);
+        let selected = native_store.startup_selection().unwrap();
+        assert!(selected.activated_now);
+        let catalog = Arc::new(
+            Catalog::open_bound_existing(
+                selected.path.clone(),
+                selected.identity.clone(),
+                selected.volume.clone(),
+            )
+            .unwrap(),
+        );
+        catalog.retain_native_owner(native_store.clone()).unwrap();
+        native_store.confirm_initialized(&selected).unwrap();
+        drop(selected);
+        run.fixture.library = Library::new(catalog, options.clone()).unwrap();
+        CredentialStore::delete_owned(&run.catalog, CredentialPurpose::Repository, &run.credential)
+            .unwrap();
+        assert!(
+            !run.fixture
+                .library
+                .snapshots
+                .capabilities()
+                .helpers_available
+        );
+        assert!(
+            !run.fixture
+                .library
+                .snapshots
+                .capabilities()
+                .restore_available
+        );
+        assert!(run.fixture.library.retained_catalog_restore_available());
+        run.fixture
+            .library
+            .catalog
+            .call(|db| {
+                db.execute("UPDATE roots SET label='second newer local edit'", [])?;
+                db.execute(
+                    "UPDATE library_state SET revision=revision+1 WHERE singleton=1",
+                    [],
+                )?;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            native_store
+                .latest_retained_transaction_id()
+                .unwrap()
+                .as_deref(),
+            Some(first.transaction_id.as_str())
+        );
+        let proof = native_store
+            .latest_retained_source(&first.transaction_id)
+            .unwrap();
+        let view = run
+            .fixture
+            .library
+            .review_retained_catalog_restore(proof.clone())
+            .unwrap();
+        assert_eq!(
+            view.source_kind,
+            CatalogRestoreSourceKind::RetainedPreRestore
+        );
+        assert!(view.restore_job_id.is_none() && view.snapshot_id.is_none());
+        assert_eq!(view.roots.len(), 2);
+        let view = run
+            .fixture
+            .library
+            .snapshots
+            .catalog_restore_map(
+                &view.id,
+                &run.fixture.root,
+                Fixture::selection(&run.fixture.source),
+            )
+            .unwrap();
+        let view = run
+            .fixture
+            .library
+            .snapshots
+            .catalog_restore_map(&view.id, &extra_id, Fixture::selection(&extra))
+            .unwrap();
+        let approval = run
+            .fixture
+            .library
+            .snapshots
+            .catalog_restore_approve(&view.id, &view.digest)
+            .unwrap();
+        run.fixture
+            .library
+            .validate_catalog_restore_prepare(&approval.id)
+            .unwrap();
+        let guard = run.fixture.library.quiesce_for_catalog_restore().unwrap();
+        let second = run
+            .fixture
+            .library
+            .prepare_catalog_restore(&approval.id, &appdata)
+            .unwrap();
+        assert_eq!(second.version, 2);
+        assert_eq!(
+            second.source_kind,
+            CatalogRestoreSourceKind::RetainedPreRestore
+        );
+        assert!(second.source_restore_job_id.is_none() && second.source_snapshot_id.is_none());
+        assert_ne!(first.candidate.path, second.candidate.path);
+        native_store.stage_pending(&second).unwrap();
+        assert!(proof.revalidate().is_err());
+        drop(proof);
+        drop(guard);
+        let selected = native_store.startup_selection().unwrap();
+        assert!(selected.activated_now);
+        let catalog = Arc::new(
+            Catalog::open_bound_existing(
+                selected.path.clone(),
+                selected.identity.clone(),
+                selected.volume.clone(),
+            )
+            .unwrap(),
+        );
+        catalog.retain_native_owner(native_store.clone()).unwrap();
+        native_store.confirm_initialized(&selected).unwrap();
+        drop(selected);
+        run.fixture.library = Library::new(catalog, options).unwrap();
+        let label = run
+            .fixture
+            .library
+            .catalog
+            .call({
+                let id = run.fixture.root.clone();
+                move |db| {
+                    Ok(
+                        db.query_row("SELECT label FROM roots WHERE id=?", [id], |r| {
+                            r.get::<_, String>(0)
+                        })?,
+                    )
+                }
+            })
+            .unwrap();
+        assert_eq!(label, "first newer local edit");
+        assert_eq!(store::roots(&run.fixture.library.catalog).unwrap().len(), 2);
+        let kept = Connection::open_with_flags(
+            second.pre_restore.native_path().unwrap(),
+            rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
+        )
+        .unwrap();
+        assert_eq!(
+            kept.query_row("SELECT label FROM roots", [], |r| r.get::<_, String>(0))
+                .unwrap(),
+            "second newer local edit"
+        );
+        drop(kept);
+        activation::validate_frozen(&first.pre_restore).unwrap();
+        activation::validate_frozen(&second.pre_restore).unwrap();
+        assert!(
+            native_store
+                .latest_retained_source(&first.transaction_id)
+                .is_err()
+        );
+        assert_eq!(
+            std::fs::read(run.fixture.source.join("original.txt")).unwrap(),
+            b"generated preserved original"
+        );
+        assert_eq!(
+            std::fs::read(run.fixture.source.join("hidden-source/companion.xmp")).unwrap(),
+            b"generated sidecar outside gallery filter"
+        );
+        assert_eq!(
+            std::fs::read(extra.join("unique.bin")).unwrap(),
+            b"new root bytes never rewritten by catalog return"
         );
     }
 }

@@ -1,7 +1,10 @@
 import { useSyncExternalStore } from 'react';
-import type { CatalogRestorePrepared } from '../bindings';
+import type { CatalogRestorePrepared, CatalogRestoreReview } from '../bindings';
 
-type Context = { catalogId: string; restoreJobId: string; reviewDigest: string };
+type Context = Pick<
+  CatalogRestoreReview,
+  'catalogId' | 'sourceKind' | 'restoreJobId' | 'snapshotId' | 'retainedTransactionId'
+> & { reviewDigest: string };
 export type CatalogSwitchState = Context & { ticket: number } & (
     | { phase: 'preparing' }
     | { phase: 'prepared'; prepared: CatalogRestorePrepared }
@@ -28,6 +31,16 @@ export function createCatalogSwitchStore() {
     begin(context: Context) {
       if (value)
         throw new Error('This catalog session requires closing and reopening before more work.');
+      const sourceValid =
+        context.sourceKind === 'verified_snapshot_restore'
+          ? Boolean(context.restoreJobId && context.snapshotId) &&
+            context.retainedTransactionId === null
+          : context.sourceKind === 'retained_pre_restore' &&
+            context.restoreJobId === null &&
+            context.snapshotId === null &&
+            Boolean(context.retainedTransactionId);
+      if (!sourceValid)
+        throw new Error('Catalog switch source attribution is incomplete or inconsistent.');
       const ticket = ++nextTicket;
       publish({ ...context, ticket, phase: 'preparing' });
       return ticket;

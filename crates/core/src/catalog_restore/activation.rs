@@ -12,8 +12,14 @@ use std::{
 
 const DEFAULT_CATALOG: &str = "Foundation.stillharbour";
 const MAX_DESCRIPTOR: u64 = 8 * 1024 * 1024;
+mod retained;
 #[cfg(test)]
 mod tests;
+pub use retained::RetainedCatalogSource;
+#[cfg(feature = "fixture-probes")]
+mod fixture_session;
+#[cfg(feature = "fixture-probes")]
+pub use fixture_session::{CatalogFixtureRole, CatalogFixtureSession};
 
 fn blocked() -> AppError {
     AppError::new(
@@ -182,6 +188,10 @@ impl StartupSelection {
     }
 }
 impl ActivationStore {
+    #[cfg(test)]
+    pub(crate) fn fixture_authority_scope(&self) -> &str {
+        &self.scope
+    }
     pub fn open(appdata: &Path) -> Result<Self> {
         let chain = root(appdata)?;
         let scope = hash(&encode(&(
@@ -329,8 +339,8 @@ impl ActivationStore {
         let (bytes, file, chain) = read_bytes(&directory.join("prepared.json"), MAX_DESCRIPTOR)?;
         let prepared: PreparedCatalogRestore =
             serde_json::from_slice(&bytes).map_err(|_| blocked())?;
+        prepared.validate_provenance()?;
         if prepared.transaction_id != id
-            || prepared.version != 1
             || prepared.schema != crate::catalog::SCHEMA_VERSION
             || prepared.roots.is_empty()
             || prepared.roots.len() > 32
@@ -432,6 +442,7 @@ impl ActivationStore {
         value: &authority::Authority,
     ) -> Result<()> {
         let active = self.active(value, false)?;
+        self.verify_retained_provenance_locked(prepared, value)?;
         if native::decode_path(&prepared.current.path)? != active.path
             || prepared.current.identity != active.identity
             || prepared.current.volume != active.volume

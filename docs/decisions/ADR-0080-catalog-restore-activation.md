@@ -7,9 +7,11 @@ results remain separately recorded.
 
 Catalog activation is separate from publishing a snapshot into a new output
 folder. A completed, fully compared whole-snapshot restore job supplies the
-opaque source ID. A fresh authenticated repository read establishes the exact
-manifest and catalog digest before shutdown. Renderer paths, catalog history
-alone and imported approval records cannot authorize activation.
+snapshot source ID. A fresh authenticated repository read establishes its exact
+manifest and catalog digest before shutdown. A second source kind selects only
+the current OS-active transaction's sealed local pre-restore catalog. Renderer
+paths, catalog history alone and imported approval records cannot authorize
+either source.
 
 The first implementation requires the same catalog UUID, current schema and
 platform. It compares bounded `sqlite_schema` tuples with the schema generated
@@ -47,6 +49,33 @@ requires closing and reopening the retained original. A successful preparation
 reports that restart is required; it does not claim the active catalog has
 already changed. This is a single-catalog recovery action, not the broader N2
 catalog-management interface.
+
+## Latest retained local catalog
+
+The capability hint exposes only the latest OS-active transaction ID. A native
+factory verifies that exact selector/generation, unchanged descriptor bytes and
+seal, current catalog identity, and complete frozen pre-restore catalog bytes,
+schema and revision. Its non-deserializable proof retains native handles and
+is checked again during mapping, approval, preflight and preparation. Roots come
+from that pre-restore catalog, which can contain newer roots absent from the
+previously selected snapshot. The user confirms each root afresh.
+
+The retained source does not require repository credentials or packaged helpers;
+the native workflow/platform gate still applies. UI labels it as local catalog
+recovery, with no snapshot or media-backup claim. It produces a new forward
+activation transaction and independently backs up the current catalog again.
+It never renames an old catalog into the live path, scans arbitrary history or
+accepts an imported path. Advancing the OS selector retires the old proof and
+latest-source ID. This preserves edits from both sides of a return.
+
+New prepared descriptors use version 2 and explicit source provenance. Snapshot
+sources require a restore-job UUID and concrete snapshot ID, with no retained
+source fields. Retained sources require the current transaction UUID and OS
+generation and forbid job/snapshot IDs. Existing version-1 descriptors parse
+only as snapshot provenance; their raw bytes, seal and native identities remain
+unchanged. No catalog schema or UUID migration follows from this protocol
+evolution. Imported UUIDs, numeric identities/revisions and platform strings
+have SQL byte bounds before allocation in Rust.
 
 ## SQLite basis
 

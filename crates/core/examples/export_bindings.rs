@@ -48,6 +48,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         SnapshotSchedule::decl(&config),
         SnapshotReply::decl(&config),
         CatalogRestoreRoot::decl(&config),
+        CatalogRestoreSourceKind::decl(&config),
         CatalogRestoreReview::decl(&config),
         CatalogRestoreApproval::decl(&config),
         CatalogRestorePrepared::decl(&config),

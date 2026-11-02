@@ -14,7 +14,7 @@ import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import { SnapshotProfileForm } from './SnapshotProfileForm';
 import { snapshotRequest } from './snapshotIpc';
 import { SnapshotRecoveryInspection } from './SnapshotRecoveryInspection';
-import { CatalogRestore } from './CatalogRestore';
+import { CatalogRestore, RetainedCatalogRestore } from './CatalogRestore';
 
 const active = (job: SnapshotJob) => ['queued', 'running', 'cancel_requested'].includes(job.state);
 function validJob(value: SnapshotJob, profileId: string, expected?: SnapshotJob) {
@@ -56,45 +56,73 @@ function Evidence({
 
 export function SnapshotWorkflow({
   status,
+  catalogId,
   onActivityChange,
 }: {
   status: LibraryStatus;
+  catalogId?: string | null;
   onActivityChange: (active: boolean) => void;
 }) {
   const [capabilities, setCapabilities] = useState<SnapshotCapabilities | null>(null);
+  const [capabilityError, setCapabilityError] = useState<string | null>(null);
+  const [catalogReviewEpoch, setCatalogReviewEpoch] = useState(0);
   const [profiles, setProfiles] = useState<SnapshotProfile[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [showSetup, setShowSetup] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refresh, setRefresh] = useState(0);
-  const refreshProfileViews = useCallback(() => setRefresh((value) => value + 1), []);
+  const refreshProfileViews = useCallback(() => {
+    setCapabilities(null);
+    setRefresh((value) => value + 1);
+  }, []);
   const [creationBusy, setCreationBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
-  const locked = creationBusy || profileBusy;
+  const [retainedActivities, setRetainedActivities] = useState<Set<string>>(() => new Set());
+  const onRetainedActivity = useCallback((scopeId: string, active: boolean) => {
+    setRetainedActivities((current) => {
+      if (current.has(scopeId) === active) return current;
+      const next = new Set(current);
+      if (active) next.add(scopeId);
+      else next.delete(scopeId);
+      return next;
+    });
+  }, []);
+  const locked = creationBusy || profileBusy || retainedActivities.size > 0;
   useEffect(() => {
     onActivityChange(locked);
   }, [locked, onActivityChange]);
   useEffect(() => {
     let retired = false;
-    void Promise.all([
-      snapshotRequest({ kind: 'capabilities' }, 'capabilities'),
-      snapshotRequest({ kind: 'profiles' }, 'profiles'),
-    ])
-      .then(([caps, saved]) => {
-        if (!Array.isArray(saved)) throw new Error('Snapshot profiles could not be read.');
-        if (!retired) {
-          setCapabilities(caps);
-          setProfiles(saved);
-          setError(null);
-        }
-      })
-      .catch((cause: unknown) => {
-        if (!retired) setError(errorMessage(cause));
-      })
-      .finally(() => {
-        if (!retired) setLoading(false);
-      });
+    void Promise.allSettled([
+      snapshotRequest({ kind: 'capabilities' }, 'capabilities')
+        .then((caps) => {
+          if (!retired) {
+            setCapabilities(caps);
+            setCapabilityError(null);
+          }
+        })
+        .catch((cause: unknown) => {
+          if (!retired) {
+            setCapabilities(null);
+            setCapabilityError(errorMessage(cause));
+          }
+        }),
+      snapshotRequest({ kind: 'profiles' }, 'profiles')
+        .then((saved) => {
+          if (!Array.isArray(saved)) throw new Error('Snapshot profiles could not be read.');
+          if (!retired) {
+            setProfiles(saved);
+            setError(null);
+          }
+        })
+        .catch((cause: unknown) => {
+          if (!retired) setError(errorMessage(cause));
+        })
+        .finally(() => {
+          if (!retired) setLoading(false);
+        }),
+    ]);
     return () => {
       retired = true;
     };
@@ -115,6 +143,35 @@ export function SnapshotWorkflow({
         This is separate from a readable safe copy. Removing a source does not automatically delete
         earlier snapshots.
       </p>
+      <section className="backup-review" aria-label="Latest retained catalog">
+        <h3>Catalog saved before the latest switch</h3>
+        <p>
+          A fresh native review can use the latest OS-authorized local pre-restore catalog. Current
+          edits are preserved again in a new transaction; no old activation pointer is replayed.
+        </p>
+        {capabilities?.latestRetainedCatalogTransactionId && catalogId ? (
+          <RetainedCatalogRestore
+            key={catalogReviewEpoch}
+            transactionId={capabilities.latestRetainedCatalogTransactionId}
+            catalogId={catalogId}
+            disabled={locked}
+            onActivityChange={onRetainedActivity}
+          />
+        ) : (
+          <p role="status">
+            {!capabilities
+              ? 'Local retained-catalog availability has not been established.'
+              : !capabilities.latestRetainedCatalogTransactionId
+                ? 'No eligible local retained-catalog source is available in this session.'
+                : 'Current catalog identity is unavailable; a retained-catalog review cannot start.'}
+          </p>
+        )}
+      </section>
+      {capabilityError && (
+        <p className="error" role="alert">
+          {capabilityError}
+        </p>
+      )}
       {loading && <p role="status">Loading snapshot profiles…</p>}
       {error && (
         <p className="error" role="alert">
@@ -154,7 +211,7 @@ export function SnapshotWorkflow({
           disabled={locked}
           onClick={() => {
             setLoading(true);
-            setRefresh((current) => current + 1);
+            refreshProfileViews();
           }}
         >
           Refresh snapshot profiles
@@ -178,7 +235,7 @@ export function SnapshotWorkflow({
           )}
           status={status}
           capabilities={capabilities}
-          disabled={profileBusy}
+          disabled={profileBusy || retainedActivities.size > 0}
           onActivityChange={setCreationBusy}
           onClose={() => setShowSetup(false)}
           onSaved={(value) => {
@@ -188,6 +245,7 @@ export function SnapshotWorkflow({
             ]);
             setSelectedId(value.id);
             setShowSetup(false);
+            setCatalogReviewEpoch((current) => current + 1);
           }}
         />
       )}
@@ -197,6 +255,7 @@ export function SnapshotWorkflow({
           profile={selected}
           status={status}
           capabilities={capabilities}
+          disabled={creationBusy || retainedActivities.size > 0}
           onActivityChange={setProfileBusy}
           onRefreshProfiles={refreshProfileViews}
           onProfileUpdated={(value) => {
@@ -206,6 +265,7 @@ export function SnapshotWorkflow({
                 : [value, ...current],
             );
             setSelectedId(value.id);
+            setCatalogReviewEpoch((current) => current + 1);
           }}
         />
       )}
@@ -228,6 +288,7 @@ function SnapshotProfileWorkspace({
   profile,
   status,
   capabilities,
+  disabled,
   onActivityChange,
   onProfileUpdated,
   onRefreshProfiles,
@@ -235,6 +296,7 @@ function SnapshotProfileWorkspace({
   profile: SnapshotProfile;
   status: LibraryStatus;
   capabilities: SnapshotCapabilities | null;
+  disabled: boolean;
   onActivityChange: (active: boolean) => void;
   onProfileUpdated: (value: SnapshotProfile) => void;
   onRefreshProfiles: () => void;
@@ -257,7 +319,7 @@ function SnapshotProfileWorkspace({
       return next;
     });
   }, []);
-  const busy = localBusy || catalogActivities.size > 0;
+  const busy = disabled || localBusy || catalogActivities.size > 0;
   const [selectedSnapshot, setSelectedSnapshot] = useState<SnapshotRecord | null>(null);
   const [browse, setBrowse] = useState<SnapshotBrowse | null>(null);
   const [browseOffset, setBrowseOffset] = useState(0);
@@ -278,8 +340,8 @@ function SnapshotProfileWorkspace({
   }, [onActivityChange]);
   const running = jobs.find(active);
   useEffect(() => {
-    onActivityChange(busy || Boolean(running));
-  }, [busy, running, onActivityChange]);
+    onActivityChange(localBusy || catalogActivities.size > 0 || Boolean(running));
+  }, [localBusy, catalogActivities.size, running, onActivityChange]);
   useEffect(() => {
     let retired = false;
     void Promise.allSettled([
@@ -391,7 +453,7 @@ function SnapshotProfileWorkspace({
     };
   }, [profile.id, snapshotId, browseOffset]);
   async function action(work: () => Promise<void>) {
-    if (pending.current || catalogActivities.size > 0) return;
+    if (disabled || pending.current || catalogActivities.size > 0) return;
     pending.current = true;
     setBusy(true);
     setError(null);
