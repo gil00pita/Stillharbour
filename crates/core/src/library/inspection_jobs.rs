@@ -39,6 +39,22 @@ impl Drop for InspectionJobs {
     }
 }
 impl InspectionJobs {
+    pub(super) fn stop(&self) {
+        if let Ok(active) = self.active.lock()
+            && let Some(active) = active.as_ref()
+        {
+            active.cancel.store(true, Ordering::Release);
+        }
+    }
+    pub(super) fn idle(&self) -> Result<bool> {
+        Ok(self
+            .active
+            .lock()
+            .map_err(|_| {
+                AppError::new(ErrorCode::WorkerFailed, "Inspection state is unavailable.")
+            })?
+            .is_none())
+    }
     pub(super) fn start(
         self: &Arc<Self>,
         catalog: Arc<Catalog>,

@@ -106,3 +106,15 @@ This yields `needs_recovery` with sources, partial copies, repository objects an
 locks retained. It authorizes inspection, never an automatic backup replay,
 unlock, prune or repair. The observer neither exposes raw output nor treats
 source filenames or JSON progress as executable/error-control instructions.
+
+## Generated permission-loss fixture correction (2026-11-02)
+
+macOS Foundation at checkpoint `3278459` passed four other native acceptance
+cases but failed the two-root case before permission denial. Its containment
+comparison included mutable directory link counts, which changed when staging
+created owned siblings. Paths had already been canonicalized. The correction
+retains the canonical run's native chain and compares ordered stable volume/file
+IDs; it also checks the exact source entry without requiring denied read access.
+Regular-file single-link and permission restoration checks remain strict, and
+uncertain scopes stay retained. That failed run is not macOS unreadable-source
+proof: the corrected case requires a separately recorded native rerun.

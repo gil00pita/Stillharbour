@@ -167,6 +167,73 @@ pub(super) fn handle(state: &Foundation, action: &str) -> Result<serde_json::Val
         .as_mut()
         .ok_or_else(|| fail("Generate the owned application fixture first."))?;
     match action {
+        "m4_application_catalog_audit" => {
+            let prepared = state
+                .catalog_restore_receipt
+                .lock()
+                .map_err(|_| fail("Generated catalog receipt is unavailable."))?
+                .clone()
+                .ok_or_else(|| fail("No actual native catalog preparation completed."))?;
+            if prepared.catalog_id != fixture.catalog_id {
+                return Err(fail(
+                    "Catalog preparation belongs to another generated catalog.",
+                ));
+            }
+            uuid::Uuid::parse_str(&prepared.transaction_id)
+                .map_err(|_| fail("Invalid generated transaction."))?;
+            let transaction = state
+                .appdata
+                .join("catalog-restores")
+                .join(&prepared.transaction_id);
+            if prepared.pre_restore.native_path()? != transaction.join("pre-restore.stillharbour")
+                || prepared.candidate.native_path()? != transaction.join("candidate.stillharbour")
+            {
+                return Err(fail(
+                    "Generated catalog artifacts escaped their exact transaction.",
+                ));
+            }
+            state._catalog_selection.revalidate()?;
+            let current = stillharbour_core::catalog_restore::capture_current(
+                &state._catalog_selection.path,
+            )?;
+            if current.identity != prepared.current.identity
+                || current.volume != prepared.current.volume
+                || current.path != prepared.current.path
+            {
+                return Err(fail("The original generated catalog identity changed."));
+            }
+            let schema = stillharbour_core::catalog::current_schema_fingerprint()?;
+            stillharbour_core::catalog_restore::validate_frozen(&prepared.pre_restore)?;
+            stillharbour_core::catalog_restore::validate_frozen(&prepared.candidate)?;
+            let retained = stillharbour_core::catalog_restore::validate_catalog(
+                &prepared.pre_restore.native_path()?,
+                &fixture.catalog_id,
+                &schema,
+            )?;
+            let candidate = stillharbour_core::catalog_restore::validate_catalog(
+                &prepared.candidate.native_path()?,
+                &fixture.catalog_id,
+                &schema,
+            )?;
+            if retained.revision != prepared.current_catalog_revision
+                || candidate.revision != prepared.candidate_catalog_revision
+                || !retained
+                    .roots
+                    .iter()
+                    .any(|root| root.root_id == fixture.root_id)
+                || !candidate
+                    .roots
+                    .iter()
+                    .any(|root| root.root_id == fixture.root_id)
+            {
+                return Err(fail(
+                    "Generated retained/candidate catalog validation failed.",
+                ));
+            }
+            Ok(
+                serde_json::json!({"transactionId":prepared.transaction_id,"catalogId":fixture.catalog_id,"pendingActivation":true,"activationClaimed":false,"currentCatalogRetained":true,"preRestoreVerified":true,"candidateVerified":true,"fixturePickerOnly":true,"sourceAudit":fixture.audit()?}),
+            )
+        }
         "m4_application_audit" => fixture.audit(),
         "m4_application_remove_source" => {
             fixture.check_source()?;
@@ -183,25 +250,37 @@ pub(super) fn handle(state: &Foundation, action: &str) -> Result<serde_json::Val
             fixture.removed = true;
             Ok(serde_json::json!({"sourceRemoved":true,"sourceUnchangedBeforeRemoval":true}))
         }
-        "m4_application_source" | "m4_application_repository" | "m4_application_restore" => {
+        "m4_application_source"
+        | "m4_application_repository"
+        | "m4_application_restore"
+        | "m4_application_catalog_root_picker" => {
             let path = match action {
-                "m4_application_source" => fixture.source.path(),
+                "m4_application_source" | "m4_application_catalog_root_picker" => {
+                    fixture.source.path()
+                }
                 "m4_application_repository" => fixture.repository.path(),
                 _ => fixture.restore.path(),
             }
             .canonicalize()?;
             let file = filesystem::open_directory_readonly(&path)?;
             let selection_id = uuid::Uuid::new_v4().to_string();
+            let native = NativeSelection {
+                id: selection_id.clone(),
+                path,
+                identity: Some(filesystem::identity(&file)?),
+                volume: Some(stillharbour_core::library::native::volume_token(&file)?),
+            };
+            if action == "m4_application_catalog_root_picker" {
+                *state
+                    .catalog_restore_picker
+                    .lock()
+                    .map_err(|_| fail("Generated picker state is unavailable."))? =
+                    Some(native.clone());
+            }
             *state
                 .selection
                 .lock()
-                .map_err(|_| fail("Fixture picker selection is unavailable."))? =
-                Some(NativeSelection {
-                    id: selection_id.clone(),
-                    path,
-                    identity: Some(filesystem::identity(&file)?),
-                    volume: Some(stillharbour_core::library::native::volume_token(&file)?),
-                });
+                .map_err(|_| fail("Fixture picker selection is unavailable."))? = Some(native);
             Ok(
                 serde_json::json!({"selectionId":selection_id,"rootId":fixture.root_id,"catalogId":fixture.catalog_id,"credentialRef":fixture.credential_ref}),
             )

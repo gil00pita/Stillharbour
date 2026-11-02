@@ -14,21 +14,37 @@ ARMED_BYTES_PER_SECOND = 262144
 
 def progressing_pack(scope, observed):
     """Only a new, partially written pack can establish upload progress."""
+    scope.boundary()
     count = 0
     for path in scope.root.rglob('*'):
         count += 1
-        if count > 8192 or path.is_symlink():
+        if count > 8192:
             raise RuntimeError('Generated proxy repository scope exceeds its bound.')
-        if path.is_file():
-            relative = scope.relative(path)
+        relative = path.relative_to(scope.root).as_posix()
+        # Restic removes temporary locks while read-only commands complete.
+        # They cannot establish pack progress and must never be stat'ed here.
+        if 'data' not in Path(relative).parts or relative in scope.baseline:
+            continue
+        try:
+            if path.is_symlink():
+                raise RuntimeError('Generated proxy pack cannot be a link.')
+            if not path.is_file():
+                observed.pop(relative, None)
+                continue
             size = path.stat().st_size
+        except FileNotFoundError:
+            # A vanished NEW pack earns no evidence. Final frozen OLD-object
+            # identity/metadata/byte audits remain strict and unchanged.
+            observed.pop(relative, None)
+            continue
+        else:
+            scope.relative(path)
             if size > LIMIT:
                 raise RuntimeError('Generated proxy pack exceeds its bound.')
-            if 'data' in Path(relative).parts and relative not in scope.baseline:
-                previous = observed.get(relative)
-                observed[relative] = size
-                if previous is not None and size > previous and 32768 <= size < 2097152:
-                    return size
+            previous = observed.get(relative)
+            observed[relative] = size
+            if previous is not None and size > previous and 32768 <= size < 2097152:
+                return size
     return 0
 
 

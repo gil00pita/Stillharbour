@@ -45,6 +45,44 @@ def fixture(scenario):
 
 
 class FaultBoundaryTests(unittest.TestCase):
+    def test_proxy_ignores_vanished_lock_and_vanished_new_pack_without_earning_progress(self):
+        with fixture('disconnect_upload') as (base, controller, _):
+            locks = base / 'server/locks'
+            locks.mkdir()
+            lock = locks / ('f' * 64)
+            lock.write_bytes(b'generated temporary lock')
+            pack = base / 'server/data/aa' / ('d' * 64)
+            pack.write_bytes(b'x')
+            observed = {}
+            self.assertEqual(PROXY.progressing_pack(controller, observed), 0)
+            real_stat = Path.stat
+
+            def disappear(path, *args, **kwargs):
+                if path == lock:
+                    raise AssertionError('Non-pack lock metadata must not be queried.')
+                if path == pack:
+                    pack.unlink()
+                    raise FileNotFoundError('Generated NEW pack vanished between enumeration and stat.')
+                return real_stat(path, *args, **kwargs)
+
+            with patch.object(Path, 'stat', disappear):
+                self.assertEqual(PROXY.progressing_pack(controller, observed), 0)
+            relative = pack.relative_to(controller.root).as_posix()
+            self.assertNotIn(relative, observed)
+            self.assertFalse(controller.triggered)
+            pack.write_bytes(b'x' * 65536)
+            self.assertEqual(PROXY.progressing_pack(controller, observed), 0)
+            self.assertFalse(controller.triggered)
+
+    def test_proxy_pack_observation_never_hides_a_missing_frozen_baseline_object(self):
+        with fixture('disconnect_upload') as (_, controller, original):
+            original.unlink()  # Damage only this constructor-owned model fixture.
+            self.assertEqual(PROXY.progressing_pack(controller, {}), 0)
+            (controller.control / 'failure.disarm').write_bytes(controller.owner.encode())
+            controller.poll()
+            audit = json.loads((controller.control / 'failure.audit.json').read_bytes())
+            self.assertFalse(audit['oldObjectsUnchanged'])
+
     def test_proxy_requires_new_growing_partial_pack_not_existing_or_complete_object(self):
         with fixture('disconnect_upload') as (base, controller, original):
             observed = {}

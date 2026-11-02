@@ -33,6 +33,7 @@ struct Signal {
 #[derive(Clone)]
 pub(super) struct Monitor {
     pub stop: Arc<AtomicBool>,
+    pub done: Arc<AtomicBool>,
     pub views: Arc<Mutex<Vec<RootMonitor>>>,
 }
 struct Pending {
@@ -128,6 +129,7 @@ impl RootWatch {
 pub(super) fn start(owner: Weak<Library>, managed: PathBuf) -> Result<Monitor> {
     let state = Monitor {
         stop: Arc::new(AtomicBool::new(false)),
+        done: Arc::new(AtomicBool::new(false)),
         views: Arc::new(Mutex::new(Vec::new())),
     };
     let worker = state.clone();
@@ -144,6 +146,13 @@ pub(super) fn start(owner: Weak<Library>, managed: PathBuf) -> Result<Monitor> {
     Ok(state)
 }
 fn run(owner: Weak<Library>, state: Monitor, managed: PathBuf) {
+    struct Finished(Arc<AtomicBool>);
+    impl Drop for Finished {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Release);
+        }
+    }
+    let _finished = Finished(state.done.clone());
     let mut roots: BTreeMap<String, RootWatch> = BTreeMap::new();
     let mut cursor = 0usize;
     while !state.stop.load(Ordering::Relaxed) {

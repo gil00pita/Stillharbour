@@ -14,6 +14,8 @@ import './backup.css';
 import { ComparisonPreviews } from './ComparisonPreviews';
 import { SyncWorkflow } from './SyncWorkflow';
 import { SnapshotWorkflow } from './SnapshotWorkflow';
+import { useCatalogSwitchState } from './catalogSwitchState';
+import { CatalogSwitchStopped } from './CatalogSwitchStopped';
 
 type ComparisonSource = Pick<
   LibraryStatus['roots'][number],
@@ -40,7 +42,16 @@ const summaryKeys = {
   blocked: 'blocked',
 } as const;
 
-export function BackupScreen({
+export function BackupScreen(props: {
+  status: LibraryStatus;
+  navigationControl: ReactNode;
+  jobsControl: ReactNode;
+}) {
+  const stopped = useCatalogSwitchState();
+  return stopped ? <CatalogSwitchStopped state={stopped} /> : <BackupScreenContent {...props} />;
+}
+
+function BackupScreenContent({
   status,
   navigationControl,
   jobsControl,

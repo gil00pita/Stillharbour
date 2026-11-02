@@ -41,6 +41,21 @@ pub enum SnapshotDestinationInput {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum SnapshotRequest {
+    CatalogRestoreReview {
+        restore_job_id: String,
+    },
+    CatalogRestoreMap {
+        review_id: String,
+        root_id: String,
+        selection_id: String,
+    },
+    CatalogRestoreApprove {
+        review_id: String,
+        digest: String,
+    },
+    CatalogRestorePrepare {
+        approval_id: String,
+    },
     Capabilities,
     Profiles,
     ProfileCreate {
@@ -127,7 +142,8 @@ impl SnapshotRequest {
                 destination: SnapshotDestinationInput::Local { selection_id },
                 ..
             }
-            | Self::RestoreReview { selection_id, .. } => Some(selection_id),
+            | Self::RestoreReview { selection_id, .. }
+            | Self::CatalogRestoreMap { selection_id, .. } => Some(selection_id),
             Self::ProfileOpen { selection_id, .. } => selection_id.as_deref(),
             _ => None,
         }
@@ -267,6 +283,9 @@ pub struct SnapshotSchedule {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum SnapshotReply {
+    CatalogRestoreReview(CatalogRestoreReview),
+    CatalogRestoreApproval(CatalogRestoreApproval),
+    CatalogRestorePrepared(CatalogRestorePrepared),
     Capabilities(SnapshotCapabilities),
     Profiles(Vec<SnapshotProfile>),
     Profile(SnapshotProfile),
@@ -277,4 +296,45 @@ pub enum SnapshotReply {
     Snapshots(Vec<SnapshotRecord>),
     Browse(SnapshotBrowse),
     Schedule(Option<SnapshotSchedule>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogRestoreRoot {
+    pub root_id: String,
+    pub label: String,
+    pub saved_display_path: String,
+    pub confirmed_display_path: Option<String>,
+    pub confirmed: bool,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogRestoreReview {
+    pub id: String,
+    pub digest: String,
+    pub restore_job_id: String,
+    pub snapshot_id: String,
+    pub catalog_id: String,
+    pub schema: u32,
+    pub current_revision: String,
+    pub restored_revision: String,
+    pub roots: Vec<CatalogRestoreRoot>,
+    pub approval_available: bool,
+    pub warning: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogRestoreApproval {
+    pub id: String,
+    pub review_id: String,
+    pub digest: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct CatalogRestorePrepared {
+    pub transaction_id: String,
+    pub catalog_id: String,
+    pub restart_required: bool,
+    pub current_catalog_retained: bool,
+    pub message: String,
 }

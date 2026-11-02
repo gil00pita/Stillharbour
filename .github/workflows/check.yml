@@ -32,6 +32,8 @@ jobs:
       - run: npm run check
       - name: Actual generated snapshot application recovery tests
         run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow library::snapshots::application_tests -- --ignored
+      - name: Native catalog preservation, activation authority and recovery
+        run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow catalog_restore -- --include-ignored
       - name: Actual snapshot process-exit and restart recovery
         run: cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow library::snapshots::process_failures -- --ignored
       - name: Native schedule, multi-root loss and coordination acceptance

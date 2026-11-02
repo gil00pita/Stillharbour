@@ -485,6 +485,21 @@ A restore browser selects destination profile, snapshot, roots/folders/photos, a
 
 Reject unsafe or escaping paths from repository manifests. After restoration, compare bytes/digests against the backed-up manifest for the selected scope and show results. Restoring the catalog is a separate action with a pre-restore catalog backup and migration checks. Credentials are not restored from a plaintext settings export.
 
+M4's separate catalog action activates after closing and reopening the app. Its
+source is a completed fully compared restore job, authenticated again against
+the concrete repository manifest. Initial activation supports the same catalog
+UUID, platform and current schema; older/cross-platform conversion is explicitly
+unsupported until tested. Compare imported schema as bounded data against the
+compiled owned schema before writable access; never execute imported scripts.
+Require fresh native identity/volume confirmation for every root. Review newer
+local edits as a whole-catalog collision, retain an independently validated
+consistent current-catalog backup, and prepare a new exclusive candidate without
+overwriting the live database. Drain admission and freeze catalog writes before
+preparation. OS-backed generation authority and native appdata lifetime ownership
+protect restart selection from replay/tampering; ambiguity retains all catalogs
+and must not create an empty replacement. Prepared is distinct from activated.
+After the barrier, errors require reopening the original session. See ADR-0080.
+
 Release gates require an end-to-end backup -> remove temporary source -> restore -> byte comparison on every advertised transport. A connection test alone does not establish support.
 
 ## 14. Integrity checks and storage analysis

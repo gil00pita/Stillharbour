@@ -4,6 +4,7 @@ use super::*;
 
 pub(super) struct DeniedSource {
     run: PathBuf,
+    run_chain: DirectoryChain,
     path: PathBuf,
     parent: DirectoryChain,
     file: File,
@@ -18,6 +19,7 @@ impl DeniedSource {
         let run = run.canonicalize().unwrap();
         let path = path.canonicalize().unwrap();
         assert!(path.starts_with(&run) && path != run);
+        let run_chain = DirectoryChain::open(&run).unwrap();
         assert!(
             !std::fs::symlink_metadata(&path)
                 .unwrap()
@@ -32,6 +34,7 @@ impl DeniedSource {
         let saved = platform::save(&file).unwrap();
         Self {
             run,
+            run_chain,
             path,
             parent,
             file,
@@ -49,11 +52,31 @@ impl DeniedSource {
             ));
         }
         let parent = DirectoryChain::open(self.path.parent().unwrap())?;
-        if parent.identities() != self.parent.identities() {
+        let same = |a: &FileIdentity, b: &FileIdentity| a.volume == b.volume && a.file == b.file;
+        if parent.identities().len() != self.parent.identities().len()
+            || !parent
+                .identities()
+                .iter()
+                .zip(self.parent.identities())
+                .all(|(a, b)| same(a, b))
+            || !parent
+                .identities()
+                .iter()
+                .any(|id| same(id, self.run_chain.identity()))
+            || !same(
+                DirectoryChain::open(&self.run)?.identity(),
+                self.run_chain.identity(),
+            )
+        {
             return Err(conflict(
                 "Generated source permission fixture changed containment.",
             ));
         }
+        platform::member(
+            parent.leaf(),
+            self.path.file_name().unwrap(),
+            &self.identity,
+        )?;
         Ok(())
     }
     pub(super) fn deny(&mut self) -> Result<()> {
@@ -98,6 +121,24 @@ mod platform {
         },
     };
     pub(super) struct Saved(Vec<u32>);
+    pub(super) fn member(
+        parent: &File,
+        name: &std::ffi::OsStr,
+        expected: &FileIdentity,
+    ) -> Result<()> {
+        let entry = filesystem::windows::destination_entry(parent, name)?
+            .ok_or_else(|| conflict("Generated permission source disappeared."))?;
+        if entry.name != name
+            || entry.file_id != expected.file
+            || filesystem::identity(parent)?.volume != expected.volume
+            || entry.attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT) != 0
+        {
+            return Err(conflict(
+                "Generated permission source changed native membership.",
+            ));
+        }
+        Ok(())
+    }
     fn failed() -> AppError {
         AppError::new(ErrorCode::Io, "Generated native permission fixture failed.")
             .caused_by(std::io::Error::last_os_error())
@@ -235,6 +276,32 @@ mod platform {
     use super::*;
     use std::os::{fd::AsRawFd, unix::fs::MetadataExt};
     pub(super) struct Saved(u32);
+    pub(super) fn member(
+        parent: &File,
+        name: &std::ffi::OsStr,
+        expected: &FileIdentity,
+    ) -> Result<()> {
+        use std::os::unix::ffi::OsStrExt;
+        let name = std::ffi::CString::new(name.as_bytes())
+            .map_err(|_| invalid("Invalid generated source component."))?;
+        let stat = rustix::fs::statat(parent, &name, rustix::fs::AtFlags::SYMLINK_NOFOLLOW)
+            .map_err(std::io::Error::from)?;
+        #[cfg(target_os = "macos")]
+        let volume = stat.st_dev as u64;
+        #[cfg(not(target_os = "macos"))]
+        let volume = stat.st_dev;
+        if volume != expected.volume
+            || stat.st_ino != expected.file
+            || stat.st_nlink != 1
+            || rustix::fs::FileType::from_raw_mode(stat.st_mode)
+                != rustix::fs::FileType::RegularFile
+        {
+            return Err(conflict(
+                "Generated permission source changed native membership.",
+            ));
+        }
+        Ok(())
+    }
     pub(super) fn open(path: &Path) -> Result<File> {
         filesystem::open_readonly(path)
     }
@@ -253,5 +320,45 @@ mod platform {
     }
     pub(super) fn restore(file: &File, saved: &Saved) -> Result<()> {
         mode(file, saved.0)
+    }
+}
+
+#[cfg(all(test, any(windows, target_os = "macos")))]
+mod tests {
+    use super::*;
+    struct OwnedRun {
+        run: tempfile::TempDir,
+        retain: Arc<AtomicBool>,
+    }
+    impl Drop for OwnedRun {
+        fn drop(&mut self) {
+            if std::thread::panicking() || self.retain.load(Ordering::Acquire) {
+                self.run.disable_cleanup(true);
+            }
+        }
+    }
+    #[test]
+    fn generated_permission_fixture_keeps_native_containment_after_owned_sibling_creation() {
+        let owned = OwnedRun {
+            run: tempfile::tempdir().unwrap(),
+            retain: Arc::new(AtomicBool::new(false)),
+        };
+        let run = owned.run.path().canonicalize().unwrap();
+        let source = run.join("generated-source");
+        std::fs::create_dir(&source).unwrap();
+        let path = source.join("generated-file.bin");
+        std::fs::write(&path, b"retained generated source bytes").unwrap();
+        let mut denial = DeniedSource::new(&run, &path, owned.retain.clone());
+        std::fs::create_dir(run.join("owned-staging-sibling")).unwrap();
+        std::fs::create_dir(source.join("owned-source-sibling")).unwrap();
+        denial.validate().unwrap();
+        denial.deny().unwrap();
+        assert!(filesystem::open_readonly(&path).is_err());
+        denial.restore().unwrap();
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"retained generated source bytes"
+        );
+        assert!(!owned.retain.load(Ordering::Acquire));
     }
 }

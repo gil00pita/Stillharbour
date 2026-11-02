@@ -14,6 +14,7 @@ import { errorMessage, libraryData, pickDirectory } from '../ipc';
 import { SnapshotProfileForm } from './SnapshotProfileForm';
 import { snapshotRequest } from './snapshotIpc';
 import { SnapshotRecoveryInspection } from './SnapshotRecoveryInspection';
+import { CatalogRestore } from './CatalogRestore';
 
 const active = (job: SnapshotJob) => ['queued', 'running', 'cancel_requested'].includes(job.state);
 function validJob(value: SnapshotJob, profileId: string, expected?: SnapshotJob) {
@@ -245,7 +246,18 @@ function SnapshotProfileWorkspace({
   const [refresh, setRefresh] = useState(0);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [localBusy, setBusy] = useState(false);
+  const [catalogActivities, setCatalogActivities] = useState<Set<string>>(() => new Set());
+  const onCatalogActivityChange = useCallback((jobId: string, active: boolean) => {
+    setCatalogActivities((current) => {
+      if (current.has(jobId) === active) return current;
+      const next = new Set(current);
+      if (active) next.add(jobId);
+      else next.delete(jobId);
+      return next;
+    });
+  }, []);
+  const busy = localBusy || catalogActivities.size > 0;
   const [selectedSnapshot, setSelectedSnapshot] = useState<SnapshotRecord | null>(null);
   const [browse, setBrowse] = useState<SnapshotBrowse | null>(null);
   const [browseOffset, setBrowseOffset] = useState(0);
@@ -379,7 +391,7 @@ function SnapshotProfileWorkspace({
     };
   }, [profile.id, snapshotId, browseOffset]);
   async function action(work: () => Promise<void>) {
-    if (pending.current) return;
+    if (pending.current || catalogActivities.size > 0) return;
     pending.current = true;
     setBusy(true);
     setError(null);
@@ -839,6 +851,12 @@ function SnapshotProfileWorkspace({
               bytes
             </p>
             <Evidence value={job} />
+            <CatalogRestore
+              job={job}
+              catalogId={profile.catalogId}
+              disabled={busy || Boolean(running)}
+              onActivityChange={onCatalogActivityChange}
+            />
             {job.action === 'backup' && job.state === 'needs_recovery' && (
               <SnapshotRecoveryInspection
                 key={job.id}

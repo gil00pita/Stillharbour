@@ -150,6 +150,25 @@ pub(crate) fn write_new(parent: &Root, leaf: &str, bytes: &[u8]) -> Result<()> {
     }
     Ok(())
 }
+/// Flush a newly owned file after an explicit native metadata/SQLite adapter.
+/// The ordinary source reader deliberately lacks these write/delete rights.
+pub(crate) fn sync_owned_file(parent: &Root, leaf: &str) -> Result<()> {
+    if !parent.owned {
+        return Err(failed(
+            "Only a newly owned file may be flushed through this adapter.",
+        ));
+    }
+    let chain = parent.output()?;
+    let current = native::read(chain.leaf(), leaf)?;
+    let identity = filesystem::identity(&current)?;
+    drop(current);
+    let file = native::reopen_stage(chain.leaf(), leaf, &identity)?;
+    file.sync_all()?;
+    if !native::entry_matches(chain.leaf(), leaf, &identity)? {
+        return Err(failed("Owned file membership changed while flushing."));
+    }
+    Ok(())
+}
 pub(crate) fn digest(file: &mut File, cancel: &AtomicBool) -> Result<String> {
     let version = source::revision(file)?;
     let identity = filesystem::identity(file)?;
@@ -400,7 +419,12 @@ pub(crate) fn copy(
             "probe_stage_intent",
             serde_json::json!({"index":index,"stage":stage_leaf,"identity":expected}),
         )?;
-        let staged = native::publish_to(held, leaf, probe, &stage, &stage_leaf, expected)?;
+        let staged = native::publish_to(held, leaf, probe, &stage, &stage_leaf, expected).map_err(
+            |mut error| {
+                error.message = format!("Snapshot name-probe relocation failed. {}", error.message);
+                error
+            },
+        )?;
         let prepared = PreparedStage {
             object: Object::of(&staged)?,
             revision: source::revision(&staged)?,

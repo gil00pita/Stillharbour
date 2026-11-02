@@ -5,6 +5,7 @@ compile_error!("desktop-test instrumentation must never be compiled into a relea
 
 #[cfg(feature = "desktop-test")]
 mod backup_fixture;
+mod catalog_admission;
 mod native_credentials;
 
 use std::{
@@ -41,6 +42,15 @@ struct MultiSourceFixture {
 }
 
 struct Foundation {
+    #[cfg(feature = "desktop-test")]
+    catalog_restore_picker: Mutex<Option<NativeSelection>>,
+    #[cfg(feature = "desktop-test")]
+    catalog_restore_receipt:
+        Arc<Mutex<Option<stillharbour_core::catalog_restore::PreparedCatalogRestore>>>,
+    catalog_admission: Arc<catalog_admission::Admission>,
+    activation: Arc<stillharbour_core::catalog_restore::activation::ActivationStore>,
+    _catalog_selection: Arc<stillharbour_core::catalog_restore::activation::StartupSelection>,
+    appdata: PathBuf,
     #[cfg(feature = "desktop-test")]
     backup_application_fixture: Mutex<Option<backup_fixture::ApplicationFixture>>,
     #[cfg(feature = "desktop-test")]
@@ -99,6 +109,7 @@ fn request_shutdown(app: &tauri::AppHandle, code: i32) {
     let gate = state.credential_gate.clone();
     let picker = state.picker.clone();
     let shutdown = state.shutdown.clone();
+    let catalog_admission = state.catalog_admission.clone();
     let app = app.clone();
     let _shutdown_worker = tauri::async_runtime::spawn_blocking(move || {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
@@ -114,6 +125,7 @@ fn request_shutdown(app: &tauri::AppHandle, code: i32) {
             if let (Some(_credential_guard), Ok(_picker_guard)) =
                 (credential_guard, picker.try_lock())
                 && library.backup_shutdown_ready().unwrap_or(false)
+                && catalog_admission.idle()
             {
                 shutdown.store(2, Ordering::Release);
                 app.exit(code);
@@ -165,6 +177,11 @@ async fn foundation_request(
     state: State<'_, Foundation>,
     request: FoundationRequest,
 ) -> Result<FoundationResponse> {
+    let catalog_admission = if matches!(&request, FoundationRequest::Status {}) {
+        None
+    } else {
+        Some(state.catalog_admission.enter()?)
+    };
     if state.credential_cancel.load(Ordering::Acquire)
         && matches!(&request, FoundationRequest::PickDirectory {})
     {
@@ -184,6 +201,7 @@ async fn foundation_request(
             let preferences = state.preferences.clone();
             let library = state.library.clone();
             tauri::async_runtime::spawn_blocking(move || {
+                let _catalog_admission = catalog_admission;
                 let mut value = preferences.get()?;
                 if let Some(id) = &value.default_root_id
                     && !library.root_exists(id.clone())?
@@ -201,6 +219,7 @@ async fn foundation_request(
             let store = state.preferences.clone();
             let library = state.library.clone();
             tauri::async_runtime::spawn_blocking(move || {
+                let _catalog_admission = catalog_admission;
                 if let Some(id) = &preferences.default_root_id {
                     library.validate_root_id(id.clone())?;
                 }
@@ -215,6 +234,40 @@ async fn foundation_request(
         }
         FoundationRequest::Status {} => Ok(FoundationResponse::Status(state.status.clone())),
         FoundationRequest::PickDirectory {} => {
+            #[cfg(feature = "desktop-test")]
+            if let Some(native) = state
+                .catalog_restore_picker
+                .lock()
+                .map_err(|_| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "Generated picker state is unavailable.",
+                    )
+                })?
+                .take()
+            {
+                let (identity, volume) = selected_identity(&native)?;
+                let file =
+                    stillharbour_core::library::native::open_root(&native.path, Some(&identity))?;
+                if stillharbour_core::library::native::volume_token(&file)? != volume {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Generated picker root changed.",
+                    ));
+                }
+                let response = DirectorySelection {
+                    id: native.id.clone(),
+                    display_path: native.path.display().to_string(),
+                    identity_available: true,
+                };
+                *state.selection.lock().map_err(|_| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "Generated selection state is unavailable.",
+                    )
+                })? = Some(native);
+                return Ok(FoundationResponse::Directory(Some(response)));
+            }
             let _picker = state
                 .picker
                 .try_lock()
@@ -232,6 +285,7 @@ async fn foundation_request(
                 .set_title("Select a folder — selection only, no scan")
                 .set_can_create_directories(false)
                 .pick_folder(move |selection| {
+                    let _catalog_admission = catalog_admission;
                     let _ = sender.send(selection);
                 });
             let selected = receiver.await.map_err(|_| {
@@ -246,7 +300,9 @@ async fn foundation_request(
             let path = selected.into_path().map_err(|error| {
                 AppError::new(ErrorCode::InvalidInput, "Select a local folder.").caused_by(error)
             })?;
+            let catalog_admission = state.catalog_admission.enter()?;
             let (response, native) = tauri::async_runtime::spawn_blocking(move || -> Result<_> {
+                let _catalog_admission = catalog_admission;
                 let handle = filesystem::open_directory_readonly(&path)?;
                 let (identity, volume) = match filesystem::identity(&handle) {
                     Ok(identity) => match stillharbour_core::library::native::volume_token(&handle)
@@ -354,6 +410,7 @@ async fn library_request(
     state: State<'_, Foundation>,
     request: LibraryRequest,
 ) -> Result<LibraryResponse> {
+    let catalog_admission = state.catalog_admission.enter()?;
     if window.label() != "main" {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
@@ -366,6 +423,48 @@ async fn library_request(
             "Stillharbour is stopping its native work before quitting.",
         ));
     }
+    if let LibraryRequest::BackupSnapshots {
+        request:
+            stillharbour_core::backup::snapshots::SnapshotRequest::CatalogRestorePrepare { approval_id },
+    } = &request
+    {
+        let approval_id = approval_id.clone();
+        let library = state.library.clone();
+        let admission = state.catalog_admission.clone();
+        let activation = state.activation.clone();
+        let appdata = state.appdata.clone();
+        #[cfg(feature = "desktop-test")]
+        let fixture_receipt = state.catalog_restore_receipt.clone();
+        return tauri::async_runtime::spawn_blocking(move || {
+            // Invalid or unsupported consent cannot stop any native work.
+            library.validate_catalog_restore_prepare(&approval_id)?;
+            drop(catalog_admission);
+            let result = (|| {
+                let _requests = admission.close_and_drain()?;
+                let _work = library.quiesce_for_catalog_restore()?;
+                let prepared = library.prepare_catalog_restore(&approval_id, &appdata)?;
+                activation.stage_pending(&prepared)?;
+                #[cfg(feature = "desktop-test")]
+                { *fixture_receipt.lock().map_err(|_| AppError::new(ErrorCode::WorkerFailed, "Generated catalog receipt is unavailable."))? = Some(prepared.clone()); }
+                Ok(LibraryResponse::BackupSnapshots(
+                    stillharbour_core::backup::snapshots::SnapshotReply::CatalogRestorePrepared(
+                        stillharbour_core::backup::snapshots::CatalogRestorePrepared {
+                            transaction_id: prepared.transaction_id,
+                            catalog_id: prepared.catalog_id,
+                            restart_required: true,
+                            current_catalog_retained: true,
+                            message: "The recovered catalog is prepared for the next launch. The current catalog and a consistent pre-restore copy are retained. Close and reopen Stillharbour to activate the reviewed catalog; no catalogs were merged.".into(),
+                        },
+                    ),
+                ))
+            })();
+            result.map_err(|mut error: AppError| {
+                error.message.push_str(" This session is stopped for catalog recovery. Close and reopen Stillharbour; existing catalogs and partial candidates remain retained.");
+                error
+            })
+        }).await.map_err(|_| AppError::new(ErrorCode::WorkerFailed,
+            "Catalog recovery stopped unexpectedly. Close and reopen Stillharbour; existing catalogs and candidates remain retained."))?;
+    }
     if let LibraryRequest::BackupCredentialExport { profile_id } = &request {
         let library = state.library.clone();
         let profile_id = profile_id.clone();
@@ -374,6 +473,7 @@ async fn library_request(
         let app = window.app_handle().clone();
         let parent = window.clone();
         return tauri::async_runtime::spawn_blocking(move || {
+            let _catalog_admission = catalog_admission;
             let _gate=gate.try_lock().map_err(|_|AppError::new(ErrorCode::Busy,"A native credential dialog is already open."))?;
             if cancel.load(Ordering::Acquire) {return Err(AppError::new(ErrorCode::Busy,"Stillharbour is stopping native credential work."));}
             let selection=snapshot_folder(&parent,"Choose a separate folder for the unencrypted recovery key")?;
@@ -413,6 +513,7 @@ async fn library_request(
         #[cfg(not(windows))]
         let owner = 0usize;
         return tauri::async_runtime::spawn_blocking(move || {
+            let _catalog_admission = catalog_admission;
             let _gate = gate.try_lock().map_err(|_| {
                 AppError::new(
                     ErrorCode::Busy,
@@ -507,6 +608,7 @@ async fn library_request(
         #[cfg(not(windows))]
         let owner = 0usize;
         return tauri::async_runtime::spawn_blocking(move || {
+            let _catalog_admission = catalog_admission;
             let _gate = gate.try_lock().map_err(|_| {
                 AppError::new(
                     ErrorCode::Busy,
@@ -554,6 +656,7 @@ async fn library_request(
     };
     let library = state.library.clone();
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
+        let _catalog_admission = catalog_admission;
         Ok(match request {
             LibraryRequest::BackupSync { request } => {
                 LibraryResponse::BackupSync(library.backup_sync(request)?)
@@ -1460,6 +1563,8 @@ async fn test_performance(
         | "m4_application_repository"
         | "m4_application_restore"
         | "m4_application_remove_source"
+        | "m4_application_catalog_root_picker"
+        | "m4_application_catalog_audit"
         | "m4_application_audit" => {
             if rows.is_some() {
                 return Err(AppError::new(
@@ -2326,10 +2431,16 @@ fn main() {
     builder
         .register_asynchronous_uri_scheme_protocol("original", |context, request, responder| {
             let library = context.app_handle().state::<Foundation>().library.clone();
+            let admission = context
+                .app_handle()
+                .state::<Foundation>()
+                .catalog_admission
+                .enter();
             let allowed =
                 context.webview_label() == "main" && request.method() == tauri::http::Method::GET;
             tauri::async_runtime::spawn_blocking(move || {
                 let result = (|| {
+                    let _admission = admission?;
                     if !allowed {
                         return Err(AppError::new(
                             ErrorCode::InvalidInput,
@@ -2371,9 +2482,15 @@ fn main() {
         })
         .register_asynchronous_uri_scheme_protocol("thumbnail", |context, request, responder| {
             let library = context.app_handle().state::<Foundation>().library.clone();
+            let admission = context
+                .app_handle()
+                .state::<Foundation>()
+                .catalog_admission
+                .enter();
             let allowed = context.webview_label() == "main";
             tauri::async_runtime::spawn_blocking(move || {
                 let result = (|| -> Result<Vec<u8>> {
+                    let _admission = admission?;
                     if !allowed {
                         return Err(AppError::new(
                             ErrorCode::InvalidInput,
@@ -2436,12 +2553,38 @@ fn main() {
             #[cfg(feature = "desktop-test")]
             let data = test_data.path().to_owned();
             std::fs::create_dir_all(&data)?;
+            // Use one native spelling for the held appdata binding, descriptor
+            // paths and SQLite actor. This preserves the same directory/object.
+            let data = data.canonicalize()?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
                 std::fs::set_permissions(&data, std::fs::Permissions::from_mode(0o700))?;
             }
-            let catalog = Arc::new(Catalog::open(data.join("Foundation.stillharbour"))?);
+            let startup_error = |error: AppError| {
+                app.dialog().message(format!(
+                    "Catalog recovery could not safely select a catalog. Existing catalogs, pre-restore copies and candidates remain retained.\n\n{}", error.message,
+                )).title("Stillharbour — catalog unavailable").blocking_show();
+                error
+            };
+            let activation = Arc::new(
+                stillharbour_core::catalog_restore::activation::ActivationStore::open(&data)
+                    .map_err(startup_error)?,
+            );
+            let catalog_selection = Arc::new(activation.startup_selection().map_err(startup_error)?);
+            catalog_selection.revalidate().map_err(startup_error)?;
+            let catalog = Arc::new(if catalog_selection.creation_allowed {
+                Catalog::open_bound_seed(catalog_selection.path.clone(), catalog_selection.identity.clone(), catalog_selection.volume.clone())
+            } else {
+                Catalog::open_bound_existing(catalog_selection.path.clone(), catalog_selection.identity.clone(), catalog_selection.volume.clone())
+            }.map_err(startup_error)?);
+            catalog_selection.revalidate().map_err(startup_error)?;
+            if catalog.schema_fingerprint()? != stillharbour_core::catalog::current_schema_fingerprint()? {
+                return Err(startup_error(AppError::new(ErrorCode::InvalidInput,
+                    "The selected catalog schema does not match the compiled application schema; no library workers were started.")).into());
+            }
+            activation.confirm_initialized(&catalog_selection).map_err(startup_error)?;
+            catalog.retain_native_owner(Arc::new((activation.clone(), catalog_selection.clone())))?;
             let summary = catalog.summary()?;
             let packaged = app.path().resolve(
                 "helpers/exiftool/exiftool",
@@ -2494,6 +2637,14 @@ fn main() {
             #[cfg(not(feature = "desktop-test"))]
             library.start_monitoring()?;
             app.manage(Foundation {
+                #[cfg(feature = "desktop-test")]
+                catalog_restore_picker: Mutex::new(None),
+                #[cfg(feature = "desktop-test")]
+                catalog_restore_receipt: Arc::new(Mutex::new(None)),
+                catalog_admission: Arc::new(catalog_admission::Admission::default()),
+                activation,
+                _catalog_selection: catalog_selection,
+                appdata: data.clone(),
                 #[cfg(feature = "desktop-test")]
                 backup_application_fixture: Mutex::new(None),
                 #[cfg(feature = "desktop-test")]

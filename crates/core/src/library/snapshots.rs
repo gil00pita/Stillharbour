@@ -34,6 +34,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
+mod catalog_restore;
 #[cfg(test)]
 mod content_preservation;
 #[cfg(test)]
@@ -347,6 +348,7 @@ pub(crate) struct SnapshotWorkflow {
     data: Binding,
     state: Mutex<State>,
     stopped: AtomicBool,
+    catalog_restore: Mutex<catalog_restore::CatalogRestoreState>,
 }
 
 pub(crate) fn migrate(db: &Connection) -> Result<()> {
@@ -693,6 +695,7 @@ impl SnapshotWorkflow {
                 timer_started: false,
             }),
             stopped: AtomicBool::new(false),
+            catalog_restore: Mutex::new(catalog_restore::CatalogRestoreState::default()),
         })
     }
     pub(crate) fn configure_helpers(&self, path: PathBuf) -> Result<()> {
@@ -2940,6 +2943,32 @@ impl SnapshotWorkflow {
     ) -> Result<SnapshotReply> {
         use SnapshotRequest::*;
         match request {
+            CatalogRestoreReview { restore_job_id } => Ok(SnapshotReply::CatalogRestoreReview(
+                self.catalog_restore_review(&restore_job_id)?,
+            )),
+            CatalogRestoreMap {
+                review_id,
+                root_id,
+                selection_id,
+            } => {
+                let selected = selection.ok_or_else(|| {
+                    invalid("Confirm each restored root using the native folder picker.")
+                })?;
+                if selected.id != selection_id {
+                    return Err(invalid("The native mapping selection expired."));
+                }
+                Ok(SnapshotReply::CatalogRestoreReview(
+                    self.catalog_restore_map(&review_id, &root_id, selected)?,
+                ))
+            }
+            CatalogRestoreApprove { review_id, digest } => {
+                Ok(SnapshotReply::CatalogRestoreApproval(
+                    self.catalog_restore_approve(&review_id, &digest)?,
+                ))
+            }
+            CatalogRestorePrepare { .. } => Err(unavailable(
+                "Catalog activation preparation requires the native admission and restart guard.",
+            )),
             Capabilities => Ok(SnapshotReply::Capabilities(self.capabilities())),
             Profiles => Ok(SnapshotReply::Profiles(self.profiles()?)),
             ProfileCreate {

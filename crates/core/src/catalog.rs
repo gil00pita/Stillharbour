@@ -16,6 +16,22 @@ use std::{
 
 pub const SCHEMA_VERSION: u32 = 13;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
+const INITIAL_SCHEMA: &str = "CREATE TABLE catalog_identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), uuid TEXT NOT NULL UNIQUE); CREATE TABLE job_events (sequence INTEGER PRIMARY KEY, job_id TEXT NOT NULL, state TEXT NOT NULL);";
+
+/// Build the trusted comparison schema only from compiled application SQL.
+/// Imported schema strings never become an input to migration execution.
+pub fn current_schema_fingerprint() -> Result<Vec<crate::catalog_restore::SchemaObject>> {
+    let mut connection = Connection::open_in_memory()?;
+    connection.execute_batch(INITIAL_SCHEMA)?;
+    connection.execute(
+        "INSERT INTO catalog_identity VALUES(1,?1)",
+        [uuid::Uuid::new_v4().to_string()],
+    )?;
+    connection.pragma_update(None, "application_id", APPLICATION_ID)?;
+    connection.pragma_update(None, "user_version", 1)?;
+    crate::library::store::migrate(&mut connection)?;
+    crate::catalog_restore::schema_objects(&connection)
+}
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
 pub fn sqlite_diagnostics() -> Result<serde_json::Value> {
@@ -44,6 +60,7 @@ type CatalogWork = Box<dyn FnOnce(&mut Connection, &mut ReadCache) + Send>;
 enum Request {
     Summary(SyncSender<Result<CatalogSummary>>),
     Snapshot(PathBuf, SyncSender<Result<()>>),
+    FreezeForRestore(SyncSender<Result<()>>),
     Run(CatalogWork),
     Stop,
 }
@@ -73,10 +90,74 @@ pub struct Catalog {
     worker: Option<thread::JoinHandle<()>>,
     #[cfg(feature = "fixture-probes")]
     performance_volume: Option<u64>,
+    // Retained until the actor connection/lock close, including background jobs
+    // that retain Catalog independently of the native application's state.
+    native_owner: std::sync::Mutex<Option<std::sync::Arc<dyn Send + Sync>>>,
+}
+
+struct ExistingCatalog {
+    identity: crate::filesystem::FileIdentity,
+    volume: String,
+    allow_initialization: bool,
+}
+impl ExistingCatalog {
+    fn validate(&self, path: &Path) -> Result<()> {
+        let metadata = std::fs::symlink_metadata(path)?;
+        let file = std::fs::File::open(path)?;
+        if !metadata.is_file()
+            || metadata.file_type().is_symlink()
+            || crate::filesystem::identity(&file)? != self.identity
+            || crate::library::native::volume_token(&file)? != self.volume
+        {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "The selected catalog changed; no empty replacement was created.",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl Catalog {
     pub fn open(path: PathBuf) -> Result<Self> {
+        Self::open_inner(path, None)
+    }
+
+    /// The caller retains the native activation witness and parent chains.
+    /// Unlike first-use creation this path never permits SQLite CREATE.
+    pub fn open_bound_existing(
+        path: PathBuf,
+        identity: crate::filesystem::FileIdentity,
+        volume: String,
+    ) -> Result<Self> {
+        Self::open_inner(
+            path,
+            Some(ExistingCatalog {
+                identity,
+                volume,
+                allow_initialization: false,
+            }),
+        )
+    }
+
+    /// Only a freshly OS-authorized first-use seed may initialize schema zero.
+    /// The native activation selection owns this authority, never renderer data.
+    pub fn open_bound_seed(
+        path: PathBuf,
+        identity: crate::filesystem::FileIdentity,
+        volume: String,
+    ) -> Result<Self> {
+        Self::open_inner(
+            path,
+            Some(ExistingCatalog {
+                identity,
+                volume,
+                allow_initialization: true,
+            }),
+        )
+    }
+
+    fn open_inner(path: PathBuf, expected: Option<ExistingCatalog>) -> Result<Self> {
         #[cfg(feature = "fixture-probes")]
         let performance_volume = crate::performance::path_volume(&path);
         let (sender, receiver) = mpsc::sync_channel(16);
@@ -84,7 +165,7 @@ impl Catalog {
         let worker = thread::Builder::new()
             .name("catalog".into())
             .spawn(move || {
-                let opened = open_database(&path);
+                let opened = open_database(&path, expected.as_ref());
                 match opened {
                     Err(error) => {
                         let _ = ready_tx.send(Err(error));
@@ -110,6 +191,20 @@ impl Catalog {
                                 Request::Snapshot(path, reply) => {
                                     let _ = reply.send(snapshot(connection, &path));
                                 }
+                                Request::FreezeForRestore(reply) => {
+                                    let frozen = (|| {
+                                        connection.pragma_update(None, "query_only", true)?;
+                                        let value: bool = connection.query_row(
+                                            "PRAGMA query_only", [], |row| row.get(0),
+                                        )?;
+                                        if !value {
+                                            return Err(AppError::new(ErrorCode::Catalog,
+                                                "Catalog restore could not stop catalog writes; close and reopen Stillharbour."));
+                                        }
+                                        Ok(())
+                                    })();
+                                    let _ = reply.send(frozen);
+                                }
                                 Request::Run(work) => work(connection, &mut cache),
                                 Request::Stop => break,
                             }
@@ -126,7 +221,21 @@ impl Catalog {
             worker: Some(worker),
             #[cfg(feature = "fixture-probes")]
             performance_volume,
+            native_owner: std::sync::Mutex::new(None),
         })
+    }
+
+    /// Native lifetime ownership only, never renderer or imported authority.
+    pub fn retain_native_owner(&self, owner: std::sync::Arc<dyn Send + Sync>) -> Result<()> {
+        let mut current = self.native_owner.lock().map_err(|_| stopped())?;
+        if current.is_some() {
+            return Err(AppError::new(
+                ErrorCode::Conflict,
+                "Native catalog lifetime ownership is already configured.",
+            ));
+        }
+        *current = Some(owner);
+        Ok(())
     }
 
     pub fn summary(&self) -> Result<CatalogSummary> {
@@ -192,6 +301,22 @@ impl Catalog {
             .map_err(|_| busy())?;
         response.recv().map_err(|_| stopped())?
     }
+
+    /// Irreversible for this actor lifetime. The native shell first closes RPC
+    /// admission and drains workers; the queued barrier then refuses later SQL
+    /// writes while keeping consistent snapshots and bounded reads available.
+    /// Failure recovery requires reopening the retained original catalog.
+    pub fn freeze_writes_for_restore(&self) -> Result<()> {
+        let (reply, response) = mpsc::sync_channel(1);
+        self.sender
+            .try_send(Request::FreezeForRestore(reply))
+            .map_err(|_| busy())?;
+        response.recv().map_err(|_| stopped())?
+    }
+
+    pub fn schema_fingerprint(&self) -> Result<Vec<crate::catalog_restore::SchemaObject>> {
+        self.call(|connection| crate::catalog_restore::schema_objects(connection))
+    }
 }
 
 impl Drop for Catalog {
@@ -210,7 +335,7 @@ fn stopped() -> AppError {
     AppError::new(ErrorCode::Catalog, "The catalog worker stopped.")
 }
 
-fn open_database(path: &Path) -> Result<CatalogDatabase> {
+fn open_database(path: &Path, expected: Option<&ExistingCatalog>) -> Result<CatalogDatabase> {
     let _span = crate::performance::Span::new(
         crate::performance::Metric::CatalogOpen,
         crate::performance::Endpoint::Catalog,
@@ -231,12 +356,19 @@ fn open_database(path: &Path) -> Result<CatalogDatabase> {
         AppError::new(ErrorCode::CatalogInUse, "This catalog is already open.").caused_by(error)
     })?;
     let lock = CatalogLock(lock);
-    let mut connection = Connection::open_with_flags(
-        path,
-        OpenFlags::SQLITE_OPEN_READ_WRITE
-            | OpenFlags::SQLITE_OPEN_CREATE
-            | OpenFlags::SQLITE_OPEN_NO_MUTEX,
-    )?;
+    if let Some(expected) = expected {
+        expected.validate(path)?;
+    }
+    let mut flags = OpenFlags::SQLITE_OPEN_READ_WRITE
+        | OpenFlags::SQLITE_OPEN_NO_MUTEX
+        | OpenFlags::SQLITE_OPEN_NOFOLLOW;
+    if expected.is_none() {
+        flags |= OpenFlags::SQLITE_OPEN_CREATE;
+    }
+    let mut connection = Connection::open_with_flags(path, flags)?;
+    if let Some(expected) = expected {
+        expected.validate(path)?;
+    }
     connection.busy_timeout(Duration::from_secs(2))?;
     connection.execute_batch(
         "PRAGMA trusted_schema=OFF; PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL;",
@@ -249,7 +381,22 @@ fn open_database(path: &Path) -> Result<CatalogDatabase> {
         ));
     }
     let app_id: i32 = connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
+    if expected.is_some()
+        && version == SCHEMA_VERSION
+        && crate::catalog_restore::schema_objects(&connection)? != current_schema_fingerprint()?
+    {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "The selected catalog schema differs from the compiled schema; no imported schema was executed.",
+        ));
+    }
     if version == 0 {
+        if expected.is_some_and(|binding| !binding.allow_initialization) {
+            return Err(AppError::new(
+                ErrorCode::InvalidInput,
+                "The selected existing catalog has no schema. No empty catalog was initialized.",
+            ));
+        }
         let objects: u32 = connection.query_row(
             "SELECT count(*) FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'",
             [],
@@ -262,7 +409,7 @@ fn open_database(path: &Path) -> Result<CatalogDatabase> {
             ));
         }
         let tx = connection.transaction()?;
-        tx.execute_batch("CREATE TABLE catalog_identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), uuid TEXT NOT NULL UNIQUE); CREATE TABLE job_events (sequence INTEGER PRIMARY KEY, job_id TEXT NOT NULL, state TEXT NOT NULL);")?;
+        tx.execute_batch(INITIAL_SCHEMA)?;
         tx.execute(
             "INSERT INTO catalog_identity VALUES (1, ?1)",
             [uuid::Uuid::new_v4().to_string()],
@@ -420,6 +567,134 @@ fn snapshot(source: &Connection, destination: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn catalog_restore_bound_open_rejects_schema_before_reading_redefined_identity() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("Generated.stillharbour");
+        drop(Catalog::open(path.clone()).unwrap());
+        let db = Connection::open(&path).unwrap();
+        db.execute_batch("DROP TABLE catalog_identity; CREATE VIEW catalog_identity AS SELECT 1 AS singleton,randomblob(1048576) AS uuid;").unwrap();
+        db.close().unwrap();
+        let before = std::fs::read(&path).unwrap();
+        let file = std::fs::File::open(&path).unwrap();
+        let identity = crate::filesystem::identity(&file).unwrap();
+        let volume = crate::library::native::volume_token(&file).unwrap();
+        drop(file);
+        let result = Catalog::open_bound_existing(path.clone(), identity, volume);
+        assert!(matches!(result, Err(error) if error.code == ErrorCode::InvalidInput));
+        assert_eq!(std::fs::read(path).unwrap(), before);
+    }
+    #[test]
+    fn catalog_restore_native_owner_survives_every_catalog_reference() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+        struct Owner(Arc<AtomicBool>);
+        impl Drop for Owner {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::Release);
+            }
+        }
+        let owned = tempfile::tempdir().unwrap();
+        let catalog = Arc::new(Catalog::open(owned.path().join("Generated.stillharbour")).unwrap());
+        let dropped = Arc::new(AtomicBool::new(false));
+        catalog
+            .retain_native_owner(Arc::new(Owner(dropped.clone())))
+            .unwrap();
+        assert!(catalog.retain_native_owner(Arc::new(())).is_err());
+        let background_reference = catalog.clone();
+        drop(catalog);
+        assert!(!dropped.load(Ordering::Acquire));
+        assert!(background_reference.summary().is_ok());
+        drop(background_reference);
+        assert!(dropped.load(Ordering::Acquire));
+    }
+    #[test]
+    fn catalog_restore_compiled_schema_matches_owned_catalog_and_detects_extra_objects() {
+        let owned = tempfile::tempdir().unwrap();
+        let catalog = Catalog::open(owned.path().join("Generated.stillharbour")).unwrap();
+        let expected = current_schema_fingerprint().unwrap();
+        assert!(!expected.is_empty());
+        assert_eq!(catalog.schema_fingerprint().unwrap(), expected);
+        catalog
+            .call(|db| {
+                db.execute_batch("CREATE TABLE generated_extra(value TEXT)")?;
+                Ok(())
+            })
+            .unwrap();
+        assert_ne!(catalog.schema_fingerprint().unwrap(), expected);
+    }
+    #[test]
+    fn catalog_restore_freeze_retains_edits_allows_backup_and_requires_reopen_for_writes() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("Generated.stillharbour");
+        let retained = owned.path().join("pre-restore.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        catalog.call(|db| {
+            db.execute("INSERT INTO job_events(job_id,state) VALUES('generated-local-edit','retained')", [])?;
+            Ok(())
+        }).unwrap();
+        catalog.freeze_writes_for_restore().unwrap();
+        catalog.freeze_writes_for_restore().unwrap();
+        assert!(
+            catalog
+                .call(|db| {
+                    db.execute("DELETE FROM job_events", [])?;
+                    Ok(())
+                })
+                .is_err()
+        );
+        assert_eq!(catalog.summary().unwrap().id, id);
+        catalog.snapshot(retained.clone()).unwrap();
+        let backup =
+            Connection::open_with_flags(&retained, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+        let saved: String = backup
+            .query_row(
+                "SELECT state FROM job_events WHERE job_id='generated-local-edit'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(saved, "retained");
+        drop(backup);
+        drop(catalog);
+        let catalog = Catalog::open(path).unwrap();
+        catalog.call(|db| {
+            db.execute("INSERT INTO job_events(job_id,state) VALUES('generated-after-reopen','writable')", [])?;
+            Ok(())
+        }).unwrap();
+    }
+    #[test]
+    fn catalog_restore_bound_existing_never_creates_missing_or_adopts_another_object() {
+        let owned = tempfile::tempdir().unwrap();
+        let path = owned.path().join("Generated.stillharbour");
+        let catalog = Catalog::open(path.clone()).unwrap();
+        let id = catalog.summary().unwrap().id;
+        drop(catalog);
+        let file = std::fs::File::open(&path).unwrap();
+        let identity = crate::filesystem::identity(&file).unwrap();
+        let volume = crate::library::native::volume_token(&file).unwrap();
+        drop(file);
+        let catalog =
+            Catalog::open_bound_existing(path.clone(), identity.clone(), volume.clone()).unwrap();
+        assert_eq!(catalog.summary().unwrap().id, id);
+        drop(catalog);
+        let mut wrong = identity.clone();
+        wrong.file ^= 1;
+        assert!(Catalog::open_bound_existing(path.clone(), wrong, volume.clone()).is_err());
+        let missing = owned.path().join("Absent.stillharbour");
+        assert!(Catalog::open_bound_existing(missing.clone(), identity, volume).is_err());
+        assert!(!missing.exists());
+        std::fs::write(&path, []).unwrap();
+        let file = std::fs::File::open(&path).unwrap();
+        let identity = crate::filesystem::identity(&file).unwrap();
+        let volume = crate::library::native::volume_token(&file).unwrap();
+        drop(file);
+        assert!(Catalog::open_bound_existing(path.clone(), identity, volume).is_err());
+        assert_eq!(std::fs::metadata(path).unwrap().len(), 0);
+    }
     #[test]
     #[cfg(unix)]
     fn closing_catalog_releases_lock_while_an_unrelated_child_is_pre_exec() {

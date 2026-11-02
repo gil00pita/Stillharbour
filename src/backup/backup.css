@@ -223,3 +223,15 @@
     grid-template-columns: 1fr;
   }
 }
+
+.catalog-switch-stopped {
+  max-width: 880px;
+  min-height: 100vh;
+  margin-inline: auto;
+  padding: 48px 32px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 20px;
+  overflow-wrap: anywhere;
+}

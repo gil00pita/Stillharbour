@@ -27,10 +27,13 @@ use std::{
     time::{Duration, Instant},
 };
 
+#[path = "catalog_quiescence.rs"]
+mod catalog_quiescence;
 #[path = "original.rs"]
 pub mod original;
 #[path = "rendition_jobs.rs"]
 mod rendition_jobs;
+pub use catalog_quiescence::CatalogRestoreLease;
 
 pub const THUMBNAIL_POLICY: &str = "p2-v3-tall-jpeg-srgb8-preview";
 const CACHE_POLICIES: &[&str] = &[
@@ -940,6 +943,7 @@ impl Library {
         Err(invalid("This scan is no longer running."))
     }
     pub fn cancel_all(&self) {
+        self.inspections.stop();
         #[cfg(any(test, feature = "backup-workflow", feature = "fixture-probes"))]
         self.sync_workflow.cancel_all();
         self.snapshots.cancel_all();

@@ -37,7 +37,7 @@ mod service;
 pub(crate) mod store;
 pub(crate) mod workers;
 pub use service::THUMBNAIL_POLICY;
-pub use service::{Library, LibraryOptions};
+pub use service::{CatalogRestoreLease, Library, LibraryOptions};
 pub use workers::WorkerPaths;
 
 #[cfg(all(feature = "fixture-probes", target_os = "macos"))]

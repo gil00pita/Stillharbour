@@ -1,6 +1,7 @@
 //! Domain rules and owned adapters. No Tauri or renderer authority lives here.
 pub mod backup;
 pub mod catalog;
+pub mod catalog_restore;
 pub mod contract;
 pub mod domain;
 pub mod executor;

@@ -78,6 +78,20 @@ pub(super) struct CompareJobs {
     review: Mutex<Option<Review>>,
 }
 impl CompareJobs {
+    pub(super) fn idle(&self) -> Result<bool> {
+        let review = self.review.lock().map_err(|_| changed())?;
+        if review
+            .as_ref()
+            .is_some_and(|r| r.run.state == ComparisonState::Comparing)
+        {
+            return Ok(false);
+        }
+        match self.preview_gate.try_lock() {
+            Ok(_) => Ok(true),
+            Err(std::sync::TryLockError::WouldBlock) => Ok(false),
+            Err(_) => Err(changed()),
+        }
+    }
     pub(super) fn stop(&self) {
         if let Ok(state) = self.review.lock()
             && let Some(review) = state.as_ref()

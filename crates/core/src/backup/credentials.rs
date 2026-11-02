@@ -3,6 +3,7 @@ use crate::domain::{AppError, ErrorCode, Result};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use zeroize::Zeroizing;
+pub(crate) mod catalog_restore;
 
 const SERVICE: &str = "stillharbour.backup.v1";
 const MAX_SECRET: usize = 2048;

@@ -322,5 +322,117 @@ describe('M4 application snapshot lifecycle — generated native fixtures', () =
       ),
     );
     await browser.saveScreenshot(`${evidence}/snapshot-lifecycle.png`);
+
+    // Catalog activation is separately reviewed, mapped and approved. This case
+    // proves native preparation/admission and the stopped UI, not a GUI restart.
+    await $('button=Review catalog switch').waitForEnabled();
+    await $('button=Review catalog switch').click();
+    const catalogPanel = $('section[aria-label="Restored catalog switch"]');
+    await catalogPanel.$('button=Approve catalog switch').waitForDisplayed();
+    assert.equal(await catalogPanel.$('button=Approve catalog switch').isEnabled(), false);
+    const rootMappings = await catalogPanel.$$(
+      'ul[aria-label="Restored catalog root mappings"] li',
+    );
+    assert.equal(
+      rootMappings.length,
+      1,
+      'Generated catalog contains exactly its original source root',
+    );
+    const picker = await fixture('catalog_root_picker');
+    assert.equal(picker.rootId, source.rootId);
+    await rootMappings[0].$('button').click();
+    await browser.waitUntil(
+      async () => (await catalogPanel.getText()).includes('Native identity confirmed:'),
+      {
+        timeout: 15000,
+        interval: 100,
+        timeoutMsg: 'Fresh native catalog root mapping did not complete',
+      },
+    );
+    const catalogReview = await browser.execute(() => {
+      const panel = document.querySelector('section[aria-label="Restored catalog switch"]');
+      if (!panel) throw new Error('Catalog review is not displayed');
+      const facts = [...panel.querySelectorAll('dl dd')].map((node) => node.textContent.trim());
+      const digest = [...panel.querySelectorAll('p')]
+        .find((node) => node.textContent.startsWith('Exact review digest:'))
+        ?.querySelector('code')?.textContent;
+      return {
+        catalogId: facts[0],
+        schema: facts[1],
+        currentRevision: facts[2],
+        restoredRevision: facts[3],
+        digest,
+      };
+    });
+    assert.equal(catalogReview.catalogId, source.catalogId);
+    assert.match(catalogReview.digest, /^[a-f0-9]{64}$/);
+    assert.ok(catalogReview.currentRevision);
+    assert.ok(catalogReview.restoredRevision);
+    await catalogPanel.$('input[type="checkbox"]').click();
+    await catalogPanel.$('button=Approve catalog switch').click();
+    await browser.waitUntil(
+      async () => (await catalogPanel.getText()).includes('Catalog preparation has not started.'),
+      {
+        timeout: 15000,
+        interval: 100,
+        timeoutMsg: 'Exact catalog approval did not complete',
+      },
+    );
+    await catalogPanel.$('button=Prepare catalog switch').click();
+    const stopped = $('main[aria-label="Catalog switch session"]');
+    await browser.waitUntil(
+      async () => (await stopped.getText()).includes('Catalog switch awaits restart'),
+      {
+        timeout: 60000,
+        interval: 100,
+        timeoutMsg: 'Native catalog preparation was not confirmed',
+      },
+    );
+    assert.ok((await stopped.getText()).includes('not confirmed active'));
+    assert.ok((await stopped.getText()).includes('Close and reopen Stillharbour'));
+    assert.equal(await $('button=Versioned backup').isExisting(), false);
+    const admission = await browser.tauri.execute(async ({ core }) => {
+      try {
+        await core.invoke('library_request', { request: { kind: 'status' } });
+        return { rejected: false, code: null };
+      } catch (error) {
+        return {
+          rejected: true,
+          code: typeof error === 'object' && error !== null && 'code' in error ? error.code : null,
+        };
+      }
+    });
+    assert.deepEqual(admission, { rejected: true, code: 'BUSY' });
+    const catalogAudit = await fixture('catalog_audit');
+    assert.equal(catalogAudit.catalogId, source.catalogId);
+    for (const key of [
+      'pendingActivation',
+      'currentCatalogRetained',
+      'preRestoreVerified',
+      'candidateVerified',
+      'fixturePickerOnly',
+    ])
+      assert.equal(catalogAudit[key], true, `Native catalog audit: ${key}`);
+    assert.equal(catalogAudit.activationClaimed, false);
+    assert.equal(catalogAudit.sourceAudit.onlyFixtureWrites, true);
+    assert.equal(catalogAudit.sourceAudit.destinationOnlyPreserved, true);
+    assert.equal(catalogAudit.sourceAudit.restoredCompared, true);
+    // A late normal-RPC Busy response must not replace the persistent restart instruction.
+    assert.ok((await stopped.getText()).includes('Catalog switch awaits restart'));
+    await writeFile(
+      `${evidence}/catalog-switch-prepared.json`,
+      JSON.stringify(
+        {
+          catalogReview,
+          admission,
+          catalogAudit,
+          nativePreparationConfirmed: true,
+          guiRestartActivationTested: false,
+        },
+        null,
+        2,
+      ),
+    );
+    await browser.saveScreenshot(`${evidence}/catalog-switch-prepared.png`);
   });
 });

@@ -1,5 +1,9 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0080](decisions/ADR-0080-catalog-restore-activation.md) adds a separate reviewed catalog activation on restart: repository-authenticated restored catalog bytes, fresh native root confirmation, a consistent retained current catalog, a new candidate and an OS-sealed monotonic selector. Imported schema is compared with compiled definitions before data queries; current catalogs are never overwritten or replaced by an empty fallback. Same-platform/current-schema bounds and native acceptance remain explicit.
+
+[ADR-0079](decisions/ADR-0079-backup-application-workflows.md) records schema-13 application integration, native credentials/helpers, verified snapshot restore and OS-sealed recurring timing. Catalog timing-row replay cannot advance scheduled admission, and disabling an imported catalog copy cannot revoke the original instance's authority.
+
 [ADR-0078](decisions/ADR-0078-generated-retained-replacement-and-transport-labs.md) records generated retained replacement, seven actual process exits and disposable pinned-helper transports. All remaining M4 stages are owner-authorized; preservation acceptance gates remain mandatory.
 
 [ADR-0077](decisions/ADR-0077-separate-staging-append-fixture.md) adds separately bound staging to the shared executor and a closed M4B append/recovery lab. Legacy organization streams reject the additional scope. Production copying and remaining M4B–D evidence stay gated; the owner authorized continuing all M4 slices and publishing a PR.

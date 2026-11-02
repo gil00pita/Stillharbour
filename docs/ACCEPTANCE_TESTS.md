@@ -174,6 +174,18 @@ Continuous M2/M3 prerequisite coverage, 2026-10-31: existing target review must 
 | AC-072 | Restore a catalog after adding new local edits. Pre-restore backup and collision/migration review protect those edits. Absolute root paths are relinked rather than assumed on another OS. |
 | AC-073 | Quit the app or sleep across a scheduled time. Behavior matches the documented running/tray/catch-up model; no fully-quit scheduling claim without an installed tested background agent. |
 
+AC-072 additionally exercises the separate activation-on-restart action from an
+actual verified restore job. Add newer local catalog edits, reject stale review
+and wrong-root mappings, retain a consistent current-catalog backup, and verify
+the independently openable candidate contains the chosen older records. Require
+fresh native confirmation for every root and preserve original media/sidecars.
+Reject unknown/redefined schema objects, untested schema/platform conversions,
+tampered candidate bytes/native IDs, stale OS handoffs and ambiguous interrupted
+preparation. Test restart selection before any writable catalog open, without
+overwriting the original or creating an empty fallback. UI must distinguish
+prepared/restart-required from activated; failure after quiescence requires
+reopening the retained original. Imported schedules/approvals never execute.
+
 AC-073 application checks also require exact reviewed manifest/profile consent:
 changed content, versions, roots or endpoints return to review; imported/restored
 catalog schedules cannot execute. Test elapsed UTC intervals, one unchanged-scope
@@ -192,6 +204,15 @@ until fresh reviewed consent. Disable a copied catalog's imported policy and
 confirm the original native instance's authority remains unchanged. Native time
 fixtures may seed both their exact OS authority and catalog row; row-only edits
 must never authorize an early run.
+
+AC-069's during-staging fixture must first prove one root item was staged, then
+make the other generated root unreadable and restore its original permissions
+through the held native file. Revalidate the canonical constructor-owned run,
+ordered native ancestor objects and exact source entry before each permission
+change. Directory containment uses stable volume/file IDs, not mutable directory
+link counts; regular files still require their exact identity and single link.
+Creating unrelated staging siblings must not invalidate that authority. A fixture
+failure before actual denial supplies no unreadable-root acceptance evidence.
 
 | AC-074 | Photos have valid zero coordinates, missing coordinates, identical coordinates and positions across the antimeridian. Missing GPS does not become (0,0); viewport results/clusters remain correct. |
 | AC-075 | Clicking a map cluster and switching to timeline preserves date/root filters and selection. Large queries use bounded data; markers do not explode into one DOM node per library asset. |
