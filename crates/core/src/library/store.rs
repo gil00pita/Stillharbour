@@ -550,7 +550,7 @@ pub struct Metadata {
 pub fn legacy_windows_metadata(catalog: &Catalog, id: String, revision: String) -> Result<bool> {
     catalog.call(move |db| {
         Ok(db.query_row(
-            "SELECT coalesce(CASE WHEN json_valid(raw_metadata) THEN json_extract(raw_metadata,'$[0].StillharbourMetadataPolicy') END='windows-basic-v1',0) FROM assets WHERE id=? AND revision=?",
+            "SELECT coalesce(CASE WHEN length(CAST(raw_metadata AS BLOB))<=1048576 THEN CASE WHEN json_valid(raw_metadata) THEN json_extract(raw_metadata,'$[0].StillharbourMetadataPolicy') END END='windows-basic-v1',0) FROM assets WHERE id=? AND revision=?",
             params![id, revision], |r| r.get(0),
         )?)
     })
@@ -1635,7 +1635,7 @@ mod preview_policy_tests {
                 false,
             ),
             ("not JSON", false),
-        ] {
+        ].into_iter().map(|(raw, legacy)| (raw.to_owned(), legacy)).chain(std::iter::once((serde_json::json!([{"StillharbourMetadataPolicy":"windows-basic-v1","Padding":"x".repeat(1024*1024)}]).to_string(), false))) {
             let before = raw.to_owned();
             catalog
                 .call(move |db| {

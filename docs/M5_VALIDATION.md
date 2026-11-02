@@ -2,6 +2,16 @@
 
 Date: 2026-11-02. Request: “Finish M5”. Implementation covers offline maps, catalog organization, reversible tags, explicit keyword import and reviewed portable-catalog/XMP export. Full milestone acceptance still depends on the explicitly recorded native/platform gates below. M4 preservation authority and M6 release scope remain separate.
 
+## Current completion checks
+
+The later full local workspace runs pass **508 core / zero failed / fifteen opt-ins**, two desktop unit cases, all 28 then-present integrations and zero doctests (319.33s and 342.73s). The earlier intermittent provenance EINVAL remains retained; the positive fixture keeps OS-provided bytes and all exact restoration assertions. Current UI remains **475/475**, with strict types/lint and the unchanged React Doctor 57/100 findings.
+
+At 6ed2557 both transport jobs pass again. Windows passes **470 core cases**, then fails a scan integration because the standalone worker lacks the new metadata command. That route is repaired with a real child-process red/green regression; the three-case process suite now passes (2.02s). Mac CI passes the live-library, M4 application, M5 map and M5 metadata/export specs; its remaining two Foundation assertions omit Catalog and ambiguously select an inspector checkbox. Their corrections preserve strict behavior assertions. Fresh full CI remains required.
+
+Actual isolated Tauri CLI validation passes for zero/West/South GPS and extra-path rejection, with nine original/companion entries unchanged (`.context/m5-exif-cli.json`). Both binary entry points also pass baseline-PNG CLI/extra-path tests (`.context/m5-cli-backend.log`). The one-MiB imported-policy bound has a failing-before/passing-after regression and preserves observations. These are backend/native-process checks, not actual screen-reader or foreground-visible evidence.
+
+The console currently reports locked. A full desktop attempt in that state fails and is stopped; it is not counted as passing. The system authentication window's purpose cannot be confirmed while locked, and prior checkbox reads may be stale. The owner has granted app-control access and reports enabling VoiceOver scripting; actual spoken output must be rechecked in an unlocked session, or reviewed manually. No permission bypass or fabricated screen-reader result is used.
+
 ## Latest M5 acceptance work
 
 At 0d97e14, both transport jobs pass (Windows 16m26s; macOS 19m56s). Windows core/preservation checks pass, but native desktop fails on stale schema expectations, missing screenshot folders and the dimensions-only GPS adapter. Mac M5 map and metadata/export scenarios pass in real Foundation CI; remaining Foundation failures include the same stale harness assumptions and a setup-field focus failure with cascading dependent cases. Those tests retain their assertions while correcting the schema/directory/pointer-order assumptions.
