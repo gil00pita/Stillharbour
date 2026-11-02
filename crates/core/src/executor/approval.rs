@@ -17,6 +17,10 @@ pub(super) enum Action {
     RelocateFixture,
     #[cfg(any(test, feature = "fixture-probes"))]
     ContinueRelocationFixture,
+    #[cfg(any(test, feature = "fixture-probes"))]
+    ReplaceRetaining,
+    #[cfg(any(test, feature = "fixture-probes"))]
+    RestoreRetained,
     PrepareNames,
     CopyFiles,
     #[cfg(any(test, feature = "fixture-probes", feature = "copy-workflow"))]

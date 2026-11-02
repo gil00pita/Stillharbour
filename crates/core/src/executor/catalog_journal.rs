@@ -24,6 +24,52 @@ const PLAN_PHASE: &str = "copy_execution_plan_v1";
 const EVENT_PHASE: &str = "copy_execution_event_v1";
 const MAX_RECORD: usize = 65_536;
 const MAX_EVENT: usize = 8192;
+/// Reuse the production event decoder for the constructor-owned append lab.
+#[cfg(any(test, feature = "fixture-probes"))]
+pub(super) fn append_fixture_history(
+    journal: &super::Journal,
+    plan: &CopyPlan,
+) -> Result<(Vec<super::resume::Cursor>, bool, String)> {
+    let mut history = History::new(plan);
+    let mut hash = blake3::Hasher::new();
+    hash.update(plan.digest.as_bytes());
+    let mut query = journal.0.prepare("SELECT sequence,item,phase,CASE WHEN length(CAST(evidence AS BLOB))<=8192 THEN evidence END FROM events ORDER BY sequence LIMIT ?")?;
+    let mut rows = query.query([plan.files.len() as i64 * 6 + 4])?;
+    while let Some(row) = rows.next()? {
+        let text: Option<String> = row.get(3)?;
+        let text = text.ok_or_else(|| failed("Append event exceeds its bound."))?;
+        let event = Event {
+            ordinal: u64::try_from(row.get::<_, i64>(0)?)
+                .map_err(|_| failed("Invalid append journal ordinal."))?,
+            stream_digest: plan.digest.clone(),
+            item: row
+                .get::<_, Option<i64>>(1)?
+                .map(usize::try_from)
+                .transpose()
+                .map_err(|_| failed("Invalid append journal item."))?,
+            phase: row.get(2)?,
+            evidence: decode(&text, MAX_EVENT)?,
+        };
+        history.apply(&event, plan)?;
+        let encoded = serde_json::to_vec(&event)
+            .map_err(|e| failed("Could not fingerprint append events.").caused_by(e))?;
+        hash.update(&(encoded.len() as u64).to_le_bytes());
+        hash.update(&encoded);
+    }
+    Ok((
+        history
+            .items
+            .iter()
+            .map(|item| super::resume::Cursor {
+                phase: item.phase,
+                object: item.object.clone(),
+                digest: item.digest.clone(),
+            })
+            .collect(),
+        history.terminal,
+        hash.finalize().to_hex().to_string(),
+    ))
+}
 #[cfg(test)]
 #[path = "catalog_journal/import_bundle_tests.rs"]
 mod import_bundle_tests;
@@ -243,6 +289,16 @@ impl CopyJournal for ObservedJournal<'_> {
     }
 }
 fn validate_binding(db: &Connection, binding: &Binding) -> Result<()> {
+    if binding
+        .plan
+        .files
+        .iter()
+        .any(|file| file.stage_location.is_some())
+    {
+        return Err(failed(
+            "Organization copy streams do not authorize separate staging locations.",
+        ));
+    }
     if binding.namespace.is_some() {
         return namespace_journal::validate_copy_binding(db, binding);
     }
@@ -1034,6 +1090,7 @@ impl Fixture {
                     None
                 },
                 prepared_stage: None,
+                stage_location: None,
             });
         }
         let mut plan = CopyPlan {

@@ -1120,6 +1120,40 @@ async fn test_performance(
         ));
     }
     match action.as_str() {
+        "backup_retained_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The generated replacement lab accepts no supplied scope.",
+                ));
+            }
+            tokio::task::spawn_blocking(
+                stillharbour_core::executor::run_retained_replacement_fixture_probe,
+            )
+            .await
+            .map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "The generated replacement lab stopped unexpectedly.",
+                )
+            })?
+        }
+        "backup_append_fixture" => {
+            if rows.is_some() {
+                return Err(AppError::new(
+                    ErrorCode::InvalidInput,
+                    "The generated append lab accepts no supplied scope.",
+                ));
+            }
+            tokio::task::spawn_blocking(stillharbour_core::executor::run_append_fixture_probe)
+                .await
+                .map_err(|_| {
+                    AppError::new(
+                        ErrorCode::WorkerFailed,
+                        "The generated append lab stopped unexpectedly.",
+                    )
+                })?
+        }
         "organization_rename_arm_hold" => {
             if rows.is_some() {
                 return Err(AppError::new(

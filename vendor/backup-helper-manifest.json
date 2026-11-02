@@ -1,0 +1,12 @@
+{
+  "policy": "stillharbour-backup-helpers-v1",
+  "reviewedAt": "2026-11-02",
+  "resticVersion": "0.19.1",
+  "rcloneVersion": "1.75.2",
+  "artifacts": [
+    {"helper":"restic","platform":"windows-x86_64","archive":"restic_0.19.1_windows_amd64.zip","url":"https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_windows_amd64.zip","archiveSha256":"da948ad707ed690426473aaba2046cd61f8f90f6f0e7dab6be0d5796531de67d","member":"restic_0.19.1_windows_amd64.exe","executable":"restic.exe","executableSha256":"b0dd1fd21eea5d8fe1325f55f7118213c21f36de8a261e04c0624a5ab9fd7830","license":"BSD-2-Clause","release":"https://github.com/restic/restic/releases/tag/v0.19.1"},
+    {"helper":"restic","platform":"macos-aarch64","archive":"restic_0.19.1_darwin_arm64.bz2","url":"https://github.com/restic/restic/releases/download/v0.19.1/restic_0.19.1_darwin_arm64.bz2","archiveSha256":"7be0a144ccc377880f294204aa271d76e4b79554b42a751151d425ce6ebac143","member":null,"executable":"restic","executableSha256":"06582569ff2f10e1935a6f12187c76db02f0bae99e6e54098f2cdc374766d768","license":"BSD-2-Clause","release":"https://github.com/restic/restic/releases/tag/v0.19.1"},
+    {"helper":"rclone","platform":"windows-x86_64","archive":"rclone-v1.75.2-windows-amd64.zip","url":"https://github.com/rclone/rclone/releases/download/v1.75.2/rclone-v1.75.2-windows-amd64.zip","archiveSha256":"8a9db2bad1dc79a65b3348fd857069598e2aab7cf4d118b77b1df23055aff818","member":"rclone-v1.75.2-windows-amd64/rclone.exe","executable":"rclone.exe","executableSha256":"41eab3e118d264920b62c3327966c5ece0dc4dd715ee617d9e30450d8ead95a4","license":"MIT","release":"https://github.com/rclone/rclone/releases/tag/v1.75.2"},
+    {"helper":"rclone","platform":"macos-aarch64","archive":"rclone-v1.75.2-osx-arm64.zip","url":"https://github.com/rclone/rclone/releases/download/v1.75.2/rclone-v1.75.2-osx-arm64.zip","archiveSha256":"610ab7d48615135dfc60b763858b11a426a0d3d1160c1bb76fb0ae6011b02edd","member":"rclone-v1.75.2-osx-arm64/rclone","executable":"rclone","executableSha256":"af0257730173748dc9706ad3c83288bf3a0c5d5e9768fef20235e375e9d835e1","license":"MIT","release":"https://github.com/rclone/rclone/releases/tag/v1.75.2"}
+  ]
+}

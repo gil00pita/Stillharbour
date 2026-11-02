@@ -1,0 +1,35 @@
+name: M4 disposable transport evidence
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  transports:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Prepare pinned helper binaries
+        run: python scripts/prepare-backup-helpers.py --download
+      - name: Install hashed development server dependencies
+        run: python -m pip install --require-hashes -r scripts/m4-protocol-requirements.txt
+      - name: Prepare pinned user-mode Windows SMB fixture
+        if: runner.os == 'Windows'
+        run: python scripts/prepare-smb-fixture.py --download
+      - name: Validate helper extraction and process timeout failures
+        run: python -m unittest discover -s scripts/tests
+      - name: Generated backup, remove source, restore and full byte comparison
+        run: python scripts/m4-protocol-probe.py --protocols local sftp ftp ftps smb --allow-insecure-ftp --evidence .context/m4-protocol-ci.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: m4-transport-evidence-${{ matrix.os }}
+          path: .context/m4-protocol-ci.json

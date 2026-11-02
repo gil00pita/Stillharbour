@@ -2,7 +2,11 @@
 
 ## Objective
 
-M4A read-only implementation and Windows/macOS native validation are complete at tested head 90acf91 (CI 41356788575). See [M4A_VALIDATION.md](../docs/M4A_VALIDATION.md) for the requirement matrix and [IMPLEMENTATION_LOG.md](../docs/IMPLEMENTATION_LOG.md) for actual results. Both platform receipts and screenshots have been inspected; stop at this review gate before M4B. M4B–D and real-library mutations remain separately gated.
+Owner continuation, 2026-11-02: finish all M4 slices, commit/push and create a PR; use disposable local protocol servers. ADR-0077 adds generated shared-executor append/verification/recovery with separate staging. This supersedes the earlier authorization-only pause before M4C/D, while preserving every acceptance gate and the stop before M5. Full M4 completion must be based on actual implementation/native/transport results, not the generated lab alone.
+
+M4A read-only implementation and Windows/macOS native validation are complete at tested head 90acf91 (CI 41356788575). See [M4A_VALIDATION.md](../docs/M4A_VALIDATION.md) for the requirement matrix and [IMPLEMENTATION_LOG.md](../docs/IMPLEMENTATION_LOG.md) for actual results. Both platform receipts and screenshots have been inspected. The owner authorized starting M4B on 2026-11-01; its first increment is backend-only append planning and native revalidation (ADR-0076), with execution still unavailable. M4C–D and real-library mutation gates remain separate.
+
+M4B remaining work: connect the exact append scope to the shared executor; implement native destination preparation, capability/capacity/fidelity review, explicit approval, transfer controls, durable staging/read-back/publication and cold recovery; run Windows/macOS native failure tests. Record results at each acceptance gate; the owner has authorized continuing through M4C/D. The initial review is not a completed copy feature.
 
 Policy 3/schema 12 add immutable bounded observation history, destination-edited context, an immutable nonexecutable review descriptor, explicit superseding profile rebind, potential companion relationships and ID-bound side-by-side decoder previews. Original and destination trees remain unchanged.
 

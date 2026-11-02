@@ -2,6 +2,7 @@
 use crate::domain::{AppError, ErrorCode, Result};
 use std::{ffi::OsString, path::Path};
 
+pub mod append;
 pub mod comparison;
 pub(crate) mod names;
 

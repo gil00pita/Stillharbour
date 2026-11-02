@@ -11,4 +11,5 @@ coverage/
 
 # Generated Python diagnostic bytecode.
 __pycache__/
+vendor/backup-helpers/
 *.pyc

@@ -1,5 +1,11 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0078](decisions/ADR-0078-generated-retained-replacement-and-transport-labs.md) records generated retained replacement, seven actual process exits and disposable pinned-helper transports. All remaining M4 stages are owner-authorized; preservation acceptance gates remain mandatory.
+
+[ADR-0077](decisions/ADR-0077-separate-staging-append-fixture.md) adds separately bound staging to the shared executor and a closed M4B append/recovery lab. Legacy organization streams reject the additional scope. Production copying and remaining M4B–D evidence stay gated; the owner authorized continuing all M4 slices and publishing a PR.
+
+[ADR-0076](decisions/ADR-0076-m4b-append-review.md) starts the owner-authorized M4B increment with a pure append planner and backend-only native revalidation. Every report row participates; differing source revisions need explicit keep-destination decisions and remain counted as uncopied. Reviews grant no execution or recovery authority. Shared executor integration and native transfer gates remain open.
+
 [ADR-0075](decisions/ADR-0075-m4a-review-completion.md) completes the read-only M4A implementation with schema-12 observation history, explicit superseding profile rebind, companion context, an immutable nonexecutable review plan and ID-authorized bounded previews. Native acceptance is tracked in [M4A_VALIDATION.md](M4A_VALIDATION.md); M4B–D remain gated.
 
 [ADR-0074](decisions/ADR-0074-comparison-conflicts-and-review.md) adds conservative native-name/type conflict blocking and full-report category filtering with observed entry details to M4A. Policy 2 reviews remain read-only; schema 11 and profile version 1 are unchanged. Native naming, fidelity, historical baseline and recovery gates remain open.

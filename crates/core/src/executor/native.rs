@@ -521,7 +521,7 @@ pub(super) fn relocate_new(
     publish_to(source_parent, source, file, target_parent, target, expected)
 }
 
-fn publish_to(
+pub(super) fn publish_to(
     source_parent: &File,
     stage: &str,
     file: File,
@@ -531,6 +531,15 @@ fn publish_to(
 ) -> Result<File> {
     name(stage)?;
     name(target)?;
+    if filesystem::identity(source_parent)?.volume != expected.volume
+        || filesystem::identity(target_parent)?.volume != expected.volume
+        || crate::library::native::volume_token(source_parent)?
+            != crate::library::native::volume_token(target_parent)?
+    {
+        return Err(conflict(
+            "Staging and publication require the same validated native volume.",
+        ));
+    }
     if filesystem::identity(&file)? != *expected || expected.links != 1 {
         return Err(conflict("The owned stage changed before publication."));
     }

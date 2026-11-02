@@ -93,7 +93,8 @@ impl Review {
         for (file, cursor) in plan.files.iter().zip(cursors) {
             source_member(inputs.source_root, file)?;
             let parent = destination_parent(inputs.destination, file)?;
-            let stage = native::maybe_read(&parent, &file.stage)?
+            let staging = staging_parent(inputs.destination, file)?;
+            let stage = native::maybe_read(&staging, &file.stage)?
                 .as_ref()
                 .map(Observation::capture)
                 .transpose()?;
@@ -104,6 +105,7 @@ impl Review {
             let member = Member { stage, published };
             member.validate(file, cursor)?;
             destination_member(inputs.destination, file, &parent)?;
+            staging_member(inputs.destination, file, &staging)?;
             members.push(member);
         }
         (inputs.validate_scope)()?;
@@ -264,6 +266,7 @@ impl Continuation<'_> {
                 return Ok(CopyOutcome::CanceledWithPartialCopies);
             }
             let parent = destination_parent(self.inputs.destination, file)?;
+            let staging = staging_parent(self.inputs.destination, file)?;
             let mut source = read_source(self.inputs.source_root, file)?;
             revision(&source, file)?;
             let mut phase = cursor.phase;
@@ -278,11 +281,11 @@ impl Continuation<'_> {
             }
             if phase == 1 {
                 let stage = if let Some(prepared) = &file.prepared_stage {
-                    let stage = native::reopen_stage(&parent, &file.stage, &prepared.identity())?;
-                    prepared.validate_empty(&parent, &file.stage, &stage)?;
+                    let stage = native::reopen_stage(&staging, &file.stage, &prepared.identity())?;
+                    prepared.validate_empty(&staging, &file.stage, &stage)?;
                     stage
                 } else {
-                    native::create_file(&parent, &file.stage)?
+                    native::create_file(&staging, &file.stage)?
                 };
                 let observed = Observation::capture(&stage)?;
                 if observed.bytes != 0 {
@@ -321,7 +324,7 @@ impl Continuation<'_> {
                 }
                 published
             } else {
-                let mut stage = native::reopen_append_stage(&parent, &file.stage, &identity)?;
+                let mut stage = native::reopen_append_stage(&staging, &file.stage, &identity)?;
                 if cursor.phase >= 2
                     && fresh.members[index].stage.as_ref() != Some(&Observation::capture(&stage)?)
                 {
@@ -332,7 +335,7 @@ impl Continuation<'_> {
                         &mut source,
                         &mut stage,
                         file,
-                        &parent,
+                        &staging,
                         self.inputs,
                         self.fault,
                     )? {
@@ -354,7 +357,7 @@ impl Continuation<'_> {
                     if stop(self.fault, CopyFault::AfterFlush) {
                         return Ok(CopyOutcome::Interrupted);
                     }
-                    stage = native::reopen_append_stage(&parent, &file.stage, &identity)?;
+                    stage = native::reopen_append_stage(&staging, &file.stage, &identity)?;
                 }
                 let IoStep::Completed(witness) = compare(
                     self.inputs.io,
@@ -386,7 +389,8 @@ impl Continuation<'_> {
                 (self.inputs.validate_scope)()?;
                 source_member(self.inputs.source_root, file)?;
                 destination_member(self.inputs.destination, file, &parent)?;
-                witness.revalidate(&parent, &file.stage, &stage)?;
+                staging_member(self.inputs.destination, file, &staging)?;
+                witness.revalidate(&staging, &file.stage, &stage)?;
                 if self.inputs.cancel.load(Ordering::Acquire) {
                     return Ok(CopyOutcome::CanceledWithPartialCopies);
                 }
@@ -397,8 +401,14 @@ impl Continuation<'_> {
                 if stop(self.fault, CopyFault::BeforePublish) {
                     return Ok(CopyOutcome::Interrupted);
                 }
-                let published =
-                    native::publish_new(&parent, &file.stage, stage, &file.target, &identity)?;
+                let published = native::publish_to(
+                    &staging,
+                    &file.stage,
+                    stage,
+                    &parent,
+                    &file.target,
+                    &identity,
+                )?;
                 if stop(self.fault, CopyFault::AfterPublish) {
                     return Ok(CopyOutcome::Interrupted);
                 }

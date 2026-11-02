@@ -1,5 +1,17 @@
 # M4 Backup & Sync
 
+2026-11-02: the owner authorized all M4 stages and local disposable protocol servers. Earlier per-stage authorization pauses are superseded; acceptance gates and the stop before M5 remain. [ADR-0078](decisions/ADR-0078-generated-retained-replacement-and-transport-labs.md) records generated retained replacement, seven actual process exits and fresh-output old-version restore. [Transport tests](M4_TRANSPORT_TESTS.md) record five Windows helper round trips and pending macOS evidence. Production transfer/replacement/backup remains unavailable pending the required application integration and safety gates.
+
+## M4B start — 2026-11-01
+
+Continuation on 2026-11-02: [ADR-0077](decisions/ADR-0077-separate-staging-append-fixture.md) connects a real generated M4A review to shared staging/copy/verification/publication and fresh-approved recovery. Separate native staging locators preserve legacy M2 serialization; existing organization streams reject their adoption. Nine actual child-exit boundaries and generated corruption/late-target/approval/preparation/disk/journal failures have focused Windows coverage. The desktop-only no-scope probe emits `m4b-append.json`; actual desktop and macOS results must be recorded separately. Production append job storage/control/UI and native fidelity/capacity/preparation recovery remain open. The owner authorized all remaining M4 stages plus commit/push/PR and requested local disposable protocol servers. This authorizes M4C–D work without accepting unrun safety gates.
+
+The owner authorized starting M4B after updating to main `eaa3a8a`. [ADR-0076](decisions/ADR-0076-m4b-append-review.md) adds a backend-only append review over the complete current Verified report. Native source/destination/namespace bindings, object membership, directory revisions and every file snapshot are checked again under read leases. Review creates no output or name probe. A new dataset or entry, stale scope, incomplete inventory, cancellation, foreign decision or competing writer blocks review.
+
+The pure planner proposes source-only regular-file copies, keeps destination-only files and leaves verified-equal files unchanged. Differences require explicit keep-destination entry IDs and contribute to an uncopied-source-revision count. Its deterministic digest binds native scope, comparison and every row decision; output remains nonexecutable. No renderer command, approval, schema migration, transfer or recovery evidence is added. The M4A product interface remains read-only.
+
+M4B is in progress. Exclusive native preparation, fidelity/capacity review, approval, shared executor integration, staged full verification/no-replace publication, pause/limits and durable restart recovery still require implementation and native failure tests. M4C replacement and M4D snapshots/transports remain gated. Actual initial checks are in IMPLEMENTATION_LOG.md; no new both-platform acceptance is claimed.
+
 ## Current increment — 2026-11-01
 
 The owner requested starting M4. The first M4A increment adds a real native read-only comparison workspace. M4A implementation and native validation are complete at the read-only review gate; exact-head Windows/macOS results are recorded in M4A_VALIDATION.md. M4B–D retain separate approval gates. Copying, replacement, encrypted snapshots, restore and original mutation remain unavailable.

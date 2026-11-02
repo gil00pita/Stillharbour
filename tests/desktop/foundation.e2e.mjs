@@ -1854,6 +1854,63 @@ const expectedExtensions =
     ' ',
   );
 describe('native read-only library', () => {
+  it('verifies generated retained replacement through native IPC', async () => {
+    const receipt = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'backup_retained_fixture', rows: null }),
+    );
+    assert.equal(receipt.scope, 'constructor-owned-generated-only');
+    assert.equal(receipt.replacedFiles, 1);
+    assert.equal(receipt.priorVersionsRetained, 3);
+    for (const key of [
+      'sameOldNativeObjectRetained',
+      'oldBytesVerified',
+      'oldRestoredToNewOutput',
+      'newBytesVerified',
+      'sourcePreserved',
+      'destinationOnlyPreserved',
+    ])
+      assert.equal(receipt[key], true);
+    assert.equal(receipt.productionExecutionAvailable, false);
+    assert.equal(receipt.independentRecoveryVerified, false);
+    const rejected = await browser.tauri.execute(async ({ core }) => {
+      try {
+        await core.invoke('test_performance', { action: 'backup_retained_fixture', rows: 1 });
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    assert.equal(rejected, true);
+    const evidence = await createEvidenceDirectory('.context/m4c-retained');
+    await writeFile(`${evidence}/m4c-retained.json`, JSON.stringify(receipt));
+  });
+  it('verifies generated M4B append output and retains destination-only bytes through native IPC', async () => {
+    const receipt = await browser.tauri.execute(async ({ core }) =>
+      core.invoke('test_performance', { action: 'backup_append_fixture', rows: null }),
+    );
+    assert.equal(receipt.scope, 'constructor-owned-generated-only');
+    assert.equal(receipt.copyFiles, 4);
+    assert.equal(receipt.uncopiedSourceRevisions, 1);
+    for (const key of [
+      'sourcesPreserved',
+      'destinationOnlyPreserved',
+      'separateStaging',
+      'fullByteVerified',
+    ])
+      assert.equal(receipt[key], true);
+    assert.equal(receipt.productionExecutionAvailable, false);
+    const rejected = await browser.tauri.execute(async ({ core }) => {
+      try {
+        await core.invoke('test_performance', { action: 'backup_append_fixture', rows: 1 });
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    assert.equal(rejected, true);
+    const evidence = await createEvidenceDirectory('.context/m4b-append');
+    await writeFile(`${evidence}/m4b-append.json`, JSON.stringify(receipt));
+  });
   it('connects to a fresh native catalog and rejects renderer path authority', async () => {
     await $('h1').waitForDisplayed();
     await $('button.primary').waitForEnabled();

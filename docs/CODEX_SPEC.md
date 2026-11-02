@@ -400,6 +400,12 @@ Imported filenames and capture-time formatting use the selected saved date polic
 
 ## 13. Backup & Sync and restore
 
+ADR-0078 adds generated retained replacement and disposable protocol labs. Actual evidence and its limits are in [M4_TRANSPORT_TESTS.md](M4_TRANSPORT_TESTS.md); these tests do not enable production application snapshots, replacement or schedules.
+
+ADR-0077 adds separate staging/publication parent proofs to the shared executor and generated M4B transfer/recovery evidence. The closed diagnostic cannot take real-library paths; no production transfer or replacement is enabled by fixture success. The owner has authorized completing M4B–D and publishing a PR; all preservation, native OS/transport and exact-version recovery gates remain mandatory.
+
+M4B began with the owner-authorized backend-only append review described in docs/decisions/ADR-0076-m4b-append-review.md. Fresh native scope validation precedes deterministic source-only copy proposals; destination-only data stays and explicit kept differences remain counted as uncopied source revisions. This initial increment creates no output and exposes no transfer/approval command. Staged-copy, publication and crash-recovery requirements remain mandatory before execution becomes available.
+
 Current M4A implementation scope is recorded in docs/M4_BACKUP_SYNC.md. Its read-only comparison review must retain ambiguous native names and file/folder conflicts without proposing a copy, expose category totals/filtering over the whole bounded report and render per-side observed entry details safely. Conservative Unicode/case warnings do not establish native destination equivalence; metadata observations do not establish companion completeness, fidelity or recovery. M4A policy 3/schema 12 also supply immutable observation history, reviewed superseding profile rebind, potential companion relationships and bounded side-by-side previews. See docs/M4A_VALIDATION.md for the read-only acceptance matrix; all later transfer gates remain separate.
 
 Version 1.1 adds a required readable Safe copy / one-way sync workflow with the base library selected automatically. See docs/BACKUP_SYNC_ADDENDUM.md for compare, retained-version replacement, contextual errors, throttling and M4A-M4D gates. Keep this separate from restic snapshots. Both obey docs/PRESERVATION_CONTRACT.md.

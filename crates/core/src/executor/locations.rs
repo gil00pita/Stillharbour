@@ -54,7 +54,7 @@ fn parts(bytes: &[u8]) -> Result<Vec<OsString>> {
     }
     Ok(result)
 }
-fn child(parent: &File, name: &OsStr, directory: bool) -> Result<File> {
+pub(super) fn child(parent: &File, name: &OsStr, directory: bool) -> Result<File> {
     #[cfg(windows)]
     let file = crate::filesystem::windows::child(parent, name, directory)?;
     #[cfg(unix)]
@@ -253,6 +253,7 @@ mod tests {
                 Destination::capture(output_scope.leaf(), "result-folder/deep").unwrap(),
             ),
             prepared_stage: None,
+            stage_location: None,
         };
         let mut plan = CopyPlan {
             id: token,

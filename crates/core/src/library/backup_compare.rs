@@ -27,6 +27,7 @@ const MAX_ENTRIES: usize = 10_000;
 const MAX_NAMES: usize = 16 * 1024 * 1024;
 const MAX_ISSUES: usize = 200;
 
+mod append;
 pub(super) mod history;
 mod inspector;
 pub(super) mod profiles;
@@ -61,7 +62,9 @@ fn canceled(cancel: &AtomicBool) -> Result<()> {
     }
 }
 
+#[derive(Clone)]
 struct Review {
+    append_scope: Option<append::FrozenScope>,
     observations: BTreeMap<String, (PathBuf, Option<Snapshot>, Option<Snapshot>)>,
     source: Option<Binding>,
     destination: Option<Binding>,
@@ -417,6 +420,7 @@ impl Library {
             previous.cancel.store(true, Ordering::Release);
         }
         *current = Some(Review {
+            append_scope: None,
             observations: BTreeMap::new(),
             source: None,
             destination: None,
@@ -823,6 +827,7 @@ impl Library {
             return Err(changed());
         }
         canceled(cancel)?;
+        let append_scope = append::FrozenScope::capture(&src, &dst, &destination, &namespace);
         inspector::companions(&mut rows, &observations);
         review.run.baseline_id = prior.as_ref().map(|m| m.id.clone());
         review.run.bytes_read = count.to_string();
@@ -882,6 +887,7 @@ impl Library {
         review.observations = observations;
         review.source = Some(source);
         review.destination = dataset;
+        review.append_scope = Some(append_scope);
         Ok(())
     }
     fn compare_progress(&self, id: &str, count: u64, entries: u32) -> Result<()> {
