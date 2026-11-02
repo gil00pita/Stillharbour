@@ -81,3 +81,5 @@ Corrected checkpoint `2b3c245` CI passes the actual SMB and SFTP cases on both o
 | Windows | SMB      |  45.559 |               1048576 |               1072463 |
 
 All four outcomes are `preserved_unresolved_lock`: frozen old-object, source, history/neighbor and helper-stop audits pass; post-fault recovery remains blocked and no unlock or backup replay occurs. These are actual per-platform application/proxy results, not physical unplug or strict independent-recovery certificates. The earlier macOS failure remains retained separately.
+
+Implementation checkpoint `0b152a3` also passes both OS jobs in [transport CI41411088176](https://github.com/gil00pita/Stillharbour/actions/runs/41411088176). Downloaded `.context/ci-0b152a3-transports/m4-transport-evidence-{macos-15,windows-latest}` receipts contain five actual application round trips, ten FTP/FTPS faults and both SMB/SFTP disconnect cases per platform. Source-removal/full-byte/catalog/neighbor/credential-cleanup and frozen old-object audits were inspected. This adds exact implementation-revision evidence without changing the retained-lock, physical-I/O or metadata-independence limits above.
