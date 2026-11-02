@@ -1,3 +1,4 @@
+import { Button, Input } from './components/ui/controls';
 // Loaded only by desktop-test entry code. This is visibly generated-fixture
 // instrumentation, never a control for an existing photo library.
 import { useEffect, useRef, useState } from 'react';
@@ -173,7 +174,7 @@ export function GeneratedRenameLab() {
     >
       <header className="organization-heading">
         <h2 id="rename-lab-title">Generated rename and undo fixture</h2>
-        <button onClick={close}>Close fixture review</button>
+        <Button onClick={close}>Close fixture review</Button>
       </header>
       <div className="organization-body">
         <p>
@@ -192,33 +193,33 @@ export function GeneratedRenameLab() {
                 ? 'Stop requested; finishing the current verification or journal boundary.'
                 : 'Native worker active.'}
             </p>
-            <button
+            <Button
               disabled={stopping || worker.stopRequested || !worker.job}
               onClick={() => void stop()}
             >
               Stop after current step
-            </button>
+            </Button>
           </section>
         )}
         <fieldset disabled={busy || stopping || worker?.busy}>
           {!review && !worker?.scopeCreated && (
             <>
-              <button onClick={() => void request({ kind: 'create' })}>
+              <Button onClick={() => void request({ kind: 'create' })}>
                 Create generated rename fixture
-              </button>
+              </Button>
               <label>
                 Generated filename template
-                <input value={pattern} onChange={(e) => setPattern(e.target.value)} />
+                <Input value={pattern} onChange={(e) => setPattern(e.target.value)} />
               </label>
               <label>
                 Generated template event
-                <input value={event} onChange={(e) => setEvent(e.target.value)} />
+                <Input value={event} onChange={(e) => setEvent(e.target.value)} />
               </label>
               <p>
                 Five disposable payloads, including a same-stem XMP companion. No capture dates.
                 Filename templates only; missing dates block.
               </p>
-              <button
+              <Button
                 onClick={() =>
                   void request({
                     kind: 'create_from_template',
@@ -227,16 +228,16 @@ export function GeneratedRenameLab() {
                 }
               >
                 Review generated template targets
-              </button>
+              </Button>
             </>
           )}
-          <button onClick={() => void request({ kind: 'inspect' })}>
+          <Button onClick={() => void request({ kind: 'inspect' })}>
             Inspect retained rename state
-          </button>
+          </Button>
           {worker?.scopeCreated && (
-            <button onClick={() => void request({ kind: 'reopen_retained' })}>
+            <Button onClick={() => void request({ kind: 'reopen_retained' })}>
               Reopen owned generated scope
-            </button>
+            </Button>
           )}
           {review && (
             <>
@@ -301,16 +302,16 @@ export function GeneratedRenameLab() {
                     I reviewed these exact generated-file targets and the recovery limits
                   </label>
                   {!review.ticket ? (
-                    <button
+                    <Button
                       disabled={!acknowledged}
                       onClick={() =>
                         void request({ kind: 'approve', plan_id: review.planId, acknowledged })
                       }
                     >
                       Approve generated targets
-                    </button>
+                    </Button>
                   ) : (
-                    <button
+                    <Button
                       onClick={() =>
                         void request({
                           kind: 'start',
@@ -322,14 +323,14 @@ export function GeneratedRenameLab() {
                       {review.state === 'needs_catalog_commit'
                         ? 'Commit reviewed generated catalog paths'
                         : `Run reviewed generated ${review.reverse ? 'undo' : 'rename'}`}
-                    </button>
+                    </Button>
                   )}
                 </>
               )}
               {review.state === 'completed' && !review.reverse && (
-                <button onClick={() => void request({ kind: 'review_reverse' })}>
+                <Button onClick={() => void request({ kind: 'review_reverse' })}>
                   Review generated undo
-                </button>
+                </Button>
               )}
             </>
           )}

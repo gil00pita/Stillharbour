@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { ImportCopyReceipt, ImportOutputIndex, ScanJob } from '../bindings';
 import { errorMessage, library, libraryData, pickDirectory } from '../ipc';
@@ -120,9 +121,9 @@ export function ImportOutputIndexReview({
         selected managed destination uses its existing library scan settings. Indexing is separate
         from byte verification and independent backup.
       </p>
-      <button type="button" disabled={pending || running} onClick={() => void index()}>
+      <Button type="button" disabled={pending || running} onClick={() => void index()}>
         {result ? 'Review output registration' : 'Choose destination and index output'}
-      </button>
+      </Button>
       {result && (
         <p role="status">
           {result.alreadyRegistered && result.root.mode === 'managed'
@@ -145,9 +146,9 @@ export function ImportOutputIndexReview({
         </>
       )}
       {running && (
-        <button type="button" disabled={pending} onClick={() => void cancel()}>
+        <Button type="button" disabled={pending} onClick={() => void cancel()}>
           Cancel output scan
-        </button>
+        </Button>
       )}
       {error && <p role="alert">{error}</p>}
     </section>

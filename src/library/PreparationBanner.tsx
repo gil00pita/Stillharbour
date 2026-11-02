@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useState } from 'react';
 import type { LibraryRoot, LibraryStatus, ScanJob } from '../bindings';
 import { errorMessage, library } from '../ipc';
@@ -117,14 +118,14 @@ function PreparationStatus({
         {job ? <ScanJobProgress job={job} label={root.label} compact /> : <span />}
         <div className="preparation-actions">
           {job && job.kind !== 'thumbnails' && job.state !== 'paused' && (
-            <button
+            <Button
               disabled={busy || stopping || job.state === 'pause_requested'}
               onClick={() => void act(true)}
             >
               {job.state === 'pause_requested' ? 'Pausing…' : 'Pause scan'}
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             disabled={busy || stopping || job?.state === 'pause_requested'}
             onClick={() => void act()}
           >
@@ -141,7 +142,7 @@ function PreparationStatus({
                       : job.kind === 'thumbnails'
                         ? 'Pause previews'
                         : 'Stop scan'}
-          </button>
+          </Button>
         </div>
       </div>
       {thumbnails && thumbnails.processed > 0 && thumbnails.percentage !== undefined && (

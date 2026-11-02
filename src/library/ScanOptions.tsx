@@ -1,3 +1,4 @@
+import { Button, Textarea } from '../components/ui/controls';
 import { useState } from 'react';
 import type { ScanFilter } from '../bindings';
 import { libraryData } from '../ipc';
@@ -103,7 +104,7 @@ export function ScanOptions({
         </p>
         <label>
           Try relative paths, one per line
-          <textarea
+          <Textarea
             disabled={disabled}
             rows={3}
             value={sample}
@@ -111,7 +112,7 @@ export function ScanOptions({
             onChange={(event) => setSample(event.target.value)}
           />
         </label>
-        <button
+        <Button
           type="button"
           disabled={disabled}
           onClick={(event) => {
@@ -130,7 +131,7 @@ export function ScanOptions({
           }}
         >
           Preview filters
-        </button>
+        </Button>
         {preview.length > 0 && (
           <ul className="filter-preview">
             {Array.from(new Set(preview)).map((line) => (

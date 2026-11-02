@@ -1,3 +1,4 @@
+import { Button, Input, Select } from '../components/ui/controls';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   LibraryStatus,
@@ -143,11 +144,11 @@ export function SnapshotWorkflow({
         This is separate from a readable safe copy. Removing a source does not automatically delete
         earlier snapshots.
       </p>
-      <section className="backup-review" aria-label="Latest retained catalog">
+      <section className="backup-recovery" aria-label="Latest retained catalog">
         <h3>Catalog saved before the latest switch</h3>
         <p>
-          A fresh native review can use the latest OS-authorized local pre-restore catalog. Current
-          edits are preserved again in a new transaction; no old activation pointer is replayed.
+          Review the local catalog saved before your latest restore. Stillharbour checks that it is
+          available and saves your current edits before preparing another switch.
         </p>
         {capabilities?.latestRetainedCatalogTransactionId && catalogId ? (
           <RetainedCatalogRestore
@@ -182,7 +183,7 @@ export function SnapshotWorkflow({
       <div className="backup-controls">
         <label>
           Snapshot profile
-          <select
+          <Select
             value={selectedId}
             disabled={locked || loading}
             onChange={(event) => {
@@ -196,9 +197,9 @@ export function SnapshotWorkflow({
                 {profile.label} · {profile.protocol}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
-        <button
+        <Button
           disabled={locked || loading}
           onClick={() => {
             setSelectedId('');
@@ -206,8 +207,8 @@ export function SnapshotWorkflow({
           }}
         >
           New snapshot profile
-        </button>
-        <button
+        </Button>
+        <Button
           disabled={locked}
           onClick={() => {
             setLoading(true);
@@ -215,7 +216,7 @@ export function SnapshotWorkflow({
           }}
         >
           Refresh snapshot profiles
-        </button>
+        </Button>
       </div>
       {!loading && !profiles.length && !error && (
         <p>
@@ -558,7 +559,7 @@ function SnapshotProfileWorkspace({
         </section>
       </div>
       <div className="backup-controls">
-        <button
+        <Button
           disabled={busy || Boolean(running)}
           onClick={() =>
             void action(async () => {
@@ -583,8 +584,8 @@ function SnapshotProfileWorkspace({
           {profile.protocol === 'local'
             ? 'Reauthorize repository parent…'
             : 'Refresh profile authorization'}
-        </button>
-        <button
+        </Button>
+        <Button
           disabled={busy || Boolean(running)}
           onClick={() =>
             void action(async () => {
@@ -597,8 +598,8 @@ function SnapshotProfileWorkspace({
           }
         >
           Review backup scope
-        </button>
-        <button
+        </Button>
+        <Button
           disabled={busy || checkingHistory}
           onClick={() => {
             setLoading(true);
@@ -608,7 +609,7 @@ function SnapshotProfileWorkspace({
           }}
         >
           Refresh snapshot history
-        </button>
+        </Button>
       </div>
       {profile.protocol === 'local' && (
         <p>
@@ -632,22 +633,22 @@ function SnapshotProfileWorkspace({
           password; choosing another password does not recover encrypted data.
         </p>
         <div className="backup-controls">
-          <button
+          <Button
             disabled={busy || Boolean(running) || !capabilities?.credentialsAvailable}
             onClick={() => void action(() => unlock('repository'))}
           >
             Unlock repository password…
-          </button>
+          </Button>
           {profile.protocol !== 'local' && (
-            <button
+            <Button
               disabled={busy || Boolean(running) || !capabilities?.credentialsAvailable}
               onClick={() => void action(() => unlock('transport'))}
             >
               Unlock remote credentials…
-            </button>
+            </Button>
           )}
         </div>
-        <button
+        <Button
           disabled={busy || !capabilities?.credentialsAvailable}
           onClick={() =>
             void action(async () => {
@@ -660,7 +661,7 @@ function SnapshotProfileWorkspace({
           }
         >
           Export repository recovery key…
-        </button>
+        </Button>
         {exportMessage && <p role="status">{exportMessage}</p>}
       </details>
       {!profile.credentialsPresent && (
@@ -758,7 +759,7 @@ function SnapshotProfileWorkspace({
               retained: {snapshot.sourceRetained ? 'Yes' : 'Not established'}
             </p>
             <div className="backup-controls">
-              <button
+              <Button
                 disabled={busy}
                 aria-pressed={snapshotId === snapshot.id}
                 onClick={() => {
@@ -772,8 +773,8 @@ function SnapshotProfileWorkspace({
                 }}
               >
                 Browse snapshot
-              </button>
-              <button
+              </Button>
+              <Button
                 disabled={busy || Boolean(running)}
                 onClick={() =>
                   void action(async () => {
@@ -786,8 +787,8 @@ function SnapshotProfileWorkspace({
                 }
               >
                 Read back repository data
-              </button>
-              <button
+              </Button>
+              <Button
                 disabled={busy || Boolean(running)}
                 onClick={() =>
                   void action(async () => {
@@ -807,7 +808,7 @@ function SnapshotProfileWorkspace({
                 }
               >
                 Review restore to new output…
-              </button>
+              </Button>
             </div>
           </li>
         ))}
@@ -851,7 +852,7 @@ function SnapshotProfileWorkspace({
                 </table>
               </div>
               <div className="backup-controls">
-                <button
+                <Button
                   disabled={browseOffset === 0 || browseLoading}
                   onClick={() => {
                     setBrowse(null);
@@ -860,12 +861,12 @@ function SnapshotProfileWorkspace({
                   }}
                 >
                   Previous snapshot entries
-                </button>
+                </Button>
                 <span>
                   Entries {browse.entries.length ? browseOffset + 1 : 0}–
                   {browseOffset + browse.entries.length} of {browse.total}
                 </span>
-                <button
+                <Button
                   disabled={browse.nextOffset === null || browseLoading}
                   onClick={() => {
                     setBrowse(null);
@@ -874,11 +875,11 @@ function SnapshotProfileWorkspace({
                   }}
                 >
                   Next snapshot entries
-                </button>
+                </Button>
               </div>
             </>
           )}
-          <button
+          <Button
             onClick={() => {
               setSelectedSnapshot(null);
               setBrowse(null);
@@ -886,7 +887,7 @@ function SnapshotProfileWorkspace({
             }}
           >
             Close snapshot browser
-          </button>
+          </Button>
         </section>
       )}
       <details>
@@ -956,7 +957,7 @@ function SnapshotProfileWorkspace({
             </p>
             {job.snapshotId && <p className="backup-path">Snapshot {job.snapshotId}</p>}
             {active(job) && (
-              <button
+              <Button
                 disabled={busy || job.state === 'cancel_requested'}
                 onClick={() =>
                   void action(async () => {
@@ -967,7 +968,7 @@ function SnapshotProfileWorkspace({
                 }
               >
                 Cancel snapshot job
-              </button>
+              </Button>
             )}
           </li>
         ))}
@@ -1088,19 +1089,19 @@ export function SnapshotReviewPanel({
         </table>
       </div>
       <div className="backup-controls">
-        <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
+        <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
           Previous snapshot plan entries
-        </button>
+        </Button>
         <span>
           {Math.min(offset + 1, review.items.length)}–{Math.min(offset + 200, review.items.length)}{' '}
           of {review.items.length}
         </span>
-        <button
+        <Button
           disabled={offset + 200 >= review.items.length}
           onClick={() => setOffset(offset + 200)}
         >
           Next snapshot plan entries
-        </button>
+        </Button>
       </div>
       <p>
         {review.files} files · {review.bytes} content bytes · Catalog included:{' '}
@@ -1147,24 +1148,24 @@ export function SnapshotReviewPanel({
       </label>
       <div className="backup-controls">
         {!approved ? (
-          <button
+          <Button
             disabled={busy || !review.executionAvailable || !safeScope || !acknowledged}
             onClick={onApprove}
           >
             Approve this snapshot action
-          </button>
+          </Button>
         ) : (
-          <button
+          <Button
             className="primary"
             disabled={busy || !review.executionAvailable || !safeScope}
             onClick={onStart}
           >
             {review.action === 'backup' ? 'Start encrypted backup' : 'Start restore to new output'}
-          </button>
+          </Button>
         )}
-        <button disabled={busy} onClick={onClose}>
+        <Button disabled={busy} onClick={onClose}>
           Close snapshot action review
-        </button>
+        </Button>
       </div>
     </section>
   );
@@ -1228,7 +1229,7 @@ function SnapshotSchedulePanel({
           <legend>Exact-scope recurring consent</legend>
           <label>
             Interval in minutes
-            <input
+            <Input
               inputMode="numeric"
               value={interval}
               maxLength={5}
@@ -1261,9 +1262,9 @@ function SnapshotSchedulePanel({
             />
             I approve repeating only this reviewed manifest; changes must return to review
           </label>
-          <button type="submit" disabled={!validInterval || !acknowledged}>
+          <Button type="submit" disabled={!validInterval || !acknowledged}>
             Save snapshot schedule
-          </button>
+          </Button>
         </fieldset>
       </form>
       {schedule && (
@@ -1276,9 +1277,9 @@ function SnapshotSchedulePanel({
         </p>
       )}
       {schedule && (
-        <button disabled={busy} onClick={onDisable}>
+        <Button disabled={busy} onClick={onDisable}>
           Disable future snapshot repeats
-        </button>
+        </Button>
       )}
     </section>
   );

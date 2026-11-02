@@ -14,13 +14,17 @@ use std::{
     time::Duration,
 };
 
-pub const SCHEMA_VERSION: u32 = 13;
+pub const SCHEMA_VERSION: u32 = 17;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 const INITIAL_SCHEMA: &str = "CREATE TABLE catalog_identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), uuid TEXT NOT NULL UNIQUE); CREATE TABLE job_events (sequence INTEGER PRIMARY KEY, job_id TEXT NOT NULL, state TEXT NOT NULL);";
 
 /// Build the trusted comparison schema only from compiled application SQL.
 /// Imported schema strings never become an input to migration execution.
 pub fn current_schema_fingerprint() -> Result<Vec<crate::catalog_restore::SchemaObject>> {
+    compiled_schema_fingerprint(SCHEMA_VERSION)
+}
+
+fn compiled_schema_fingerprint(version: u32) -> Result<Vec<crate::catalog_restore::SchemaObject>> {
     let mut connection = Connection::open_in_memory()?;
     connection.execute_batch(INITIAL_SCHEMA)?;
     connection.execute(
@@ -29,8 +33,55 @@ pub fn current_schema_fingerprint() -> Result<Vec<crate::catalog_restore::Schema
     )?;
     connection.pragma_update(None, "application_id", APPLICATION_ID)?;
     connection.pragma_update(None, "user_version", 1)?;
-    crate::library::store::migrate(&mut connection)?;
+    crate::library::store::migrate_through(&mut connection, version)?;
     crate::catalog_restore::schema_objects(&connection)
+}
+
+pub(crate) fn initialize_portable(db: &mut Connection, id: &str) -> Result<()> {
+    db.execute_batch(INITIAL_SCHEMA)?;
+    db.execute("INSERT INTO catalog_identity VALUES(1,?)", [id])?;
+    db.pragma_update(None, "application_id", APPLICATION_ID)?;
+    db.pragma_update(None, "user_version", 1)?;
+    crate::library::store::migrate_through(db, SCHEMA_VERSION)?;
+    Ok(())
+}
+
+#[cfg(feature = "fixture-probes")]
+pub fn inspect_portable_export_fixture(path: &Path) -> Result<serde_json::Value> {
+    // macOS temporary folders may use the /var ancestor alias. Resolve only
+    // the owned parent; keep SQLite's no-follow check on the output leaf.
+    let parent = path
+        .parent()
+        .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "Missing generated export parent."))?
+        .canonicalize()?;
+    let leaf = path
+        .file_name()
+        .ok_or_else(|| AppError::new(ErrorCode::InvalidInput, "Missing generated export name."))?;
+    let path = parent.join(leaf);
+    let db = Connection::open_with_flags(
+        path,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NOFOLLOW,
+    )?;
+    db.execute_batch("PRAGMA trusted_schema=OFF;")?;
+    if crate::catalog_restore::schema_objects(&db)? != current_schema_fingerprint()? {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Unexpected generated export schema.",
+        ));
+    }
+    let schema = summary(&db)?;
+    let roots:i64=db.query_row("SELECT count(*) FROM roots WHERE availability<>'needs_relink' OR volume<>'portable-unbound' OR device<>'0' OR inode<>'0' OR length(native_path)<>0",[],|r|r.get(0))?;
+    let profiles:i64=db.query_row("SELECT (SELECT count(*) FROM backup_snapshot_profiles)+(SELECT count(*) FROM backup_snapshot_schedules)+(SELECT count(*) FROM catalog_metadata_plans)+(SELECT count(*) FROM operation_journal)",[],|r|r.get(0))?;
+    let integrity: String = db.query_row("PRAGMA integrity_check", [], |r| r.get(0))?;
+    if roots != 0 || profiles != 0 || integrity != "ok" {
+        return Err(AppError::new(
+            ErrorCode::InvalidInput,
+            "Generated portable copy retained unexpected authority or invalid data.",
+        ));
+    }
+    Ok(
+        serde_json::json!({"schema":schema.schema,"catalogId":schema.id,"sqliteVersion":schema.sqlite_version,"unboundRoots":true,"nativeAuthorities":roots,"credentialScheduleApprovalRows":profiles,"integrity":integrity,"media":db.query_row("SELECT count(*) FROM assets WHERE is_media=1",[],|r|r.get::<_,i64>(0))?}),
+    )
 }
 
 /// Read linked-build provenance without opening a user catalog or starting Tauri.
@@ -495,8 +546,9 @@ fn open_database(path: &Path, expected: Option<&ExistingCatalog>) -> Result<Cata
     }
     let app_id: i32 = connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
     if expected.is_some()
-        && version == SCHEMA_VERSION
-        && crate::catalog_restore::schema_objects(&connection)? != current_schema_fingerprint()?
+        && version != 0
+        && crate::catalog_restore::schema_objects(&connection)?
+            != compiled_schema_fingerprint(version)?
     {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
@@ -1648,14 +1700,29 @@ mod tests {
             std::fs::read_to_string(parent.join("owned-fixture-token")).unwrap(),
             token
         );
-        let _catalog = Catalog::open(path).unwrap();
+        let _catalog = if std::env::var("STILLHARBOUR_M2_MIGRATION_BOUND").as_deref() == Ok("1") {
+            let held = crate::filesystem::open_readonly(&path).unwrap();
+            let identity = crate::filesystem::identity(&held).unwrap();
+            let volume = crate::library::native::volume_token(&held).unwrap();
+            drop(held);
+            Catalog::open_bound_existing(path, identity, volume).unwrap()
+        } else {
+            Catalog::open(path).unwrap()
+        };
         panic!("The fixture crash boundary was not reached");
     }
     fn legacy_profile_fixture(path: &Path, version: u32) -> String {
-        assert!(matches!(version, 9..=12));
+        assert!(matches!(version, 9..=16));
         let catalog = Catalog::open(path.to_owned()).unwrap();
         let id = catalog.summary().unwrap().id;
         catalog.call(move |db| {
+            if version >= 13 {
+                strip_geographic_schema(db)?;
+                db.pragma_update(None,"user_version",13)?;
+                crate::library::store::migrate_through(db,version)?;
+                db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');")?;
+                return Ok(());
+            }
             strip_m4_workflow_schema(db).unwrap();
             db.execute_batch("INSERT INTO job_events VALUES(1,'fixture','retained user data');")?;
             if version<12 {db.execute_batch("DROP TABLE backup_comparison_history;")?;}
@@ -1728,13 +1795,11 @@ mod tests {
     #[test]
     #[cfg(any(windows, target_os = "macos"))]
     fn process_exit_during_migration_retains_a_consistent_catalog_and_backup() {
-        for (version, stage) in
-            [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-                .into_iter()
-                .flat_map(|version| {
-                    ["after_snapshot", "before_commit", "after_commit"]
-                        .map(|stage| (version, stage))
-                })
+        for (version, stage) in [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+            .into_iter()
+            .flat_map(|version| {
+                ["after_snapshot", "before_commit", "after_commit"].map(|stage| (version, stage))
+            })
         {
             let owned = tempfile::Builder::new()
                 .prefix("stillharbour-m2-migration-")
@@ -1768,6 +1833,10 @@ mod tests {
                 ])
                 .env("STILLHARBOUR_M2_MIGRATION_FILE", &path)
                 .env("STILLHARBOUR_M2_MIGRATION_TOKEN", &token)
+                .env(
+                    "STILLHARBOUR_M2_MIGRATION_BOUND",
+                    if version >= 13 { "1" } else { "0" },
+                )
                 .env("STILLHARBOUR_M2_MIGRATION_CRASH", stage)
                 .spawn()
                 .unwrap();
@@ -1924,7 +1993,180 @@ mod comparison_history_migration_tests {
 
 #[cfg(test)]
 fn strip_m4_workflow_schema(db: &Connection) -> rusqlite::Result<()> {
+    strip_geographic_schema(db)?;
     db.execute_batch("DROP TABLE backup_sync_events; DROP TABLE backup_sync_plans; DROP TABLE backup_sync_jobs; DROP TABLE backup_snapshot_schedules; DROP TABLE backup_snapshot_events; DROP TABLE backup_snapshot_records; DROP TABLE backup_snapshot_jobs; DROP TABLE backup_snapshot_profiles; ")
+}
+
+#[cfg(test)]
+fn strip_geographic_schema(db: &Connection) -> rusqlite::Result<()> {
+    db.execute_batch("DROP TRIGGER catalog_tags_changed; DROP TABLE catalog_tag_context; DROP TABLE catalog_tag_overrides; DROP TABLE catalog_tag_history; DROP TABLE catalog_tag_category_history; DROP TABLE catalog_metadata_plans; DROP TABLE catalog_export_journal;")?;
+    db.execute_batch("DROP TABLE asset_notes; DROP TABLE asset_note_history; DROP TABLE catalog_collection_members; DROP TABLE catalog_collections; DROP TABLE catalog_tag_categories;")?;
+    db.execute_batch("DROP TRIGGER assets_location_insert; DROP TRIGGER assets_location_update; DROP TRIGGER assets_location_delete; DROP VIEW asset_location_observations; DROP TABLE asset_locations; DROP TABLE asset_spatial;")
+}
+
+#[cfg(test)]
+mod geographic_migration_tests {
+    use super::*;
+    #[test]
+    fn bound_startup_migrates_only_exact_compiled_historical_layouts() {
+        for (legacy, tampered) in [
+            (13, false),
+            (14, false),
+            (14, true),
+            (15, false),
+            (15, true),
+            (16, false),
+            (16, true),
+        ] {
+            let owned = tempfile::tempdir().unwrap();
+            let path = owned.path().join("Bound.stillharbour");
+            let catalog = Catalog::open(path.clone()).unwrap();
+            let id = catalog.summary().unwrap().id;
+            catalog.call(move|db| {
+                strip_geographic_schema(db)?;
+                db.pragma_update(None,"user_version",13)?;
+                crate::library::store::migrate_through(db,legacy)?;
+                db.execute("INSERT INTO job_events(job_id,state) VALUES('generated','retained before upgrade')",[])?;
+                assert_eq!(crate::catalog_restore::schema_objects(db)?,compiled_schema_fingerprint(legacy)?);
+                if tampered {db.execute_batch("CREATE VIEW unreviewed_schema AS SELECT randomblob(1000000000);")?;}
+                Ok(())
+            }).unwrap();
+            drop(catalog);
+            let held = crate::filesystem::open_readonly(&path).unwrap();
+            let identity = crate::filesystem::identity(&held).unwrap();
+            let volume = crate::library::native::volume_token(&held).unwrap();
+            drop(held);
+            let result = Catalog::open_bound_existing(path.clone(), identity, volume);
+            if tampered {
+                assert!(matches!(result,Err(error) if error.code==ErrorCode::InvalidInput));
+                let db = Connection::open(&path).unwrap();
+                assert_eq!(summary(&db).unwrap().schema, legacy);
+            } else {
+                let catalog = result.unwrap();
+                assert_eq!(catalog.summary().unwrap().schema, SCHEMA_VERSION);
+                assert_eq!(catalog.summary().unwrap().id, id);
+                let retained = std::fs::read_dir(owned.path())
+                    .unwrap()
+                    .map(|e| e.unwrap().path())
+                    .find(|p| {
+                        p.file_name()
+                            .unwrap()
+                            .to_string_lossy()
+                            .starts_with(&format!("pre-migration-v{legacy}-"))
+                    })
+                    .unwrap();
+                let db = Connection::open_with_flags(retained, OpenFlags::SQLITE_OPEN_READ_ONLY)
+                    .unwrap();
+                assert_eq!(summary(&db).unwrap().schema, legacy);
+                assert_eq!(summary(&db).unwrap().id, id);
+                assert_eq!(
+                    db.query_row(
+                        "SELECT state FROM job_events WHERE job_id='generated'",
+                        [],
+                        |r| r.get::<_, String>(0)
+                    )
+                    .unwrap(),
+                    "retained before upgrade"
+                );
+            }
+        }
+    }
+    #[test]
+    fn schema_fourteen_retains_thirteen_and_backfills_without_rewriting_observations() {
+        for collision in [false, true] {
+            let owned = tempfile::tempdir().unwrap();
+            let path = owned.path().join("Map.stillharbour");
+            let catalog = Catalog::open(path.clone()).unwrap();
+            let id = catalog.summary().unwrap().id;
+            catalog.call(|db|{
+                strip_geographic_schema(db)?;
+                db.execute_batch("INSERT INTO job_events(job_id,state) VALUES('fixture','retained thirteen'); PRAGMA user_version=13;")?;
+                db.execute("INSERT INTO roots(id,label,native_path,display_path,mode,is_base,platform,volume,device,inode,availability,filter) VALUES('root','Retained root',x'01','Generated','referenced',1,'fixture','fixture','0','0','offline','{}')",[])?;
+                db.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,presence,is_media,seen_scan,raw_metadata,favorite,rating,tags) VALUES('photo','root',x'01','Zero.jpg',x'','','Zero.jpg','Zero','jpg','fixture',1,'retained-revision','2026-11-01','2026-11-01','capture','ready','ready','present',1,'fixture','[{\"GPSLatitude\":0,\"GPSLongitude\":0}]',1,5,'[\"retained\"]')",[])?;
+                Ok(())
+            }).unwrap();
+            drop(catalog);
+            if collision {
+                Connection::open(&path).unwrap().execute_batch("CREATE TABLE asset_locations(retained TEXT); INSERT INTO asset_locations VALUES('retain collision');").unwrap();
+            }
+            let result = Catalog::open(path.clone());
+            if collision {
+                assert!(result.is_err());
+                let db = Connection::open(&path).unwrap();
+                assert_eq!(summary(&db).unwrap().schema, 13);
+                assert_eq!(
+                    db.query_row("SELECT retained FROM asset_locations", [], |r| r
+                        .get::<_, String>(0))
+                        .unwrap(),
+                    "retain collision"
+                );
+            } else {
+                let opened = result.unwrap();
+                assert_eq!(opened.summary().unwrap().schema, SCHEMA_VERSION);
+                assert_eq!(opened.summary().unwrap().id, id);
+                opened
+                    .call(|db| {
+                        assert_eq!(
+                            db.query_row("SELECT count(*) FROM asset_spatial", [], |r| r
+                                .get::<_, u32>(0))?,
+                            1
+                        );
+                        let retained: (String, bool, u8, String) = db.query_row(
+                            "SELECT revision,favorite,rating,tags FROM assets WHERE id='photo'",
+                            [],
+                            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+                        )?;
+                        assert_eq!(
+                            retained,
+                            ("retained-revision".into(), true, 5, "[\"retained\"]".into())
+                        );
+                        assert_eq!(
+                            db.query_row("SELECT latitude FROM asset_locations", [], |r| r
+                                .get::<_, f64>(0))?,
+                            0.0
+                        );
+                        Ok(())
+                    })
+                    .unwrap();
+                assert_eq!(
+                    opened.schema_fingerprint().unwrap(),
+                    current_schema_fingerprint().unwrap()
+                );
+            }
+            let retained = std::fs::read_dir(owned.path())
+                .unwrap()
+                .map(|e| e.unwrap().path())
+                .find(|p| {
+                    p.file_name()
+                        .unwrap()
+                        .to_string_lossy()
+                        .starts_with("pre-migration-v13-")
+                })
+                .unwrap();
+            let db =
+                Connection::open_with_flags(retained, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+            assert_eq!(summary(&db).unwrap().schema, 13);
+            assert_eq!(summary(&db).unwrap().id, id);
+            assert_eq!(
+                db.query_row(
+                    "SELECT raw_metadata FROM assets WHERE id='photo'",
+                    [],
+                    |r| r.get::<_, String>(0)
+                )
+                .unwrap(),
+                "[{\"GPSLatitude\":0,\"GPSLongitude\":0}]"
+            );
+            assert_eq!(
+                db.query_row(
+                    "SELECT state FROM job_events WHERE job_id='fixture'",
+                    [],
+                    |r| r.get::<_, String>(0)
+                )
+                .unwrap(),
+                "retained thirteen"
+            );
+        }
+    }
 }
 
 #[cfg(test)]

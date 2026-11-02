@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '../test/render';
 import { expect, it, vi } from 'vitest';
 import { BatchToolbar } from './BatchToolbar';
 function props() {
@@ -43,4 +43,10 @@ it('offers whole-query selection only as an explicit action when nothing is sele
   fireEvent.click(screen.getByRole('button', { name: 'Select all results' }));
   expect(callbacks.onFreeze).toHaveBeenCalledOnce();
   expect(callbacks.onFavorite).not.toHaveBeenCalled();
+});
+it('opens catalog album review for an explicit or frozen selection', () => {
+  const onAlbum = vi.fn();
+  render(<BatchToolbar {...props()} count={2000} frozen onAlbum={onAlbum} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Add to album' }));
+  expect(onAlbum).toHaveBeenCalledOnce();
 });

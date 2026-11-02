@@ -5,6 +5,13 @@ import { join } from 'node:path';
 import { run } from './process.mjs';
 
 const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+const mapManifest = JSON.parse(readFileSync('assets/maps/manifest.json', 'utf8'));
+for (const [path, hash] of Object.entries(mapManifest.files))
+  assert.equal(
+    createHash('sha256').update(readFileSync(path)).digest('hex'),
+    hash,
+    `Bundled map data checksum: ${path}`,
+  );
 const capability = JSON.parse(readFileSync('src-tauri/capabilities/foundation.json', 'utf8'));
 assert.deepEqual(config.app.security.capabilities, ['foundation']);
 assert.deepEqual(capability.permissions, ['allow-foundation-request', 'allow-library-request']);
@@ -72,7 +79,7 @@ for (const [path, hash] of Object.entries(manifest.files))
     `ExifTool resource checksum: ${path}`,
   );
 const frontend = files('dist')
-  .filter((path) => path.endsWith('.js'))
+  .filter((path) => /\.(?:js|mjs|cjs)$/.test(path))
   .map((path) => readFileSync(path, 'utf8'))
   .join('\n');
 assert.ok(!frontend.includes('__wdio_mocks__'));

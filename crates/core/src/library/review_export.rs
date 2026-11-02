@@ -8,7 +8,7 @@ use crate::{
 };
 use std::{
     fs::File,
-    io::{Read, Seek, SeekFrom, Write},
+    io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
 };
 
@@ -22,7 +22,7 @@ fn same(a: &FileIdentity, b: &FileIdentity) -> bool {
     a.volume == b.volume && a.file == b.file
 }
 
-fn output_chain(path: &Path) -> Result<DirectoryChain> {
+pub(super) fn output_chain(path: &Path) -> Result<DirectoryChain> {
     if path.components().any(|part| {
         part.as_os_str()
             .to_string_lossy()
@@ -186,22 +186,72 @@ fn export_event(
     })
 }
 
-fn save_new(
+pub(super) fn save_new(
     path: &Path,
     directory: &DirectoryChain,
     stage: &str,
     filename: &str,
     bytes: &[u8],
 ) -> Result<()> {
+    if bytes.len() > MAX_EXPORT {
+        return Err(conflict("Export exceeds its byte limit."));
+    }
+    save_stream(
+        path,
+        directory,
+        stage,
+        filename,
+        &mut std::io::Cursor::new(bytes),
+        MAX_EXPORT as u64,
+        None,
+    )
+}
+pub(super) fn save_owned_file(
+    path: &Path,
+    directory: &DirectoryChain,
+    stage: &str,
+    filename: &str,
+    source: &mut File,
+    cancel: &std::sync::atomic::AtomicBool,
+) -> Result<()> {
+    save_stream(
+        path,
+        directory,
+        stage,
+        filename,
+        source,
+        512 * 1024 * 1024,
+        Some(cancel),
+    )
+}
+fn save_stream(
+    path: &Path,
+    directory: &DirectoryChain,
+    stage: &str,
+    filename: &str,
+    source: &mut (impl Read + Seek),
+    limit: u64,
+    paced: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<()> {
+    let length = source.seek(SeekFrom::End(0))?;
+    source.seek(SeekFrom::Start(0))?;
     // Only fixed backend-generated UUID names enter this adapter.
     if !stage.starts_with(".stillharbour-review-")
         || !stage.ends_with(".partial")
-        || !filename.starts_with("stillharbour-plan-")
-        || !(filename.ends_with(".json") || filename.ends_with(".csv"))
+        || !(filename.starts_with("stillharbour-plan-")
+            || filename.starts_with("stillharbour-metadata-")
+            || filename.starts_with("stillharbour-catalog-"))
+        || !(filename.ends_with(".json")
+            || filename.ends_with(".csv")
+            || filename.ends_with(".xmp")
+            || filename.ends_with(".stillharbour")
+            || [".acr", ".aae", ".dop", ".pp3", ".bin"]
+                .iter()
+                .any(|suffix| filename.ends_with(suffix)))
         || [stage, filename]
             .iter()
             .any(|name| name.contains(['/', '\\', ':', '\0']) || name.len() > 255)
-        || bytes.len() > MAX_EXPORT
+        || length > limit
     {
         return Err(AppError::new(
             ErrorCode::InvalidInput,
@@ -241,9 +291,24 @@ fn save_new(
             "The owned review stage has an unexpected identity.",
         ));
     }
-    file.write_all(bytes)?;
+    let mut copied = 0u64;
+    let mut buffer = [0u8; 65536];
+    loop {
+        let n = read_export(source, &mut buffer, paced)?;
+        if n == 0 {
+            break;
+        }
+        copied += n as u64;
+        if copied > length {
+            return Err(conflict("Export source changed while copying."));
+        }
+        write_export(&mut file, &buffer[..n], paced)?;
+    }
+    if copied != length {
+        return Err(conflict("Export source changed while copying."));
+    }
     file.sync_all()?;
-    verify(&mut file, bytes)?;
+    verify_stream(&mut file, source, length, paced)?;
     #[cfg(windows)]
     {
         drop(file);
@@ -254,7 +319,7 @@ fn save_new(
             &path.join(filename),
             &expected,
         )?;
-        verify(&mut published, bytes)?;
+        verify_stream(&mut published, source, length, paced)?;
     }
     #[cfg(target_os = "macos")]
     {
@@ -289,7 +354,7 @@ fn save_new(
         if !same(&filesystem::identity(&published)?, &expected) {
             return Err(conflict("The published review identity changed."));
         }
-        verify(&mut published, bytes)?;
+        verify_stream(&mut published, source, length, paced)?;
         let _ = path;
     }
     #[cfg(not(any(windows, target_os = "macos")))]
@@ -307,20 +372,85 @@ fn same_volume(a: &FileIdentity, b: &FileIdentity) -> bool {
     a.volume == b.volume
 }
 
-fn verify(file: &mut File, expected: &[u8]) -> Result<()> {
+fn verify_stream(
+    file: &mut File,
+    source: &mut (impl Read + Seek),
+    length: u64,
+    paced: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<()> {
     file.seek(SeekFrom::Start(0))?;
-    if file.metadata()?.len() != expected.len() as u64 {
-        return Err(conflict("Review-file byte verification failed."));
+    source.seek(SeekFrom::Start(0))?;
+    if file.metadata()?.len() != length {
+        return Err(conflict("Export byte verification failed."));
     }
-    let mut buffer = [0u8; 65536];
-    for chunk in expected.chunks(buffer.len()) {
-        file.read_exact(&mut buffer[..chunk.len()])?;
-        if &buffer[..chunk.len()] != chunk {
-            return Err(conflict("Review-file byte verification failed."));
+    let mut a = [0u8; 65536];
+    let mut b = [0u8; 65536];
+    let mut remaining = length;
+    while remaining > 0 {
+        let n = remaining.min(a.len() as u64) as usize;
+        read_exact_export(source, &mut a[..n], paced)?;
+        read_exact_export(file, &mut b[..n], paced)?;
+        if a[..n] != b[..n] {
+            return Err(conflict("Export byte comparison failed."));
+        }
+        remaining -= n as u64;
+    }
+    Ok(())
+}
+
+pub(super) fn read_export(
+    source: &mut impl Read,
+    buffer: &mut [u8],
+    cancel: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<usize> {
+    match cancel {
+        None => Ok(source.read(buffer)?),
+        Some(cancel) => {
+            match crate::jobs::paced_io::PacedIo::shared().read(source, buffer, cancel)? {
+                crate::jobs::paced_io::IoStep::Completed(n) => Ok(n),
+                crate::jobs::paced_io::IoStep::Canceled => Err(AppError::new(
+                    ErrorCode::Busy,
+                    "Metadata export canceled. Completed outputs and partial stages remain retained.",
+                )),
+            }
         }
     }
-    if file.read(&mut buffer[..1])? != 0 {
-        return Err(conflict("The review file changed during verification."));
+}
+pub(super) fn write_export(
+    output: &mut impl std::io::Write,
+    buffer: &[u8],
+    cancel: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<()> {
+    for chunk in buffer.chunks(65536) {
+        match cancel {
+            None => output.write_all(chunk)?,
+            Some(cancel) => {
+                match crate::jobs::paced_io::PacedIo::shared().write_all(output, chunk, cancel)? {
+                    crate::jobs::paced_io::IoStep::Completed(()) => (),
+                    crate::jobs::paced_io::IoStep::Canceled => {
+                        return Err(AppError::new(
+                            ErrorCode::Busy,
+                            "Metadata export canceled. Completed outputs and partial stages remain retained.",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+fn read_exact_export(
+    source: &mut impl Read,
+    buffer: &mut [u8],
+    cancel: Option<&std::sync::atomic::AtomicBool>,
+) -> Result<()> {
+    let mut offset = 0;
+    while offset < buffer.len() {
+        let n = read_export(source, &mut buffer[offset..], cancel)?;
+        if n == 0 {
+            return Err(conflict("Export ended during independent verification."));
+        }
+        offset += n;
     }
     Ok(())
 }

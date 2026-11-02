@@ -1,3 +1,4 @@
+import { Button, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CopyManifest,
@@ -322,7 +323,7 @@ export function ImportPlanReview({
             <label key={bundle.fileIds[0]}>
               <bdi>{manifest.files.find((file) => file.id === bundle.fileIds[0])?.sourceName}</bdi>{' '}
               · {bundle.fileIds.length} members
-              <select
+              <Select
                 aria-label={`Import choice for ${manifest.files.find((file) => file.id === bundle.fileIds[0])?.sourceName}`}
                 value={choices[bundle.fileIds[0]!] ?? ''}
                 onChange={(event) => {
@@ -340,50 +341,50 @@ export function ImportPlanReview({
                     Review existing group {index + 1} · {group.members.length} members
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           ))}
-          <button
+          <Button
             type="button"
             disabled={bundles.some((bundle) => !choices[bundle.fileIds[0]!])}
             onClick={() => void work(save)}
           >
             Save import decisions
-          </button>
+          </Button>
         </fieldset>
       )}
       {!capability?.available && <p>{capability?.reason ?? 'Checking import availability…'}</p>}
-      <button
+      <Button
         type="button"
         disabled={pending || active || copyActive || capability?.available !== true}
         onClick={() => void work(readHistory)}
       >
         Review saved import decisions
-      </button>
+      </Button>
       {history && (
         <div>
           <p>Recent import plans and attempts (up to 32 each).</p>
           {history.plans.map((saved) => (
             <p key={saved.id}>
-              <button
+              <Button
                 type="button"
                 disabled={pending || active || copyActive}
                 onClick={() => void work((token) => open(token, saved.id))}
               >
                 Open import plan: {saved.copyFiles} copy / {saved.skipFiles} existing ·{' '}
                 {saved.createdAt}
-              </button>
+              </Button>
             </p>
           ))}
           {history.sessions.map((session) => (
             <p key={session.id}>
-              <button
+              <Button
                 type="button"
                 disabled={pending || active || copyActive}
                 onClick={() => void work((token) => open(token, session.importPlanId, session))}
               >
                 Review import attempt: {session.state.replaceAll('_', ' ')} · {session.createdAt}
-              </button>
+              </Button>
             </p>
           ))}
           {!history.plans.length && <p>No import decisions are retained for this manifest.</p>}
@@ -453,21 +454,21 @@ export function ImportPlanReview({
                 I understand sources remain and every chosen existing file must be freshly
                 byte-compared.
               </label>
-              <button
+              <Button
                 type="button"
                 disabled={!ack || pending || active || copyActive || capability?.available !== true}
                 onClick={() => void work(approve)}
               >
                 Approve existing-bundle import
-              </button>
+              </Button>
               {approval && (
-                <button
+                <Button
                   type="button"
                   disabled={pending || active || copyActive || capability?.available !== true}
                   onClick={() => void work(start)}
                 >
                   Verify and record skipped import
-                </button>
+                </Button>
               )}
             </>
           ) : capability?.available === true ? (
@@ -491,13 +492,13 @@ export function ImportPlanReview({
       )}
       {active && (
         <>
-          <button
+          <Button
             type="button"
             disabled={pending || job.state === 'cancel_requested'}
             onClick={() => void work(cancel)}
           >
             Cancel import verification
-          </button>
+          </Button>
           <CopyIoControls />
         </>
       )}

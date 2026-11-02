@@ -1,3 +1,4 @@
+import { Button, Textarea } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   OrganizationPlanDetail,
@@ -145,16 +146,16 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
     >
       <header className="organization-heading">
         <h2 id="saved-plans-title">Saved organization plans</h2>
-        <button onClick={onClose}>Close saved plans</button>
+        <Button onClick={onClose}>Close saved plans</Button>
       </header>
       <div className="organization-body" aria-busy={busy}>
         <p>
           Retained drafts preserve their original paths and template versions. Copying remains
           unavailable.
         </p>
-        <button disabled={busy} onClick={() => void list()}>
+        <Button disabled={busy} onClick={() => void list()}>
           Refresh plans
-        </button>
+        </Button>
         {error && (
           <p className="error" role="alert">
             {error}
@@ -169,16 +170,16 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
         <ul>
           {page?.plans.map((plan) => (
             <li key={plan.id}>
-              <button disabled={busy} onClick={() => void open(plan.id)}>
+              <Button disabled={busy} onClick={() => void open(plan.id)}>
                 <bdi>{plan.destinationPath}</bdi> · {plan.proposed} proposed · {plan.createdAt}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
         {page?.next && (
-          <button disabled={busy} onClick={() => void list(page.next)}>
+          <Button disabled={busy} onClick={() => void list(page.next)}>
             Load more plans
-          </button>
+          </Button>
         )}
         {detail && (
           <section aria-label="Saved plan detail">
@@ -218,7 +219,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                     <tr key={row.assetId}>
                       <td>
                         <bdi>{row.sourcePath}</bdi>
-                        <button
+                        <Button
                           type="button"
                           disabled={busy || detail.stale || row.issues.length > 0}
                           onClick={(event) => {
@@ -227,7 +228,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                           }}
                         >
                           Review all companion filenames
-                        </button>
+                        </Button>
                         {companionChoices[row.assetId] && (
                           <p className="help">Chosen review: {companionChoices[row.assetId]?.id}</p>
                         )}
@@ -270,23 +271,23 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
               preparation and explicit approval. Recovery and metadata fidelity limits apply.
             </p>
             <p className="help">Fingerprint: {detail.plan.digest}</p>
-            <button disabled={busy} onClick={() => void exportText('json')}>
+            <Button disabled={busy} onClick={() => void exportText('json')}>
               View JSON export
-            </button>
-            <button disabled={busy} onClick={() => void exportText('csv')}>
+            </Button>
+            <Button disabled={busy} onClick={() => void exportText('csv')}>
               View CSV export
-            </button>
+            </Button>
             <p className="help">
               Save a new review file to a native-selected folder outside your libraries. The
               generated filename is preserved; an existing file is never replaced. Exports contain
               review data, not original photos or execution approval.
             </p>
-            <button disabled={busy} onClick={() => void saveFile('json')}>
+            <Button disabled={busy} onClick={() => void saveFile('json')}>
               Save JSON file…
-            </button>
-            <button disabled={busy} onClick={() => void saveFile('csv')}>
+            </Button>
+            <Button disabled={busy} onClick={() => void saveFile('csv')}>
               Save CSV file…
-            </button>
+            </Button>
             {savedExport && (
               <p role="status">
                 Review file saved: <bdi>{savedExport.path}</bdi> ·{' '}
@@ -296,7 +297,7 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
             {exported && (
               <label>
                 Export text — {exported.filename}
-                <textarea
+                <Textarea
                   rows={10}
                   readOnly
                   value={exported.text}

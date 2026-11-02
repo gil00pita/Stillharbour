@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CopyManifest,
@@ -522,9 +523,9 @@ function CopyWorkflowSession({
         Originals remain in place.
       </p>
       {!review && (
-        <button type="button" disabled={busy || !!unavailable} onClick={() => void create()}>
+        <Button type="button" disabled={busy || !!unavailable} onClick={() => void create()}>
           {busy ? 'Reviewing native scope…' : 'Choose destination and review preparation'}
-        </button>
+        </Button>
       )}
       {unavailable && <p role="status">{unavailable}</p>}
       {receipt && (
@@ -539,9 +540,9 @@ function CopyWorkflowSession({
         <ImportOutputIndexReview receipt={receipt} sourceRootId={manifest.files[0]!.rootId} />
       )}
       {importPlan && job?.state === 'completed_verified' && !receipt && (
-        <button type="button" onClick={() => setReceiptRetry((old) => old + 1)}>
+        <Button type="button" onClick={() => setReceiptRetry((old) => old + 1)}>
           Reload import receipt
-        </button>
+        </Button>
       )}
       {existing && (
         <section aria-label="Existing copy output history">
@@ -557,14 +558,14 @@ function CopyWorkflowSession({
         </section>
       )}
       {job?.action === 'prepare_names' && prepared && review?.action === 'copy_files' && (
-        <button type="button" disabled={busy} onClick={() => void reopen()}>
+        <Button type="button" disabled={busy} onClick={() => void reopen()}>
           Choose destination and reopen prepared review
-        </button>
+        </Button>
       )}
       {prepared && review?.action === 'prepare_names' && (
-        <button type="button" onClick={() => setReadyRetry(readyRetry + 1)}>
+        <Button type="button" onClick={() => setReadyRetry(readyRetry + 1)}>
           Reload prepared copy review
-        </button>
+        </Button>
       )}
       {review && (
         <>
@@ -620,12 +621,12 @@ function CopyWorkflowSession({
               </tbody>
             </table>
           </div>
-          <button type="button" disabled={!page} onClick={() => setPage(page - 1)}>
+          <Button type="button" disabled={!page} onClick={() => setPage(page - 1)}>
             Previous output paths
-          </button>
-          <button type="button" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
+          </Button>
+          <Button type="button" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
             Next output paths
-          </button>
+          </Button>
           {review.action === 'copy_files' && (
             <label>
               <input
@@ -640,7 +641,7 @@ function CopyWorkflowSession({
             </label>
           )}
           {!approval ? (
-            <button
+            <Button
               type="button"
               disabled={blocked || (review.action === 'copy_files' && !acknowledged)}
               onClick={() => void approve()}
@@ -648,21 +649,21 @@ function CopyWorkflowSession({
               {review.action === 'prepare_names'
                 ? 'Approve output preparation'
                 : 'Approve byte-verified copy'}
-            </button>
+            </Button>
           ) : (
             <>
               <p>Approved for one attempt in this session; expires after ten minutes.</p>
-              <button type="button" disabled={blocked} onClick={() => void start()}>
+              <Button type="button" disabled={blocked} onClick={() => void start()}>
                 {review.action === 'prepare_names'
                   ? 'Start output preparation'
                   : 'Start verified copy'}
-              </button>
+              </Button>
             </>
           )}
           {review.action === 'copy_files' && !running && (
-            <button type="button" disabled={busy} onClick={() => void inspect()}>
+            <Button type="button" disabled={busy} onClick={() => void inspect()}>
               Inspect actual output bytes
-            </button>
+            </Button>
           )}
         </>
       )}
@@ -749,9 +750,9 @@ function ExistingEffect({ entry }: { entry: ExistingCopyEffect }) {
       ) : original ? (
         <VerifiedCopyWorkflow manifest={original} />
       ) : (
-        <button type="button" disabled={busy} onClick={() => void open()}>
+        <Button type="button" disabled={busy} onClick={() => void open()}>
           Review original saved mapping
-        </button>
+        </Button>
       )}
       {error && <p role="alert">{error}</p>}
     </article>
@@ -824,9 +825,9 @@ export function ReopenPreparedCopy({ job }: { job: CopyWorkflowJob }) {
           {...(opened.importPlan ? { importPlan: opened.importPlan } : {})}
         />
       ) : (
-        <button type="button" disabled={busy} onClick={() => void reopen()}>
+        <Button type="button" disabled={busy} onClick={() => void reopen()}>
           {busy ? 'Checking retained preparation…' : 'Choose destination and reopen preparation'}
-        </button>
+        </Button>
       )}
       {error && <p role="alert">{error}</p>}
     </section>

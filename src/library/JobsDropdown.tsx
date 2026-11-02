@@ -1,3 +1,4 @@
+import { Button, Select } from '../components/ui/controls';
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { JobDetail, LibraryStatus, ScanJob } from '../bindings';
@@ -102,7 +103,7 @@ export function JobsDropdown({
     ));
   return (
     <>
-      <button
+      <Button
         ref={opener}
         className="jobs-trigger"
         aria-label="Jobs"
@@ -126,7 +127,7 @@ export function JobsDropdown({
             {activeCount}
           </span>
         )}
-      </button>
+      </Button>
       <span id={`${id}-status`} className="screen-reader-status" role="status">
         {status
           ? `${activeCount} running ${activeCount === 1 ? 'job' : 'jobs'}`
@@ -146,7 +147,7 @@ export function JobsDropdown({
               <h2 id={`${id}-title`} tabIndex={-1}>
                 Jobs
               </h2>
-              <button
+              <Button
                 className="icon-button"
                 aria-label="Close jobs"
                 onClick={() => {
@@ -157,7 +158,7 @@ export function JobsDropdown({
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="m6 6 12 12M18 6 6 18" stroke="currentColor" strokeWidth="1.5" />
                 </svg>
-              </button>
+              </Button>
             </div>
             {!status ? (
               <p role="status">Connecting to jobs…</p>
@@ -269,7 +270,7 @@ function JobEntry({
       <JobCounts job={job} />
       <p className="help">{job.message}</p>
       <div className="job-actions">
-        <button
+        <Button
           aria-expanded={expanded}
           aria-controls={detailId}
           onClick={() => {
@@ -279,9 +280,9 @@ function JobEntry({
           }}
         >
           {expanded ? 'Hide details' : 'Details'}
-        </button>
+        </Button>
         {['queued', 'running', 'pause_requested', 'paused'].includes(job.state) && (
-          <button
+          <Button
             disabled={canceling || job.state === 'pause_requested'}
             onClick={() => void action(job.state === 'paused' ? 'resume' : 'pause')}
           >
@@ -294,21 +295,21 @@ function JobEntry({
                   : job.state === 'pause_requested'
                     ? 'Pausing…'
                     : 'Pause'}
-          </button>
+          </Button>
         )}
         {!['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
           job.state,
         ) && (
-          <button disabled={canceling} onClick={() => void action('retry')}>
+          <Button disabled={canceling} onClick={() => void action('retry')}>
             {pendingAction === 'retry'
               ? 'Retrying…'
               : `Retry ${job.kind === 'thumbnails' ? 'thumbnails' : 'scan'}`}
-          </button>
+          </Button>
         )}
         {['queued', 'running', 'cancel_requested', 'pause_requested', 'paused'].includes(
           job.state,
         ) && (
-          <button
+          <Button
             disabled={pendingAction === 'cancel' || job.state === 'cancel_requested'}
             onClick={() => void action('cancel')}
           >
@@ -317,7 +318,7 @@ function JobEntry({
               : job.kind === 'thumbnails'
                 ? 'Cancel thumbnails'
                 : 'Cancel scan'}
-          </button>
+          </Button>
         )}
       </div>
       {cancelError && (
@@ -359,7 +360,7 @@ function ThumbnailJobAction({
     <div className="thumbnail-job-action">
       <label>
         Preview library
-        <select
+        <Select
           value={selected.id}
           onChange={(event) => setRootId(event.target.value)}
           disabled={pending}
@@ -369,11 +370,11 @@ function ThumbnailJobAction({
               {root.label}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
-      <button onClick={() => void generate()} disabled={pending}>
+      <Button onClick={() => void generate()} disabled={pending}>
         {pending ? 'Starting…' : 'Generate thumbnails'}
-      </button>
+      </Button>
       <p className="help">Prepare tiny previews in the background. Originals stay read-only.</p>
       {error && (
         <p role="alert" className="error">

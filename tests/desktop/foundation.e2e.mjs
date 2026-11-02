@@ -1918,7 +1918,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 13);
+    assert.equal(status.data.catalogSchema, 16);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -2197,7 +2197,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 13);
+      assert.equal(receipt.catalogJournal.catalogSchema, 16);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',

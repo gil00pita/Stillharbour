@@ -12,7 +12,7 @@ A local-first photo library that keeps your originals in ordinary folders.
 
 </div>
 
-**Stillharbour** is a native desktop application built with Tauri, React and Rust. Browse photos across folders, inspect metadata, and organise favourites, ratings and tags in a local SQLite catalog. Your originals stay where they are, and annotations stay in the catalog. No account, telemetry or cloud service is enabled.
+**Stillharbour** is a native desktop application built with Tauri, React, Chakra UI and Rust. Browse photos across folders, inspect metadata, and organise favourites, ratings, tags and virtual albums in a local SQLite catalog. Your originals stay where they are, and annotations stay in the catalog. No account, telemetry or cloud service is enabled.
 
 > [!IMPORTANT]
 > Stillharbour is in development. Native library evidence covers **macOS Apple Silicon**, with a bounded **Windows local NTFS** scan/preview implementation. Windows network drives and other filesystems remain unavailable for library scanning; capture/camera metadata and broader format support are not implemented there. Signed installers and clean-machine release validation remain pending. M2 organization, M3 read-only inspection and M4 comparison/copy/snapshot integration are present. Production copying, renaming, moving, deletion and backup remain gated while native preservation acceptance is collected. See [M4 validation](docs/M4_VALIDATION.md) and the [implementation log](docs/IMPLEMENTATION_LOG.md) for actual checks and open gates.
@@ -22,8 +22,10 @@ A local-first photo library that keeps your originals in ordinary folders.
 - **Browse your collection.** A chronological photo canvas, uniform grid, text-only list, folder explorer and date navigation, with filename search and filters.
 - **Keep a local catalog.** Save multiple nonoverlapping photo folders, configure scan filters, follow background jobs, and retain indexed records and available cached previews when a root goes offline.
 - **Inspect and annotate.** View metadata and date provenance; add favourites, ratings and tags individually or in batches without rewriting originals or sidecars.
+- **Organise in the catalog.** Save captions and reject flags in Info; use Catalog or Add to album for virtual albums, saved searches and explicit tag categories. Preview and apply exact tag rename/merge/removal, undo retained tag changes, and explicitly import observed keywords. Export reviewed portable catalogs or XMP into new files in a separately selected folder. Source files stay unchanged. See [metadata scope and evidence](docs/M5_METADATA.md).
 - **Compare backup scope.** Review the base library against a separate destination dataset using quick or full-byte comparison, save immutable comparison profiles, review historical destination edits and inspect read-only previews. This read-only M4A increment cannot copy, replace or establish recovery evidence. See [M4 status](docs/M4_BACKUP_SYNC.md).
 - **Look closer.** Navigate photos with zoom, pan, filmstrip and Info, or visually compare 2–4 selected photos. Comparison does not establish duplicate equality.
+- **Explore locations.** Browse retained photo locations on an offline world overview, filter by folder/date, select thumbnail clusters and show the same area in the library. Existing folders need an explicit rescan to acquire previously unextracted GPS; Windows GPS extraction remains unavailable. See [map scope and evidence](docs/M5_MAP.md).
 - **Plan organization.** Select up to 240 individual photos and try date, event and sequence templates. Save immutable template versions with up to four validated examples and destination-bound drafts; review existing target conflicts and selected source folders. Reopen Saved plans and view or save new JSON/CSV review files. Future-name checks, complete companion bundles, execution, import and undo remain pending. Originals stay in place.
 
 Preview support includes JPEG, PNG and WebP, with tested HEIC/HEIF, TIFF and selected RAW camera samples on macOS. The viewer can display admitted JPEG/PNG/WebP originals and supported HEIC/HEIF originals on compatible macOS WebViews, within a 32 MiB / 32-million-pixel limit. Other cases retain a labelled preview or an explicit unavailable state. See [format coverage](docs/FORMAT_SUPPORT.md) and [original-image viewing](docs/ORIGINAL_IMAGE_VIEWING.md) for exact limits.
@@ -75,7 +77,7 @@ Run the native test build and suite sequentially after `npm run check`; they sha
 
 ### Project layout
 
-The React interface sends typed requests to the Rust backend, which owns filesystem access, catalog writes, workers and safety checks. Business rules remain separate from I/O adapters; IPC bindings are generated from Rust-owned types.
+The React/TypeScript interface uses Chakra UI 3.37.0 with a Stillharbour token/recipe layer; see [UI framework](docs/UI_FRAMEWORK.md). It sends typed requests to the Rust backend, which owns filesystem access, catalog writes, workers and safety checks. Business rules remain separate from I/O adapters; IPC bindings are generated from Rust-owned types.
 
 ```text
 src/                 React/TypeScript interface and generated IPC bindings
@@ -94,15 +96,15 @@ templates/           Data-only example presets and manifests
 
 Work proceeds through reviewed milestones. Individual later slices, such as macOS format previews, do not complete their parent milestone.
 
-| Milestone                                                                    | Scope and current position                                                                                                                     |
-| ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| [M0 — Foundation](tasks/M0_FOUNDATION.md)                                    | Implemented foundation with recorded local evidence; cross-platform gates remain                                                               |
-| [M1 — Read-only library](tasks/M1_READ_ONLY_LIBRARY.md)                      | Implemented native browsing and catalog annotations; platform and performance gates remain                                                     |
-| [M2 — Organization and import](tasks/M2_SAFE_OPERATIONS.md)                  | In progress: previews, companion review, destination preflight, saved template versions and immutable drafts; execution/import/undo gates open |
-| [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Read-only Duplicates, Integrity and Storage; production quarantine awaits M4 recovery                                                          |
-| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | M4A accepted; copy, retained history and snapshots integrated, with production execution gated on native preservation acceptance               |
-| [M5 — Maps, metadata and formats](tasks/M5_MAP_METADATA_FORMATS.md)          | macOS format-preview slice implemented; maps and remaining scope pending                                                                       |
-| [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | Pending packaging, signing and target-platform acceptance                                                                                      |
+| Milestone                                                                    | Scope and current position                                                                                                                                                |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [M0 — Foundation](tasks/M0_FOUNDATION.md)                                    | Implemented foundation with recorded local evidence; cross-platform gates remain                                                                                          |
+| [M1 — Read-only library](tasks/M1_READ_ONLY_LIBRARY.md)                      | Implemented native browsing and catalog annotations; platform and performance gates remain                                                                                |
+| [M2 — Organization and import](tasks/M2_SAFE_OPERATIONS.md)                  | In progress: previews, companion review, destination preflight, saved template versions and immutable drafts; execution/import/undo gates open                            |
+| [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Read-only Duplicates, Integrity and Storage; production quarantine awaits M4 recovery                                                                                     |
+| [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | M4A accepted; copy, retained history and snapshots integrated, with production execution gated on native preservation acceptance                                          |
+| [M5 — Maps, metadata and formats](tasks/M5_MAP_METADATA_FORMATS.md)          | Offline map, catalog organization, reversible tags and reviewed catalog/XMP export implemented; native/format acceptance limits in [M5 validation](docs/M5_VALIDATION.md) |
+| [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | Pending packaging, signing and target-platform acceptance                                                                                                                 |
 
 Catalog portability, broader health checks, editing, provider imports and mobile are separately gated [library extensions](docs/LIBRARY_FEATURES_ADDENDUM.md). They are planned work, not current capabilities. [Performance status](docs/PERFORMANCE_P4_STATUS.md) records the remaining P4-06 gate.
 

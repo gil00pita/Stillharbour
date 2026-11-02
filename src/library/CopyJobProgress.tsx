@@ -1,3 +1,4 @@
+import { Button, Input } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { CopyWorkflowJob, CopyIoStatus, CopyJobState } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -56,13 +57,13 @@ export function CopyJobProgress({
         </p>
       )}
       {copyJobActive(job) && (
-        <button
+        <Button
           type="button"
           disabled={pending || job.state === 'cancel_requested'}
           onClick={() => void cancel()}
         >
           {pending || job.state === 'cancel_requested' ? 'Stopping…' : 'Cancel organization job'}
-        </button>
+        </Button>
       )}
       {error && (
         <p role="alert" className="error">
@@ -120,7 +121,7 @@ export function CopyIoControls() {
       <h4>Operation I/O</h4>
       <label>
         Aggregate KiB/s{' '}
-        <input
+        <Input
           type="number"
           min="1"
           max="1048576"
@@ -130,16 +131,16 @@ export function CopyIoControls() {
           disabled={pending}
         />
       </label>
-      <button type="button" disabled={pending || !status} onClick={() => void update(null)}>
+      <Button type="button" disabled={pending || !status} onClick={() => void update(null)}>
         Apply I/O limit
-      </button>
-      <button
+      </Button>
+      <Button
         type="button"
         disabled={pending || !status}
         onClick={() => void update(!status?.byteIoPaused)}
       >
         {status?.byteIoPaused ? 'Resume byte I/O' : 'Pause byte I/O'}
-      </button>
+      </Button>
       <p className="help">
         Reads, writes and verification share this limit. Pause takes effect at the next admitted
         byte boundary. Metadata, flushes and external helpers have separate limits.

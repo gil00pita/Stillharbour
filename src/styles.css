@@ -1,22 +1,28 @@
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: var(
+    --stillharbour-fonts-body,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif
+  );
   font-size: 14px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
-  color: #e7e9e8;
-  background: #16191b;
+  color: var(--stillharbour-colors-fg, #e7e9e8);
+  background: var(--stillharbour-colors-bg, #16191b);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --background: #16191b;
-  --surface: #1d2123;
-  --border: #303638;
-  --muted: #a9b3b2;
-  --accent: #b6d6c8;
-  --secondary: #c7cecb;
-  --control-hover: #232827;
-  --control-height: 36px;
-  --control-radius: 8px;
+  --background: var(--stillharbour-colors-bg, #16191b);
+  --surface: var(--stillharbour-colors-bg-panel, #1d2123);
+  --border: var(--stillharbour-colors-border, #303638);
+  --muted: var(--stillharbour-colors-fg-muted, #a9b3b2);
+  --accent: var(--stillharbour-colors-brand-solid, #b6d6c8);
+  --secondary: var(--stillharbour-colors-fg-secondary, #c7cecb);
+  --control-hover: var(--stillharbour-colors-bg-hover, #232827);
+  --control-height: var(--stillharbour-sizes-control, 36px);
+  --control-radius: var(--stillharbour-radii-control, 8px);
   --ui-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 .organization-preview {
@@ -192,7 +198,7 @@ button,
 a {
   -webkit-tap-highlight-color: transparent;
 }
-button {
+button:not(.chakra-button) {
   font: inherit;
   cursor: pointer;
 }
@@ -519,9 +525,9 @@ h3 {
     padding: 24px;
   }
 }
-input,
-select,
-textarea {
+input:not(.chakra-input),
+select:not(.chakra-native-select),
+textarea:not(.chakra-textarea) {
   font: inherit;
   font-size: 13px;
   line-height: 20px;
@@ -580,10 +586,10 @@ label {
   line-height: 16px;
   color: var(--secondary);
 }
-button:not(.primary):not(.asset-open) {
+button:not(.primary):not(.asset-open):not(.chakra-button) {
   border: 1px solid #3c4643;
   background: var(--surface);
-  color: #e7e9e8;
+  color: var(--stillharbour-colors-fg, #e7e9e8);
   border-radius: var(--control-radius);
   padding: 7px 12px;
   font-size: 13px;
@@ -593,7 +599,7 @@ button:not(.primary):not(.asset-open) {
     background-color 140ms var(--ui-ease),
     border-color 140ms var(--ui-ease);
 }
-button:not(.primary):not(.asset-open):hover:enabled {
+button:not(.primary):not(.asset-open):not(.chakra-button):hover:enabled {
   background: var(--control-hover);
 }
 button[aria-pressed='true'] {
@@ -1734,7 +1740,7 @@ input.switch-control:disabled {
   padding: 0;
   margin: 0;
   border: 0;
-  color: #e7e9e8;
+  color: var(--stillharbour-colors-fg, #e7e9e8);
   background: #121516;
 }
 .photo-viewer[open],
@@ -2116,11 +2122,29 @@ input.switch-control:disabled {
 }
 .settings-save {
   justify-content: flex-end;
+  align-items: center;
   padding-top: 24px;
+}
+.settings-save .primary {
+  margin-top: 0;
+}
+.settings-import-form {
+  display: grid;
+  gap: 12px;
+}
+.settings-import-form > button {
+  justify-self: start;
 }
 .settings-section .view-switch {
   margin: 16px 0;
   flex-wrap: wrap;
+  gap: 8px;
+}
+.settings-section .view-switch > button {
+  font-size: 13px !important;
+}
+.settings-section .thumbnail-control {
+  font-size: 13px;
 }
 .settings-section .scan-options {
   margin-top: 20px;
@@ -2149,7 +2173,7 @@ input.switch-control:disabled {
   }
   .settings-libraries li {
     grid-template-columns: minmax(0, 1fr);
-    gap: 10px;
+    gap: 12px;
   }
   .settings-section-heading {
     flex-wrap: wrap;
@@ -2631,7 +2655,7 @@ button.explorer-entry.asset-open:hover:enabled {
   min-width: 0;
   padding-right: 12px;
 }
-.text-list-head button:not(.primary):not(.asset-open) {
+.text-list-head button:not(.primary):not(.asset-open):not(.chakra-button) {
   display: flex;
   align-items: center;
   gap: 6px;

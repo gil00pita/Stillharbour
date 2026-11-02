@@ -235,7 +235,7 @@ failure before actual denial supplies no unreadable-root acceptance evidence.
 | AC-080 | Production bundle has no mock-success backend, arbitrary filesystem/shell permission, test WebDriver server or exposed secret. Dependency/notice review matches the exact shipped binaries. |
 | AC-081 | Concurrent scan, organizer and backup target overlapping roots. Locking prevents incompatible mutations, and app-generated watch events do not create phantom duplicates. |
 | AC-082 | Export a CSV containing names starting with =, +, -, @ and unusual line breaks. Spreadsheet-oriented export escapes formula hazards while preserving a lossless JSON alternative. |
-| AC-083 | Write catalog metadata to a supported XMP companion after an external edit. Conflict review prevents silent overwrites and preserves unknown namespaces and recognized ACR/JSON companions. |
+| AC-083 | Export catalog metadata to a new supported XMP output after an external source edit. Review/source witnesses prevent stale publication and silent overwrites; preserve unknown namespaces and original XMP/ACR/JSON companions verbatim. Originals and existing destination files remain unchanged. See ADR-0084 and M5-X cases. |
 | AC-084 | Kill the app during database migration or catalog backup. Recovery never opens a silently half-migrated schema and a previous valid catalog backup is available. |
 | AC-085 | Release performance documentation labels objectives as targets until measured and records actual fixture, hardware, cache state, error counts and command evidence. |
 
@@ -301,6 +301,8 @@ This replaces the earlier gapless/no-checkbox requirements; their historical evi
 
 ### Settings and indexed library locations — owner revision, 2026-10-28
 
+- Presentation refinement (2026-11-02): defaults actions align vertically, import controls have 12px spacing, and browsing control text remains at least 13px at narrow widths. Missing-catalog and unavailable-save states explain disabled import controls visibly and through an accessible description. Existing independent save and preservation behavior remains intact.
+
 - Settings is keyboard accessible from expanded/collapsed navigation, including before the first folder is added. Its heading receives focus; controls fit 1180×780 and 660×560 without horizontal overflow, with normal main-pane scrolling and fixed navigation.
 - Library locations show actual catalog roots and their availability/path/mode. Change location routes an opaque native picker selection and the existing root ID through identity-checked relinking. Cancellation preserves roots; a different identity is refused. Add photo folder opens selected-folder setup without scanning before explicit Save. Originals stay in place.
 - Save defaults persists through a fresh native preference-store read. The default registered library, view, density, fit, sort and navigation state apply to newly opened Photos. Selecting a view in Settings does not submit the form. An unavailable saved library is labelled instead of silently displaying All libraries.
@@ -357,7 +359,7 @@ The bounded catalog-read update must satisfy P1-01 through P1-07 in [PERFORMANCE
 | M5-F03 | Retain input/dimension/output/deadline bounds, reject invalid ICC, preserve alpha/orientation, and monitor native child memory. | Unit/integration and packaged negative cases pass; sampled RSS is not a whole-process-tree quota. |
 | M5-F04 | New policy retries old unavailable failures without schema migration and preserves compatible indexed M1 positive previews offline. | Passed in isolated catalog regressions and packaged HEIC legacy-failure retry. |
 | M5-F05 | Native gallery/viewer loads HEIC, returns to the same query and keeps original mutations disabled. | Passed macOS debug in a separate native test invocation; independent 36-file manifests match. |
-| M5-F06 | Complete AC-083 clean-machine format/OS, color, sidecar/metadata and full-validation gates before broad release claims. | Not run for this slice; remains open. Preview success is not full RAW validation. |
+| M5-F06 | Complete packaged format/OS, color, sidecar/metadata and full-validation gates before broad release claims, including AC-077 clean-machine checks and AC-083 XMP conflicts. | Not run for this slice; remains open. Preview success is not full RAW validation. |
 
 ### Balanced chronological gallery — owner revision, 2026-10-28
 
@@ -628,3 +630,86 @@ AC-002/010/015/022 extensions, using generated sources only:
 - Retry rejects active jobs, uses backend job/root identity and current saved filters, retries failed work and reuses unchanged metadata/previews. Never changes originals or bypasses exclusions. Failed requests remain explicit and re-attemptable.
 - Thumbnail progress includes generated/cached/unavailable observations. Remaining time is explicitly an estimate after three items; paused boundary time is excluded. No fixed throughput or large-library timing promise.
 - Schema-9 catalogs retain independent pre-migration snapshots before schema 10 adds nullable counters; the legacy scan-branch schema-4 layout preserves existing counters; UUIDs/data survive. Retain rollback and child-process migration failure checks. Run native Windows/macOS pause/resume on the held initial-preview job and capture unchanged counts/same identity, alongside existing source manifests. Local host limitations are recorded separately.
+## M5 geographic increment — owner continuation, 2026-11-02
+
+The owner authorized M5 development after the readiness review; this does not certify M4 preservation. Scope and actual evidence are in [M5_MAP.md](M5_MAP.md), with architecture/migration in ADR-0081. Remaining M5 metadata and format requirements are unchanged.
+
+| ID | Required behavior | Evidence boundary |
+| --- | --- | --- |
+| M5-G01 | Numeric zero is located; absent, partial, nonnumeric, invalid and unextracted coordinates stay unlocated without an invented (0,0). | Geographic core fixtures; signed EXIF extraction needs actual native helper evidence. |
+| M5-G02 | Exact double-precision viewport membership survives R-tree rounding, ±180 aliasing and antimeridian bounds. | Geographic core fixtures; ordinary library queries use the same predicate. |
+| M5-G03 | Identical and dispersed dense locations never exceed 256 clusters; count sums retain all matching points. | Generated 4,000-point core fixture; this is bounded correctness, not a throughput benchmark. |
+| M5-G04 | Metadata invalidation and catalog deletion reconcile derived locations; read-only map queries do not rewrite raw observations or originals. | Trigger/read-only core fixtures plus native independent generated-file audit. |
+| M5-G05 | Known schema-13/14/15 bound startup validates the exact compiled historical layout before current schema-16 migration, preserves UUID/root/annotation/raw data, retains an independently openable prior catalog and rejects unfamiliar schemas/name collisions. | New migration tests and extended existing actual child-exit matrix; no Keychain reset or schema bypass. |
+| M5-G06 | Folder/date/viewport/cell filters and representative selection survive Show in library and Return to map; stale responses/errors never appear as another scope's success. | Component cases plus native UI checks; map strip uses 80-row keyset pages. |
+| M5-G07 | Offline geometry/attribution and locally bundled worker function under the restricted CSP, without public tile or geocoder requests. | Native screenshots and main-WebView resource timing; worker/OS network interception and clean targets remain qualified. |
+| M5-G08 | Keyboard map controls and the photo-list alternative remain reachable at minimum size; graphics failure keeps the list usable. | Component fallback plus native size evidence; full AC-079 screen-reader/manual review remains open. |
+
+These cases supplement AC-074–076/079, rather than replacing the full milestone gate. M5-F06 retains its platform/format limits; AC-083 implementation/evidence is tracked in the M5-X cases below.
+
+
+## M5 catalog metadata continuation — 2026-11-02
+
+The owner requested continuing M5. [M5_METADATA.md](M5_METADATA.md) records scope and executed evidence; ADR-0082 defines the catalog-only boundary.
+
+| Case | Required result | Evidence boundary |
+| --- | --- | --- |
+| M5-C01 | Caption/reject saves validate size/identity and expected version; stale writes retain drafts; history failure rolls back notes and revision. | Core rollback/conflict cases and component draft states; native Unicode save. |
+| M5-C02 | Embedded keyword observations stay separate from manual tags; manual removal plus rescan cannot resurrect a tag. | Generated raw-metadata and query regressions; full N2 import/tombstone workflow remains open. |
+| M5-C03 | Virtual albums retain offline photo/video IDs; exact explicit/frozen sets reject missing/duplicate members atomically, remain idempotent and archive reversibly. | Core exact-count/expiry/version cases and native UI creation/membership. |
+| M5-C04 | Saved searches store only bounded validated filters, reject unknown scripts/schedules and run only on explicit view; archive grants no authority. | Hostile-data/core and component cases; native search persistence. |
+| M5-C05 | Categories preserve case/Unicode/slash labels, reject missing parents/cycles/depth and stale reparenting, and include descendants in queries. | Core graph/filter cases, component actions and native parent-category navigation. |
+| M5-C06 | Schema-16 startup migrates exact compiled historical layouts, retains consistent prior copies and rejects unknown layouts; independently opened snapshots retain notes/albums/categories. | Extended catalog migration/actual-exit matrix plus metadata snapshot case. No Keychain reset. |
+| M5-C07 | Native metadata actions use generated fixtures and independently leave every original/companion unchanged with production mutation capability false. | Combined macOS map/metadata run and nine-entry source manifest. Windows native metadata and full AC-079 remain open. |
+
+These cases supplement the first-release catalog metadata requirements; the subsequent M5-X cases cover portable export, reviewed tag changes, explicit keyword overrides and XMP conflicts. Broader N2 and platform acceptance remain separate. Neither M4 preservation nor whole-M5 acceptance is implied.
+
+
+### Inspection, backup and map presentation — 2026-11-02
+
+- Duplicates, Integrity and Storage keep checkbox controls beside their labels and field labels left-aligned. All existing inspection modes, criteria, acknowledgment and unavailable-root guards remain functional.
+- Exact matches still require complete byte comparison; property candidates do not authorize quarantine. Changed checksums remain distinct from proven damage.
+- Storage highlights total file size, retains unknown metrics as unknown, explains hard-link counting and right-aligns numeric columns. Treemap button styling is not overridden by generic controls.
+- Backup profile and comparison actions align with their inputs. Retained-catalog review remains available in its existing order with quieter styling; source summaries show names and paths rather than internal IDs.
+- Map retains a visible page title at 660px viewport width. Zoom buttons remain 36px square; marker and filmstrip styling wins over generic button rules, with visible focus and selection. Existing offline attribution and location caveats remain.
+
+
+## Owner-requested Chakra UI adoption — 2026-11-02
+
+[ADR-0083](decisions/ADR-0083-chakra-ui-design-system.md) and [UI_FRAMEWORK.md](UI_FRAMEWORK.md) define the frontend-library change.
+
+| Case | Required behavior | Evidence |
+| --- | --- | --- |
+| UI-C01 | Shared controls retain lossless native form values, implicit/explicit submission, refs, numeric size and disabled approvals. | Provider-backed shared-control regressions and existing product component suite. |
+| UI-C02 | Theme tokens retain the dark palette, 13px controls, visible focus, reduced motion and existing selected/disabled states without a global native-element reset. | Theme/CSS review plus native resolved-style checks; full manual screen-reader acceptance remains separate. |
+| UI-C03 | Native map/library/catalog interactions remain functional under the actual provider, dialog fits minimum width, and all generated originals/sidecars remain unchanged. | Combined native map/metadata test with independent nine-entry audit; record actual host/results in the log. |
+| UI-C04 | Production CSP/capabilities stay restricted, no remote fonts/styles are added, and test instrumentation is excluded. | Production frontend/resource checks; native resource timing remains scoped to the main WebView. |
+
+This UI migration does not establish missing M4 preservation, M5 interoperability/format or M6 release acceptance.
+
+## M5 export and reversible-tag acceptance — 2026-11-02
+
+[M5 validation](M5_VALIDATION.md) records actual runs. These supplement AC-083 and existing catalog requirements; no full-M4/whole-release certification is implied.
+
+| Case | Required behavior | Evidence boundary |
+| --- | --- | --- |
+| M5-X01 | Preview exact-label rename/merge/removal; reject stale/replayed digests and invalid category graphs; apply atomically. | Core regressions and native tag review. |
+| M5-X02 | Undo checks current after-state, records new history and increases category versions; category-only changes remain visible/reversible. | Core regression, including zero-asset category history. |
+| M5-X03 | Explicit observed-keyword import respects removal overrides across rescan/reopen; restoring removed labels requires explicit choice. | Core fixtures; raw observations remain unchanged. |
+| M5-X04 | Portable export independently opens with exact compiled schema/UUID, valid integrity/FKs and organization/read-only evidence; roots unbound, credentials/schedules/approvals absent. | Core independent reopen plus generated native export audit. No clean-machine/import-UI claim. |
+| M5-X05 | XMP preserves unknown namespace/editing data and verbatim companions; rejects DTD/entities/unsupported qualifiers, ambiguous variants, symlinks and drift. | Parser and fresh-inventory regressions; native source-XMP fixture. |
+| M5-X06 | Export requires reviewed IDs/digest and native output authority outside indexed roots; stale catalog/source/folder/stage, collision, cancellation and replay fail without overwrite. | Core regressions and component approval/cancel/conflict states. |
+| M5-X07 | Process exit after approval, publication or verification leaves source/neighbors unchanged and no false completed receipt; retained approvals never auto-replay. | Three actual child-process exits with owned-fixture markers and independent reopen. |
+| M5-X08 | Native UI previews/saves new catalog/XMP outputs, reviews/undoes tag edits and independently leaves every generated image/companion unchanged. | Independent local macOS WKWebView metadata suite; source/neighbor audit passes. GPU/native focus and Windows remain unverified. |
+
+The existing AC-077 clean-machine and full AC-079 manual screen-reader gates remain open. Unsupported packaged formats stay explicitly unverified under FORMAT_SUPPORT.md.
+
+### Critique polish regression checks — 2026-11-02
+
+- Edit a caption/reject flag, move between photos or close/reopen Info/viewer, and verify the same-catalog draft remains without an implicit native save. Another catalog must not inherit it.
+- Reopen a draft after a newer catalog version exists: saving must still use the original expected version. Failed save/reload retains the draft; a late save cannot remove a newer edit. The 240-draft limit must refuse a new draft without evicting prior work.
+- Scroll catalog organization at 1180×780 and 660×560: title, Close and section shortcuts remain visible; shortcut focus reaches the chosen heading.
+- Review saved-search replacement: show both queries, cancel without a write, and submit only the frozen reviewed query with the displayed collection version.
+- No usable location hides empty geography, retains filters and photo actions, and reports only its matching unlocated total.
+
+These UI checks do not establish Windows, screen-reader, crash-recovery or original-file preservation acceptance.

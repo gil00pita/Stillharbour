@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { CopyAssessment, CopyManifest } from '../bindings';
 import { libraryData } from '../ipc';

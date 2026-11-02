@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   BundleConfirmation,
@@ -162,19 +163,19 @@ export function BundleInventoryReview({
         gallery. No file contents are read or changed. Folders, links and placeholders stay at
         source. This review creates no copy approval.
       </p>
-      <button type="button" disabled={busy || changed} onClick={() => void run('inventory')}>
+      <Button type="button" disabled={busy || changed} onClick={() => void run('inventory')}>
         {pending === 'inventory'
           ? 'Reading filenames…'
           : inventory
             ? 'Read filenames again'
             : 'Read all filenames'}
-      </button>
-      <button type="button" disabled={busy} onClick={() => void run('history')}>
+      </Button>
+      <Button type="button" disabled={busy} onClick={() => void run('history')}>
         Load retained companion reviews
-      </button>
-      <button type="button" onClick={onClose}>
+      </Button>
+      <Button type="button" onClick={onClose}>
         Close companion inventory
-      </button>
+      </Button>
       {error && (
         <p className="error" role="alert">
           {error}
@@ -276,20 +277,20 @@ export function BundleInventoryReview({
               </tbody>
             </table>
           </div>
-          <button
+          <Button
             type="button"
             disabled={busy || page === 0}
             onClick={() => setPage((value) => value - 1)}
           >
             Previous filenames
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={busy || (page + 1) * PAGE_SIZE >= inventory.entries.length}
             onClick={() => setPage((value) => value + 1)}
           >
             Next filenames
-          </button>
+          </Button>
           <p>
             Include every possible same-stem, filename-sidecar and AppleDouble companion.
             Unsupported or ambiguous companions block confirmation. You may also include other
@@ -311,13 +312,13 @@ export function BundleInventoryReview({
             I reviewed all filenames, including other pages, and included every companion for this
             photo.
           </label>
-          <button
+          <Button
             type="button"
             disabled={busy || !canConfirm || confirmation !== null}
             onClick={() => void run('confirm')}
           >
             {pending === 'confirm' ? 'Retaining companion review…' : 'Save companion review'}
-          </button>
+          </Button>
         </>
       )}
       {confirmation && (
@@ -335,9 +336,9 @@ export function BundleInventoryReview({
             ))}
           </ul>
           {onChoose && (
-            <button type="button" disabled={busy || changed} onClick={() => onChoose(confirmation)}>
+            <Button type="button" disabled={busy || changed} onClick={() => onChoose(confirmation)}>
               Use this decision in copy review
-            </button>
+            </Button>
           )}
         </section>
       )}
@@ -353,9 +354,9 @@ export function BundleInventoryReview({
             <ul>
               {history.map((record) => (
                 <li key={record.id}>
-                  <button type="button" disabled={busy} onClick={() => setConfirmation(record)}>
+                  <Button type="button" disabled={busy} onClick={() => setConfirmation(record)}>
                     View {record.files.length} files · review {record.id}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

@@ -1,8 +1,11 @@
+import { Button } from './components/ui/controls';
 import { useState, type ReactNode } from 'react';
 import { useFoundation } from './useFoundation';
 import { usePreferences } from './usePreferences';
 import { SettingsScreen } from './settings/SettingsScreen';
-import type { DirectorySelection, LibraryRoot, RootMode, ScanFilter } from './bindings';
+import type { AssetQuery, DirectorySelection, LibraryRoot, RootMode, ScanFilter } from './bindings';
+import { MapScreen } from './map/MapScreen';
+import { initialMapState, type MapBrowseState } from './map/state';
 import { JobsDropdown } from './library/JobsDropdown';
 import { LibraryScreen, type Section } from './library/LibraryScreen';
 import { FolderExplorer } from './library/FolderExplorer';
@@ -13,8 +16,10 @@ import { libraryData } from './ipc';
 import { BackupScreen } from './backup/BackupScreen';
 import { useCatalogSwitchState } from './backup/catalogSwitchState';
 import { CatalogSwitchStopped } from './backup/CatalogSwitchStopped';
+import { NotesDraftContext, type NotesDraft } from './metadata/notesDrafts';
 
-type AppSection = Section | 'Settings' | InspectionSection | 'Backup & Sync';
+type AppSection = Section | 'Settings' | InspectionSection | 'Backup & Sync' | 'Map';
+type LibraryLaunch = { query: AssetQuery; selectedId: string | null; generation: number };
 
 export default function App() {
   const stopped = useCatalogSwitchState();
@@ -40,6 +45,8 @@ function ConnectedApplication() {
   const settings = usePreferences();
   const preferences = settings.preferences;
   const [section, setSection] = useState<AppSection>('Photos');
+  const [mapState, setMapState] = useState(initialMapState);
+  const [libraryLaunch, setLibraryLaunch] = useState<LibraryLaunch | null>(null);
   const [navigationOverride, setNavigationOverride] = useState<boolean | null>(null);
   const collapsed = navigationOverride ?? preferences?.navigationCollapsed ?? false;
   const hasLibrary = Boolean(status?.roots.length);
@@ -85,18 +92,32 @@ function ConnectedApplication() {
           onDismiss={() => setError(null)}
           onReconnect={reconnect}
         />
-        <WorkspaceContent
-          navigationControl={navigationControl}
-          app={app}
-          settings={settings}
-          jobsControl={jobsControl}
-          section={section}
-          onSettings={(id) => {
-            setSettingsId(id);
-            setSection('Settings');
-          }}
-          onDefaultsSaved={() => setNavigationOverride(null)}
-        />
+        <NotesDraftScope key={foundation?.catalogId ?? 'connecting'}>
+          <WorkspaceContent
+            mapState={mapState}
+            onMapState={setMapState}
+            libraryLaunch={libraryLaunch}
+            onReturnToMap={() => setSection('Map')}
+            onShowLibrary={(query, selectedId) => {
+              setLibraryLaunch((previous) => ({
+                query,
+                selectedId,
+                generation: (previous?.generation ?? 0) + 1,
+              }));
+              setSection('Photos');
+            }}
+            navigationControl={navigationControl}
+            app={app}
+            settings={settings}
+            jobsControl={jobsControl}
+            section={section}
+            onSettings={(id) => {
+              setSettingsId(id);
+              setSection('Settings');
+            }}
+            onDefaultsSaved={() => setNavigationOverride(null)}
+          />
+        </NotesDraftScope>
         <p className="screen-reader-status" role="status">
           {notice}
         </p>
@@ -105,10 +126,15 @@ function ConnectedApplication() {
   );
 }
 
+function NotesDraftScope({ children }: { children: ReactNode }) {
+  const [drafts] = useState(() => new Map<string, NotesDraft>());
+  return <NotesDraftContext.Provider value={drafts}>{children}</NotesDraftContext.Provider>;
+}
+
 function NavigationToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const label = collapsed ? 'Expand navigation' : 'Collapse navigation';
   return (
-    <button
+    <Button
       className="sidebar-toggle"
       aria-label={label}
       title={label}
@@ -123,7 +149,7 @@ function NavigationToggle({ collapsed, onToggle }: { collapsed: boolean; onToggl
           strokeWidth="1.5"
         />
       </svg>
-    </button>
+    </Button>
   );
 }
 
@@ -173,7 +199,7 @@ function Sidebar({
         {hasLibrary ? (
           <>
             {(['Photos', 'Folders', 'Tags'] as const).map((item) => (
-              <button
+              <Button
                 key={item}
                 aria-label={item === 'Tags' ? 'Albums / Tags' : item}
                 title={collapsed ? (item === 'Tags' ? 'Albums / Tags' : item) : undefined}
@@ -184,10 +210,10 @@ function Sidebar({
               >
                 <NavigationIcon section={item} />
                 <span className="nav-label">{item === 'Tags' ? 'Albums / Tags' : item}</span>
-              </button>
+              </Button>
             ))}
             {(['Duplicates', 'Integrity', 'Storage', 'Backup & Sync'] as const).map((item) => (
-              <button
+              <Button
                 key={item}
                 aria-label={item}
                 title={collapsed ? item : undefined}
@@ -196,21 +222,25 @@ function Sidebar({
               >
                 <NavigationIcon section={item} />
                 <span className="nav-label">{item}</span>
-              </button>
+              </Button>
             ))}
-            <button disabled title="Map browsing is planned for a later milestone">
+            <Button
+              aria-label="Map"
+              title={collapsed ? 'Map' : undefined}
+              aria-current={section === 'Map' ? 'page' : undefined}
+              onClick={() => onNavigate('Map')}
+            >
               <NavigationIcon section="Map" />
               <span className="nav-label">Map</span>
-              <small>Later</small>
-            </button>
-            <button disabled title="File operations remain unavailable in this read-only release">
+            </Button>
+            <Button disabled title="File operations remain unavailable in this read-only release">
               <NavigationIcon section="Utilities" />
               <span className="nav-label">Utilities</span>
               <small>Later</small>
-            </button>
+            </Button>
           </>
         ) : (
-          <button
+          <Button
             onClick={() => onNavigate('Photos')}
             aria-current={section === 'Photos' ? 'page' : undefined}
           >
@@ -221,13 +251,13 @@ function Sidebar({
               <rect x="14" y="14" width="7" height="7" rx="1" />
             </svg>
             <span className="nav-label">Library</span>
-          </button>
+          </Button>
         )}
       </nav>
       <footer className="sidebar-footer">
         <nav aria-label="Workspace actions">
           {(['Settings'] as const).map((item) => (
-            <button
+            <Button
               key={item}
               aria-label={item}
               title={collapsed ? item : undefined}
@@ -236,7 +266,7 @@ function Sidebar({
             >
               <NavigationIcon section={item} />
               <span className="nav-label">{item}</span>
-            </button>
+            </Button>
           ))}
         </nav>
         {version && (
@@ -277,9 +307,9 @@ function LibraryWelcome({
           ? 'Add another library folder.'
           : 'Start by selecting your Photo library folder.'}
       </h2>
-      <button className="primary" onClick={onChoose} disabled={disabled}>
+      <Button className="primary" onClick={onChoose} disabled={disabled}>
         {busy ? 'Please wait…' : 'Choose a folder'}
-      </button>
+      </Button>
     </section>
   );
 }
@@ -300,9 +330,9 @@ function ConnectionNotice({
     <div className="error global-error" role="alert">
       <p>{error}</p>
       {canReconnect ? (
-        <button onClick={onReconnect}>Reconnect</button>
+        <Button onClick={onReconnect}>Reconnect</Button>
       ) : (
-        <button onClick={onDismiss}>Dismiss</button>
+        <Button onClick={onDismiss}>Dismiss</Button>
       )}
     </div>
   );
@@ -378,9 +408,9 @@ function SetupHeader({
       <h1>{hasLibrary ? (section === 'Tags' ? 'Albums / Tags' : section) : 'Your library'}</h1>
       <div className="header-actions">
         {hasLibrary && (
-          <button onClick={onChoose} disabled={busy}>
+          <Button onClick={onChoose} disabled={busy}>
             Add folder
-          </button>
+          </Button>
         )}
         {jobsControl}
       </div>
@@ -389,6 +419,11 @@ function SetupHeader({
 }
 
 function WorkspaceContent({
+  mapState,
+  onMapState,
+  libraryLaunch,
+  onShowLibrary,
+  onReturnToMap,
   jobsControl,
   navigationControl,
   app,
@@ -397,6 +432,11 @@ function WorkspaceContent({
   onDefaultsSaved,
   onSettings,
 }: {
+  mapState: MapBrowseState;
+  onMapState: (state: MapBrowseState) => void;
+  libraryLaunch: LibraryLaunch | null;
+  onShowLibrary: (query: AssetQuery, selectedId: string | null) => void;
+  onReturnToMap: () => void;
   jobsControl: ReactNode;
   navigationControl: ReactNode;
   app: ReturnType<typeof useFoundation>;
@@ -412,7 +452,7 @@ function WorkspaceContent({
         {settings.error ? (
           <>
             <p role="alert">{settings.error}</p>
-            <button onClick={settings.retry}>Retry settings</button>
+            <Button onClick={settings.retry}>Retry settings</Button>
           </>
         ) : (
           <p>Loading settings…</p>
@@ -501,6 +541,17 @@ function WorkspaceContent({
         jobsControl={jobsControl}
       />
     ) : null;
+  if (section === 'Map')
+    return status ? (
+      <MapScreen
+        status={status}
+        state={mapState}
+        onState={onMapState}
+        onShowLibrary={onShowLibrary}
+        navigationControl={navigationControl}
+        jobsControl={jobsControl}
+      />
+    ) : null;
   if ((section === 'Duplicates' || section === 'Integrity' || section === 'Storage') && status)
     return (
       <InspectionScreen
@@ -525,6 +576,10 @@ function WorkspaceContent({
   return (
     status && (
       <LibraryScreen
+        key={libraryLaunch?.generation ?? 'library'}
+        initialQuery={libraryLaunch?.query}
+        initialSelectedId={libraryLaunch?.selectedId ?? null}
+        onReturnToMap={libraryLaunch ? onReturnToMap : undefined}
         catalogId={foundation?.catalogId ?? null}
         jobsControl={jobsControl}
         navigationControl={navigationControl}

@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useState, type FormEvent } from 'react';
 import { TagInput } from '../components/TagInput';
 
@@ -14,6 +15,7 @@ export function BatchToolbar({
   onTags,
   onCompare,
   onOrganization,
+  onAlbum,
 }: {
   loading: boolean;
   total: number;
@@ -27,6 +29,7 @@ export function BatchToolbar({
   onTags: (tags: string[]) => Promise<boolean>;
   onCompare: () => void;
   onOrganization?: () => void;
+  onAlbum?: () => void;
 }) {
   const [editingTags, setEditingTags] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
@@ -70,21 +73,21 @@ export function BatchToolbar({
         </p>
         <div>
           {count === 0 ? (
-            <button disabled={!total || busy || loading} onClick={onFreeze}>
+            <Button disabled={!total || busy || loading} onClick={onFreeze}>
               Select all results
-            </button>
+            </Button>
           ) : (
             <>
               <span className="selection-scope">
                 {frozen ? 'All matching results' : 'Explicitly selected photos'}
               </span>
-              <button disabled={busy} onClick={() => setEditingTags((value) => !value)}>
+              <Button disabled={busy} onClick={() => setEditingTags((value) => !value)}>
                 Add tags
-              </button>
-              <button disabled={busy} onClick={onFavorite}>
+              </Button>
+              <Button disabled={busy} onClick={onFavorite}>
                 Favorite selected
-              </button>
-              <button
+              </Button>
+              <Button
                 disabled={busy || !canCompare}
                 title={
                   canCompare
@@ -94,20 +97,24 @@ export function BatchToolbar({
                 onClick={onCompare}
               >
                 Compare
-              </button>
-              <button disabled title="Albums are not available yet; tags are saved in the catalog.">
+              </Button>
+              <Button
+                disabled={busy || !onAlbum}
+                title="Choose a virtual album for this selection"
+                onClick={onAlbum}
+              >
                 Add to album
-              </button>
+              </Button>
               <OrganizationAction
                 busy={busy}
                 frozen={frozen}
                 count={count}
                 onPreview={onOrganization}
               />
-              <button disabled title="Export requires a separate reviewed preservation workflow.">
+              <Button disabled title="Export requires a separate reviewed preservation workflow.">
                 Export
-              </button>
-              <button
+              </Button>
+              <Button
                 disabled={busy}
                 onClick={() => {
                   setEditingTags(false);
@@ -115,7 +122,7 @@ export function BatchToolbar({
                 }}
               >
                 Clear selection
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -133,9 +140,9 @@ export function BatchToolbar({
           <p className="help">
             Adds to existing catalog tags. Originals and sidecars stay unchanged.
           </p>
-          <button disabled={busy} type="submit">
+          <Button disabled={busy} type="submit">
             Save tags to selection
-          </button>
+          </Button>
         </form>
       )}
     </div>
@@ -155,7 +162,7 @@ function OrganizationAction({
 }) {
   const unsupportedScope = frozen || count > 240;
   return (
-    <button
+    <Button
       disabled={busy || unsupportedScope || !onPreview}
       title={
         unsupportedScope
@@ -165,6 +172,6 @@ function OrganizationAction({
       onClick={onPreview}
     >
       Preview organization
-    </button>
+    </Button>
   );
 }

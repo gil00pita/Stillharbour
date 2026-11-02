@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   BundleConfirmation,
@@ -98,13 +99,13 @@ export function CopyManifestReview({
         {decisionIds.filter(Boolean).length} of {decisionIds.length} photos have an explicitly
         chosen decision.
       </p>
-      <button
+      <Button
         type="button"
         disabled={pending || !complete || detail.stale}
         onClick={() => void compile()}
       >
         {pending ? 'Compiling copy review…' : 'Compile copy review'}
-      </button>
+      </Button>
       {error && (
         <p role="alert" className="error">
           {error}
@@ -174,16 +175,16 @@ export function CopyManifestReview({
               </tbody>
             </table>
           </div>
-          <button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
+          <Button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
             Previous compiled files
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={page + 1 >= pages}
             onClick={() => setPage((value) => value + 1)}
           >
             Next compiled files
-          </button>
+          </Button>
           <p className="help">Manifest fingerprint: {manifest.digest}</p>
           {!changed && <CopyAssessmentReview key={manifest.digest} manifest={manifest} />}
           {!changed && manifest.issues.length === 0 && (

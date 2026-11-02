@@ -1,3 +1,4 @@
+import { Button, Input } from '../components/ui/controls';
 import { useState } from 'react';
 import type { SnapshotJob } from '../bindings';
 
@@ -21,7 +22,7 @@ export function SnapshotRecoveryInspection({
       </p>
       <label>
         Existing snapshot ID (optional)
-        <input
+        <Input
           value={snapshotId}
           disabled={disabled}
           maxLength={64}
@@ -36,9 +37,9 @@ export function SnapshotRecoveryInspection({
       {!valid && (
         <p role="status">A concrete snapshot ID must contain exactly 64 hexadecimal characters.</p>
       )}
-      <button disabled={disabled || !valid} onClick={() => onInspect(snapshotId || null)}>
+      <Button disabled={disabled || !valid} onClick={() => onInspect(snapshotId || null)}>
         Inspect existing snapshot
-      </button>
+      </Button>
     </section>
   );
 }

@@ -1,0 +1,265 @@
+import { useState } from 'react';
+import { fireEvent, render, screen, waitFor } from '../test/render';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AssetQuery, LibraryStatus, MapCluster, MapView } from '../bindings';
+import { libraryData } from '../ipc';
+import { fixtureAsset } from '../library/__tests__/fixtures';
+import { MapScreen } from './MapScreen';
+import { initialMapState, normalizeViewport, WORLD } from './state';
+
+vi.mock('../ipc', async (original) => ({
+  ...(await original<typeof import('../ipc')>()),
+  libraryData: vi.fn(),
+  library: vi.fn(),
+}));
+vi.mock('../library/previews', () => ({
+  usePreviews: () => ({ results: {}, retry: vi.fn() }),
+  previewKey: () => '',
+  previewUrl: () => '',
+}));
+vi.mock('./Basemap', () => ({
+  default: ({
+    clusters,
+    onCluster,
+    onViewport,
+    onUnavailable,
+  }: {
+    clusters: MapCluster[];
+    onCluster: (cluster: MapCluster) => void;
+    onViewport: (bounds: typeof WORLD, zoom: number) => void;
+    onUnavailable: () => void;
+  }) => (
+    <div>
+      {clusters.map((cluster) => (
+        <button key={cluster.key} onClick={() => onCluster(cluster)}>
+          Choose cluster {cluster.count}
+        </button>
+      ))}
+      <button onClick={() => onViewport({ west: 170, east: -170, south: -20, north: 30 }, 5)}>
+        Pan across date line
+      </button>
+      <button onClick={onUnavailable}>Graphics unavailable</button>
+    </div>
+  ),
+}));
+vi.mock('../library/PhotoViewer', () => ({
+  PhotoViewer: () => <div role="dialog" aria-label="Photo viewer" />,
+}));
+const asset = fixtureAsset('map-photo');
+const cluster: MapCluster = {
+  cell: { zoom: 2, x: 2, y: 2 },
+  key: 'v1:2:2:2',
+  latitude: 0,
+  longitude: 0,
+  count: 3,
+  representative: asset,
+};
+const view: MapView = {
+  clusters: [cluster],
+  inView: 3,
+  located: 3,
+  unavailable: 1,
+  clusterZoom: 2,
+  revision: '1',
+};
+const status: LibraryStatus = {
+  roots: [
+    {
+      id: 'root',
+      label: 'Generated folder',
+      displayPath: 'Generated',
+      mode: 'referenced',
+      isBase: true,
+      availability: 'offline',
+      filter: {
+        version: 1,
+        includeGlobs: [],
+        excludeGlobs: [],
+        excludedFolders: [],
+        extensions: [],
+        includeHiddenFiles: false,
+        includeHiddenFolders: false,
+        minBytes: null,
+        maxBytes: null,
+        fromDate: null,
+        throughDate: null,
+      },
+      lastScan: null,
+      fileCount: 4,
+    },
+  ],
+  jobs: [],
+  revision: '1',
+  previewGeneration: '0',
+  metadataAvailable: true,
+  previewAvailable: true,
+};
+const show = vi.fn();
+function Harness({ revision = '1' }: { revision?: string }) {
+  const [state, onState] = useState(initialMapState);
+  return (
+    <MapScreen
+      status={{ ...status, revision }}
+      state={state}
+      onState={onState}
+      onShowLibrary={show}
+    />
+  );
+}
+beforeEach(() => {
+  show.mockReset();
+  vi.mocked(libraryData)
+    .mockReset()
+    .mockImplementation(async (request) => {
+      if (request.kind === 'map_view') return view as never;
+      return {
+        assets: [asset],
+        nextCursor: null,
+        total: request.kind === 'query' && request.query.location === 'unavailable' ? 1 : 3,
+        revision: '1',
+      } as never;
+    });
+});
+describe('local map browsing', () => {
+  it('keeps an open viewer through catalog refreshes without losing its filter scope', async () => {
+    const { rerender } = render(<Harness />);
+    fireEvent.click(await screen.findByRole('button', { name: `Open ${asset.name}` }));
+    expect(screen.getByRole('dialog', { name: 'Photo viewer' })).toBeVisible();
+    rerender(<Harness revision="2" />);
+    expect(screen.getByRole('dialog', { name: 'Photo viewer' })).toBeVisible();
+  });
+  it('carries the exact cluster, viewport and selection to the library', async () => {
+    render(<Harness />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose cluster 3' }));
+    await screen.findByRole('heading', { name: 'Selected location' });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Show in library' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show in library' }));
+    expect(show).toHaveBeenCalledWith(
+      expect.objectContaining({ mapBounds: WORLD, mapCell: cluster.cell, location: 'known' }),
+      'map-photo',
+    );
+  });
+  it('uses native folder and date filters without treating offline originals as missing', async () => {
+    render(<Harness />);
+    await screen.findByRole('button', { name: 'Choose cluster 3' });
+    fireEvent.change(screen.getByLabelText('Library folder'), { target: { value: 'root' } });
+    fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
+    fireEvent.change(screen.getByLabelText('Through'), { target: { value: '2026-11-01' } });
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'query',
+          query: expect.objectContaining({
+            rootId: 'root',
+            fromDate: '2026-01-01',
+            throughDate: '2026-11-01',
+            includeMissing: false,
+          }),
+        }),
+        'page',
+      ),
+    );
+    expect(screen.getByText(/Offline originals remain offline/)).toBeVisible();
+  });
+  it('lists absent or invalid locations with no zero-coordinate substitution', async () => {
+    render(<Harness />);
+    fireEvent.click(await screen.findByRole('button', { name: 'No usable location (1)' }));
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'query',
+          query: expect.objectContaining({
+            location: 'unavailable',
+            mapBounds: null,
+            mapCell: null,
+          }),
+        }),
+        'page',
+      ),
+    );
+    expect(screen.queryByRole('button', { name: 'Choose cluster 3' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Geographic overview' })).not.toBeInTheDocument();
+    expect(await screen.findByText('1 photo without usable location')).toBeVisible();
+  });
+  it('preserves crossing viewports and keeps bounded paging', async () => {
+    render(<Harness />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Pan across date line' }));
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'map_view',
+          bounds: { west: 170, east: -170, south: -20, north: 30 },
+          zoom: 5,
+        }),
+        'map_view',
+      ),
+    );
+    const queries = vi.mocked(libraryData).mock.calls.filter(([r]) => r.kind === 'query');
+    expect(queries.every(([r]) => r.kind === 'query' && r.limit === 80)).toBe(true);
+  });
+  it('keeps the photo list usable when graphics fail', async () => {
+    render(<Harness />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Graphics unavailable' }));
+    expect(await screen.findByText(/map could not be displayed/)).toBeVisible();
+    expect(await screen.findByRole('button', { name: `Open ${asset.name}` })).toBeEnabled();
+  });
+  it('reports native failures and retries without fake empty success', async () => {
+    vi.mocked(libraryData).mockRejectedValueOnce(new Error('Catalog unavailable.'));
+    render(<Harness />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Catalog unavailable.');
+    expect(screen.getByRole('button', { name: 'Show in library' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry photos' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Show in library' })).toBeEnabled(),
+    );
+  });
+  it('refuses mismatched catalog generations', async () => {
+    vi.mocked(libraryData).mockImplementation(async (request) =>
+      request.kind === 'map_view'
+        ? (view as never)
+        : ({ assets: [asset], nextCursor: null, total: 1, revision: '2' } as never),
+    );
+    render(<Harness />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('catalog changed');
+    expect(screen.queryByRole('button', { name: `Open ${asset.name}` })).not.toBeInTheDocument();
+  });
+  it('discards a late response after the filter scope changes', async () => {
+    let resolveFirst: ((value: MapView) => void) | undefined;
+    vi.mocked(libraryData).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve as (value: MapView) => void;
+        }),
+    );
+    render(<Harness />);
+    await waitFor(() => expect(resolveFirst).toBeDefined());
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'new-scope' } });
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'map_view',
+          query: expect.objectContaining({ name: 'new-scope' }),
+        }),
+        'map_view',
+      ),
+    );
+    resolveFirst?.({ ...view, clusters: [{ ...cluster, count: 99 }] });
+    expect(await screen.findByRole('button', { name: 'Choose cluster 3' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Choose cluster 99' })).not.toBeInTheDocument();
+  });
+});
+describe('viewport normalization', () => {
+  it('normalizes wrapped worlds and retains polar photo lists', () => {
+    expect(normalizeViewport(170, -20, 190, 30)).toEqual({
+      west: 170,
+      east: -170,
+      south: -20,
+      north: 30,
+    });
+    expect(normalizeViewport(-190, -86, 190, 86)).toEqual(WORLD);
+    const query: AssetQuery = { ...initialMapState().query, mapBounds: WORLD };
+    expect(query.includeMissing).toBe(false);
+  });
+});

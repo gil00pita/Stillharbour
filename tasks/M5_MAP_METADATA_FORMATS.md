@@ -4,6 +4,13 @@
 
 Add geographic exploration that works with the same local catalog and complete the photo-management interoperability requirements.
 
+Readiness review, 2026-11-02: the owner requested a progress check and conditional M5 start. M4 PR #14 is merged and its final Windows/macOS Foundation and transport checks pass, but M4 preservation acceptance and production execution remain gated. [M5_READINESS.md](../docs/M5_READINESS.md) records the evidence, remaining blockers and prepared M5 scope. No new M5 implementation starts under this request; earlier explicitly approved format slices below remain intact.
+
+Subsequent owner continuation, 2026-11-02: “continue with m5” explicitly authorizes M5 development. The first increment is read-only geographic browsing under [ADR-0081](../docs/decisions/ADR-0081-offline-geographic-browsing.md), with bundled offline Natural Earth geometry, catalog schema 15 with preserved schema-13/14 migration snapshots and bounded local spatial queries. [M5_MAP.md](../docs/M5_MAP.md) records behavior, commands, actual checks and remaining work. This supersedes the earlier development pause; it does not certify M4 or enable production file mutations. Remaining metadata interoperability and format/native gates stay part of M5. Stop before M6.
+
+
+Further owner continuation, 2026-11-02: [ADR-0082](../docs/decisions/ADR-0082-catalog-metadata-organization.md) and [M5_METADATA.md](../docs/M5_METADATA.md) implement schema-16 catalog-only captions/rejects with immutable saved history, virtual albums, validated saved searches and explicit category relationships. Existing favorites/ratings/flat tags stay compatible. Portable catalog/XMP export, rename/merge/undo and remaining native/format/accessibility acceptance remain open. This is a reviewed increment, not M5 completion or M4 production authority.
+
 ## Prerequisites and references
 
 M1 query contracts and date/GPS provenance; docs/CODEX_SPEC.md sections 7, 8, 15, 16; acceptance AC-074 through AC-076, AC-079 and AC-083.
@@ -33,3 +40,14 @@ The owner's HEIC/CR2/common-preview request authorises only read-only format pre
 ## Owner-approved rendition follow-on — 2026-10-28
 
 The subsequent large JPEG/PNG/TIFF and separate-thumbnail-task request authorises the bounded P2 slice in [PROGRESSIVE_PREVIEWS.md](../docs/PROGRESSIVE_PREVIEWS.md), with the file-handle/job decision in [ADR-0011](../docs/decisions/ADR-0011-progressive-renditions.md). This extends preview generation only; the remaining M5 format/platform/map/metadata gates and broader P2–P4 work stay open.
+
+
+## Owner-requested UI library adoption — 2026-11-02
+
+The owner separately requested the latest Chakra UI using their supplied boilerplate as an example. [ADR-0083](../docs/decisions/ADR-0083-chakra-ui-design-system.md) records pinned Chakra/Emotion, shared product tokens/controls and preservation of native dialog/canvas behavior. [UI_FRAMEWORK.md](../docs/UI_FRAMEWORK.md) records checks. This presentation/library change does not advance catalog schema or close any remaining M5/M4/M6 gate.
+
+## Owner-requested final implementation — 2026-11-02
+
+“Finish M5” authorizes the remaining bounded milestone implementation. [ADR-0084](../docs/decisions/ADR-0084-reviewed-metadata-exports-and-tag-history.md) adds schema-17 exact tag review/merge/removal/undo, explicit keyword import overrides and new-output portable catalog/XMP export with native authority, retained plans, conflict detection and completion receipts. [M5 validation](../docs/M5_VALIDATION.md) is the current implementation/evidence record; earlier slice statements above remain historical.
+
+Implementation is present; milestone acceptance is **not certified complete** while the recorded platform/manual/preservation checks remain unclosed. Formats without clean target-machine evidence remain explicitly unverified, as required by this gate. No production original-file mutation is enabled. Stop before M6.

@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { InspectionIssuePage } from '../bindings';
 import { libraryData, errorMessage } from '../ipc';
@@ -32,9 +33,9 @@ export function InspectionIssues({ jobId }: { jobId: string }) {
   }
   return (
     <section aria-label="Inspection issues">
-      <button disabled={busy} onClick={() => void load()}>
+      <Button disabled={busy} onClick={() => void load()}>
         Review retained inspection issues
-      </button>
+      </Button>
       {error && <p role="alert">{error}</p>}
       {page && (
         <>
@@ -63,9 +64,9 @@ export function InspectionIssues({ jobId }: { jobId: string }) {
           </div>
           {page.rows.length === 0 && <p>No retained issues for this report.</p>}
           {page.next && (
-            <button disabled={busy} onClick={() => void load(page.next)}>
+            <Button disabled={busy} onClick={() => void load(page.next)}>
               Next issue page
-            </button>
+            </Button>
           )}
         </>
       )}

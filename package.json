@@ -23,6 +23,7 @@
     "desktop:test": "wdio run wdio.conf.mjs",
     "desktop:test:catalog": "node --test tests/catalog-desktop/session-owner.node-test.mjs && wdio run wdio.catalog.conf.mjs",
     "desktop:test:formats": "wdio run wdio.formats.conf.mjs",
+    "desktop:test:map": "node scripts/map-desktop-test.mjs",
     "formats:build": "node scripts/cargo.mjs build --locked --release -p stillharbour-core --features fixture-probes --example format_probe",
     "formats:test": "python3 scripts/formats/run.py",
     "bindings": "node scripts/cargo.mjs run --locked -p stillharbour-core --example export_bindings --",
@@ -36,11 +37,15 @@
     "perf:catalog:build": "node scripts/cargo.mjs build --locked --release -p stillharbour-core --features fixture-probes --example performance_probe",
     "perf:catalog": "python3 scripts/performance/run.py",
     "perf:p1": "python3 scripts/performance/run.py --phase p1",
-    "perf:desktop": "wdio run wdio.performance.conf.mjs"
+    "perf:desktop": "wdio run wdio.performance.conf.mjs",
+    "desktop:test:metadata": "node scripts/map-desktop-test.mjs --metadata"
   },
   "dependencies": {
+    "@chakra-ui/react": "3.37.0",
+    "@emotion/react": "11.14.0",
     "@tanstack/react-virtual": "3.14.23",
     "@tauri-apps/api": "2.12.4",
+    "maplibre-gl": "6.16.0",
     "react": "19.3.1",
     "react-dom": "19.3.1"
   },
@@ -72,5 +77,13 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1",
     "vitest": "5.0.5"
+  },
+  "allowScripts": {
+    "edgedriver@6.3.1": true,
+    "edgedriver@8.0.0": true,
+    "geckodriver@6.1.1": true,
+    "geckodriver@8.0.0": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true
   }
 }

@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { CachedPreviewImage } from './CachedPreviewImage';
 import { useEffect, useRef, useState } from 'react';
 import type { AssetSummary, LibraryStatus } from '../bindings';
@@ -36,7 +37,7 @@ export function ComparisonViewer({
     >
       <header className="viewer-toolbar">
         <h2>Compare {assets.length} selected photos</h2>
-        <button onClick={onClose}>{returnLabel}</button>
+        <Button onClick={onClose}>{returnLabel}</Button>
       </header>
       <p className="viewer-status">
         Visual comparison does not establish exact duplicates. Only these explicitly selected photos
@@ -45,7 +46,7 @@ export function ComparisonViewer({
       {previews.error && (
         <div role="alert">
           {previews.error}
-          <button onClick={previews.retry}>Retry previews</button>
+          <Button onClick={previews.retry}>Retry previews</Button>
         </div>
       )}
       <div className="comparison-images">

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { BackupScreen } from './BackupScreen';
 import { libraryData, pickDirectory } from '../ipc';

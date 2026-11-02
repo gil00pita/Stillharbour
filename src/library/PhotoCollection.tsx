@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useCallback, useState, type RefObject } from 'react';
 import { EmptyLibraryArt } from '../EmptyLibraryArt';
 import type { LibraryStatus } from '../bindings';
@@ -125,7 +126,7 @@ export function PhotoCollection({
             {feed.error ? (
               <>
                 <span>{feed.error.message}</span>
-                <button onClick={feed.retry}>Retry loading</button>
+                <Button onClick={feed.retry}>Retry loading</Button>
               </>
             ) : (
               <span>Loading photos…</span>

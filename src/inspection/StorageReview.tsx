@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { FolderPage, StorageSummary } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -70,37 +71,37 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
       <h2 id="storage-totals-title">Storage in this inspection</h2>
       <dl className="inspection-metrics">
         <div>
-          <dt>Logical file bytes</dt>
+          <dt>Total file size</dt>
           <dd>{displayBytes(summary.total.logicalBytes)}</dd>
         </div>
         <div>
-          <dt>Unique-object logical bytes</dt>
+          <dt>File size counting hard links once</dt>
           <dd>{displayBytes(summary.total.uniqueObjectLogicalBytes)}</dd>
         </div>
         <div>
-          <dt>Reported allocated bytes</dt>
+          <dt>Disk allocation reported by the filesystem</dt>
           <dd>{displayBytes(summary.total.reportedAllocatedBytes)}</dd>
         </div>
         <div>
-          <dt>Potential duplicate logical bytes</dt>
+          <dt>Potential duplicate file size</dt>
           <dd>{displayBytes(summary.potentialDuplicateLogicalBytes)}</dd>
         </div>
         <div>
-          <dt>Physical reclaim estimate</dt>
+          <dt>Estimated disk space that could be freed</dt>
           <dd>{displayBytes(summary.reclaimablePhysicalBytes)}</dd>
         </div>
       </dl>
       <p>
-        Linked paths count separately in logical totals. Reported allocation does not establish
-        physical reclaim on compressed, cloned or snapshotted storage. Moving to same-volume
-        quarantine frees {displayBytes(summary.quarantineFreedBytes)}.
+        Total file size counts each hard-linked path separately. Reported disk allocation does not
+        prove how much space can be freed on compressed, cloned or snapshotted storage. Moving to
+        same-volume quarantine frees {displayBytes(summary.quarantineFreedBytes)}.
       </p>
       {summary.accountingIncomplete && (
         <p role="status">Object accounting reached its bound. Unknown metrics remain unmeasured.</p>
       )}
       <nav className="inspection-breadcrumbs" aria-label="Storage folders">
         {trail.map((node, index) => (
-          <button
+          <Button
             key={node.id}
             aria-current={index === trail.length - 1 ? 'location' : undefined}
             onClick={() => {
@@ -111,13 +112,13 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
             }}
           >
             {node.name}
-          </button>
+          </Button>
         ))}
       </nav>
       {(error || geometryError) && (
         <div role="alert">
           <p>{error ?? geometryError}</p>
-          {error && <button onClick={() => setRetry(retry + 1)}>Retry folder totals</button>}
+          {error && <Button onClick={() => setRetry(retry + 1)}>Retry folder totals</Button>}
         </div>
       )}
       {!current && !error && <p role="status">Loading retained folder totals…</p>}
@@ -129,7 +130,7 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
           </p>
           <div className="inspection-map" aria-label="Logical-byte storage map">
             {tiles.map((tile, index) => (
-              <button
+              <Button
                 key={tile.id}
                 style={
                   {
@@ -147,7 +148,7 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
               >
                 <span>{tile.label}</span>
                 <small>{displayBytes(tile.bytes)}</small>
-              </button>
+              </Button>
             ))}
           </div>
           <div className="inspection-table-wrap">
@@ -158,9 +159,9 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
                   <th>Folder</th>
                   <th>Files</th>
                   <th aria-sort={ascending ? 'ascending' : 'descending'}>
-                    <button onClick={() => setAscending(!ascending)}>
+                    <Button onClick={() => setAscending(!ascending)}>
                       Logical bytes · sort this page
-                    </button>
+                    </Button>
                   </th>
                   <th>Unique-object logical bytes</th>
                   <th>Reported allocation</th>
@@ -184,7 +185,7 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
                 {(ascending ? [...current.rows].reverse() : current.rows).map((row) => (
                   <tr key={row.id}>
                     <th scope="row">
-                      <button onClick={() => open(row.id, row.name)}>{row.name}</button>
+                      <Button onClick={() => open(row.id, row.name)}>{row.name}</Button>
                     </th>
                     <td>{row.files.toLocaleString()}</td>
                     <td>{displayBytes(row.logicalBytes)}</td>
@@ -196,7 +197,7 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
             </table>
           </div>
           <div className="inspection-actions">
-            <button
+            <Button
               disabled={!cursor}
               onClick={() => {
                 epoch.current += 1;
@@ -205,8 +206,8 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
               }}
             >
               First folder page
-            </button>
-            <button
+            </Button>
+            <Button
               disabled={!current.next}
               onClick={() => {
                 epoch.current += 1;
@@ -215,7 +216,7 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
               }}
             >
               Next folder page
-            </button>
+            </Button>
           </div>
         </>
       )}

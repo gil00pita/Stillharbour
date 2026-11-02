@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '../test/render';
 import { expect, it, vi } from 'vitest';
 import { ScanSettingsGroup } from './ScanSettingsGroup';
 import { fixturePreferences } from '../library/__tests__/fixtures';

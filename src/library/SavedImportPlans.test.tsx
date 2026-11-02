@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { CopyManifest, ImportPlan, LibraryRequest } from '../bindings';
 import { library, libraryData } from '../ipc';

@@ -1,3 +1,4 @@
+import { Button, Input, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { OrganizationTemplate, SavedTemplate, TemplateRef, TemplateSample } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -77,14 +78,14 @@ export function OrganizationTemplates({
   return (
     <section className="organization-destination" aria-label="Saved templates" aria-busy={busy}>
       <h3>Saved templates</h3>
-      <button type="button" disabled={busy} onClick={() => void run(false)}>
+      <Button type="button" disabled={busy} onClick={() => void run(false)}>
         Load saved templates
-      </button>
+      </Button>
       {templates && (
         <>
           <label>
             Saved template
-            <select
+            <Select
               value={selected?.reference.id ?? ''}
               disabled={busy}
               onChange={(event) => {
@@ -108,11 +109,11 @@ export function OrganizationTemplates({
                   {v.name} · version {v.reference.version}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label>
             Template name
-            <input
+            <Input
               maxLength={128}
               value={name}
               disabled={busy}
@@ -121,7 +122,7 @@ export function OrganizationTemplates({
           </label>
           <label>
             Template description
-            <input
+            <Input
               maxLength={1024}
               value={description}
               disabled={busy}
@@ -129,20 +130,20 @@ export function OrganizationTemplates({
             />
           </label>
           <TemplateExamples samples={samples} disabled={busy} onChange={setSamples} />
-          <button type="button" disabled={busy || !name.trim()} onClick={() => void run(true)}>
+          <Button type="button" disabled={busy || !name.trim()} onClick={() => void run(true)}>
             {selected ? 'Save new version' : 'Save template'}
-          </button>
+          </Button>
           {selected && (
-            <button
+            <Button
               type="button"
               disabled={busy || !name.trim()}
               onClick={() => void run(true, true)}
             >
               Save as new template
-            </button>
+            </Button>
           )}
           {selected && (
-            <button
+            <Button
               type="button"
               disabled={busy}
               onClick={() => {
@@ -156,7 +157,7 @@ export function OrganizationTemplates({
               }}
             >
               Use retained version
-            </button>
+            </Button>
           )}
           {selected && (
             <p role="status">

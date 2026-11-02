@@ -1,3 +1,4 @@
+import { Button, Input, Select } from '../components/ui/controls';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   AssetSummary,
@@ -260,9 +261,9 @@ export function InspectionScreen({
       <div className="inspection-content">
         <p>
           {section === 'Duplicates'
-            ? 'Compare complete file bytes or explicit filesystem-property rules. Keep original files intact while reviewing the evidence.'
+            ? 'Find identical files or compare file properties. Review the matches while your originals stay unchanged.'
             : section === 'Storage'
-              ? 'Inspect file and folder sizes in an explicit scope. Unknown physical savings stay unknown.'
+              ? 'See how much space files and folders use in your selected libraries. File size alone does not tell you how much disk space can be freed.'
               : 'Check integrity without rewriting or repairing originals.'}
         </p>
         {error && (
@@ -293,39 +294,39 @@ export function InspectionScreen({
           </div>
           <label>
             File scope
-            <select
+            <Select
               value={scope}
               onChange={(event) => setScope(event.target.value as typeof scope)}
             >
               <option value="indexed_media_companions">
-                Indexed media and filename-associated companions
+                Indexed photos, videos and matching companion files
               </option>
-              <option value="all_eligible_files">All eligible regular files</option>
-            </select>
+              <option value="all_eligible_files">All files within the exclusions below</option>
+            </Select>
           </label>
           <p>
-            Inspection keeps hidden-folder, hidden-file, glob and size exclusions. Gallery extension
-            and capture-date filters do not limit this scope. Links, special files and cloud
-            placeholders are reported, never followed or downloaded.
+            Your hidden-file, hidden-folder, filename-pattern and size exclusions still apply.
+            Gallery file-type and date filters do not limit this inspection. Links, special files
+            and cloud placeholders are reported, never followed or downloaded.
           </p>
           {section === 'Duplicates' && (
             <>
               <label>
                 Match mode
-                <select
+                <Select
                   value={options.mode}
                   onChange={(event) =>
                     setOptions({ ...options, mode: event.target.value as DuplicateOptions['mode'] })
                   }
                 >
-                  <option value="exact_content">Exact complete bytes</option>
-                  <option value="properties">Filesystem-property candidates</option>
+                  <option value="exact_content">Identical file contents</option>
+                  <option value="properties">Matching file properties · candidates only</option>
                   <option value="normalized_pixels">Static PNG8 pixels · manual review</option>
-                </select>
+                </Select>
               </label>
               <label>
                 Content algorithm
-                <select
+                <Select
                   value={options.algorithm}
                   onChange={(event) =>
                     setOptions({
@@ -339,12 +340,11 @@ export function InspectionScreen({
                   <option value="sha1">SHA-1 · compatibility only</option>
                   <option value="md5">MD5 · compatibility only</option>
                   <option value="direct_bytes">Direct bytes · no full-file hash</option>
-                </select>
+                </Select>
               </label>
               <p>
-                Sample and hash matches are filters. Exact groups finish with complete byte
-                comparison. Property candidates never authorize quarantine. ID3 is not applicable to
-                these photo modes.
+                Exact matches are confirmed by comparing every byte. Matching names, sizes or other
+                properties only identify candidates; they never authorize quarantine.
               </p>
               <label>
                 <input
@@ -375,7 +375,7 @@ export function InspectionScreen({
             <>
               <label>
                 Integrity mode
-                <select
+                <Select
                   aria-label="Integrity mode"
                   value={healthMode}
                   onChange={(event) => {
@@ -383,11 +383,11 @@ export function InspectionScreen({
                     setBaselineAcknowledged(false);
                   }}
                 >
-                  <option value="compare_baseline">Compare checksum baselines</option>
-                  <option value="establish_baseline">Establish new checksum baselines</option>
+                  <option value="compare_baseline">Compare with saved checksums</option>
+                  <option value="establish_baseline">Record new checksum baselines</option>
                   <option value="quick">Quick signature and header check</option>
-                  <option value="deep">Deep supported static-raster decode</option>
-                </select>
+                  <option value="deep">Decode supported still images</option>
+                </Select>
               </label>
               <p>
                 Checksums read complete file bytes. A mismatch means changed since baseline, not
@@ -407,7 +407,7 @@ export function InspectionScreen({
             </>
           )}
           {
-            <button
+            <Button
               className="primary"
               disabled={
                 !rootIds.length ||
@@ -428,13 +428,13 @@ export function InspectionScreen({
                       ? 'Start deep image check'
                       : 'Start checksum comparison'
                 : `Start ${section === 'Duplicates' ? 'duplicate' : 'storage'} inspection`}
-            </button>
+            </Button>
           }
         </fieldset>
         {history.length > 0 && (
           <label>
             Retained inspection
-            <select
+            <Select
               disabled={busy}
               value={job?.id ?? ''}
               onChange={(event) => {
@@ -447,7 +447,7 @@ export function InspectionScreen({
                   {record.startedAt} · {record.state}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
         )}
         {job && (
@@ -461,12 +461,12 @@ export function InspectionScreen({
             {running && (
               <>
                 <progress aria-label="Inspection in progress" />
-                <button
+                <Button
                   disabled={busy || job.state === 'cancel_requested'}
                   onClick={() => void stop()}
                 >
                   Cancel inspection
-                </button>
+                </Button>
               </>
             )}
             {job.limited && (
@@ -556,7 +556,7 @@ export function InspectionScreen({
                 status={status}
               />
             ))}
-            {groups.next && <button onClick={() => void nextGroups()}>Next group page</button>}
+            {groups.next && <Button onClick={() => void nextGroups()}>Next group page</Button>}
           </section>
         )}
         {job && report && groups?.groups.length === 0 && job.input.task.kind === 'duplicates' && (
@@ -570,7 +570,7 @@ export function InspectionScreen({
           <section aria-label="Inspected files">
             <h2>Files · largest logical size first</h2>
             <FindingTable rows={files.rows} />
-            {files.next && <button onClick={() => void nextFiles()}>Next file page</button>}
+            {files.next && <Button onClick={() => void nextFiles()}>Next file page</Button>}
           </section>
         )}
       </div>
@@ -590,7 +590,7 @@ function PropertyControls({
       <legend>Advanced candidate rules</legend>
       <label>
         Combination
-        <select
+        <Select
           value={rules.logic}
           onChange={(event) =>
             onChange({ ...rules, logic: event.target.value as PropertyRules['logic'] })
@@ -598,7 +598,7 @@ function PropertyControls({
         >
           <option value="all">All selected criteria (AND)</option>
           <option value="any">Any selected criterion (OR) · candidates only</option>
-        </select>
+        </Select>
       </label>
       <div className="inspection-rule-options">
         {(
@@ -626,7 +626,7 @@ function PropertyControls({
       </div>
       <label>
         Date tolerance (milliseconds)
-        <input
+        <Input
           type="number"
           min="0"
           max="86400000"
@@ -668,7 +668,7 @@ function PropertyControls({
       </label>
       <label>
         Literal characters to ignore
-        <input
+        <Input
           value={rules.name.ignoredCharacters}
           maxLength={128}
           onChange={(event) =>
@@ -801,19 +801,19 @@ function GroupReview({
       <p>{group.explanation}</p>
       {error && <p role="alert">{error}</p>}
       <div className="inspection-actions">
-        <button onClick={() => void load()}>Review group members</button>
-        <button
+        <Button onClick={() => void load()}>Review group members</Button>
+        <Button
           disabled={(members?.rows.filter((row) => row.isMedia && row.assetId).length ?? 0) < 2}
           onClick={() => void compare()}
         >
           Compare photo previews
-        </button>
-        <button
+        </Button>
+        <Button
           disabled
           title="Independent recovery and fresh complete bundle verification are required"
         >
           Quarantine unavailable
-        </button>
+        </Button>
       </div>
       {members && (
         <>
@@ -863,7 +863,7 @@ function GroupReview({
           />
           <FindingTable rows={members.rows} />
           {members.next && (
-            <button onClick={() => void load(members.next)}>Next member page</button>
+            <Button onClick={() => void load(members.next)}>Next member page</Button>
           )}
         </>
       )}

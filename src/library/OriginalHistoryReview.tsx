@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { OriginalOperationHistory, OriginalOperationJob } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -74,9 +75,9 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
   }
   return (
     <>
-      <button type="button" onClick={() => void load()}>
+      <Button type="button" onClick={() => void load()}>
         Review retained organization plan
-      </button>
+      </Button>
       {open && (
         <dialog
           ref={dialog}
@@ -90,9 +91,9 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
         >
           <header className="organization-heading">
             <h2 id="original-history-title">Retained organization plan</h2>
-            <button type="button" onClick={close}>
+            <Button type="button" onClick={close}>
               Close plan history
-            </button>
+            </Button>
           </header>
           <div className="organization-body">
             <p>
@@ -109,9 +110,9 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
                 <p role="alert" className="error">
                   {error}
                 </p>
-                <button type="button" onClick={() => void load()}>
+                <Button type="button" onClick={() => void load()}>
                   Retry history
-                </button>
+                </Button>
               </>
             )}
             {history && (
@@ -162,23 +163,23 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
                 </div>
                 {history.members.length > 64 && (
                   <nav aria-label="Retained plan members">
-                    <button
+                    <Button
                       type="button"
                       disabled={page === 0}
                       onClick={() => setPage((value) => value - 1)}
                     >
                       Previous members
-                    </button>
+                    </Button>
                     <span>
                       Page {page + 1} of {Math.ceil(history.members.length / 64)}
                     </span>
-                    <button
+                    <Button
                       type="button"
                       disabled={(page + 1) * 64 >= history.members.length}
                       onClick={() => setPage((value) => value + 1)}
                     >
                       Next members
-                    </button>
+                    </Button>
                   </nav>
                 )}
               </>

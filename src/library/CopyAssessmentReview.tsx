@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CopyAssessment,
@@ -71,9 +72,9 @@ export function CopyAssessmentReview({ manifest }: { manifest: CopyManifest }) {
   const capacity = report?.capacity;
   return (
     <section aria-label="Copy space and fidelity" aria-busy={pending}>
-      <button type="button" disabled={pending} onClick={() => void check()}>
+      <Button type="button" disabled={pending} onClick={() => void check()}>
         {pending ? 'Checking copy space…' : 'Check copy space and fidelity'}
-      </button>
+      </Button>
       {error && (
         <p role="alert" className="error">
           {error}

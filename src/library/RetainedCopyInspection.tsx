@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CopyRecoveryInspection,
@@ -78,9 +79,9 @@ export function RetainedCopyInspection({
   }
   return (
     <section aria-label="Retained copy inspection" aria-busy={pending}>
-      <button type="button" disabled={pending} onClick={() => void inspect()}>
+      <Button type="button" disabled={pending} onClick={() => void inspect()}>
         {pending ? 'Inspecting retained bytes…' : 'Choose original destination and inspect'}
-      </button>
+      </Button>
       <p className="help">
         Inspection compares actual files with their sources. It grants no permission to resume or
         change files. Originals and retained outputs remain in place.
@@ -120,16 +121,16 @@ export function RetainedCopyInspection({
               </li>
             ))}
           </ol>
-          <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
+          <Button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
             Previous inspected files
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={(page + 1) * 64 >= result.files.length}
             onClick={() => setPage(page + 1)}
           >
             Next inspected files
-          </button>
+          </Button>
           {selection && (
             <CopyContinuationWorkflow
               key={selection.id}

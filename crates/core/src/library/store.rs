@@ -30,9 +30,20 @@ pub fn now() -> String {
     chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
 }
 pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
+    migrate_to(db, crate::catalog::SCHEMA_VERSION, true)
+}
+
+pub(crate) fn migrate_through(db: &mut Connection, target: u32) -> Result<()> {
+    migrate_to(db, target, false)
+}
+
+fn migrate_to(db: &mut Connection, target: u32, _test_boundaries: bool) -> Result<()> {
     let current: u32 = db.query_row("PRAGMA user_version", [], |r| r.get(0))?;
+    if !(1..=crate::catalog::SCHEMA_VERSION).contains(&target) || current > target {
+        return Err(invalid("Unsupported compiled catalog migration target."));
+    }
     let tx = db.transaction()?;
-    if current < 2 {
+    if current < 2 && target >= 2 {
         tx.execute_batch(r#"
     CREATE TABLE roots (
       id TEXT PRIMARY KEY, label TEXT NOT NULL, native_path BLOB NOT NULL, display_path TEXT NOT NULL,
@@ -90,7 +101,7 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
     PRAGMA user_version=2;
     "#)?;
     }
-    if current < 3 {
+    if current < 3 && target >= 3 {
         super::operation_store::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 3)?;
     }
@@ -102,31 +113,31 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
     } else {
         0
     };
-    if current < 4 || (current == 4 && progress_columns == 2) {
+    if target >= 4 && (current < 4 || (current == 4 && progress_columns == 2)) {
         tx.execute_batch("CREATE INDEX operation_journal_scope ON operation_journal(plan_id,phase,item_id,sequence); CREATE UNIQUE INDEX operation_copy_stream ON operation_journal(plan_id,item_id) WHERE phase='copy_execution_plan_v1';")?;
         tx.pragma_update(None, "user_version", 4)?;
     }
-    if current < 5 {
+    if current < 5 && target >= 5 {
         super::operation_jobs::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 5)?;
     }
-    if current < 6 {
+    if current < 6 && target >= 6 {
         super::operation_store::migrate_effects(&tx)?;
         tx.pragma_update(None, "user_version", 6)?;
     }
-    if current < 7 {
+    if current < 7 && target >= 7 {
         super::original_jobs::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 7)?;
     }
-    if current < 8 {
+    if current < 8 && target >= 8 {
         super::import_destination::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 8)?;
     }
-    if current < 9 {
+    if current < 9 && target >= 9 {
         super::inspection_store::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 9)?;
     }
-    if current < 10 {
+    if current < 10 && target >= 10 {
         match progress_columns {
             0 => tx.execute_batch("ALTER TABLE scans ADD COLUMN total_files INTEGER; ALTER TABLE scans ADD COLUMN processed_files INTEGER;")?,
             2 => {},
@@ -134,21 +145,39 @@ pub(crate) fn migrate(db: &mut Connection) -> Result<()> {
         }
         tx.pragma_update(None, "user_version", 10)?;
     }
-    if current < 11 {
+    if current < 11 && target >= 11 {
         super::backup_compare::profiles::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 11)?;
     }
-    if current < 12 {
+    if current < 12 && target >= 12 {
         super::backup_compare::history::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 12)?;
     }
-    if current < 13 {
+    if current < 13 && target >= 13 {
         super::backup_store::migrate(&tx)?;
         super::snapshots::migrate(&tx)?;
         tx.pragma_update(None, "user_version", 13)?;
     }
+    if current < 14 && target >= 14 {
+        super::geography::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 14)?;
+    }
+    if current < 15 && target >= 15 {
+        super::geography::migrate_jsonq(&tx)?;
+        tx.pragma_update(None, "user_version", 15)?;
+    }
+    if current < 16 && target >= 16 {
+        super::catalog_metadata::migrate(&tx)?;
+        tx.pragma_update(None, "user_version", 16)?;
+    }
+    if current < 17 && target >= 17 {
+        super::catalog_metadata::migrate_completion(&tx)?;
+        tx.pragma_update(None, "user_version", 17)?;
+    }
     #[cfg(test)]
-    crate::catalog::migration_test_exit("before_commit");
+    if _test_boundaries {
+        crate::catalog::migration_test_exit("before_commit");
+    }
     tx.commit()?;
     Ok(())
 }
@@ -736,8 +765,13 @@ pub(crate) fn query_where(query: &AssetQuery) -> Result<(String, Vec<Value>)> {
         sql.push_str(" AND favorite=1");
     }
     if !query.tag.is_empty() {
-        sql.push_str(" AND EXISTS(SELECT 1 FROM json_each(assets.tags) WHERE value=?)");
-        values.push(query.tag.clone().into());
+        if query.tag_descendants.unwrap_or(false) {
+            sql.push_str(" AND EXISTS(SELECT 1 FROM json_each(assets.tags) WHERE value=? OR value IN(WITH RECURSIVE category(id,label,depth) AS (SELECT id,label,1 FROM catalog_tag_categories WHERE label=? UNION ALL SELECT c.id,c.label,p.depth+1 FROM catalog_tag_categories c JOIN category p ON c.parent_id=p.id WHERE p.depth<16) SELECT label FROM category))");
+            values.extend([query.tag.clone().into(), query.tag.clone().into()]);
+        } else {
+            sql.push_str(" AND EXISTS(SELECT 1 FROM json_each(assets.tags) WHERE value=?)");
+            values.push(query.tag.clone().into());
+        }
     }
     if !matches!(
         query.sort.as_str(),
@@ -745,6 +779,8 @@ pub(crate) fn query_where(query: &AssetQuery) -> Result<(String, Vec<Value>)> {
     ) {
         return Err(invalid("Unknown sort order."));
     }
+    super::geography::query_filter(query, &mut sql, &mut values)?;
+    super::catalog_metadata::query_filter(query, &mut sql, &mut values)?;
     Ok((sql, values))
 }
 #[derive(Serialize, Deserialize)]
@@ -812,7 +848,13 @@ fn query_hash(query: &AssetQuery) -> Result<String> {
 }
 
 fn inventory_query(query: &AssetQuery) -> bool {
-    query.directory_id.is_none()
+    query.album_id.is_none()
+        && query.rejected.is_none()
+        && query.min_rating.is_none()
+        && query.map_bounds.is_none()
+        && query.map_cell.is_none()
+        && query.location.is_none()
+        && query.directory_id.is_none()
         && !query.favorites_only
         && [
             &query.folder,
@@ -1135,7 +1177,10 @@ pub fn freeze(catalog: &Catalog, query: AssetQuery) -> Result<SelectionToken> {
         })
     })
 }
-fn selection_scope(db: &Connection, selection: AssetSelection) -> Result<(String, Vec<Value>)> {
+pub(super) fn selection_scope(
+    db: &Connection,
+    selection: AssetSelection,
+) -> Result<(String, Vec<Value>)> {
     match selection {
         AssetSelection::Ids { ids } => {
             if ids.is_empty() || ids.len() > 500 || ids.iter().any(|id| id.len() > 64) {

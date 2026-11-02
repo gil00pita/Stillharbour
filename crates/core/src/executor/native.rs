@@ -315,6 +315,14 @@ pub(super) fn create_directory(parent: &File, leaf: &str) -> Result<File> {
         ))
     }
 }
+// Windows snapshot metadata restoration also uses this in default builds.
+#[cfg(any(
+    windows,
+    test,
+    feature = "fixture-probes",
+    feature = "copy-workflow",
+    feature = "backup-workflow"
+))]
 pub(super) fn read_directory(parent: &File, leaf: &str) -> Result<File> {
     name(leaf)?;
     #[cfg(windows)]

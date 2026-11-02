@@ -1,3 +1,4 @@
+import { Button, Input } from '../components/ui/controls';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -140,7 +141,7 @@ export function FolderExplorer({
             <span className="screen-reader-status">
               {root ? 'Filter files in this folder' : 'Search libraries'}
             </span>
-            <input
+            <Input
               type="search"
               maxLength={256}
               placeholder={root ? 'Filter files in this folder…' : 'Search libraries…'}
@@ -152,21 +153,21 @@ export function FolderExplorer({
             />
           </label>
           <div className="explorer-views" aria-label="Folder view">
-            <button aria-pressed={mode === 'icons'} onClick={() => setMode('icons')}>
+            <Button aria-pressed={mode === 'icons'} onClick={() => setMode('icons')}>
               Icons
-            </button>
-            <button aria-pressed={mode === 'details'} onClick={() => setMode('details')}>
+            </Button>
+            <Button aria-pressed={mode === 'details'} onClick={() => setMode('details')}>
               Details
-            </button>
+            </Button>
           </div>
           {jobsControl}
         </header>
         <div className="folder-explorer">
           <div className="explorer-navigation">
-            <button onClick={back} disabled={!history.length}>
+            <Button onClick={back} disabled={!history.length}>
               Back
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() =>
                 navigate(
                   parent ? { ...location, directoryId: parent.id, cursor: null, search: '' } : HOME,
@@ -175,17 +176,17 @@ export function FolderExplorer({
               disabled={!root}
             >
               Up
-            </button>
+            </Button>
             <nav aria-label="Folder path">
-              <button onClick={() => navigate(HOME)} disabled={!root}>
+              <Button onClick={() => navigate(HOME)} disabled={!root}>
                 Libraries
-              </button>
+              </Button>
               {root && (
                 <>
                   {(page?.ancestors ?? []).map((directory) => (
                     <span key={directory.id}>
                       <span aria-hidden="true">/</span>
-                      <button
+                      <Button
                         title={directory.name}
                         onClick={() =>
                           navigate({
@@ -197,7 +198,7 @@ export function FolderExplorer({
                         }
                       >
                         <bdi>{directory.name}</bdi>
-                      </button>
+                      </Button>
                     </span>
                   ))}
                   <span aria-current="location">
@@ -211,7 +212,7 @@ export function FolderExplorer({
           <FolderStatus root={root} page={page} libraryCount={status.roots.length} />
           {browse.error && (
             <p role="alert" className="error">
-              {browse.error} <button onClick={browse.retry}>Retry folder</button>
+              {browse.error} <Button onClick={browse.retry}>Retry folder</Button>
             </p>
           )}
           {browse.loading && !page ? (
@@ -255,7 +256,7 @@ export function FolderExplorer({
                 {page.entries.length.toLocaleString()} shown · {page.total.toLocaleString()} indexed
                 items
               </span>
-              <button
+              <Button
                 disabled={browse.loading || !page.previousCursor}
                 onClick={() => {
                   restore.current = { location, offset: 0, focus: null };
@@ -263,8 +264,8 @@ export function FolderExplorer({
                 }}
               >
                 Previous items
-              </button>
-              <button
+              </Button>
+              <Button
                 disabled={browse.loading || !page.nextCursor}
                 onClick={() => {
                   restore.current = { location, offset: 0, focus: null };
@@ -272,7 +273,7 @@ export function FolderExplorer({
                 }}
               >
                 Next items
-              </button>
+              </Button>
             </div>
           )}
         </div>

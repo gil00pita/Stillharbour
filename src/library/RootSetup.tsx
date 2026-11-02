@@ -1,3 +1,4 @@
+import { Button, Input } from '../components/ui/controls';
 import { useEffect, useId, useRef, useState } from 'react';
 import type { DirectorySelection, LibraryRoot, RootMode, ScanFilter } from '../bindings';
 import { defaultFilter, normalizeFileExtensions } from './model';
@@ -67,7 +68,7 @@ export function RootSetup({
       <div className="form-grid">
         <label>
           Library name
-          <input
+          <Input
             ref={labelInput}
             readOnly={Boolean(root)}
             disabled={busy}
@@ -107,17 +108,17 @@ export function RootSetup({
       )}
       <ScanOptions filter={filter} disabled={busy} onChange={setFilter} onError={onError} />
       <div className="folder-actions">
-        <button type="button" onClick={onCancel} disabled={busy}>
+        <Button type="button" onClick={onCancel} disabled={busy}>
           {embedded ? 'Discard scan changes' : 'Cancel'}
-        </button>
-        <button
+        </Button>
+        <Button
           className="primary"
           type="submit"
           disabled={busy || scanRunning || (!root && !selected?.identityAvailable)}
           aria-describedby={identityUnavailable ? identityAlertId : undefined}
         >
           {scanSubmitLabel(busy, scanRunning, Boolean(root))}
-        </button>
+        </Button>
       </div>
     </form>
   );

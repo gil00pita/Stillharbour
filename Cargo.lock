@@ -3538,6 +3538,7 @@ dependencies = [
  "libc",
  "md-5",
  "notify",
+ "quick-xml",
  "rusqlite",
  "rustix",
  "security-framework-sys",

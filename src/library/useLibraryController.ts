@@ -20,6 +20,8 @@ function reducer(state: BrowseState, action: BrowseAction): BrowseState {
     : { ...state, period: action.period };
 }
 export function useLibraryController({
+  initialQuery,
+  initialSelectedId,
   defaults,
   status,
   section,
@@ -27,6 +29,8 @@ export function useLibraryController({
   onRefresh,
   onWindowChange,
 }: {
+  initialQuery?: AssetQuery | undefined;
+  initialSelectedId?: string | null;
   defaults?: import('../bindings').AppPreferences;
   status: LibraryStatus;
   section: Section;
@@ -39,10 +43,13 @@ export function useLibraryController({
       ...defaultQuery,
       rootId: defaults?.defaultRootId ?? null,
       sort: defaults?.sort ?? defaultQuery.sort,
+      ...initialQuery,
     },
     period: null,
   });
-  const [ids, setIds] = useState<ReadonlySet<string>>(new Set());
+  const [ids, setIds] = useState<ReadonlySet<string>>(
+    () => new Set(initialSelectedId ? [initialSelectedId] : []),
+  );
   const [token, setToken] = useState<SelectionToken | null>(null);
   const anchor = useRef<string | null>(null);
   const epoch = useRef(0);
@@ -52,7 +59,14 @@ export function useLibraryController({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const query = useMemo<AssetQuery>(
-    () => ({ ...browse.query, deferPendingPreviews: true }),
+    () => ({
+      ...browse.query,
+      deferPendingPreviews: !(
+        browse.query.mapBounds ||
+        browse.query.mapCell ||
+        browse.query.location
+      ),
+    }),
     [browse.query],
   );
   const feed = useAssetFeed(query, browse.period, status.revision, onError, onWindowChange);
@@ -212,7 +226,17 @@ export function useLibraryController({
     folders,
     tags,
     notice,
-    selection: { ids, count: token?.count ?? ids.size, frozen: Boolean(token), busy },
+    selection: {
+      ids,
+      count: token?.count ?? ids.size,
+      frozen: Boolean(token),
+      busy,
+      scope: token
+        ? { kind: 'token' as const, id: token.id }
+        : ids.size
+          ? { kind: 'ids' as const, ids: [...ids] }
+          : null,
+    },
     filter,
     select,
     selectGroup,

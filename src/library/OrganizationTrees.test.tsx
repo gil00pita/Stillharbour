@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within } from '../test/render';
 import { expect, it } from 'vitest';
 import type { OrganizationRow } from '../bindings';
 import { OrganizationTrees } from './OrganizationTrees';

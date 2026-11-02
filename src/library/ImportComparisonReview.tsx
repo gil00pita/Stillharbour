@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CopyManifest, ImportComparisonJob, LibraryRoot } from '../bindings';
 import { errorMessage, library, libraryData } from '../ipc';
@@ -315,9 +316,9 @@ function ImportComparisonSession({
         comparison. This review grants no copy-skipping or removal permission.
       </p>
       {!roots ? (
-        <button type="button" disabled={pending} onClick={() => void open()}>
+        <Button type="button" disabled={pending} onClick={() => void open()}>
           Choose indexed comparison scope
-        </button>
+        </Button>
       ) : (
         <>
           <fieldset disabled={pending || running || importActive}>
@@ -335,7 +336,7 @@ function ImportComparisonSession({
               </label>
             ))}
           </fieldset>
-          <button
+          <Button
             type="button"
             disabled={
               pending ||
@@ -348,7 +349,7 @@ function ImportComparisonSession({
             onClick={() => void start()}
           >
             Start read-only comparison
-          </button>
+          </Button>
           {manifest.files.length > 512 && (
             <p>Compare at most 512 confirmed source files per review.</p>
           )}
@@ -362,19 +363,19 @@ function ImportComparisonSession({
         </p>
       )}
       {job && !running && (
-        <button disabled={pending || importActive} onClick={() => void closeReport()}>
+        <Button disabled={pending || importActive} onClick={() => void closeReport()}>
           Close comparison report
-        </button>
+        </Button>
       )}
       {running && (
         <>
-          <button
+          <Button
             type="button"
             disabled={pending || job.state === 'cancel_requested'}
             onClick={() => void cancel()}
           >
             Cancel read-only comparison
-          </button>
+          </Button>
           <CopyIoControls />
         </>
       )}
@@ -460,12 +461,12 @@ function ImportComparisonSession({
               </tbody>
             </table>
           </div>
-          <button type="button" disabled={!page} onClick={() => setPage(page - 1)}>
+          <Button type="button" disabled={!page} onClick={() => setPage(page - 1)}>
             Previous comparison files
-          </button>
-          <button type="button" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
+          </Button>
+          <Button type="button" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
             Next comparison files
-          </button>
+          </Button>
           {report.issues.length > 0 && (
             <ul aria-label="Comparison issues">
               {report.issues.map((issue, index) => (

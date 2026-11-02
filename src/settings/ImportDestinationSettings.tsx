@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { Button, Select } from '../components/ui/controls';
+import { useId, useState, type FormEvent } from 'react';
 import type { ImportDestinationPreference, LibraryRoot } from '../bindings';
 import { errorMessage } from '../ipc';
 
@@ -14,6 +15,12 @@ export function ImportDestinationSettings({
   onSave: ((rootId: string | null) => Promise<ImportDestinationPreference>) | null;
 }) {
   const current = preference?.catalogId === catalogId ? (preference.rootId ?? '') : '';
+  const unavailableId = useId();
+  const unavailableReason = !catalogId
+    ? 'Open a catalog to choose its preferred import destination'
+    : !onSave
+      ? 'Saving an import destination is unavailable in this session'
+      : null;
   const [choice, setChoice] = useState(current);
   const [dirty, setDirty] = useState(false);
   const [pending, setPending] = useState(false);
@@ -48,15 +55,20 @@ export function ImportDestinationSettings({
     <section className="settings-section" aria-labelledby="import-destination-title">
       <h2 id="import-destination-title">Import destination</h2>
       <p className="help">
-        A preference for this catalog, separate from its base library and browsing defaults. It does
-        not grant writes, choose a folder or approve copying. Unavailable and selected source
-        destinations remain blocked during planning.
+        Suggest a library for new import plans in this catalog. Your base library and browsing
+        defaults stay unchanged. You still choose the destination folder and approve each copy;
+        unavailable libraries and source folders cannot be used as destinations.
       </p>
-      <form aria-label="Import destination preference" onSubmit={(event) => void save(event)}>
+      <form
+        className="settings-import-form"
+        aria-label="Import destination preference"
+        onSubmit={(event) => void save(event)}
+      >
         <label>
           Preferred import destination
-          <select
+          <Select
             aria-label="Preferred import destination"
+            aria-describedby={unavailableReason ? unavailableId : undefined}
             value={choice}
             disabled={!catalogId || !onSave || pending}
             onChange={(event) => {
@@ -81,11 +93,16 @@ export function ImportDestinationSettings({
                     : ''}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
-        <button type="submit" disabled={!catalogId || !onSave || pending || !dirty}>
+        {unavailableReason && (
+          <p className="help" id={unavailableId}>
+            {unavailableReason}
+          </p>
+        )}
+        <Button type="submit" disabled={!catalogId || !onSave || pending || !dirty}>
           {pending ? 'Saving import destination…' : 'Save import destination'}
-        </button>
+        </Button>
         {saved && (
           <p role="status">
             Import destination saved for this catalog. Folder grants and existing plans are
