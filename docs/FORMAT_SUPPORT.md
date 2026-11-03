@@ -1,5 +1,7 @@
 # Read-only format previews — M5 slice
 
+M5 closeout, 2026-11-03: the [development gate](M5_CLOSEOUT.md) is complete with the capability limits in this document. Clean-machine, untested OS/camera/color combinations and full RAW validation remain **unverified**; passing native map/export CI adds no codec or packaged-format evidence. AC-077 and eventual M5-F06 release coverage remain required.
+
 Discovery revision, 2026-11-01: the built-in scan preset now includes `.mp4`, case-insensitively. This changes discovery/cataloguing only; it does not add or certify MP4 decoding, video previews or playback. Unsupported video content remains preserved and reports its actual metadata/preview status. Existing saved filters retain their scope.
 
 The owner's 2026-10-28 HEIC/CR2/common-preview request authorises this bounded M5 format slice. Maps, metadata export, original mutations and later performance phases remain outside it. The existing gallery, folder thumbnails and viewer use derived 256/512 px PNG previews. There is no full-resolution RAW developer, original conversion or source metadata write.

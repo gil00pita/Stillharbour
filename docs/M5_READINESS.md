@@ -1,5 +1,7 @@
 # M5 readiness review
 
+Final development gate, 2026-11-03: [M5 closeout](M5_CLOSEOUT.md) records acceptance of the implemented offline map, catalog metadata and reviewed exports into new files. The deterministic export correction passes native Windows/macOS CI for the exact merged application tree. Unverified formats, release acceptance and M4 production authority retain their separate gates. The readiness review below is historical; stop before M6.
+
 Current final implementation: see [M5 validation](M5_VALIDATION.md) and [ADR-0084](decisions/ADR-0084-reviewed-metadata-exports-and-tag-history.md). The owner subsequently requested “Finish M5”; schema-17 tag history/overrides and reviewed catalog/XMP exports are implemented. Remaining acceptance restrictions are explicit there. The readiness review below remains historical and does not revoke later authorization.
 
 Current continuation: the owner subsequently requested “continue with m5”. Read-only M5 development is now authorized under [ADR-0081](decisions/ADR-0081-offline-geographic-browsing.md); [M5_MAP.md](M5_MAP.md) records the first increment. The later [M5_METADATA.md](M5_METADATA.md) continuation adds schema-16 catalog metadata organization while keeping export and whole-milestone gates open. The review below remains historical evidence of unclosed M4 preservation gates, which this authorization does not waive.

@@ -1,6 +1,8 @@
 # M5 implementation and acceptance evidence
 
-Date: 2026-11-02. Request: “Finish M5”. Implementation covers offline maps, catalog organization, reversible tags, explicit keyword import and reviewed portable-catalog/XMP export. Full milestone acceptance still depends on the explicitly recorded native/platform gates below. M4 preservation authority and M6 release scope remain separate.
+Current status, 2026-11-03: **M5's development gate is complete** for the implemented offline map, catalog metadata and reviewed exports into new files. [M5 closeout](M5_CLOSEOUT.md) records passing Windows/macOS CI for the deterministic export correction, inspected native receipts and the acceptance mapping. Unverified format/platform combinations retain that label under the M5 gate. M4 preservation authority, clean-machine release acceptance and M6 remain separately gated.
+
+The dated checkpoints below preserve the original requests, failures, repairs and evidence boundaries. Statements about pending Windows correction CI or incomplete M5 acceptance describe those earlier checkpoints; the closeout above is current.
 
 ## Current completion checks
 
@@ -127,7 +129,7 @@ The production/package/format results are recorded below. Earlier evidence remai
 
 ## Remaining acceptance gates
 
-Final PR Foundation/transport CI passes on both target platforms for the exact merged application tree, as recorded above. The continuation repairs an intermittent export evidence assertion; its own verification is recorded separately from those earlier CI runs. Actual VoiceOver evidence covers the three owner-reviewed cases. Intel/oldest-supported macOS, clean target machines, other screen readers and whole-application accessibility certification remain outside those receipts. Those formats/platforms stay explicitly unverified as permitted by the M5 gate; an indexed RAW extension is not full-media validation. Native macOS checks use generated fixtures and the local WebView, not a signed release or clean-machine install.
+[M5 closeout](M5_CLOSEOUT.md) closes the pending correction CI: final PR #16 head `80da716` and merge `e15a4b2` have identical trees, with both-platform Foundation/transport passes and inspected deterministic repeated-export receipts. Actual VoiceOver evidence covers the three owner-reviewed cases. Intel/oldest-supported macOS, clean target machines, other screen readers and whole-application accessibility certification remain outside those receipts. Those formats/platforms stay explicitly unverified as permitted by the M5 gate; an indexed RAW extension is not full-media validation. Native checks use generated fixtures and platform WebViews, not signed releases or clean-machine installs. AC-077/078/079 and eventual M5-F06 release coverage remain required.
 
 The ten inherited macOS default-suite metadata/replacement failures are resolved by exact v2 provenance preservation in the repair checkpoint above; the unchanged-main failed reproduction remains retained. Full M4 preservation acceptance and production original-file mutations remain gated independently. M6 signing, release hardening, mobile/cloud import and editing remain out of scope.
 
