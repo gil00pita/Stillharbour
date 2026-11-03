@@ -1,5 +1,7 @@
 # M5 local map increment
 
+Current gate, 2026-11-03: [M5 closeout](M5_CLOSEOUT.md) accepts the implemented M5 development scope against final PR #16's passing Windows/macOS CI and inspected native map/export receipts. Earlier incomplete/pending statements below retain their checkpoint scope. Clean-machine, broader format/accessibility and production original-file gates remain explicit.
+
 Current evidence, 2026-11-03: Windows Foundation at `a2b3d10` passes the native M5 scenarios; fresh local map/navigation and metadata/export tests pass with nine unchanged source/companion entries each. The owner passes the bounded actual VoiceOver map, heading and Catalog-dialog review. [M5 validation](M5_VALIDATION.md) records exact scope and remaining PR-wide checks; the older open statements below retain their historical scope.
 
 The owner requested continuing M5 on 2026-11-02. [ADR-0081](decisions/ADR-0081-offline-geographic-browsing.md) records the first geographic slice. M4 preservation certification and production mutation restrictions remain unchanged; M5 as a whole is not complete.
