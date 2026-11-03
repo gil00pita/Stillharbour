@@ -2200,7 +2200,10 @@ async fn test_performance(
                 } else {
                     serde_json::json!({"text":std::fs::read_to_string(entry.path())?})
                 };
-                exports.push(serde_json::json!({"name":name,"bytes":entry.metadata()?.len().to_string(),"detail":detail}));
+                let digest = blake3::hash(&std::fs::read(entry.path())?)
+                    .to_hex()
+                    .to_string();
+                exports.push(serde_json::json!({"name":name,"bytes":entry.metadata()?.len().to_string(),"digest":digest,"detail":detail}));
             }
             Ok(serde_json::json!({"neighborUnchanged":true,"exports":exports}))
         }
