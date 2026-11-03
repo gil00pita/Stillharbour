@@ -1,3 +1,4 @@
+import { Button, Select } from '../components/ui/controls';
 import type { THUMBNAIL_SIZES, ViewMode } from './model';
 
 export function BrowserControls({
@@ -18,14 +19,14 @@ export function BrowserControls({
   return (
     <div className="view-switch" aria-label="Library view">
       {(['gallery', 'grid', 'list'] as const).map((view) => (
-        <button type="button" key={view} aria-pressed={mode === view} onClick={() => onMode(view)}>
+        <Button type="button" key={view} aria-pressed={mode === view} onClick={() => onMode(view)}>
           {view === 'gallery' ? 'Timeline' : view === 'grid' ? 'Uniform grid' : 'Text list'}
-        </button>
+        </Button>
       ))}
       {mode !== 'list' && (
         <label className="thumbnail-control">
           Thumbnail size
-          <select
+          <Select
             aria-label="Thumbnail size"
             value={size}
             onChange={(event) => {
@@ -38,20 +39,20 @@ export function BrowserControls({
             <option value="compact">Compact</option>
             <option value="comfortable">Comfortable</option>
             <option value="large">Large</option>
-          </select>
+          </Select>
         </label>
       )}
       {mode === 'grid' && (
         <label className="thumbnail-control">
           Image fit
-          <select
+          <Select
             aria-label="Grid image fit"
             value={fit}
             onChange={(event) => onFit(event.target.value === 'cover' ? 'cover' : 'contain')}
           >
             <option value="contain">Fit whole image</option>
             <option value="cover">Crop to fill</option>
-          </select>
+          </Select>
         </label>
       )}
     </div>

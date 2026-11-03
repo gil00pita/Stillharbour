@@ -102,6 +102,8 @@ pub struct Library {
     pub(crate) catalog: Arc<Catalog>,
     pub(super) options: LibraryOptions,
     pub(super) destination_gate: Mutex<()>,
+    pub(super) metadata_export_session: String,
+    pub(super) metadata_export_cancel: AtomicBool,
     #[cfg(any(test, feature = "copy-workflow"))]
     pub(super) copy_workflow: Arc<crate::executor::CopyWorkflow>,
     active: Mutex<Option<ActiveScan>>,
@@ -507,6 +509,8 @@ impl Library {
             catalog,
             options,
             destination_gate: Mutex::new(()),
+            metadata_export_session: uuid::Uuid::new_v4().to_string(),
+            metadata_export_cancel: AtomicBool::new(false),
             active: Mutex::new(None),
             thumbnail_jobs: Mutex::new(Vec::new()),
             thumbnail_job_gate: JobScheduler::new(1)?,
@@ -1173,6 +1177,20 @@ impl Library {
     }
     pub fn detail(&self, id: String) -> Result<AssetDetail> {
         store::detail(&self.catalog, id)
+    }
+    pub fn catalog_metadata(
+        &self,
+        request: super::catalog_metadata::model::CatalogMetadataRequest,
+    ) -> Result<super::catalog_metadata::model::CatalogMetadataReply> {
+        super::catalog_metadata::request(&self.catalog, request)
+    }
+    pub fn map_view(
+        &self,
+        query: AssetQuery,
+        bounds: super::geography::MapBounds,
+        zoom: u8,
+    ) -> Result<super::geography::MapView> {
+        super::geography::query(&self.catalog, query, bounds, zoom)
     }
     pub fn neighbors(&self, query: AssetQuery, id: String) -> Result<AssetNeighbors> {
         store::neighbors(&self.catalog, query, id)

@@ -1,5 +1,6 @@
 import { run } from './process.mjs';
 run('cargo', ['fmt', '--all', '--check']);
+run('cargo', ['clippy', '--locked', '-p', 'stillharbour-core', '--lib', '--', '-D', 'warnings']);
 run('cargo', [
   'clippy',
   '--workspace',

@@ -1,3 +1,4 @@
+import { Button, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { InspectionFinding, KeeperOrder, KeeperReview } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -88,7 +89,7 @@ export function KeeperControls({
       <legend>Backend keeper review</legend>
       <label>
         Filesystem date policy{' '}
-        <select
+        <Select
           value={order}
           onChange={(event) => {
             setOrder(event.target.value as KeeperOrder);
@@ -100,7 +101,7 @@ export function KeeperControls({
           <option value="newest_modified">Keep newest modified</option>
           <option value="oldest_created">Keep oldest created/birth</option>
           <option value="newest_created">Keep newest created/birth</option>
-        </select>
+        </Select>
       </label>
       <p>
         Explicit keep choices and protected folders take priority. Preferred folders follow the
@@ -154,18 +155,18 @@ export function KeeperControls({
           </label>
         ))}
       </details>
-      <button
+      <Button
         onClick={() => {
           onKeep(new Set());
           setReview(null);
         }}
       >
         Clear manual choices
-      </button>
-      <button onClick={() => void apply()}>
+      </Button>
+      <Button onClick={() => void apply()}>
         {busy ? 'Reviewing…' : 'Retain backend keeper review'}
-      </button>
-      <button onClick={() => void latest()}>Load latest retained keeper review</button>
+      </Button>
+      <Button onClick={() => void latest()}>Load latest retained keeper review</Button>
       {error && <p role="alert">{error}</p>}
       {review && (
         <div role="status">
@@ -175,7 +176,7 @@ export function KeeperControls({
             {review.input.preferredFolders.length} preferred folders. These recorded choices may
             differ from the current form.
           </p>
-          <button
+          <Button
             onClick={() => {
               setOrder(review.input.order);
               setProtected(review.input.protectedFolders);
@@ -184,7 +185,7 @@ export function KeeperControls({
             }}
           >
             Reuse this recorded policy in the form
-          </button>
+          </Button>
           <p>{review.explanation}</p>
           <p>
             {review.keepers.length} suggested keepers; {review.blocks.length} cleanup blocks.

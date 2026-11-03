@@ -665,7 +665,9 @@ async fn library_request(
             .selection_id()
             .map(|id| selected(&state, id))
             .transpose()?,
-        LibraryRequest::BackupProfileSave { selection_id, .. }
+        LibraryRequest::MetadataExportPreview { selection_id, .. }
+        | LibraryRequest::MetadataExportSave { selection_id, .. }
+        | LibraryRequest::BackupProfileSave { selection_id, .. }
         | LibraryRequest::BackupCompareStart { selection_id, .. }
         | LibraryRequest::SaveAndScan { selection_id, .. }
         | LibraryRequest::OrganizationPlanSaveExport { selection_id, .. }
@@ -1385,6 +1387,52 @@ async fn library_request(
                 library.update_mode(root_id, mode)?;
                 LibraryResponse::Done
             }
+            LibraryRequest::MetadataExportCancel => {
+                library.cancel_metadata_export();
+                LibraryResponse::Done
+            }
+            LibraryRequest::MetadataExportPreview {
+                export_kind,
+                selection: assets,
+                expected_count,
+                selection_id,
+            } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(ErrorCode::InvalidInput, "Choose an export folder again.")
+                })?;
+                LibraryResponse::MetadataExportReview(library.metadata_export_preview(
+                    export_kind,
+                    assets,
+                    expected_count,
+                    selection_id,
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
+            LibraryRequest::MetadataExportSave {
+                id,
+                digest,
+                selection_id,
+            } => {
+                let chosen = selection.as_ref().ok_or_else(|| {
+                    AppError::new(ErrorCode::InvalidInput, "Choose an export folder again.")
+                })?;
+                LibraryResponse::MetadataExportSaved(library.metadata_export_save(
+                    id,
+                    digest,
+                    selection_id,
+                    chosen.path.clone(),
+                    selected_identity(chosen)?,
+                )?)
+            }
+            LibraryRequest::CatalogMetadata { request } => {
+                LibraryResponse::CatalogMetadata(library.catalog_metadata(request)?)
+            }
+            LibraryRequest::MapView {
+                query,
+                bounds,
+                zoom,
+            } => LibraryResponse::MapView(library.map_view(query, bounds, zoom)?),
             LibraryRequest::Query {
                 query,
                 cursor,
@@ -1469,6 +1517,7 @@ fn test_library_fixture(
     state: State<'_, Foundation>,
     verify: bool,
     native_formats: Option<bool>,
+    geographic: Option<bool>,
 ) -> Result<serde_json::Value> {
     if window.label() != "main" {
         return Err(AppError::new(
@@ -1493,7 +1542,15 @@ fn test_library_fixture(
             "A generated fixture already exists.",
         ));
     }
-    let generated = if native_formats.unwrap_or(false) {
+    let generated = if geographic.unwrap_or(false) {
+        if native_formats.unwrap_or(false) {
+            return Err(AppError::new(
+                ErrorCode::InvalidInput,
+                "Choose one generated fixture kind.",
+            ));
+        }
+        stillharbour_core::library_fixture::LibraryFixture::generate_geographic()?
+    } else if native_formats.unwrap_or(false) {
         stillharbour_core::library_fixture::LibraryFixture::generate_native_formats()?
     } else {
         stillharbour_core::library_fixture::LibraryFixture::generate()?
@@ -1516,7 +1573,12 @@ fn test_library_fixture(
     *fixture = Some(generated);
     serde_json::to_value(DirectorySelection {
         id,
-        display_path: "Generated test library · 18 images and safety fixtures".into(),
+        display_path: if geographic.unwrap_or(false) {
+            "Generated map library · 8 images and a companion"
+        } else {
+            "Generated test library · 18 images and safety fixtures"
+        }
+        .into(),
         identity_available: true,
     })
     .map_err(|e| AppError::new(ErrorCode::WorkerFailed, "Test response failed.").caused_by(e))
@@ -2097,6 +2159,51 @@ async fn test_performance(
                 serde_json::json!({"id":id, "displayPath":"Generated destination fixture", "identityAvailable":true}),
             )
         }
+        "metadata_export_verify" => {
+            let owned = state.export_fixture.lock().map_err(|_| {
+                AppError::new(
+                    ErrorCode::WorkerFailed,
+                    "Generated export fixture unavailable.",
+                )
+            })?;
+            let folder = owned.as_ref().ok_or_else(|| {
+                AppError::new(
+                    ErrorCode::InvalidInput,
+                    "Generate the owned export folder first.",
+                )
+            })?;
+            if std::fs::read(folder.path().join("destination-only.txt"))? != b"retained destination"
+            {
+                return Err(AppError::new(
+                    ErrorCode::Conflict,
+                    "Generated destination neighbor changed.",
+                ));
+            }
+            let mut exports = Vec::new();
+            for entry in std::fs::read_dir(folder.path())? {
+                let entry = entry?;
+                let name = entry.file_name().to_string_lossy().into_owned();
+                if name == "destination-only.txt" {
+                    continue;
+                }
+                if !entry.file_type()?.is_file()
+                    || entry.metadata()?.len() > 16 * 1024 * 1024
+                    || !name.starts_with("stillharbour-")
+                {
+                    return Err(AppError::new(
+                        ErrorCode::Conflict,
+                        "Unexpected generated export entry.",
+                    ));
+                }
+                let detail = if name.ends_with(".stillharbour") {
+                    stillharbour_core::catalog::inspect_portable_export_fixture(&entry.path())?
+                } else {
+                    serde_json::json!({"text":std::fs::read_to_string(entry.path())?})
+                };
+                exports.push(serde_json::json!({"name":name,"bytes":entry.metadata()?.len().to_string(),"detail":detail}));
+            }
+            Ok(serde_json::json!({"neighborUnchanged":true,"exports":exports}))
+        }
         "organization_destination_verify"
         | "organization_export_verify"
         | "backup_destination_verify" => {
@@ -2384,6 +2491,15 @@ fn main() {
         std::process::exit(code);
     }
     let args: Vec<_> = std::env::args_os().collect();
+    if args
+        .get(1)
+        .is_some_and(|arg| arg == "--metadata-worker-stdin-v1")
+    {
+        if args.len() != 2 || stillharbour_core::media::metadata_worker().is_err() {
+            std::process::exit(1);
+        }
+        return;
+    }
     if args.get(1).is_some_and(|arg| arg == "--inspection-worker") {
         let result = if args.len() == 5 {
             stillharbour_core::inspection::decoder::worker(&args[2], &args[3], &args[4])
@@ -2757,7 +2873,8 @@ fn main() {
                 .dev_url
                 .as_ref()
                 .map(|url| url.origin().ascii_serialization());
-            tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?
+            let main_window = tauri::WebviewWindowBuilder::from_config(app, &app.config().app.windows[0])?;
+            main_window
                 .on_navigation(move |url| {
                     (url.scheme() == "tauri" && url.host_str() == Some("localhost"))
                         || matches!(

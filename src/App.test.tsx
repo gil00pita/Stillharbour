@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from './test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { fixturePreferences } from './library/__tests__/fixtures';

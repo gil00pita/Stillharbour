@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, render } from '../test/render';
 import { afterEach, expect, it, vi } from 'vitest';
 import { fixtureAsset } from './__tests__/fixtures';
 import { usePhotoMotion } from './viewerMotion';

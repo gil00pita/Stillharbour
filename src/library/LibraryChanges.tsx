@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useState } from 'react';
 import type { LibraryChangeKind, LibraryChangePage, LibraryStatus } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -64,7 +65,7 @@ export function LibraryChanges({ status }: { status: LibraryStatus }) {
         {loading && <p role="status">Checking library changes…</p>}
         {error && (
           <p role="alert">
-            {error} <button onClick={() => setAttempt(attempt + 1)}>Retry changes</button>
+            {error} <Button onClick={() => setAttempt(attempt + 1)}>Retry changes</Button>
           </p>
         )}
         {page?.changes.length === 0 && !loading && !error && <p>No changes recorded yet.</p>}
@@ -98,14 +99,14 @@ export function LibraryChanges({ status }: { status: LibraryStatus }) {
         )}
         <div className="library-change-navigation">
           {before && (
-            <button disabled={loading} onClick={() => setBefore(null)}>
+            <Button disabled={loading} onClick={() => setBefore(null)}>
               Latest changes
-            </button>
+            </Button>
           )}
           {page?.nextBefore && (
-            <button disabled={loading} onClick={() => setBefore(page.nextBefore)}>
+            <Button disabled={loading} onClick={() => setBefore(page.nextBefore)}>
               Older changes
-            </button>
+            </Button>
           )}
         </div>
       </details>

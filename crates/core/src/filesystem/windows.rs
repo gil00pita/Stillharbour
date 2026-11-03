@@ -32,7 +32,7 @@ fn os_error() -> AppError {
     std::io::Error::last_os_error().into()
 }
 
-pub(super) fn checked(file: File) -> Result<File> {
+pub(crate) fn checked(file: File) -> Result<File> {
     let attributes = file.metadata()?.file_attributes();
     if attributes
         & (FILE_ATTRIBUTE_REPARSE_POINT

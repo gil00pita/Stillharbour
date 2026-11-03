@@ -1,0 +1,25 @@
+# ADR-0081: Local geographic browsing and bundled overview
+
+Date: 2026-11-02. Status: implemented first M5 increment; validation and remaining gates in [M5_MAP.md](../M5_MAP.md).
+
+The owner explicitly requested continuing M5 after the readiness review. This authorizes M5 development while preserving the unclosed M4 preservation gates; it does not certify production transfers or authorize M6/N3–N5.
+
+## Decision
+
+Use pinned MapLibre GL JS 6.16.0 with one bundled module worker and bundled Natural Earth 1:110m land geometry. This is the initial production offline data path. There is no tile server, style URL, geocoder, external font/sprite service, runtime download or offline prefetch. The small world overview is useful without a network, with explicit absence of street detail. Natural Earth data is public domain; retain upstream license/commit/URLs and file SHA-256 in `assets/maps/manifest.json`, verified by `release:check`. Visible attribution says “Made with Natural Earth”. Changing to an online provider requires a separate privacy, attribution, cache and rights decision.
+
+Schema 14 adds `asset_locations`, a SQLite R-tree, extraction view and maintenance triggers. Schema 15 separately upgrades the extraction view for ExifTool JSONQ numeric text, without altering the known schema-14 fingerprint. Before migration, bound startup compares the old catalog against the exact historical schema constructed from compiled migrations; unfamiliar schemas fail closed before imported objects are queried. The existing catalog migration transaction and consistent pre-migration snapshot remain mandatory. Existing UUIDs, roots, annotations and raw metadata are retained. Backfill admits only both-present numbers or strictly validated JSON-number text in geographic range. Booleans, arbitrary text and nonfinite/out-of-range numbers are rejected; permissive SQL casts never turn invalid text into zero. Original raw longitude 180 remains preserved while its query coordinate normalizes to -180. Updates clearing obsolete metadata revoke derived locations; catalog deletion removes index entries. No original or sidecar is rewritten or automatically rescanned.
+
+The pinned ExifTool argument allowlist now requests numeric composite latitude/longitude, whose EXIF hemisphere references are resolved by ExifTool. Previously scanned files usually have no retained GPS fields because the old allowlist did not request them. They need an explicit read-only rescan to acquire locations. Windows' current basic metadata adapter does not extract GPS, so this change does not claim Windows EXIF support. Coordinates represent catalog observations with source `exiftool-composite-numeric-v1`, without invented accuracy, location overrides or manual geotagging.
+
+All spatial reads use the existing database actor. R-tree candidates receive exact double-precision comparisons, including antimeridian bounds and valid zero. A deterministic angular grid coarsens at most sixteen levels until no more than 256 clusters remain. Each cluster returns one catalog summary as a thumbnail representative and a typed grid cell. Main library queries support the same viewport/cell and known/unavailable-location filters, retaining keyset paging, neighbors, selections and date buckets. Unsupported, invalid and unextracted coordinates are “No usable location”; offline roots retain last observations and are not reclassified as absent.
+
+The map photo strip pages 80 summaries at a time. Markers are capped at 256 and thumbnail requests reuse the existing bounded rendition path. Stale request scopes and mismatched map/page revisions are rejected. Map-to-library navigation carries folder/date/geographic scope and the selected representative. Map state survives return navigation. The canvas has keyboard navigation plus native buttons and a photo-list alternative when graphics fail. Mercator polar markers are visually clamped with disclosure while stored/query coordinates remain exact.
+
+## Recovery compatibility and limits
+
+The exact compiled-schema recovery check now describes schema 15, including R-tree shadow objects. Restored schema-13 catalogs do not acquire activation authority automatically; current-schema/same-platform bounds remain. The retained pre-migration schema-13 copy remains independently openable as evidence. No imported SQL or mutation approval is executed.
+
+MapLibre is one renderer dependency required by the original specification, loaded only with the map basemap. No additional UI/state library or native helper is added. The 23 added lockfile packages and their declared licenses are inventoried in M5_MAP.md; shipped notices and clean-machine support remain release gates. The larger lazy map chunk is disclosed rather than hidden by increasing Vite's warning threshold.
+
+This increment does not complete M5's albums, hierarchical tags, captions/rejects, saved searches, portable catalog export, XMP conflict-safe export, or full packaged format/platform acceptance. No preservation requirement is reduced.

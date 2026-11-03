@@ -184,9 +184,30 @@ pub struct FolderEntry {
     pub count: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AssetQuery {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub album_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub rejected: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub min_rating: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub tag_descendants: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub map_cell: Option<super::geography::MapCell>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub map_bounds: Option<super::geography::MapBounds>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
+    pub location: Option<super::geography::LocationFilter>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub defer_pending_previews: Option<bool>,
@@ -210,6 +231,13 @@ pub struct AssetQuery {
 impl Default for AssetQuery {
     fn default() -> Self {
         Self {
+            album_id: None,
+            rejected: None,
+            min_rating: None,
+            tag_descendants: None,
+            map_cell: None,
+            map_bounds: None,
+            location: None,
             defer_pending_previews: None,
             directory_id: None,
             root_id: None,
@@ -495,6 +523,26 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    MetadataExportCancel,
+    MetadataExportPreview {
+        export_kind: super::metadata_export::model::MetadataExportKind,
+        selection: Option<AssetSelection>,
+        expected_count: u32,
+        selection_id: String,
+    },
+    MetadataExportSave {
+        id: String,
+        digest: String,
+        selection_id: String,
+    },
+    CatalogMetadata {
+        request: super::catalog_metadata::model::CatalogMetadataRequest,
+    },
+    MapView {
+        query: AssetQuery,
+        bounds: super::geography::MapBounds,
+        zoom: u8,
+    },
     BackupSync {
         request: crate::backup::sync::SyncRequest,
     },
@@ -906,6 +954,10 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    MetadataExportReview(super::metadata_export::model::MetadataExportReview),
+    MetadataExportSaved(super::metadata_export::model::MetadataExportSaved),
+    CatalogMetadata(super::catalog_metadata::model::CatalogMetadataReply),
+    MapView(super::geography::MapView),
     BackupSync(crate::backup::sync::SyncReply),
     BackupSnapshots(crate::backup::snapshots::SnapshotReply),
     BackupCredentialRef(String),

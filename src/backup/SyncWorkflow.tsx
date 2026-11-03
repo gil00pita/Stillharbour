@@ -1,3 +1,4 @@
+import { Button, Input, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   ComparisonEntry,
@@ -203,9 +204,9 @@ export function SyncWorkflow({
             />
             Keep this destination version; leave its differing source revision uncopied
           </label>
-          <button disabled aria-describedby="retained-replacement-gate">
+          <Button disabled aria-describedby="retained-replacement-gate">
             Replace destination and retain previous version
-          </button>
+          </Button>
           <p id="retained-replacement-gate">
             Replacement requires a separate native review proving recovery of this exact existing
             destination version and its required metadata. Back up the old version below, then
@@ -232,7 +233,7 @@ export function SyncWorkflow({
         {keep.size} explicit keep-destination decisions. Decisions persist across pages of this
         comparison.
       </p>
-      <button
+      <Button
         disabled={busy || Boolean(running) || !canReview}
         onClick={() =>
           void action(async () => {
@@ -249,7 +250,7 @@ export function SyncWorkflow({
         }
       >
         Review append plan
-      </button>
+      </Button>
       {!canReview && (
         <p>
           A complete Verified comparison is required. Every difference needs an explicit decision.
@@ -345,7 +346,7 @@ export function SyncWorkflow({
         >
           <label>
             Budget preset{' '}
-            <select
+            <Select
               disabled={busy}
               value={rate === '10485760' || rate === '41943040' ? rate : 'custom'}
               onChange={(event) => {
@@ -355,11 +356,11 @@ export function SyncWorkflow({
               <option value="10485760">Quiet — 10 MiB/s</option>
               <option value="41943040">Balanced — 40 MiB/s</option>
               <option value="custom">Custom</option>
-            </select>
+            </Select>
           </label>
           <label>
             Maximum issued bytes per second{' '}
-            <input
+            <Input
               inputMode="numeric"
               maxLength={10}
               value={rate}
@@ -367,9 +368,9 @@ export function SyncWorkflow({
               onChange={(event) => setRate(event.target.value)}
             />
           </label>
-          <button type="submit" disabled={busy || !validRate}>
+          <Button type="submit" disabled={busy || !validRate}>
             Apply shared budget
-          </button>
+          </Button>
         </form>
         <p>
           Changes affect comparison, copying and verification using this shared application budget.
@@ -378,7 +379,7 @@ export function SyncWorkflow({
       </details>
       <div className="backup-controls">
         <h3>Transfer history and recovery</h3>
-        <button
+        <Button
           disabled={busy}
           onClick={() => {
             setHistoryLoading(true);
@@ -386,7 +387,7 @@ export function SyncWorkflow({
           }}
         >
           Refresh safe-copy history
-        </button>
+        </Button>
       </div>
       {historyError && (
         <p className="error" role="alert">
@@ -425,7 +426,7 @@ export function SyncWorkflow({
             <small>Updated {job.updatedAt}</small>
             <div className="backup-controls">
               {job.action === 'replace_retaining' && (
-                <button
+                <Button
                   disabled={busy}
                   onClick={() =>
                     void action(async () => {
@@ -438,10 +439,10 @@ export function SyncWorkflow({
                   }
                 >
                   Inspect retained versions
-                </button>
+                </Button>
               )}
               {(job.state === 'running' || job.state === 'paused') && (
-                <button
+                <Button
                   disabled={busy}
                   onClick={() =>
                     void action(async () => {
@@ -455,10 +456,10 @@ export function SyncWorkflow({
                   }
                 >
                   {job.state === 'paused' ? 'Resume transfer' : 'Pause transfer'}
-                </button>
+                </Button>
               )}
               {active(job) && (
-                <button
+                <Button
                   disabled={busy || job.state === 'cancel_requested'}
                   onClick={() =>
                     void action(async () => {
@@ -469,10 +470,10 @@ export function SyncWorkflow({
                   }
                 >
                   Cancel transfer
-                </button>
+                </Button>
               )}
               {job.state === 'needs_review' && job.readyReviewId && (
-                <button
+                <Button
                   disabled={busy || Boolean(running)}
                   onClick={() =>
                     void action(async () => {
@@ -491,12 +492,12 @@ export function SyncWorkflow({
                   }
                 >
                   Review prepared copy
-                </button>
+                </Button>
               )}
               {['needs_recovery', 'failed', 'canceled', 'completed_partial'].includes(
                 job.state,
               ) && (
-                <button
+                <Button
                   disabled={busy || Boolean(running)}
                   onClick={() =>
                     void action(async () => {
@@ -511,7 +512,7 @@ export function SyncWorkflow({
                   }
                 >
                   Inspect recovery
-                </button>
+                </Button>
               )}
             </div>
             {versions[job.id] && (
@@ -535,7 +536,7 @@ export function SyncWorkflow({
                     </li>
                   ))}
                 </ul>
-                <button
+                <Button
                   disabled={
                     busy ||
                     Boolean(running) ||
@@ -559,7 +560,7 @@ export function SyncWorkflow({
                   }
                 >
                   Review retained restore to new output
-                </button>
+                </Button>
                 <p>
                   Restore requires a separate approval and writes into a new protected output.
                   Existing originals and retained history remain untouched.
@@ -661,19 +662,19 @@ function SyncReviewPanel({
         </table>
       </div>
       <div className="backup-controls">
-        <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
+        <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
           Previous plan entries
-        </button>
+        </Button>
         <span>
           Plan entries {items.length ? offset + 1 : 0}–{offset + items.length} of{' '}
           {review.items.length}
         </span>
-        <button
+        <Button
           disabled={offset + 200 >= review.items.length}
           onClick={() => setOffset(offset + 200)}
         >
           Next plan entries
-        </button>
+        </Button>
       </div>
       {!review.executionAvailable && <p role="status">{review.reason}</p>}
       <fieldset disabled={busy || approved || !review.executionAvailable}>
@@ -711,7 +712,7 @@ function SyncReviewPanel({
       </p>
       <div className="backup-controls">
         {!approved && (
-          <button
+          <Button
             disabled={
               busy ||
               !review.executionAvailable ||
@@ -722,20 +723,20 @@ function SyncReviewPanel({
             onClick={() => onApprove(uncopied, metadata)}
           >
             Approve this safe-copy action
-          </button>
+          </Button>
         )}
         {approved && (
-          <button
+          <Button
             className="primary"
             disabled={busy || !review.executionAvailable}
             onClick={onStart}
           >
             Start {actionNames[review.action].toLowerCase()}
-          </button>
+          </Button>
         )}
-        <button disabled={busy} onClick={onDismiss}>
+        <Button disabled={busy} onClick={onDismiss}>
           Close action review
-        </button>
+        </Button>
       </div>
     </section>
   );

@@ -1918,7 +1918,7 @@ describe('native read-only library', () => {
     const status = await browser.tauri.execute(async ({ core }) =>
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
-    assert.equal(status.data.catalogSchema, 13);
+    assert.equal(status.data.catalogSchema, 17);
     assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
     assert.equal(
       await browser.execute(() =>
@@ -2197,7 +2197,7 @@ describe('native read-only library', () => {
         completedAfterRelease: true,
         sourcesPreserved: true,
       });
-      assert.equal(receipt.catalogJournal.catalogSchema, 13);
+      assert.equal(receipt.catalogJournal.catalogSchema, 17);
       assert.equal(receipt.renamePlanning.scope, 'simulated-pure-planning-only');
       assert.deepEqual(receipt.relocation, {
         scope: 'generated-relocation-infrastructure-only',
@@ -3179,7 +3179,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     const picker = await browser.tauri.mock('foundation_request');
     try {
       await picker.mockReturnValue({ kind: 'directory', data: selection });
-      await $('button.primary').click();
+      // Match pointer order; the embedded driver's click-then-focus otherwise
+      // takes focus back from the setup form after its real mount handler.
+      await browser.execute(() => {
+        const button = document.querySelector('button.primary');
+        button.focus();
+        button.click();
+      });
       await $('.selected-folder').waitForDisplayed();
       assert.equal(await $('.root-setup input[required]').isFocused(), true);
       await $('.root-setup input[required]').setValue('Generated test library');
@@ -4225,7 +4231,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             : (button.getAttribute('aria-label') ?? button.textContent.trim()),
         ),
       ),
-      ['Collapse navigation', 'Filter', 'Jobs', 'Saved plans'],
+      ['Collapse navigation', 'Filter', 'Jobs', 'Catalog', 'Saved plans'],
     );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
@@ -4975,7 +4981,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     }
     await browser.setWindowSize(1180, 780);
     console.info('Native viewer information opened');
-    const favorite = await $('.inspector input[type="checkbox"]');
+    const inspector = await $('.inspector');
+    const favorite = await inspector.$('label=Favorite').$('input[type="checkbox"]');
     await favorite.click();
     await browser.waitUntil(async () => favorite.isSelected());
     await browser.execute(() => {
@@ -4986,8 +4993,11 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(
       async () => (await native({ kind: 'detail', asset_id: opening.id })).data.asset.rating === 4,
     );
-    await $('.inspector input:not([type="checkbox"])').setValue('Generated fixture, 家族');
-    await $('.inspector button[type="submit"]').click();
+    await inspector
+      .$('label=Tags, separated by commas')
+      .$('input')
+      .setValue('Generated fixture, 家族');
+    await inspector.$('button=Save tags').click();
     await browser.waitUntil(async () => {
       const tags = await native({ kind: 'tags' });
       return tags.data.includes('家族');

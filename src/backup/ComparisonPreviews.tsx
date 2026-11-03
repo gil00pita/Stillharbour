@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import { libraryData, errorMessage } from '../ipc';
 
@@ -15,7 +16,7 @@ export function ComparisonPreviews({ runId, entryId }: { runId: string; entryId:
   }, []);
   return (
     <div>
-      <button
+      <Button
         disabled={busy}
         onClick={async () => {
           setBusy(true);
@@ -48,7 +49,7 @@ export function ComparisonPreviews({ runId, entryId }: { runId: string; entryId:
         }}
       >
         Load side-by-side previews
-      </button>
+      </Button>
       <p>
         Explicit read-only previews use the shared byte budget and bounded decoder. Unsupported,
         missing or changed files retain their text observations.

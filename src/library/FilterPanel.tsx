@@ -1,3 +1,4 @@
+import { Button, Input } from '../components/ui/controls';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AssetQuery, AppPreferences, LibraryStatus } from '../bindings';
 import type { Section, ViewMode } from './model';
@@ -72,9 +73,9 @@ export function FilterPanel({
       <form onSubmit={submit} aria-busy={selecting}>
         <header className="filter-panel-header">
           <h2 id="filter-panel-title">Filters</h2>
-          <button type="button" disabled={selecting} onClick={onClose} aria-label="Close filters">
+          <Button type="button" disabled={selecting} onClick={onClose} aria-label="Close filters">
             Close
-          </button>
+          </Button>
         </header>
         <fieldset className="filter-panel-body" disabled={selecting}>
           <p className="help">
@@ -108,7 +109,7 @@ export function FilterPanel({
             <h3>Folders &amp; tags</h3>
             <label>
               Folder (relative)
-              <input
+              <Input
                 maxLength={2048}
                 value={draft.folder}
                 onChange={(event) =>
@@ -135,18 +136,18 @@ export function FilterPanel({
               onRelink={onRelink}
             />
           </section>
-          <button
+          <Button
             type="button"
             disabled={selecting || dirty || c.loading || c.selection.busy || !c.page?.total}
             onClick={() => void selectAll()}
           >
             Select all results
-          </button>
+          </Button>
           {selectionError && <p role="alert">{selectionError}</p>}
           {dirty && <p className="help">Apply changes before selecting all matching results.</p>}
         </fieldset>
         <footer className="filter-panel-actions">
-          <button
+          <Button
             type="button"
             disabled={selecting}
             onClick={() => {
@@ -158,10 +159,10 @@ export function FilterPanel({
             }}
           >
             Reset filters
-          </button>
-          <button type="submit" className="primary" disabled={c.selection.busy || selecting}>
+          </Button>
+          <Button type="submit" className="primary" disabled={c.selection.busy || selecting}>
             Apply filters
-          </button>
+          </Button>
         </footer>
       </form>
     </dialog>

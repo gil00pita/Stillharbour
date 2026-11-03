@@ -76,6 +76,8 @@ fn metadata_read_arguments(input: &std::ffi::OsStr) -> Vec<OsString> {
         "-FileType",
         "-Keywords",
         "-Subject",
+        "-Composite:GPSLatitude",
+        "-Composite:GPSLongitude",
         "--",
     ]
     .into_iter()

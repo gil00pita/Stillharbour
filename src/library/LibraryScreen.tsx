@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { AssetSummary, AssetQuery, LibraryStatus } from '../bindings';
 import { FilterPanel, type GalleryDisplay } from './FilterPanel';
@@ -15,10 +16,14 @@ import { PreparationBanner } from './PreparationBanner';
 import { DEFAULT_TEXT_COLUMNS } from './textColumns';
 import { photoOrigin, type PhotoOrigin } from './viewerMotion';
 import { restoreAssetFocus } from './focus';
+import { CatalogOrganizer } from '../metadata/CatalogOrganizer';
 import { type ViewMode, type Section } from './model';
 
 export type { Section } from './model';
 export function LibraryScreen({
+  initialQuery,
+  initialSelectedId,
+  onReturnToMap,
   catalogId = null,
   jobsControl,
   navigationControl,
@@ -30,6 +35,9 @@ export function LibraryScreen({
   onSettings,
   onRelink,
 }: {
+  initialQuery?: AssetQuery | undefined;
+  initialSelectedId?: string | null | undefined;
+  onReturnToMap?: (() => void) | undefined;
   catalogId?: string | null;
   jobsControl?: ReactNode;
   navigationControl?: ReactNode;
@@ -47,6 +55,8 @@ export function LibraryScreen({
     [],
   );
   const c = useLibraryController({
+    initialQuery,
+    initialSelectedId: initialSelectedId ?? null,
     status,
     section,
     onError,
@@ -72,6 +82,7 @@ export function LibraryScreen({
   const [comparison, setComparison] = useState<AssetSummary[] | null>(null);
   const [organizationIds, setOrganizationIds] = useState<string[] | null>(null);
   const [plansOpen, setPlansOpen] = useState(false);
+  const [catalogOpen, setCatalogOpen] = useState(false);
   function filter(patch: Partial<AssetQuery>) {
     c.filter(patch);
     if (!batchBusy) setViewerInitial(null);
@@ -89,11 +100,14 @@ export function LibraryScreen({
       onSearch={(name) => filter({ name })}
       busy={batchBusy}
       onPlans={() => setPlansOpen(true)}
+      onCatalog={() => setCatalogOpen(true)}
       onFilter={() => setFilterOpen(true)}
       filterOpen={filterOpen}
       activeCount={
         Object.entries(query).filter(
-          ([key, value]) => !['sort', 'deferPendingPreviews'].includes(key) && Boolean(value),
+          ([key, value]) =>
+            !['sort', 'deferPendingPreviews'].includes(key) &&
+            (Boolean(value) || (key === 'rejected' && value !== null && value !== undefined)),
         ).length
       }
     />
@@ -106,6 +120,25 @@ export function LibraryScreen({
         aria-hidden={Boolean(viewerInitial)}
       >
         {header}
+        {query.albumId && (
+          <div className="catalog-collection-scope">
+            <span>Virtual album filter active</span>
+            <Button onClick={() => filter({ albumId: null })}>Clear album filter</Button>
+          </div>
+        )}
+        {(query.mapBounds || query.mapCell || query.location) && (
+          <div className="map-filters">
+            <span>
+              {query.location === 'unavailable'
+                ? 'Photos with no usable location'
+                : 'Photos from the selected map area'}
+            </span>
+            {onReturnToMap && <Button onClick={onReturnToMap}>Return to map</Button>}
+            <Button onClick={() => filter({ mapBounds: null, mapCell: null, location: null })}>
+              Clear location filter
+            </Button>
+          </div>
+        )}
         <div className="library-content">
           <PreparationBanner status={status} rootId={query.rootId} onRefresh={onRefresh} />
           <div className="library-content-body">
@@ -119,6 +152,7 @@ export function LibraryScreen({
                 canCompare={!frozen && selected.size >= 2 && selected.size <= 4}
                 onCompare={() => void openComparison()}
                 onOrganization={() => setOrganizationIds([...selected])}
+                onAlbum={() => setCatalogOpen(true)}
                 onTags={c.addTags}
                 onFreeze={() => void c.freeze()}
                 onFavorite={() =>
@@ -147,7 +181,12 @@ export function LibraryScreen({
                 status={status}
                 mode={mode}
                 viewerOpen={Boolean(
-                  viewerInitial || comparison || filterOpen || organizationIds || plansOpen,
+                  viewerInitial ||
+                  comparison ||
+                  filterOpen ||
+                  organizationIds ||
+                  plansOpen ||
+                  catalogOpen,
                 )}
                 onOpen={(id, opener) => {
                   const asset = page?.assets.find((asset) => asset.id === id);
@@ -166,6 +205,17 @@ export function LibraryScreen({
           </div>
         </div>
       </div>
+      {catalogOpen && (
+        <CatalogOrganizer
+          roots={status.roots}
+          query={query}
+          selection={c.selection.scope}
+          selectionCount={selectionCount}
+          onBrowse={filter}
+          onChanged={onRefresh}
+          onClose={() => setCatalogOpen(false)}
+        />
+      )}
       {filterOpen && (
         <FilterPanel
           controller={c}
@@ -236,9 +286,9 @@ function QueryFailure({
     <div className="empty-results">
       <h2>Library couldn’t be loaded</h2>
       <p>{message}</p>
-      <button disabled={loading} onClick={onRetry}>
+      <Button disabled={loading} onClick={onRetry}>
         {loading ? 'Retrying library…' : 'Retry library'}
-      </button>
+      </Button>
     </div>
   );
 }

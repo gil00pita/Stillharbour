@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '../test/render';
 import { expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 import { SettingsScreen } from './SettingsScreen';
@@ -223,6 +223,18 @@ it.each(['5', '-1'])('discards size amount/unit/validity and pending tags (%s)',
 function defaults() {
   return within(screen.getByRole('form', { name: 'Application defaults' }));
 }
+
+it.each([
+  [null, 'Open a catalog to choose its preferred import destination'],
+  ['current-catalog', 'Saving an import destination is unavailable in this session'],
+])('explains unavailable import preferences for catalog %s', (catalogId, reason) => {
+  setup(undefined, { catalogId });
+  const destination = screen.getByRole('combobox', { name: 'Preferred import destination' });
+  expect(destination).toBeDisabled();
+  expect(destination).toHaveAccessibleDescription(reason);
+  expect(screen.getByText(reason)).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Save import destination' })).toBeDisabled();
+});
 
 it('returns focus after cancel even when animation frames are suspended', async () => {
   vi.stubGlobal('requestAnimationFrame', vi.fn());

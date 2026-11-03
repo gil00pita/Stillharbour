@@ -1,3 +1,4 @@
+import { Button, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   DirectorySelection,
@@ -140,7 +141,7 @@ export function OrganizationDestination({
       <h3>Destination for organized copies</h3>
       <label>
         Destination library policy
-        <select
+        <Select
           aria-label="Destination library policy"
           disabled={busy || stale}
           value={destinationRootId}
@@ -175,7 +176,7 @@ export function OrganizationDestination({
               </option>
             );
           })}
-        </select>
+        </Select>
       </label>
       {preferredId && destinationRootId === preferredId && (
         <p className="help">
@@ -189,25 +190,25 @@ export function OrganizationDestination({
           : 'Choose an existing folder outside every indexed library.'}{' '}
         Checking it leaves both folders unchanged.
       </p>
-      <button
+      <Button
         type="button"
         disabled={busy || stale || !!destinationProblem}
         onClick={() => void check(true)}
       >
         {busy ? 'Checking destination…' : 'Choose destination'}
-      </button>
+      </Button>
       {selection && (
         <>
           <p>
             <bdi>{review?.destinationPath ?? selection.displayPath}</bdi>
           </p>
-          <button
+          <Button
             type="button"
             disabled={busy || stale || !!destinationProblem}
             onClick={() => void check(false)}
           >
             Check destination again
-          </button>
+          </Button>
         </>
       )}
       {error && (
@@ -258,13 +259,13 @@ export function OrganizationDestination({
               </tbody>
             </table>
           </div>
-          <button
+          <Button
             type="button"
             disabled={busy || saved !== null || !!destinationProblem}
             onClick={() => void save()}
           >
             Save plan draft
-          </button>
+          </Button>
         </>
       )}
       {saved && (

@@ -10,6 +10,105 @@ pub struct LibraryFixture {
     baseline: BTreeMap<PathBuf, String>,
 }
 impl LibraryFixture {
+    /// Closed GPS fixture with real EXIF references; no supplied paths or bytes.
+    pub fn generate_geographic() -> Result<Self> {
+        use image::ImageEncoder;
+        let directory = tempfile::Builder::new()
+            .prefix("stillharbour-generated-map-")
+            .tempdir()?;
+        for (index, (name, point)) in [
+            ("Zero", Some((0.0_f64, 0.0_f64))),
+            ("Same", Some((0.0, 0.0))),
+            ("East", Some((5.0, 179.75))),
+            ("West", Some((5.0, -179.75))),
+            ("London", Some((51.5074, -0.1278))),
+            ("South", Some((-33.5, -70.7))),
+            ("Invalid", Some((91.0, 10.0))),
+            ("Unknown", None),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let image = image::RgbImage::from_fn(360, 240, |x, y| {
+                image::Rgb([
+                    (40 + x / 3 + index as u32 * 9) as u8,
+                    (70 + y / 2) as u8,
+                    125,
+                ])
+            });
+            let mut encoded = Vec::new();
+            let mut encoder = image::codecs::jpeg::JpegEncoder::new(&mut encoded);
+            if let Some((latitude, longitude)) = point {
+                let mut tiff = b"II\x2a\0\x08\0\0\0".to_vec();
+                fn entry(out: &mut Vec<u8>, tag: u16, kind: u16, count: u32, value: u32) {
+                    out.extend(tag.to_le_bytes());
+                    out.extend(kind.to_le_bytes());
+                    out.extend(count.to_le_bytes());
+                    out.extend(value.to_le_bytes());
+                }
+                tiff.extend(1u16.to_le_bytes());
+                entry(&mut tiff, 0x8825, 4, 1, 26);
+                tiff.extend(0u32.to_le_bytes());
+                tiff.extend(4u16.to_le_bytes());
+                entry(
+                    &mut tiff,
+                    1,
+                    2,
+                    2,
+                    if latitude < 0.0 {
+                        b'S'.into()
+                    } else {
+                        b'N'.into()
+                    },
+                );
+                entry(&mut tiff, 2, 5, 3, 80);
+                entry(
+                    &mut tiff,
+                    3,
+                    2,
+                    2,
+                    if longitude < 0.0 {
+                        b'W'.into()
+                    } else {
+                        b'E'.into()
+                    },
+                );
+                entry(&mut tiff, 4, 5, 3, 104);
+                tiff.extend(0u32.to_le_bytes());
+                for coordinate in [latitude, longitude] {
+                    let degrees = coordinate.abs().floor();
+                    let minutes = ((coordinate.abs() - degrees) * 60.0).floor();
+                    let seconds = ((coordinate.abs() - degrees) * 60.0 - minutes) * 60.0;
+                    for (numerator, denominator) in [
+                        (degrees as u32, 1_u32),
+                        (minutes as u32, 1_u32),
+                        ((seconds * 1_000_000.0).round() as u32, 1_000_000_u32),
+                    ] {
+                        tiff.extend(numerator.to_le_bytes());
+                        tiff.extend(denominator.to_le_bytes());
+                    }
+                }
+                encoder.set_exif_metadata(tiff).map_err(|e| {
+                    AppError::new(ErrorCode::WorkerFailed, "GPS fixture EXIF failed.").caused_by(e)
+                })?;
+            }
+            encoder
+                .write_image(image.as_raw(), 360, 240, image::ExtendedColorType::Rgb8)
+                .map_err(|e| {
+                    AppError::new(ErrorCode::WorkerFailed, "GPS fixture JPEG failed.").caused_by(e)
+                })?;
+            std::fs::write(directory.path().join(format!("{name}.jpg")), encoded)?;
+        }
+        std::fs::write(
+            directory.path().join("Zero.xmp"),
+            br#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><r:RDF xmlns:r="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><r:Description xmlns:p="urn:stillharbour:fixture:unknown" p:EditingHistory="Retain this unknown field"/></r:RDF></x:xmpmeta>"#,
+        )?;
+        let baseline = manifest(directory.path())?;
+        Ok(Self {
+            directory,
+            baseline,
+        })
+    }
     /// Only the constructor-owned valid JPEG and its companion; unlike the
     /// malformed-format coverage fixture, this supports a complete real scan.
     pub fn coherent_import_copy(&self) -> Result<Self> {

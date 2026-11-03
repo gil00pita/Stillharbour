@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CopyActionApproval,
@@ -211,9 +212,9 @@ export function CopyContinuationWorkflow({
   }
   return (
     <section aria-label="Reviewed copy continuation" aria-busy={pending}>
-      <button type="button" disabled={pending || active} onClick={() => void create()}>
+      <Button type="button" disabled={pending || active} onClick={() => void create()}>
         Review verification and continuation
-      </button>
+      </Button>
       {error && (
         <p role="alert" className="error">
           {error}
@@ -279,16 +280,16 @@ export function CopyContinuationWorkflow({
               </tbody>
             </table>
           </div>
-          <button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
+          <Button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
             Previous continuation files
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
             disabled={(page + 1) * 64 >= review.files.length}
             onClick={() => setPage(page + 1)}
           >
             Next continuation files
-          </button>
+          </Button>
           <label>
             <input
               type="checkbox"
@@ -304,17 +305,17 @@ export function CopyContinuationWorkflow({
             sparse/compression layout are not preserved or verified. Originals remain; this is not
             independent backup.
           </label>
-          <button
+          <Button
             type="button"
             disabled={pending || active || !acknowledged}
             onClick={() => void approve()}
           >
             Approve verification and continuation
-          </button>
+          </Button>
           {approval && (
-            <button type="button" disabled={pending || active} onClick={() => void start()}>
+            <Button type="button" disabled={pending || active} onClick={() => void start()}>
               Start reviewed continuation
-            </button>
+            </Button>
           )}
         </>
       )}

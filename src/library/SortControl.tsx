@@ -1,3 +1,4 @@
+import { Select } from '../components/ui/controls';
 const LIBRARY_SORTS = [
   { value: 'capture', label: 'Capture Date · newest first' },
   { value: 'name', label: 'Filename' },
@@ -20,7 +21,7 @@ export function SortControl({
   return (
     <label>
       Sort
-      <select
+      <Select
         aria-label={label}
         value={value}
         disabled={disabled}
@@ -31,7 +32,7 @@ export function SortControl({
             {sort.label}
           </option>
         ))}
-      </select>
+      </Select>
     </label>
   );
 }

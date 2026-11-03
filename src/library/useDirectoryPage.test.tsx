@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook, waitFor } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { DirectoryPage } from '../bindings';
 import { useDirectoryPage } from './useDirectoryPage';

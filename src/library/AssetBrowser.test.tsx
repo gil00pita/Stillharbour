@@ -1,5 +1,5 @@
 import { createRef } from 'react';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { AssetBrowser, type PhotoViewportHandle } from './AssetBrowser';
 import { libraryData } from '../ipc';

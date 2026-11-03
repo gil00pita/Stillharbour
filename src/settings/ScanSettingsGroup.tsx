@@ -1,3 +1,4 @@
+import { Select } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { LibraryRoot, RootMode, ScanFilter } from '../bindings';
 import { errorMessage } from '../ipc';
@@ -41,7 +42,7 @@ export function ScanSettingsGroup({
         <>
           <label className="scan-library-selector">
             Library to configure
-            <select
+            <Select
               aria-label="Library to configure"
               value={root.id}
               disabled={busy || saving}
@@ -56,7 +57,7 @@ export function ScanSettingsGroup({
                   {value.label}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <RootSetup
             key={`${root.id}:${version}`}

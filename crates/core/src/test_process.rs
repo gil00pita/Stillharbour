@@ -48,19 +48,19 @@ pub(crate) fn isolated(case: &str, seconds: u64) -> bool {
     true
 }
 
-struct Output {
+pub(crate) struct Output {
     tail: std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
     done: std::sync::mpsc::Receiver<()>,
 }
 impl Output {
-    fn finish(self) -> String {
+    pub(crate) fn finish(self) -> String {
         // A descendant retaining an inherited writer must not remove the
         // parent's deadline. Keep the captured tail even if EOF is delayed.
         let _ = self.done.recv_timeout(std::time::Duration::from_secs(1));
         String::from_utf8_lossy(&self.tail.lock().unwrap()).into_owned()
     }
 }
-fn drain(mut stream: impl std::io::Read + Send + 'static) -> Output {
+pub(crate) fn drain(mut stream: impl std::io::Read + Send + 'static) -> Output {
     let tail = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let captured = tail.clone();
     let (sender, done) = std::sync::mpsc::channel();

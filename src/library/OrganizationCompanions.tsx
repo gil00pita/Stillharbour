@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { OrganizationCompanionReview } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -45,13 +46,13 @@ export function OrganizationCompanions({
     (review.catalogRevision !== revision || review.catalogRevision !== previewRevision);
   return (
     <div className="organization-companions">
-      <button type="button" disabled={busy} onClick={() => void load()}>
+      <Button type="button" disabled={busy} onClick={() => void load()}>
         {busy
           ? 'Loading companions…'
           : review || error
             ? 'Refresh companion review'
             : 'Review indexed companions'}
-      </button>
+      </Button>
       {error && (
         <p role="alert" className="error">
           {error}

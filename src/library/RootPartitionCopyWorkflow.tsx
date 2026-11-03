@@ -1,3 +1,4 @@
+import { Button, Select } from '../components/ui/controls';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { CopyManifest, LibraryRoot } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -65,13 +66,13 @@ export function RootPartitionCopyWorkflow({
       {error && (
         <div role="alert">
           {error}{' '}
-          <button onClick={() => setRetry((value) => value + 1)}>Retry source libraries</button>
+          <Button onClick={() => setRetry((value) => value + 1)}>Retry source libraries</Button>
         </div>
       )}
       {roots && (
         <label>
           {purpose === 'copy' ? 'Source library to copy' : 'Source library to compare'}
-          <select
+          <Select
             aria-label={purpose === 'copy' ? 'Source library to copy' : 'Source library to compare'}
             value={choice}
             disabled={busy}
@@ -98,7 +99,7 @@ export function RootPartitionCopyWorkflow({
                 </option>
               );
             })}
-          </select>
+          </Select>
         </label>
       )}
       {choice && !allowed && roots && (

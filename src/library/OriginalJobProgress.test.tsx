@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../test/render';
 import { expect, it } from 'vitest';
 import type { OriginalOperationJob } from '../bindings';
 import { OriginalJobProgress } from './OriginalJobProgress';

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { SnapshotProfile, SnapshotReview, SnapshotJob, SyncReply } from '../bindings';
 import { libraryData } from '../ipc';

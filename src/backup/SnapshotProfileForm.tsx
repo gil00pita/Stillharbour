@@ -1,3 +1,4 @@
+import { Button, Input, Select, Textarea } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   DirectorySelection,
@@ -153,7 +154,7 @@ export function SnapshotProfileForm({
           <legend>Profile and source scope</legend>
           <label>
             Snapshot profile name
-            <input
+            <Input
               value={label}
               maxLength={80}
               onChange={(event) => setLabel(event.target.value)}
@@ -205,7 +206,7 @@ export function SnapshotProfileForm({
           <legend>Destination</legend>
           <label>
             Snapshot transport
-            <select
+            <Select
               value={protocol}
               onChange={(event) =>
                 changeEndpoint(() => {
@@ -222,14 +223,14 @@ export function SnapshotProfileForm({
                   {!capabilities?.protocols.includes(kind) ? ' — unavailable' : ''}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           {protocol === 'local' ? (
             <div>
               <p className="backup-path">
                 {selection?.displayPath ?? 'Choose a separate parent folder for this repository.'}
               </p>
-              <button
+              <Button
                 type="button"
                 onClick={() =>
                   void action(async () => {
@@ -239,7 +240,7 @@ export function SnapshotProfileForm({
                 }
               >
                 Choose snapshot destination
-              </button>
+              </Button>
               {selection && !selection.identityAvailable && (
                 <p role="alert">
                   This folder cannot supply the required native identity. Choose another
@@ -251,7 +252,7 @@ export function SnapshotProfileForm({
             <>
               <label>
                 Server host
-                <input
+                <Input
                   value={host}
                   maxLength={253}
                   autoComplete="off"
@@ -260,7 +261,7 @@ export function SnapshotProfileForm({
               </label>
               <label>
                 Server port
-                <input
+                <Input
                   value={port}
                   maxLength={5}
                   inputMode="numeric"
@@ -269,7 +270,7 @@ export function SnapshotProfileForm({
               </label>
               <label>
                 Remote username
-                <input
+                <Input
                   value={user}
                   maxLength={128}
                   autoComplete="off"
@@ -278,7 +279,7 @@ export function SnapshotProfileForm({
               </label>
               <label>
                 Remote parent path
-                <input
+                <Input
                   value={remotePath}
                   maxLength={4096}
                   autoComplete="off"
@@ -292,7 +293,7 @@ export function SnapshotProfileForm({
               {protocol === 'sftp' && (
                 <label>
                   Verified server public host key
-                  <textarea
+                  <Textarea
                     value={hostKey}
                     maxLength={16384}
                     spellCheck={false}
@@ -307,7 +308,7 @@ export function SnapshotProfileForm({
               {protocol === 'ftps' && (
                 <label>
                   Trusted CA certificate (optional PEM)
-                  <textarea
+                  <Textarea
                     value={certificate}
                     maxLength={65536}
                     spellCheck={false}
@@ -323,7 +324,7 @@ export function SnapshotProfileForm({
                 <>
                   <label>
                     SMB domain
-                    <input
+                    <Input
                       value={domain}
                       maxLength={128}
                       onChange={(event) => changeEndpoint(() => setDomain(event.target.value))}
@@ -331,7 +332,7 @@ export function SnapshotProfileForm({
                   </label>
                   <label>
                     SMB share
-                    <input
+                    <Input
                       value={share}
                       maxLength={128}
                       onChange={(event) => changeEndpoint(() => setShare(event.target.value))}
@@ -366,7 +367,7 @@ export function SnapshotProfileForm({
             Passwords are entered in the native credential dialog. They are not stored in this form
             or exported with profile settings.
           </p>
-          <button
+          <Button
             type="button"
             disabled={!capabilities?.credentialsAvailable}
             onClick={() =>
@@ -382,13 +383,13 @@ export function SnapshotProfileForm({
             {repositoryRef
               ? 'Set a different repository password…'
               : 'Set repository recovery password…'}
-          </button>
+          </Button>
           {repositoryRef && (
             <p>Repository recovery password saved in this device's credential vault.</p>
           )}
           {protocol !== 'local' && (
             <>
-              <button
+              <Button
                 type="button"
                 disabled={!capabilities?.credentialsAvailable || !target}
                 onClick={() =>
@@ -408,7 +409,7 @@ export function SnapshotProfileForm({
                 }
               >
                 {transportRef ? 'Set different remote credentials…' : 'Set remote credentials…'}
-              </button>
+              </Button>
               {transportRef && (
                 <p>
                   Remote credentials saved for these exact endpoint settings. Changing the endpoint
@@ -431,12 +432,12 @@ export function SnapshotProfileForm({
           </p>
         )}
         <div className="backup-controls">
-          <button className="primary" type="submit" disabled={locked || !canCreate}>
+          <Button className="primary" type="submit" disabled={locked || !canCreate}>
             Save snapshot profile
-          </button>
-          <button type="button" disabled={locked} onClick={onClose}>
+          </Button>
+          <Button type="button" disabled={locked} onClick={onClose}>
             Close new profile
-          </button>
+          </Button>
         </div>
         <p>
           Saving stores the reviewed binding only. Starting a backup requires a separate scope

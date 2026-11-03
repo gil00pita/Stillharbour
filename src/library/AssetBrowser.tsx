@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import {
   type CSSProperties,
   useEffect,
@@ -266,7 +267,7 @@ export function AssetBrowser({
     <div className="browser-frame" style={listStyle}>
       {previews.error && (
         <div className="preview-error" role="status">
-          Previews couldn’t be loaded. <button onClick={previews.retry}>Retry previews</button>
+          Previews couldn’t be loaded. <Button onClick={previews.retry}>Retry previews</Button>
         </div>
       )}
       <div className={`browser-canvas-layout ${timeline ? '' : 'without-timeline'}`}>

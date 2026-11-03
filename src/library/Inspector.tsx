@@ -1,7 +1,10 @@
+import { Button, Input, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { AnnotationPatch, AssetDetail, AssetSummary, LibraryRoot } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { displayDate, fileSize } from './model';
+import { AssetNotesPanel } from '../metadata/AssetNotesPanel';
+import { KeywordImport } from '../metadata/KeywordImport';
 
 export function Inspector({
   id,
@@ -63,7 +66,7 @@ export function Inspector({
         <h2 ref={heading} tabIndex={-1}>
           Photo details
         </h2>
-        <button onClick={onClose}>Close</button>
+        <Button onClick={onClose}>Close</Button>
       </div>
       {asset && detail ? (
         <>
@@ -106,7 +109,7 @@ export function Inspector({
             </label>
             <label>
               Rating
-              <select
+              <Select
                 disabled={busy}
                 value={asset.rating}
                 onChange={(event) =>
@@ -118,20 +121,22 @@ export function Inspector({
                     {value === 0 ? 'Unrated' : `${value} / 5`}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label>
               Tags, separated by commas
-              <input
+              <Input
                 value={tags ?? asset.tags.join(', ')}
                 maxLength={2048}
                 onChange={(event) => setTags(event.target.value)}
               />
             </label>
-            <button disabled={busy} type="submit">
+            <Button disabled={busy} type="submit">
               Save tags
-            </button>
+            </Button>
           </form>
+          <AssetNotesPanel assetId={asset.id} />
+          <KeywordImport assetId={asset.id} onImported={() => setAttempt((value) => value + 1)} />
           {detail.companions.length > 0 && (
             <details>
               <summary>Possible companions ({detail.companions.length})</summary>
@@ -157,14 +162,14 @@ export function Inspector({
         <div>
           <p>Photo details couldn’t be loaded.</p>
           <p className="help">{loadError}</p>
-          <button
+          <Button
             onClick={() => {
               setLoadError(null);
               setAttempt((value) => value + 1);
             }}
           >
             Retry details
-          </button>
+          </Button>
         </div>
       ) : (
         <p>Loading details…</p>

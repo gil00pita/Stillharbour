@@ -1,3 +1,4 @@
+import { Button, Input } from './ui/controls';
 import { useId, useState } from 'react';
 
 export function TagInput({
@@ -31,7 +32,7 @@ export function TagInput({
             {values.map((value) => (
               <li key={value}>
                 <bdi>{value}</bdi>
-                <button
+                <Button
                   type="button"
                   disabled={disabled}
                   aria-label={`Remove ${value} from ${label}`}
@@ -45,12 +46,12 @@ export function TagInput({
                       strokeLinecap="round"
                     />
                   </svg>
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
         )}
-        <input
+        <Input
           id={id}
           name={name}
           value={draft}

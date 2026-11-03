@@ -1,3 +1,4 @@
+import { Button, Select } from '../components/ui/controls';
 import type { ReactNode, Ref } from 'react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type {
@@ -100,9 +101,9 @@ export function SettingsScreen({
             <h2 id="library-locations-title">Library locations</h2>
             <p className="help">Photo folders indexed in place. Your photos stay where they are.</p>
           </div>
-          <button disabled={controlsBusy || busy || !status} onClick={onAddFolder}>
+          <Button disabled={controlsBusy || busy || !status} onClick={onAddFolder}>
             Add photo folder
-          </button>
+          </Button>
         </div>
         {!status ? (
           <p role="status">Connecting to your libraries…</p>
@@ -123,14 +124,14 @@ export function SettingsScreen({
                     </p>
                   </div>
                   <div className="settings-library-actions">
-                    <button
+                    <Button
                       disabled={controlsBusy || busy || root.availability === 'scanning'}
                       onClick={() => void onRelink(root.id)}
                       aria-label={`Change location for ${root.label}`}
                     >
                       Change location
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
                       className="destructive"
                       disabled={
@@ -146,14 +147,15 @@ export function SettingsScreen({
                       aria-label={`Remove library ${root.label}`}
                     >
                       Remove library
-                    </button>
+                    </Button>
                   </div>
                 </li>
               ))}
             </ul>
             <p className="help">
               Use Change location to reconnect a moved folder, or Add photo folder for a different
-              library. Reconnected locations are checked before reconciliation.
+              library. Stillharbour checks that a reconnected folder matches your library before
+              updating its index.
             </p>
           </>
         )}
@@ -163,7 +165,7 @@ export function SettingsScreen({
         <p className="help">
           Clears indexed previews for all libraries. Originals and catalog notes stay unchanged.
         </p>
-        <button
+        <Button
           type="button"
           disabled={
             controlsBusy ||
@@ -182,7 +184,7 @@ export function SettingsScreen({
           }}
         >
           Clear preview cache
-        </button>
+        </Button>
       </section>
       {maintenanceTarget && (
         <LibraryMaintenance
@@ -238,7 +240,7 @@ export function SettingsScreen({
             <div className="form-grid">
               <label>
                 Default library
-                <select
+                <Select
                   aria-label="Default library"
                   value={draft.defaultRootId ?? ''}
                   onChange={(event) => update({ defaultRootId: event.target.value || null })}
@@ -253,11 +255,11 @@ export function SettingsScreen({
                       {root.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label>
                 Default sort
-                <select
+                <Select
                   aria-label="Default sort"
                   value={draft.sort}
                   onChange={(event) =>
@@ -269,7 +271,7 @@ export function SettingsScreen({
                   <option value="modified">File modified · newest first</option>
                   <option value="name">Filename</option>
                   <option value="size">Size · largest first</option>
-                </select>
+                </Select>
               </label>
             </div>
             <BrowserControls
@@ -306,7 +308,7 @@ export function SettingsScreen({
             />
           </section>
           <div className="settings-save">
-            <button
+            <Button
               type="button"
               onClick={() => {
                 setDraft(preferences);
@@ -316,10 +318,10 @@ export function SettingsScreen({
               }}
             >
               Discard changes
-            </button>
-            <button type="submit" className="primary">
+            </Button>
+            <Button type="submit" className="primary">
               {busy ? 'Saving…' : 'Save defaults'}
-            </button>
+            </Button>
           </div>
         </fieldset>
         {error && (

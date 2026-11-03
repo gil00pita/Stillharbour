@@ -1,5 +1,12 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0084](decisions/ADR-0084-reviewed-metadata-exports-and-tag-history.md) completes the remaining M5 implementation with schema-17 reviewed tag changes, removal overrides, reversible history and explicit new-output portable catalog/XMP exports. Native folder authority, immutable plans, bounded namespace-aware parsing, fresh companion inventory, no-replace publication and completion receipts preserve original files. [M5 validation](M5_VALIDATION.md) records actual checks and unclosed acceptance gates. Earlier slice records below remain historical.
+
+
+[ADR-0082](decisions/ADR-0082-catalog-metadata-organization.md) continues M5 with schema-16 catalog-only captions/rejects, exact virtual album membership, validated saved filters and explicit tag-category relationships. Optimistic versions, immutable note history and consistent historical migration snapshots retain the safety boundary. See [M5 metadata evidence](M5_METADATA.md); XMP/export and whole-milestone gates remain open.
+
+[ADR-0081](decisions/ADR-0081-offline-geographic-browsing.md) starts owner-authorized M5 read-only geography with a bundled Natural Earth overview, one pinned MapLibre worker and schema-15 spatial observations with reviewed schema-13/14 startup migration. Exact viewport/cell membership shares the normal library query path. M4 preservation certification and production mutation gates remain separate.
+
 [ADR-0080](decisions/ADR-0080-catalog-restore-activation.md) adds a separate reviewed catalog activation on restart: repository-authenticated restored catalog bytes, fresh native root confirmation, a consistent retained current catalog, a new candidate and an OS-sealed monotonic selector. Imported schema is compared with compiled definitions before data queries; current catalogs are never overwritten or replaced by an empty fallback. Same-platform/current-schema bounds and native acceptance remain explicit.
 
 [ADR-0079](decisions/ADR-0079-backup-application-workflows.md) records schema-13 application integration, native credentials/helpers, verified snapshot restore and OS-sealed recurring timing. Catalog timing-row replay cannot advance scheduled admission, and disabling an imported catalog copy cannot revoke the original instance's authority.
@@ -34,7 +41,7 @@ These are proposed defaults. Record changes as short ADRs rather than silently c
 | Primary platforms | Windows 11 x64; macOS Apple Silicon | Clean-machine CI/manual gates on both |
 | Minimum macOS | Set during M0 | Validate every packaged dependency; document exact minimum |
 | Intel Mac | Desired secondary build, not implicit support | Same tests and codec/helper availability as ARM build |
-| Desktop/UI | Tauri 2 + React/TypeScript + Vite | Real map/virtualized gallery and native IPC spike |
+| Desktop/UI | Tauri 2 + React/TypeScript + Vite + Chakra UI | Real map/virtualized gallery and native IPC spike |
 | Rust DB layer | rusqlite behind database actor | Migrations, concurrent reads and consistent backup |
 | Metadata | Pinned bundled ExifTool | Safe argument/config behavior and clean-machine execution |
 | Image decoding | image worker for baseline; adapters for RAW/HEIC | ICC, orientation, format coverage and memory limits |
@@ -338,3 +345,11 @@ The owner continued to M2 and selected organization templates/previews as the pr
 
 
 [ADR-0079](decisions/ADR-0079-backup-application-workflows.md) introduces the M4 application integration: schema-13 durable jobs/history, separate backup workflow gate, native-only OS credentials, fixed bundled restic/rclone, source-retaining staging/restore and exact-reviewed-manifest schedules. Actual native/application acceptance is still being collected; essential metadata and independent exact-old recovery must not be inferred from ordinary-byte snapshot success.
+
+
+2026-11-02 — Owner-requested [Chakra UI adoption](decisions/ADR-0083-chakra-ui-design-system.md) pins Chakra 3.37.0 and Emotion 11.14.0. The supplied boilerplate informs the provider/theme/recipe separation. Standard controls use the Stillharbour token system while native dialogs and specialized photo controls preserve their interactions. No Next.js, state library, schema or permission expansion. [UI_FRAMEWORK.md](UI_FRAMEWORK.md) records scope and evidence; milestone gates remain open.
+
+[ADR-0085](decisions/ADR-0085-exact-native-provenance-preservation.md) fixes the inherited macOS metadata admission limitation with exact, bounded opaque provenance capture/read-back under a distinct v2 policy. V1 digest serialization and unsupported-stream/ACL/flag protections remain intact; no original-file production gate is enabled.
+[ADR-0086](decisions/ADR-0086-owned-catalog-flushing-and-publication.md) retains writable owned-output handles for durable flushing and permits catalog-parent write sharing for retained snapshot publication; original-file guards and production gates remain unchanged.
+
+[ADR-0087](decisions/ADR-0087-supervised-windows-exif-metadata.md) fills the Windows dimensions-only metadata gap with bounded EXIF/GPS in the supervised stdin worker, revision-bound rescan refresh and explicit format limits. Fresh native Windows acceptance remains required.

@@ -12,6 +12,11 @@ use std::{
     time::Duration,
 };
 use tokio::{io::AsyncReadExt, process::Command};
+mod metadata;
+
+pub fn metadata_worker() -> Result<()> {
+    metadata::worker()
+}
 
 pub const MAX_INPUT_BYTES: u64 = 32 * 1024 * 1024;
 pub const MAX_NATIVE_FILE_BYTES: u64 = 512 * 1024 * 1024;

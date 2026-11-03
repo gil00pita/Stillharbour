@@ -113,7 +113,9 @@ impl ScanContext {
                 continue;
             }
             let current = store::asset(&self.catalog, id.clone())?;
-            if current.metadata_state == "ready" {
+            let legacy_metadata = cfg!(windows)
+                && store::legacy_windows_metadata(&self.catalog, id.clone(), revision.clone())?;
+            if current.metadata_state == "ready" && !legacy_metadata {
                 if let Some(reason) = self.filter.file_reason(
                     &entry.relative,
                     false,

@@ -59,6 +59,10 @@ jobs:
             .context/m4c-retained/**/m4c-retained.json
             .context/m4-application
             .context/m4-catalog-restart
+            .context/m5-native/*.json
+            .context/m5-native/*.png
+            .context/m5-native/app/build.json
+            .context/wdio-map
             .context/wdio-catalog-restart
             .context/wdio
             .context/gallery/**/warm-scroll.json

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '../test/render';
 import { expect, it, vi } from 'vitest';
 import type { ThumbnailResult } from '../bindings';
 import { ViewerImage } from './ViewerImage';

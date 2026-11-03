@@ -1,4 +1,4 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { libraryData } from '../ipc';
 import type { LibraryStatus, SelectionToken } from '../bindings';

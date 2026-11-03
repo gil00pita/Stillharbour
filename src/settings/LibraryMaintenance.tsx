@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { MaintenancePreview, MaintenanceResult, MaintenanceTarget } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -126,11 +127,11 @@ export function LibraryMaintenance({
           </p>
         )}
         <div className="settings-library-actions">
-          <button type="button" disabled={busy} onClick={onClose}>
+          <Button type="button" disabled={busy} onClick={onClose}>
             {completed ? 'Done' : 'Cancel'}
-          </button>
+          </Button>
           {!completed && !preview && !busy && (
-            <button
+            <Button
               type="button"
               onClick={() => {
                 setBusy(true);
@@ -139,10 +140,10 @@ export function LibraryMaintenance({
               }}
             >
               Review again
-            </button>
+            </Button>
           )}
           {!completed && (
-            <button
+            <Button
               type="submit"
               className={removing ? 'destructive' : ''}
               disabled={busy || !preview}
@@ -154,7 +155,7 @@ export function LibraryMaintenance({
                 : removing
                   ? 'Remove library and its previews'
                   : 'Clear all cached previews'}
-            </button>
+            </Button>
           )}
         </div>
       </form>

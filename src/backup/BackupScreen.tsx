@@ -1,3 +1,4 @@
+import { Button, Input, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   ComparisonEntry,
@@ -106,20 +107,20 @@ function BackupScreenContent({
   // Saved profiles retain their source even if the catalog's base changes.
   const workflowControl = (
     <div className="backup-mode-control" role="group" aria-label="Backup mode">
-      <button
+      <Button
         aria-pressed={workspace === 'safe_copy'}
         disabled={controlsBusy}
         onClick={() => setWorkspace('safe_copy')}
       >
         Safe copy
-      </button>
-      <button
+      </Button>
+      <Button
         aria-pressed={workspace === 'snapshots'}
         disabled={controlsBusy}
         onClick={() => setWorkspace('snapshots')}
       >
         Versioned backup
-      </button>
+      </Button>
     </div>
   );
   if (workspace === 'snapshots')
@@ -164,7 +165,7 @@ function BackupScreenContent({
         <section aria-label="Saved comparisons">
           <label>
             Saved comparison{' '}
-            <select
+            <Select
               value={selectedId}
               disabled={controlsBusy || profileLoading}
               onChange={(event) => {
@@ -178,13 +179,13 @@ function BackupScreenContent({
                   {item.label} · {item.sourceLabel}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           {profileLoading && <p role="status">Loading saved comparisons…</p>}
           {profileError && (
             <p role="alert">
               {profileError}{' '}
-              <button
+              <Button
                 disabled={controlsBusy}
                 onClick={() => {
                   setProfileLoading(true);
@@ -192,7 +193,7 @@ function BackupScreenContent({
                 }}
               >
                 Retry profiles
-              </button>
+              </Button>
             </p>
           )}
           {selectedId && !profile && !profileLoading && (
@@ -202,7 +203,7 @@ function BackupScreenContent({
             </p>
           )}
           {profile && (
-            <button
+            <Button
               disabled={controlsBusy}
               onClick={() => {
                 setRebindFrom(profile);
@@ -210,7 +211,7 @@ function BackupScreenContent({
               }}
             >
               Review profile rebinding
-            </button>
+            </Button>
           )}
           {profile && (
             <p>
@@ -387,7 +388,7 @@ function BackupWorkspace({
         {profileControls}
         {rebindFrom && (
           <section aria-label="Profile rebinding review">
-            <h2>Review a new immutable binding</h2>
+            <h2>Review the new source and destination</h2>
             <p className="backup-path">
               Previous source: {rebindFrom.sourceLabel} · {rebindFrom.sourceDisplayPath} ·{' '}
               {rebindFrom.sourceRootId}
@@ -422,7 +423,6 @@ function BackupWorkspace({
               {base?.availability ?? 'unavailable'} · All regular files, including hidden files,
               sidecars and unknown formats.
             </p>
-            <small>Root: {base?.id ?? 'none'}</small>
           </section>
           <section aria-label="Comparison destination">
             <h3>Destination</h3>
@@ -431,7 +431,7 @@ function BackupWorkspace({
                 destination?.displayPath ??
                 'Choose a separate folder.'}
             </p>
-            <button
+            <Button
               disabled={busy || running || !base || Boolean(profile)}
               onClick={() =>
                 void action(async () => {
@@ -446,7 +446,7 @@ function BackupWorkspace({
               }
             >
               Choose destination
-            </button>
+            </Button>
             <p>
               Only the proposed Stillharbour dataset is compared. Other files in this folder remain
               outside the scope. Existing data is not adopted by selecting it.
@@ -457,14 +457,14 @@ function BackupWorkspace({
           <div className="backup-controls">
             <label>
               Comparison profile name{' '}
-              <input
+              <Input
                 value={profileLabel}
                 maxLength={80}
                 disabled={busy || running}
                 onChange={(event) => setProfileLabel(event.target.value)}
               />
             </label>
-            <button
+            <Button
               disabled={
                 busy ||
                 running ||
@@ -503,17 +503,17 @@ function BackupWorkspace({
               }
             >
               Save comparison profile
-            </button>
+            </Button>
             <p>
-              Stores this read-only source and destination binding in the catalog. It saves no
-              approval and creates no destination files.
+              Remembers this source and destination for future comparisons. Saving a profile does
+              not approve copying or create destination files.
             </p>
           </div>
         )}
         <div className="backup-controls">
           <label>
             Comparison{' '}
-            <select
+            <Select
               value={mode}
               disabled={busy || running}
               onChange={(event) => {
@@ -523,9 +523,9 @@ function BackupWorkspace({
             >
               <option value="verified">Verified (complete bytes)</option>
               <option value="quick">Quick (content not checked)</option>
-            </select>
+            </Select>
           </label>
-          <button
+          <Button
             className="primary"
             disabled={
               busy ||
@@ -554,9 +554,9 @@ function BackupWorkspace({
             }
           >
             Compare
-          </button>
+          </Button>
           {running && (
-            <button
+            <Button
               disabled={busy}
               onClick={() =>
                 void action(async () => {
@@ -569,7 +569,7 @@ function BackupWorkspace({
               }
             >
               Cancel comparison
-            </button>
+            </Button>
           )}
         </div>
         <p>
@@ -638,7 +638,7 @@ function BackupWorkspace({
             {!running && run.state !== 'failed' && run.state !== 'canceled' && (
               <label>
                 Finding filter{' '}
-                <select
+                <Select
                   value={category}
                   onChange={(event) => {
                     setPage(null);
@@ -653,7 +653,7 @@ function BackupWorkspace({
                       Show {finding.replaceAll('_', ' ')}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
             )}
             {page && (
@@ -699,11 +699,11 @@ function BackupWorkspace({
                       runId={run.id}
                       entryId={selected.id}
                     />
-                    <button onClick={() => setSelected(null)}>Close entry details</button>
+                    <Button onClick={() => setSelected(null)}>Close entry details</Button>
                   </section>
                 )}
                 <div className="backup-controls">
-                  <button
+                  <Button
                     disabled={offset === 0}
                     onClick={() => {
                       setPage(null);
@@ -712,12 +712,12 @@ function BackupWorkspace({
                     }}
                   >
                     Previous
-                  </button>
+                  </Button>
                   <span>
                     Entries {page.entries.length ? offset + 1 : 0}–{offset + page.entries.length}
                     {page.total !== undefined && ` of ${page.total}`}
                   </span>
-                  <button
+                  <Button
                     disabled={page.nextOffset === null}
                     onClick={() => {
                       setPage(null);
@@ -726,7 +726,7 @@ function BackupWorkspace({
                     }}
                   >
                     Next
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
@@ -771,13 +771,13 @@ function ComparisonTable({
           {entries.map((entry) => (
             <tr key={entry.id}>
               <td className="backup-path">
-                <button
+                <Button
                   disabled={disabled}
                   aria-pressed={selectedId === entry.id}
                   onClick={() => onSelect(entry)}
                 >
                   {entry.displayPath}
-                </button>
+                </Button>
               </td>
               <td>
                 {entry.sourceBytes ?? '—'}

@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useState } from 'react';
 import type { InspectionJob } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -42,9 +43,9 @@ export function InspectionJobProgress({
       {active && (
         <>
           <progress aria-label="Inspection in progress" />
-          <button disabled={busy || job.state === 'cancel_requested'} onClick={() => void cancel()}>
+          <Button disabled={busy || job.state === 'cancel_requested'} onClick={() => void cancel()}>
             Cancel inspection
-          </button>
+          </Button>
         </>
       )}
       <p>Open Duplicates, Integrity or Storage to review the retained scope and results.</p>

@@ -1,4 +1,4 @@
-import { act, render } from '@testing-library/react';
+import { act, render } from '../test/render';
 import { afterEach, expect, it, vi } from 'vitest';
 import { FavoriteHeart } from './FavoriteHeart';
 

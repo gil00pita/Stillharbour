@@ -1,3 +1,4 @@
+import { Button, Input } from '../components/ui/controls';
 import type { TemplateSample } from '../bindings';
 
 export function TemplateExamples({
@@ -25,7 +26,7 @@ export function TemplateExamples({
           <legend>Example {index + 1}</legend>
           <label>
             Example {index + 1} source name
-            <input
+            <Input
               maxLength={256}
               value={sample.relativePath}
               onChange={(e) => update(index, { relativePath: e.target.value })}
@@ -33,7 +34,7 @@ export function TemplateExamples({
           </label>
           <label>
             Example {index + 1} capture date (optional)
-            <input
+            <Input
               maxLength={32}
               value={sample.capture ?? ''}
               onChange={(e) => update(index, { capture: e.target.value || null })}
@@ -41,7 +42,7 @@ export function TemplateExamples({
           </label>
           <label>
             Example {index + 1} sequence
-            <input
+            <Input
               type="number"
               min={1}
               max={240}
@@ -52,18 +53,18 @@ export function TemplateExamples({
           </label>
           <label>
             Example {index + 1} expected target
-            <input
+            <Input
               maxLength={1024}
               value={sample.expectedTarget}
               onChange={(e) => update(index, { expectedTarget: e.target.value })}
             />
           </label>
-          <button type="button" onClick={() => onChange(samples.filter((_, i) => i !== index))}>
+          <Button type="button" onClick={() => onChange(samples.filter((_, i) => i !== index))}>
             Remove example {index + 1}
-          </button>
+          </Button>
         </fieldset>
       ))}
-      <button
+      <Button
         type="button"
         disabled={samples.length >= 4}
         onClick={() =>
@@ -74,7 +75,7 @@ export function TemplateExamples({
         }
       >
         Add example
-      </button>
+      </Button>
     </fieldset>
   );
 }

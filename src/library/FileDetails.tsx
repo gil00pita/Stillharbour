@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef } from 'react';
 import type { AssetSummary, LibraryRoot } from '../bindings';
 import { displayDate, fileSize } from './model';
@@ -28,7 +29,7 @@ export function FileDetails({
     >
       <header className="section-heading">
         <h2 id="file-details-title">File details</h2>
-        <button onClick={onClose}>Close</button>
+        <Button onClick={onClose}>Close</Button>
       </header>
       <h3>
         <bdi>{asset.name}</bdi>

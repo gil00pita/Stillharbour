@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   CatalogRestoreApproval,
@@ -181,7 +182,7 @@ function CatalogRestoreWorkspace({
         current catalog and its newer edits must be preserved separately; edits are not merged.
       </p>
       {!prepared && !uncertain && (
-        <button
+        <Button
           disabled={blocked}
           onClick={() =>
             void action('Inspecting current and selected catalogs…', async () => {
@@ -210,7 +211,7 @@ function CatalogRestoreWorkspace({
             : review
               ? 'Refresh catalog switch review'
               : 'Review catalog switch'}
-        </button>
+        </Button>
       )}
       {review && (
         <>
@@ -273,7 +274,7 @@ function CatalogRestoreWorkspace({
                     ? `Native identity confirmed: ${root.confirmedDisplayPath}`
                     : 'Native identity not confirmed'}
                 </p>
-                <button
+                <Button
                   disabled={blocked}
                   onClick={() =>
                     void action(
@@ -316,7 +317,7 @@ function CatalogRestoreWorkspace({
                   }
                 >
                   Choose native location for {root.label}
-                </button>
+                </Button>
               </li>
             ))}
           </ul>
@@ -337,7 +338,7 @@ function CatalogRestoreWorkspace({
             and newer edits separately; do not merge them.
           </label>
           {!approval ? (
-            <button
+            <Button
               disabled={blocked || !ready || !acknowledged}
               onClick={() =>
                 void action('Approving this exact catalog switch…', async () => {
@@ -359,11 +360,11 @@ function CatalogRestoreWorkspace({
               }
             >
               Approve catalog switch
-            </button>
+            </Button>
           ) : (
             <>
               <p>Approval recorded. Catalog preparation has not started.</p>
-              <button
+              <Button
                 disabled={blocked}
                 onClick={() =>
                   void action(
@@ -407,7 +408,7 @@ function CatalogRestoreWorkspace({
                 }
               >
                 Prepare catalog switch
-              </button>
+              </Button>
             </>
           )}
         </>

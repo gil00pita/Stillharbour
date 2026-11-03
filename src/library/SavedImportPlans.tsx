@@ -1,3 +1,4 @@
+import { Button } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type { CopyManifest, ImportPlan, ImportPlanSummary } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
@@ -101,24 +102,24 @@ export function SavedImportPlans({ planId }: { planId: string }) {
         Review saved import decisions and receipts without creating a new companion decision or
         restoring approval. Any new attempt checks current files and needs fresh approval.
       </p>
-      <button
+      <Button
         type="button"
         disabled={pending || unavailable !== null}
         onClick={() => void run(list)}
       >
         {plans ? 'Refresh retained imports' : 'Check retained import history'}
-      </button>
+      </Button>
       {unavailable && <p>{unavailable}</p>}
       {plans?.map((plan) => (
         <p key={plan.id}>
-          <button
+          <Button
             type="button"
             disabled={pending}
             onClick={() => void run((token) => open(token, plan))}
           >
             Review retained import: {plan.copyFiles} copy / {plan.skipFiles} existing ·{' '}
             {plan.createdAt}
-          </button>
+          </Button>
         </p>
       ))}
       {plans?.length === 0 && <p>No retained imports for this saved draft.</p>}

@@ -1,5 +1,5 @@
 import { FavoriteHeart } from './FavoriteHeart';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '../test/render';
 import { expect, it, vi } from 'vitest';
 import { fixtureAsset } from './__tests__/fixtures';
 import { OriginalPhoto } from './OriginalPhoto';

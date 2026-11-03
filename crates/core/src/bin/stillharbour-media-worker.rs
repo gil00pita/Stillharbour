@@ -1,5 +1,14 @@
 fn main() {
     let args: Vec<_> = std::env::args_os().collect();
+    if args
+        .get(1)
+        .is_some_and(|arg| arg == "--metadata-worker-stdin-v1")
+    {
+        if args.len() != 2 || stillharbour_core::media::metadata_worker().is_err() {
+            std::process::exit(1);
+        }
+        return;
+    }
     if args.get(1).is_some_and(|arg| arg == "--inspection-worker") {
         let result = if args.len() == 5 {
             stillharbour_core::inspection::decoder::worker(&args[2], &args[3], &args[4])

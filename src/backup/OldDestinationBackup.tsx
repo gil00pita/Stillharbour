@@ -1,3 +1,4 @@
+import { Button, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState } from 'react';
 import type {
   SnapshotApproval,
@@ -103,7 +104,7 @@ export function OldDestinationBackup({
       </p>
       <label>
         Recovery snapshot profile{' '}
-        <select
+        <Select
           value={profileId}
           disabled={locked || loading}
           onChange={(event) => {
@@ -119,7 +120,7 @@ export function OldDestinationBackup({
               {profile.label} · {profile.protocol}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       {!loading && !profiles.length && (
         <p>
@@ -127,7 +128,7 @@ export function OldDestinationBackup({
           difference.
         </p>
       )}
-      <button
+      <Button
         disabled={locked || !profileId}
         onClick={() =>
           void action(async () => {
@@ -158,7 +159,7 @@ export function OldDestinationBackup({
         }
       >
         Review old destination recovery backup
-      </button>
+      </Button>
       {review && (
         <SnapshotReviewPanel
           key={`${review.id}:${review.digest}`}
@@ -268,7 +269,7 @@ export function OldDestinationBackup({
             />
           )}
           {job.snapshotId && job.state === 'completed_verified' && (
-            <button
+            <Button
               disabled={locked}
               onClick={() =>
                 void action(async () => {
@@ -296,10 +297,10 @@ export function OldDestinationBackup({
               }
             >
               Inspect retained replacement gate for this snapshot
-            </button>
+            </Button>
           )}
           {active(job) && (
-            <button
+            <Button
               disabled={busy}
               onClick={() =>
                 void action(async () => {
@@ -311,7 +312,7 @@ export function OldDestinationBackup({
               }
             >
               Cancel old destination backup
-            </button>
+            </Button>
           )}
         </div>
       )}

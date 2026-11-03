@@ -1,3 +1,4 @@
+import { Button, Input, Select } from '../components/ui/controls';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type {
   OrganizationIssue,
@@ -132,9 +133,9 @@ export function OrganizationPreview({
             {assetIds.length} explicitly selected photos · Originals stay in place
           </p>
         </div>
-        <button onClick={onClose} aria-label="Close organization preview">
+        <Button onClick={onClose} aria-label="Close organization preview">
           Close
-        </button>
+        </Button>
       </header>
       <div className="organization-body">
         <p>Preview folder and filename changes using indexed metadata. Originals stay in place.</p>
@@ -142,7 +143,7 @@ export function OrganizationPreview({
           <fieldset disabled={busy}>
             <label>
               Preset
-              <select
+              <Select
                 value={presets.find((preset) => preset.pattern === template.pattern)?.pattern ?? ''}
                 onChange={(event) => {
                   if (event.target.value) update({ pattern: event.target.value });
@@ -156,11 +157,11 @@ export function OrganizationPreview({
                     {preset.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label>
               Path template
-              <input
+              <Input
                 required
                 maxLength={1024}
                 value={template.pattern}
@@ -179,7 +180,7 @@ export function OrganizationPreview({
             <div className="organization-options">
               <label>
                 Event name
-                <input
+                <Input
                   maxLength={128}
                   value={template.event}
                   onChange={(event) => update({ event: event.target.value })}
@@ -187,7 +188,7 @@ export function OrganizationPreview({
               </label>
               <label>
                 When capture date is missing
-                <select
+                <Select
                   value={template.missingDate}
                   onChange={(event) =>
                     update({ missingDate: event.target.value === 'block' ? 'block' : 'undated' })
@@ -195,11 +196,11 @@ export function OrganizationPreview({
                 >
                   <option value="undated">Use Undated / original filename</option>
                   <option value="block">Block the affected photo</option>
-                </select>
+                </Select>
               </label>
               <label>
                 Filename stem case
-                <select
+                <Select
                   value={template.filenameStemCase ?? 'preserve'}
                   aria-label="Filename stem case"
                   onChange={(event) =>
@@ -216,16 +217,16 @@ export function OrganizationPreview({
                   <option value="preserve">Preserve</option>
                   <option value="lowercase">Lowercase</option>
                   <option value="uppercase">Uppercase</option>
-                </select>
+                </Select>
               </label>
             </div>
             <p className="help">
               Stem case applies to proposed filenames, including Undated names. Folder names and
               extension case stay as previewed.
             </p>
-            <button type="submit" className="primary">
+            <Button type="submit" className="primary">
               {busy ? 'Building preview…' : 'Build preview'}
-            </button>
+            </Button>
           </fieldset>
         </form>
         <OrganizationTemplates
@@ -266,7 +267,7 @@ export function OrganizationPreview({
             />
             <label>
               Find a path
-              <input
+              <Input
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
@@ -330,9 +331,9 @@ export function OrganizationPreview({
           Copying and in-place changes are unavailable until destination planning, verification and
           recovery checks pass.
         </p>
-        <button disabled aria-describedby="organization-execution-help">
+        <Button disabled aria-describedby="organization-execution-help">
           Create organized copy
-        </button>
+        </Button>
       </footer>
     </dialog>
   );

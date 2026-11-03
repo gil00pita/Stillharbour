@@ -1,3 +1,4 @@
+import { Input, Select } from './ui/controls';
 import { useId, useState } from 'react';
 
 const units = [
@@ -59,7 +60,7 @@ export function FileSizeField({
     <div className="file-size-field">
       <label htmlFor={id}>{label}</label>
       <div className="file-size-controls">
-        <input
+        <Input
           id={id}
           name={name}
           inputMode="decimal"
@@ -74,7 +75,7 @@ export function FileSizeField({
           }}
           onChange={(event) => update(event.target.value, draft.unit)}
         />
-        <select
+        <Select
           aria-label={`${label} unit`}
           disabled={disabled}
           value={draft.unit.label}
@@ -88,7 +89,7 @@ export function FileSizeField({
               {unit.label}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       {error && (
         <p id={`${id}-error`} className="field-error">

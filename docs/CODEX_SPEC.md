@@ -16,6 +16,8 @@ Read AGENTS.md and docs/PRESERVATION_CONTRACT.md before implementation. Read doc
 
 ## 1. Product outcome and boundaries
 
+Owner-approved Settings presentation refinement (2026-11-02): preserve the existing brand and section order; align defaults actions, separate import controls by 12px, retain at least 13px browsing-control text at narrow widths, and explain unavailable import preferences visibly and accessibly. Use plain folder-reconnection and import guidance without changing approval or preservation requirements.
+
 Build Stillharbour, a local-first photo organizer that lets a person understand, organize, verify, and back up their real photo folders without surrendering control of those folders. The application combines a chronological photo browser, a folder organizer with dry-run previews, a duplicate review tool, a storage analyzer, a map browser, and recoverable backups.
 
 The differentiator is safe, explainable file management: show what will happen, why it will happen, which copies survive, and how to recover. Do not compete initially on professional image development, cloud sharing, or a mandatory account.
@@ -28,7 +30,7 @@ Original M0-M6 first-release boundary: mobile applications, a hosted server, mul
 
 ## 2. Technology decision
 
-Use Tauri 2 for the desktop shell, React with strict TypeScript and Vite for the interface, Rust for the application core, and SQLite for the local catalog. Use MapLibre GL JS for the map. Rust is selected for efficient native processing, explicit resource control, and memory/thread-safety benefits, not a claim that one language is fastest for every workload. Tauri uses platform WebViews, so Windows and macOS still require separate visual and integration testing. [R01, R02]
+Use Tauri 2 for the desktop shell, React with strict TypeScript, Vite and Chakra UI for the interface, Rust for the application core, and SQLite for the local catalog. Use MapLibre GL JS for the map. Rust is selected for efficient native processing, explicit resource control, and memory/thread-safety benefits, not a claim that one language is fastest for every workload. Tauri uses platform WebViews, so Windows and macOS still require separate visual and integration testing. [R01, R02]
 
 Use a modular monolith, not microservices. Business rules must be independent of Tauri and directly testable in Rust. The frontend is a client of typed commands; it is never the authority for filesystem safety or duplicate deletion.
 
@@ -37,7 +39,7 @@ Recommended implementation components, to be verified and pinned during M0:
 | Concern | Initial choice | Implementation rule |
 | --- | --- | --- |
 | Desktop | Tauri 2 | Narrow capability set; explicit custom-command permissions |
-| Frontend | React, TypeScript, Vite | Strict types; no filesystem or subprocess authority |
+| Frontend | React, TypeScript, Vite, Chakra UI | Strict types; no filesystem or subprocess authority |
 | UI primitives | Accessible reusable components; Radix or equivalent after M0 review | Keyboard and screen-reader support, not visual-only controls |
 | Large results | Virtualized gallery rows and table rows; TanStack Virtual/Table candidates | Do not mount the full collection in the DOM |
 | Database | SQLite via rusqlite | Dedicated database actor; bounded read connections; migrations |
@@ -902,3 +904,43 @@ Root-scoped import continuation, 2026-11-01 (ADR-0066): optional sourceRootId se
 The read-only M3 features and constructor-owned duplicate recovery fixture gate are accepted against complete Windows/macOS CI 41324632055 at 563721a; see [M3_VALIDATION.md](M3_VALIDATION.md). This records implementation evidence without waiving preservation requirements or authorizing M4. Production original mutations and duplicate quarantine remain disabled pending independent exact-version recovery.
 
 Normalized-image candidates use the declared static PNG RGB8/RGBA8 v2 policy: full-resolution encoded samples, straight alpha, preserved untagged/sRGB provenance, validated chunk CRC/ordering and only declared descriptive text/time exclusions. Unsupported precision, profiles, orientation, XMP/unknown/compressed/international text, animation and containers return explicit unsupported results. Pixel fingerprints are manual-review evidence. Deep checks cover bounded static PNG/JPEG/WebP raster decoding; RAW/animated/multipage validation is unsupported. Metrics distinguish logical, unique-object, reported allocation and unknown physical reclaim; same-volume quarantine reports zero freed bytes. Bounds, helper supervision differences and page-local folder sorting are disclosed in M3_INSPECTIONS.md. First release still requires M4–M6.
+## M5 geographic increment — 2026-11-02
+
+The owner explicitly authorized continuing M5 after the readiness review. [ADR-0081](decisions/ADR-0081-offline-geographic-browsing.md) and [M5_MAP.md](M5_MAP.md) define the first read-only increment: bundled public-domain Natural Earth 1:110m land with pinned MapLibre GL JS, no online provider or runtime map-data download, explicit overview/accuracy limits and visible attribution. A detailed online basemap remains a separate provider/privacy/rights decision.
+
+Schema 14 introduced derived local spatial observations and an R-tree with exact double-precision membership checks. Schema 15 supports strict numeric text from pinned ExifTool JSONQ output; bound startup validates the exact compiled historical schema before upgrading known schema-13/14 catalogs. Migrations retain a consistent prior catalog; IDs, raw observations and annotations stay unchanged. Missing, invalid and unextracted GPS are distinct from valid zero and from offline originals. Existing scans do not acquire coordinates without an explicit rescan. The current Windows basic metadata adapter still lacks GPS extraction.
+
+Viewport/zoom clusters are capped at 256 with adaptive angular-grid coarsening, and photo-strip pages at 80. Typed viewport/cell/location filters reuse library paging, selection and date-filter semantics. Cluster-to-library navigation carries the same scope and representative selection; the photo list remains usable without graphics. The map increment initially required schema 15; current activation follows the later schema-16 metadata increment, with older restored schemas failing closed. Native evidence and remaining AC-074–076/079 scope are recorded in M5_MAP.md. The following metadata increment adds bounded albums, categories, annotations and saved searches; portable catalog export, conflict-safe XMP export and full format/platform acceptance remain unfinished M5 work. No M4 preservation requirement or production mutation gate is relaxed; stop before M6.
+
+
+## M5 catalog metadata increment — 2026-11-02
+
+The owner requested continuing M5. [ADR-0082](decisions/ADR-0082-catalog-metadata-organization.md) and [M5_METADATA.md](M5_METADATA.md) define schema-16 catalog-only captions/reject flags, virtual albums, saved searches and explicit category relationships. Save notes with expected versions and append-only saved-version history in the same transaction; a stale save retains its draft. Album edits atomically validate the exact selection count and collection version, including offline catalog media. Archive/restore retains memberships. Saved filters are bounded validated data without scripts, schedules or native permissions. Categories preserve literal case/Unicode/slash labels and reject cycles, missing parents and excessive depth; no implicit flat-tag conversion or rename/merge. Embedded keyword observations remain separate from manual catalog tags and never resurrect removed manual labels on rescan.
+
+The existing bound-catalog migration path validates known historical schema before upgrading and retains a consistent prior copy. Current activation requires schema 16; historical restored-schema activation is still unavailable. Catalog organization never rewrites originals or sidecars, and N2 provenance-import/export, portable catalog export, conflict-safe XMP round trips, broader native format/accessibility acceptance and M4 preservation certification remain open. Stop before M6.
+
+
+### Owner-approved inspection, backup and map polish — 2026-11-02
+
+Keep the existing visual identity, section order, typed actions and preservation gates. Inspection forms use left-aligned fields and inline checkbox labels; duplicate and integrity choices use plain descriptions while retaining exact-byte comparison and baseline-change caveats. Storage emphasises total file size, explains hard-link/allocation accounting and aligns numeric table columns. Backup controls align with their actions; internal root IDs are omitted from routine source summaries, and retained-catalog guidance is visually secondary. Map retains its title at narrow widths and uses consistent spacing with scoped zoom, marker and filmstrip button styles. These are presentation refinements, not new inspection, mutation, recovery or map capabilities.
+
+
+## Owner-requested UI framework — 2026-11-02
+
+Use Chakra UI 3.37.0 and Emotion 11.14.0 with the Stillharbour provider, semantic tokens and recipes in [ADR-0083](decisions/ADR-0083-chakra-ui-design-system.md). Follow the supplied boilerplate’s provider/theme separation while keeping Tauri, Vite, the selected product identity and current native safety flows. Standard controls use the shared product adapters; native modal dialogs and specialized photographic/selection controls retain their existing behavior. Preserve labels, validation, refs, disabled approvals, implicit submit contracts, dark system typography and reduced motion. Do not introduce a new account, remote font/style service, native permission, catalog migration or mutation authority. See [UI_FRAMEWORK.md](UI_FRAMEWORK.md) for actual migration scope and evidence.
+
+## M5 reviewed metadata-export implementation decision — 2026-11-02
+
+The owner's “Finish M5” request authorizes [ADR-0084](decisions/ADR-0084-reviewed-metadata-exports-and-tag-history.md). Schema 17 adds reviewed exact-label tag rename/merge/removal, conflict-checked undo and explicit observed-keyword import with persistent removal overrides. Catalog-only annotation and source observation remain separate.
+
+M5 interoperability uses explicit **new-output export**, with a backend-built immutable review, native-selected folder outside indexed libraries/application data, explicit disclosure/approval, native no-replace publication, independent read-back, cancellation and retained incomplete history. It never silently synchronizes or overwrites source XMP. Supported namespace-aware XMP merging retains unknown content and verbatim companion artifacts; ambiguous/unsupported external structures fail. Catalog export independently opens as compiled-schema SQLite and retains organization/read-only evidence while removing credentials, schedules, runtime approvals and native root authority. Roots require reauthorization. Existing full recovery snapshots remain a separate requirement; a portable organization copy is not a backup of originals.
+
+[M5 validation](M5_VALIDATION.md) states exact bounds and actual native/platform results. These decisions supplement the acceptance criteria without reducing preservation, clean-machine, accessibility or M4/M6 gates. No editor, cloud/mobile feature or production original-file mutation is authorized.
+
+### Approved critique follow-through — 2026-11-02
+
+Within the existing M5 UI, preserve unsaved caption/review drafts during browsing in the same catalog session, with a bounded 240-photo memory store and explicit saving. Retain optimistic versions and never evict unsaved drafts. Disclose that app closure/catalog switching discards unsaved session drafts. Keep catalog-organization title/Close visible during form scrolling, provide section navigation, and review exact saved/proposed filters before replacing a saved search. Move technical tag limits into disclosure without removing substantive safety explanations. The Map no-location mode leads with its photo results and unambiguous counts rather than empty geography. No new original-file permission, export capability or milestone acceptance follows.
+
+Preservation acceptance fix (2026-11-02): [ADR-0085](decisions/ADR-0085-exact-native-provenance-preservation.md) adds an exact, bounded macOS provenance metadata policy v2. It captures and independently verifies the sole supported opaque OS attribute rather than ignoring it; other xattrs/resource forks/extended ACLs and nonzero flags remain unsupported. V1 serialized digests stay compatible, and original-file production/recovery gates remain mandatory. This resolves an adapter limitation through tested preservation, not a waiver of P-02/P-05 or authorization to mutate real libraries.
+
+M5 Windows metadata clarification: ADR-0087 adds bounded read-only EXIF/GPS observations inside the existing supervised stdin worker for baseline-decodable media. The dimensions-only legacy policy refreshes on an explicit rescan; original files, schema and runtime authority remain unchanged. This does not establish Windows RAW/HEIC decoding, embedded-XMP/IPTC completeness or full-media validation.

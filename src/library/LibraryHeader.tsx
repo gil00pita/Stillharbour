@@ -1,3 +1,4 @@
+import { Button, Input } from '../components/ui/controls';
 import type { ReactNode } from 'react';
 import type { Section } from './model';
 export function LibraryHeader({
@@ -11,6 +12,7 @@ export function LibraryHeader({
   filterOpen,
   activeCount,
   onPlans,
+  onCatalog,
 }: {
   jobsControl?: ReactNode;
   navigationControl?: ReactNode;
@@ -22,6 +24,7 @@ export function LibraryHeader({
   filterOpen: boolean;
   activeCount: number;
   onPlans?: () => void;
+  onCatalog?: () => void;
 }) {
   return (
     <header className="toolbar photo-toolbar">
@@ -29,7 +32,7 @@ export function LibraryHeader({
       <h1>{section === 'Tags' ? 'Albums / Tags' : section}</h1>
       <label className="fixed-search">
         <span className="screen-reader-status">Search filenames</span>
-        <input
+        <Input
           type="search"
           aria-label="Search filenames"
           placeholder="Search filenames…"
@@ -39,7 +42,7 @@ export function LibraryHeader({
           onChange={(event) => onSearch(event.target.value)}
         />
       </label>
-      <button
+      <Button
         onClick={onFilter}
         disabled={busy}
         aria-label={activeCount ? `Filter (${activeCount} active)` : 'Filter'}
@@ -48,12 +51,17 @@ export function LibraryHeader({
         aria-controls="library-filter-panel"
       >
         Filter{activeCount > 0 && <span className="filter-count">{activeCount}</span>}
-      </button>
+      </Button>
       {jobsControl}
+      {onCatalog && (
+        <Button disabled={busy} onClick={onCatalog}>
+          Catalog
+        </Button>
+      )}
       {onPlans && (
-        <button onClick={onPlans} disabled={busy}>
+        <Button onClick={onPlans} disabled={busy}>
           Saved plans
-        </button>
+        </Button>
       )}
     </header>
   );

@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render } from '../test/render';
 import { expect, it, vi } from 'vitest';
 import type { ThumbnailResult } from '../bindings';
 import { fixtureAsset } from './__tests__/fixtures';

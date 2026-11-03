@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "source": "Natural Earth 1:110m land",
+  "upstreamCommit": "ca96624a56bd078437bca8184e78163e5039ad19",
+  "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_110m_land.geojson",
+  "licenseUrl": "https://www.naturalearthdata.com/about/terms-of-use/",
+  "license": "Public domain",
+  "files": {
+    "assets/maps/ne_110m_land.geojson": "9e0729ee253ca7d7a5c4ae9395fb1902264c5377c52e224d13dd85010e2835d9",
+    "assets/maps/NATURAL_EARTH_LICENSE.md": "2631b5b39b6d1acc56de75235109b5af2dbb4b0ac5a127b6f06185977247fd4b"
+  }
+}

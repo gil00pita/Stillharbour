@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { LibraryRoot, LibraryStatus } from '../bindings';
 import { libraryData } from '../ipc';

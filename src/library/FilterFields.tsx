@@ -1,3 +1,4 @@
+import { Button, Input, Select } from '../components/ui/controls';
 import type { AssetQuery, FolderEntry, LibraryStatus } from '../bindings';
 import type { Section } from './model';
 import { SortControl } from './SortControl';
@@ -14,7 +15,7 @@ export function QueryFields({
     <div className="panel-query-fields">
       <label>
         Library
-        <select
+        <Select
           value={query.rootId ?? ''}
           onChange={(event) => filter({ rootId: event.target.value || null, folder: '' })}
         >
@@ -24,7 +25,7 @@ export function QueryFields({
               {root.label} · {root.fileCount.toLocaleString()}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <SortControl value={query.sort} onChange={(sort) => filter({ sort })} />
 
@@ -32,7 +33,7 @@ export function QueryFields({
         <div className="form-grid">
           <label>
             From date
-            <input
+            <Input
               type="date"
               value={query.fromDate}
               onChange={(event) => filter({ fromDate: event.target.value })}
@@ -40,7 +41,7 @@ export function QueryFields({
           </label>
           <label>
             Through date
-            <input
+            <Input
               type="date"
               value={query.throughDate}
               onChange={(event) => filter({ throughDate: event.target.value })}
@@ -48,7 +49,7 @@ export function QueryFields({
           </label>
           <label>
             Minimum bytes
-            <input
+            <Input
               inputMode="numeric"
               value={query.minBytes}
               onChange={(event) => filter({ minBytes: event.target.value })}
@@ -56,7 +57,7 @@ export function QueryFields({
           </label>
           <label>
             Maximum bytes
-            <input
+            <Input
               inputMode="numeric"
               value={query.maxBytes}
               onChange={(event) => filter({ maxBytes: event.target.value })}
@@ -64,7 +65,7 @@ export function QueryFields({
           </label>
           <label>
             Extension
-            <input
+            <Input
               value={query.extension}
               placeholder="jpg"
               onChange={(event) => filter({ extension: event.target.value })}
@@ -72,7 +73,44 @@ export function QueryFields({
           </label>
           <label>
             Tag
-            <input value={query.tag} onChange={(event) => filter({ tag: event.target.value })} />
+            <Input value={query.tag} onChange={(event) => filter({ tag: event.target.value })} />
+          </label>
+          <label>
+            Minimum rating
+            <Select
+              value={query.minRating ?? ''}
+              onChange={(event) =>
+                filter({ minRating: event.target.value === '' ? null : Number(event.target.value) })
+              }
+            >
+              <option value="">Any rating</option>
+              {[1, 2, 3, 4, 5].map((value) => (
+                <option key={value} value={value}>
+                  {value} / 5 or higher
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label>
+            Review flag
+            <Select
+              value={
+                query.rejected === null || query.rejected === undefined
+                  ? 'any'
+                  : query.rejected
+                    ? 'rejected'
+                    : 'not_rejected'
+              }
+              onChange={(event) =>
+                filter({
+                  rejected: event.target.value === 'any' ? null : event.target.value === 'rejected',
+                })
+              }
+            >
+              <option value="any">All photos</option>
+              <option value="rejected">Rejected only</option>
+              <option value="not_rejected">Not rejected</option>
+            </Select>
           </label>
         </div>
         <label className="check-row">
@@ -82,6 +120,14 @@ export function QueryFields({
             onChange={(event) => filter({ favoritesOnly: event.target.checked })}
           />{' '}
           Favorites only
+        </label>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={query.tagDescendants ?? false}
+            onChange={(event) => filter({ tagDescendants: event.target.checked })}
+          />
+          Include tag descendants
         </label>
         <label className="check-row">
           <input
@@ -125,22 +171,22 @@ export function LibraryFacets({
             <p>Select a library to browse its folders.</p>
           ) : (
             <>
-              <button
+              <Button
                 type="button"
                 aria-pressed={!query.folder}
                 onClick={() => onFilter({ folder: '' })}
               >
                 All folders
-              </button>
+              </Button>
               {folders.map((folder) => (
-                <button
+                <Button
                   type="button"
                   key={folder.path}
                   aria-pressed={query.folder === folder.path}
                   onClick={() => onFilter({ folder: folder.path })}
                 >
                   <bdi>{folder.path || 'Library folder'}</bdi> <small>{folder.count}</small>
-                </button>
+                </Button>
               ))}
             </>
           )}
@@ -151,14 +197,14 @@ export function LibraryFacets({
           <h2>Tags</h2>
           {tags.length ? (
             tags.map((tag) => (
-              <button
+              <Button
                 type="button"
                 key={tag}
                 aria-pressed={query.tag === tag}
                 onClick={() => onFilter({ tag: query.tag === tag ? '' : tag })}
               >
                 {tag}
-              </button>
+              </Button>
             ))
           ) : (
             <p>Add tags in Photo details to organize your library.</p>
@@ -189,13 +235,13 @@ export function RootAvailability({
             <bdi>{root.label}</bdi> · {root.availability.replaceAll('_', ' ')} ·{' '}
             {root.mode === 'referenced' ? 'read only' : 'managed'}
           </span>
-          <button type="button" onClick={() => onSettings(root.id)}>
+          <Button type="button" onClick={() => onSettings(root.id)}>
             Scan settings
-          </button>
+          </Button>
           {root.availability !== 'online' && root.availability !== 'scanning' && (
-            <button type="button" onClick={() => void onRelink(root.id)}>
+            <Button type="button" onClick={() => void onRelink(root.id)}>
               Relink folder
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -243,19 +289,34 @@ export function ActiveFilters({
       {fields
         .filter((key) => query[key])
         .map((key) => (
-          <button
+          <Button
             type="button"
             key={key}
             aria-label={`Remove ${names[key]} filter`}
             onClick={() => filter({ [key]: '' })}
           >
             {names[key]}: <bdi>{query[key]}</bdi> ×
-          </button>
+          </Button>
         ))}
       {query.favoritesOnly && (
-        <button type="button" onClick={() => filter({ favoritesOnly: false })}>
+        <Button type="button" onClick={() => filter({ favoritesOnly: false })}>
           Favorites ×
-        </button>
+        </Button>
+      )}
+      {query.albumId && (
+        <Button type="button" onClick={() => filter({ albumId: null })}>
+          Album ×
+        </Button>
+      )}
+      {query.minRating !== null && query.minRating !== undefined && (
+        <Button type="button" onClick={() => filter({ minRating: null })}>
+          Rating ≥ {query.minRating} ×
+        </Button>
+      )}
+      {query.rejected !== null && query.rejected !== undefined && (
+        <Button type="button" onClick={() => filter({ rejected: null })}>
+          {query.rejected ? 'Rejected' : 'Not rejected'} ×
+        </Button>
       )}
     </div>
   );
