@@ -4981,7 +4981,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     }
     await browser.setWindowSize(1180, 780);
     console.info('Native viewer information opened');
-    const favorite = await $('.inspector label=Favorite').$('input[type="checkbox"]');
+    const inspector = await $('.inspector');
+    const favorite = await inspector.$('label=Favorite').$('input[type="checkbox"]');
     await favorite.click();
     await browser.waitUntil(async () => favorite.isSelected());
     await browser.execute(() => {
@@ -4992,10 +4993,11 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(
       async () => (await native({ kind: 'detail', asset_id: opening.id })).data.asset.rating === 4,
     );
-    await $('.inspector label=Tags, separated by commas')
+    await inspector
+      .$('label=Tags, separated by commas')
       .$('input')
       .setValue('Generated fixture, 家族');
-    await $('.inspector button=Save tags').click();
+    await inspector.$('button=Save tags').click();
     await browser.waitUntil(async () => {
       const tags = await native({ kind: 'tags' });
       return tags.data.includes('家族');
