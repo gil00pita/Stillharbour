@@ -18,6 +18,7 @@ tokio.workspace = true
 uuid = { version = "=1.29.0", features = ["v4"] }
 zeroize.workspace = true
 tempfile = { workspace = true, optional = true }
+blake3 = { version = "=1.8.7", optional = true }
 tauri-plugin-wdio = { version = "=1.5.1", optional = true }
 tauri-plugin-wdio-webdriver = { version = "=1.5.1", optional = true }
 
@@ -25,7 +26,7 @@ tauri-plugin-wdio-webdriver = { version = "=1.5.1", optional = true }
 default = []
 copy-workflow = ["stillharbour-core/copy-workflow"]
 backup-workflow = ["stillharbour-core/backup-workflow"]
-desktop-test = ["copy-workflow", "backup-workflow", "dep:tempfile", "stillharbour-core/fixture-probes", "dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
+desktop-test = ["copy-workflow", "backup-workflow", "dep:tempfile", "dep:blake3", "stillharbour-core/fixture-probes", "dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security_Credentials", "Win32_Graphics_Gdi"] }

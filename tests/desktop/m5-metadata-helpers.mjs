@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { browser, $, $$ } from '@wdio/globals';
+import { assertPreservedXmpExport } from './metadata-export-evidence.mjs';
 
 export async function native(request) {
   return browser.tauri.execute(
@@ -361,21 +362,26 @@ export async function finishMetadataExports(directory) {
       })
     ).data;
     assert.equal(page.rows.length, 1);
-    const retained = (
+    const retainedReviews = [];
+    // Always export the sidecar twice, independent of which photo the UI selected.
+    for (let index = 0; index < 2; index++) {
+      const retained = (
+        await native({
+          kind: 'metadata_export_preview',
+          export_kind: 'xmp',
+          selection: { kind: 'ids', ids: [page.rows[0][0]] },
+          expected_count: 1,
+          selection_id: output.id,
+        })
+      ).data;
       await native({
-        kind: 'metadata_export_preview',
-        export_kind: 'xmp',
-        selection: { kind: 'ids', ids: [page.rows[0][0]] },
-        expected_count: 1,
+        kind: 'metadata_export_save',
+        id: retained.id,
+        digest: retained.digest,
         selection_id: output.id,
-      })
-    ).data;
-    await native({
-      kind: 'metadata_export_save',
-      id: retained.id,
-      digest: retained.digest,
-      selection_id: output.id,
-    });
+      });
+      retainedReviews.push({ id: retained.id, files: retained.files });
+    }
     const audit = await browser.tauri.execute(({ core }) =>
       core.invoke('test_performance', { action: 'metadata_export_verify', rows: null }),
     );
@@ -385,16 +391,8 @@ export async function finishMetadataExports(directory) {
     assert.equal(catalog.detail.nativeAuthorities, 0);
     assert.equal(catalog.detail.credentialScheduleApprovalRows, 0);
     assert.equal(catalog.detail.media, 8);
-    const preserved = audit.exports.filter(
-      (file) =>
-        file.name.endsWith('.xmp') && file.detail.text.includes('Retain this unknown field'),
-    );
-    assert.equal(
-      preserved.length,
-      2,
-      'Both original packet and merged XMP retain the unknown edit history',
-    );
-    return audit;
+    for (const retained of retainedReviews) assertPreservedXmpExport(audit, retained);
+    return { ...audit, preservedXmpReviews: retainedReviews };
   } finally {
     await browser.execute(() => {
       if (window.__wdio_mocks__) delete window.__wdio_mocks__.foundation_request;

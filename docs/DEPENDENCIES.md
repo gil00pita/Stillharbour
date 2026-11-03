@@ -72,7 +72,7 @@ Sources: [Homebrew restic](https://formulae.brew.sh/formula/restic), [rclone](ht
 
 - `@tanstack/react-virtual` **3.14.23**, MIT: bounded visible rows, without a second state-management framework. React Compiler is not enabled; the mutable virtualization adapter is not memoized by it.
 - `globset` **0.4.20**, MIT/Unlicense: compiled bounded include/exclude rules.
-- `blake3` **1.8.7**, CC0-1.0/Apache-2.0/Apache-2.0 LLVM exception: observed revision/cache keys and full-byte relink samples. This is not an integrity-baseline feature.
+- `blake3` **1.8.7**, CC0-1.0/Apache-2.0/Apache-2.0 LLVM exception: observed revision/cache keys and full-byte relink samples. The M5 desktop-test feature also enables an optional direct edge from the shell to this already locked crate for independent exported-output digest evidence; no package/version is added and the production feature graph is unchanged. This is not an integrity-baseline feature.
 - `chrono` **0.4.45**, MIT/Apache-2.0, default features off with std/clock: validated capture-local dates and explicit UTC catalog events.
 - `rustix` **1.1.6**, Apache-2.0 WITH LLVM-exception/Apache-2.0/MIT: Unix handle-relative no-follow directory traversal.
 
