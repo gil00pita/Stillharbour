@@ -1,5 +1,7 @@
 # M5 catalog metadata continuation
 
+Current evidence, 2026-11-03: native Windows M5 checks pass at `a2b3d10`; fresh local map and metadata/export audits preserve all nine generated source/companion entries. The owner passes the requested actual VoiceOver map/heading/dialog checks, including Catalog form labels and focus behavior. [M5 validation](M5_VALIDATION.md) separates that manual result from automated evidence and tracks remaining PR-wide validation. Earlier limitations below remain historical.
+
 Current continuation: [ADR-0084](decisions/ADR-0084-reviewed-metadata-exports-and-tag-history.md) and [M5 validation](M5_VALIDATION.md) add schema-17 tag rename/merge/removal/undo, explicit keyword import overrides and reviewed portable catalog/XMP export. Current activation uses schema 17; the schema-16 snapshot and measurements below remain historical evidence. The unavailable/open statements describe that earlier increment, not current controls.
 
 The owner's “continue” request on 2026-11-02 continues the authorized M5 milestone. [ADR-0082](decisions/ADR-0082-catalog-metadata-organization.md) defines this bounded catalog-only increment. M5 remains in progress, with M4 production mutation restrictions intact.
