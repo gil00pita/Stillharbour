@@ -1,5 +1,7 @@
 # Stillharbour - Codex implementation specification
 
+M6 started with owner authorization on 2026-11-03. [Release readiness](M6_RELEASE_READINESS.md) and the [AC/PS evidence matrix](M6_EVIDENCE_MATRIX.md) record the initial hardening pass, current checks and unresolved release gates. Earlier milestone stop instructions are historical. No production execution or support gate is relaxed.
+
 All repository paths in this document are relative to the repository root.
 
 Specification version: 1.2.1

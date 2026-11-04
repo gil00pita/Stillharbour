@@ -123,6 +123,12 @@ node scripts/cargo.mjs run --release -p stillharbour-core --features fixture-pro
 
 The packaged probe accepts only an application-bundle location. It creates its own photo fixtures and catalog, invokes the bundle's decoder executable and bundled ExifTool resources, and checks unchanged generated source bytes/names. It accepts no user-library path.
 
+## M6 release hardening
+
+M6 is owner-authorized as of 2026-11-03 and remains in progress. Read [release readiness](M6_RELEASE_READINESS.md), the [125-scenario AC/PS matrix](M6_EVIDENCE_MATRIX.md) and the [user guide](USER_GUIDE.md). Historical milestone acceptance never enables production original-file operations.
+
+`npm run test:release` runs isolated Node production-preflight regressions and is part of `npm run check`. They exercise missing/empty frontend output, source maps, linked build inputs, nested instrumented chunks and enabled/missing owned-package feature inventories. `npm run release:check` requires a completed production frontend build and prepared pinned helpers. It reads a quiescent build tree and the locked host default dependency graph; it is not signing, installed-artifact inspection or clean-machine acceptance. Keep the configured empty/default feature policy until a separately reviewed change with native evidence authorizes more. Run instrumented native builds and production builds sequentially because they share `dist`.
+
 ## Documenting requested changes
 
 The root [README](../README.md) is the project entry point: keep its implemented features, platform limits, quick start, command summary and milestone status aligned with this guide and the owning validation documents. Detailed historical evidence belongs in the implementation log rather than the README.
@@ -677,3 +683,9 @@ The standalone media-worker and Tauri executable both implement the metadata std
 The 2026-11-03 owner-performed VoiceOver review passes the bounded map names, heading announcements and Catalog-dialog label/focus checks in M5 validation. Record manual reviewer statements separately from automatic transcripts and source audits. If a held native session disconnects before verification, retain that failure and collect fresh independent generated-source evidence; do not attach a later fixture's audit to the disconnected lease. Native-test builds share frontend output, so restore the production frontend and run release checks afterward.
 
 M5 export harness regression: `npm test -- tests/desktop/metadata-export-evidence.test.mjs` verifies plan-scoped evidence for repeated source-sidecar exports. The test-only native auditor hashes output bytes using the same BLAKE3 algorithm as reviewed plans; JavaScript compares these opaque digests, exact names and byte lengths. Keep unrelated prior exports in the output folder: a second legitimate preserved pair must not fail a global count, and must not satisfy another plan's missing pair. `npm run desktop:test:map` and `npm run desktop:test:metadata` both exercise this shared assertion and retain the explicit reviewed file list in their receipts. Passing older CI artifacts are evidence for their own tree; replaying downloaded JSON is not new native execution or a fresh source manifest.
+
+## M6 development dependency remediation — 2026-11-04
+
+`npm run test:release` now includes four locked-dependency safety/compatibility cases alongside the five production-preflight cases. Generated ZIP symlink and traversal-cancellation cases fail against the prior lock and pass with exact glob/minimatch/browser-helper overrides. The browser helper resolves through the Tauri service's actual utility dependency; tests also import that consumer and exercise CommonJS archive matching. No browser/driver download, server or photo library is needed for these Node tests. Run `npm ci --ignore-scripts`, `npm run check`, current native tests and production resource preflight; the full npm audit must be rechecked after lock changes. See [ADR-0088](decisions/ADR-0088-development-dependency-advisory-remediation.md) and [M6 evidence](M6_DEPENDENCY_HARDENING.md) for version, license and platform qualifications.
+
+The evidence document gives the exact isolated `cargo-audit 0.22.2` install/run commands. This developer tool and its RustSec checkout live under `.context/` and are not bundled or application dependencies. Keep the database commit and informational warnings with the report; do not turn a zero vulnerability count into a universal safety or native-platform claim.

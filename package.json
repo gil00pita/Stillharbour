@@ -16,6 +16,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:release": "node --test scripts/tests/release-policy.test.mjs scripts/tests/dependency-policy.test.mjs",
     "tauri": "node scripts/tauri.mjs",
     "desktop:dev": "node scripts/desktop-dev.mjs",
     "desktop:build": "npm run tauri -- build --bundles app",
@@ -29,7 +30,7 @@
     "bindings": "node scripts/cargo.mjs run --locked -p stillharbour-core --example export_bindings --",
     "bindings:check": "npm run bindings -- --check",
     "rust:check": "node scripts/rust-check.mjs",
-    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run bindings:check && npm run rust:check && npm run build",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:release && npm run bindings:check && npm run rust:check && npm run build",
     "fixtures:smoke": "node scripts/cargo.mjs run -p stillharbour-core --features fixture-probes --example foundation_probe",
     "media:smoke": "node scripts/media-smoke.mjs",
     "release:check": "node scripts/release-check.mjs",
@@ -50,7 +51,10 @@
     "react-dom": "19.3.1"
   },
   "overrides": {
-    "basic-ftp": "6.2.3"
+    "basic-ftp": "6.2.3",
+    "glob": "14.0.3",
+    "minimatch": "11.0.4",
+    "@puppeteer/browsers": "3.2.6"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

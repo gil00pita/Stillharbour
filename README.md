@@ -72,6 +72,7 @@ Use generated, disposable media for development tests. Debug catalogs are isolat
 | `npm run desktop:test`       | Run native WebView tests with owned, generated fixtures                                                              |
 | `npm run desktop:build`      | Build the normal unsigned macOS `.app` bundle                                                                        |
 | `npm run release:check`      | Check production permissions, instrumentation exclusions and reviewed helper resources                               |
+| `npm run test:release`       | Run production-preflight and dependency regressions, also included in `npm run check`                                |
 
 Run the native test build and suite sequentially after `npm run check`; they share frontend build output. Test instrumentation must stay out of production. Additional fixture, format, helper and performance probes are documented in [Development](docs/DEVELOPMENT.md).
 
@@ -104,11 +105,15 @@ Work proceeds through reviewed milestones. Individual later slices, such as macO
 | [M3 — Duplicates, health and storage](tasks/M3_DUPLICATES_HEALTH_STORAGE.md) | Read-only Duplicates, Integrity and Storage; production quarantine awaits M4 recovery                                                                              |
 | [M4 — Backup and restore](tasks/M4_BACKUP_RESTORE.md)                        | M4A accepted; copy, retained history and snapshots integrated, with production execution gated on native preservation acceptance                                   |
 | [M5 — Maps, metadata and formats](tasks/M5_MAP_METADATA_FORMATS.md)          | Development gate complete; Windows/macOS native map/metadata/export acceptance passes; unverified formats and release limits in [M5 closeout](docs/M5_CLOSEOUT.md) |
-| [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | Pending packaging, signing and target-platform acceptance                                                                                                          |
+| [M6 — Release hardening](tasks/M6_RELEASE_HARDENING.md)                      | In progress: production preflight, safety review and 125-scenario evidence index; signing, clean-machine and release acceptance remain blocked                     |
 
 Catalog portability, broader health checks, editing, provider imports and mobile are separately gated [library extensions](docs/LIBRARY_FEATURES_ADDENDUM.md). They are planned work, not current capabilities. [Performance status](docs/PERFORMANCE_P4_STATUS.md) records the remaining P4-06 gate.
 
 ## Documentation
+
+- [User guide](docs/USER_GUIDE.md), [M6 readiness](docs/M6_RELEASE_READINESS.md) and [release evidence matrix](docs/M6_EVIDENCE_MATRIX.md) — current workflows, disabled capabilities and release gaps.
+
+- [M6 dependency hardening](docs/M6_DEPENDENCY_HARDENING.md) — reviewed development overrides, regression evidence and current advisory results.
 
 - [Product specification](docs/CODEX_SPEC.md) and [decisions](docs/DECISIONS.md) — requirements and implementation choices.
 - [Preservation contract](docs/PRESERVATION_CONTRACT.md) — original-file safety and recovery requirements.
