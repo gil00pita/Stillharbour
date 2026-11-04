@@ -457,12 +457,23 @@ async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
     await $('button=Build preview').click();
     const policy = await $('select[aria-label="Destination library policy"]');
     await browser.waitUntil(
-      async () => policy.$(`option[value="${generated.rootId}"]`).isExisting(),
-      { timeout: 15000 },
+      async () => {
+        const option = await policy.$(`option[value="${generated.rootId}"]`);
+        return (await option.isExisting()) && (await option.isEnabled());
+      },
+      { timeout: 15000, timeoutMsg: 'Managed destination policy is not available in the UI' },
     );
     await changeSizeUnit('Destination library policy', generated.rootId);
-    await $('button=Choose destination').scrollIntoView();
-    await $('button=Choose destination').click();
+    // Native status and React's root snapshot settle independently. The embedded
+    // driver calls DOM click(), which silently ignores a disabled button. Wait
+    // for the real UI guard before activating; never bypass it or retry a review.
+    const choose = await $('button=Choose destination');
+    await choose.waitForEnabled({
+      timeout: 15000,
+      timeoutMsg: 'Managed destination chooser is still disabled after policy selection',
+    });
+    await choose.scrollIntoView();
+    await choose.click();
     await browser.waitUntil(
       async () =>
         browser.execute(() =>
@@ -470,7 +481,7 @@ async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
             .querySelector('section[aria-label="Organization destination"] [role="status"]')
             ?.textContent?.includes('identity and indexed-root overlap checked'),
         ),
-      { timeout: 15000 },
+      { timeout: 15000, timeoutMsg: 'Managed destination identity/overlap review did not finish' },
     );
     assert.equal(await $('button=Save plan draft').isEnabled(), true);
     await browser.saveScreenshot(
