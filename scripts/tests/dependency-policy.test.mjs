@@ -24,6 +24,16 @@ function fixture(t) {
   return directory;
 }
 
+test('the browser extractor resolves its pinned ZIP peer inside this checkout', () => {
+  const peer = resolve('yauzl', browserModule);
+  assert.ok(
+    peer.startsWith(new URL('../../node_modules/', import.meta.url).href),
+    'An optional peer from an ancestor checkout must not satisfy clean-install validation',
+  );
+  const metadata = JSON.parse(fs.readFileSync(new URL('./package.json', peer), 'utf8'));
+  assert.equal(metadata.version, '3.4.0');
+});
+
 test('the browser helper JavaScript extractor rejects escaping ZIP symlinks and retains neighbors', async (t) => {
   const directory = fixture(t);
   const output = join(directory, 'output');
