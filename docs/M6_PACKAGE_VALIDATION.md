@@ -1,4 +1,4 @@
-# M6 macOS package evidence — 2026-11-04
+# M6 native package and executable evidence — 2026-11-04
 
 This is a fresh local developer-host validation on **macOS 27.2 arm64** after [M6 dependency hardening](M6_DEPENDENCY_HARDENING.md). No signed distribution, clean-machine installation or Windows package is certified. The default application keeps original-file mutations and experimental copy/backup execution disabled. No user catalog or personal photo library is used by these probes.
 
@@ -56,3 +56,15 @@ The normal-artifact SQLite receipt is run `76b4f953-143e-4275-9134-b7b5347ef313`
 Each packaged-library run independently creates its own fixtures, indexes **24 media**, exercises the actual packaged metadata worker and baseline JPEG/PNG/WebP previews, and verifies **36 source entries unchanged**. JPEG and HEIC original bytes compare exactly; HEIC geometry is 3,072×2,048. Original JPEG/PNG/WebP/HEIC routes succeed. The generated capture date `1964-02-29T13:15:20.1234` and `+05:30` offset come from bundled metadata execution. The two runs are separate fixture sets, not one combined library or a claim of all-format support.
 
 Logs: `production-app-build.log`, `release-check-final.log`, `packaged-sqlite.json`, `packaged-library.log`, `adhoc-receipt.json` and `adhoc-packaged-library.json` under `.context/m6-continue/`. No universal RAW/HDR/color/camera, minimum-macOS, Intel, clean-machine, Windows or signed-release claim follows. Full application accessibility, performance attribution, preservation certification, independent recovery and trusted distribution retain their existing gates.
+
+## Current-main Windows executable follow-up — 2026-11-04
+
+The isolated current-main continuation builds ordinary Windows release output with npm run tauri -- build --no-bundle (2m27 native compile). This produces an executable, not an installer. No production app/IPC/permission/source-operation feature is enabled. The test-only ZIP peer pin leaves all 183 production npm package records unchanged. Earlier legacy-checkout executable experiments are not evidence for this source.
+
+Actual executable SHA-256 is 95f93c5a8560496fe56f2ae5fb474dbce8bd2efd7b1c0be74ebd157183d47b30. Read-only Authenticode inspection returns NotSigned. The new reusable npm run release:smoke -- target/release/stillharbour.exe command tests only early worker/in-memory SQLite modes: generated two-pixel PNG decoding/output, typed malformed input, invalid worker sizes/names and rejected SQLite path arguments. It accepts only an executable, bounds child time/output, verifies the unchanged executable hash before emitting a receipt, launches no normal GUI and opens no user catalog. No library source path is accepted or created.
+
+The current executable passes all these checks. SQLite reports 3.54.1, source ID 2026-10-16 14:45:20 555e07ef33f69a0957d24d8e555b702464a131d6f1607f4c3c1e4551e8e6ca76 and userCatalogOpened=false. Raw output is .context/m6-ci/windows-release-smoke.json. Normal production frontend/resource/helper/default-graph preflight passes afterward; ordinary frontend output is retained. The existing Vite large-chunk warning remains. This does not certify a Windows installer, installed resources, clean-machine/runtime prerequisites, archival color fidelity, trusted signatures or backup/restore through the production executable.
+
+Separately, the actual instrumented Windows desktop build passes all five default specs: twelve applicable cases pass, seventeen platform cases skip, in three minutes. This includes generated operation review/copy/undo, M4 application snapshot/read/restore and M5 map/metadata exports. The map and metadata receipts independently retain nine unchanged source/companion entries each and originalMutationsEnabled=false under .context/m5-native/map.json and .context/m5-native-metadata/metadata.json. These are debug native tests, not a signed production GUI or screen-reader run.
+
+The owner explicitly confirms signing/notarization credentials, clean native machines and owner test endpoints are unavailable. Hosted macOS ARM64 capacity also cancels the earlier queued job without execution. M6 remains blocked at the documented release gates; no self-signing substitute, release publication or production mutation enablement follows from these Windows development results.

@@ -64,15 +64,16 @@ Use generated, disposable media for development tests. Debug catalogs are isolat
 
 ## Development
 
-| Command                      | Purpose                                                                                                              |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `npm run desktop:dev`        | Start the native application in development mode                                                                     |
-| `npm run check`              | Check formatting, lint, strict types, component tests, IPC bindings, Rust formatting/Clippy/tests and frontend build |
-| `npm run desktop:test:build` | Build the instrumented native test application                                                                       |
-| `npm run desktop:test`       | Run native WebView tests with owned, generated fixtures                                                              |
-| `npm run desktop:build`      | Build the normal unsigned macOS `.app` bundle                                                                        |
-| `npm run release:check`      | Check production permissions, instrumentation exclusions and reviewed helper resources                               |
-| `npm run test:release`       | Run production-preflight and dependency regressions, also included in `npm run check`                                |
+| Command                                 | Purpose                                                                                                              |
+| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `npm run desktop:dev`                   | Start the native application in development mode                                                                     |
+| `npm run check`                         | Check formatting, lint, strict types, component tests, IPC bindings, Rust formatting/Clippy/tests and frontend build |
+| `npm run desktop:test:build`            | Build the instrumented native test application                                                                       |
+| `npm run desktop:test`                  | Run native WebView tests with owned, generated fixtures                                                              |
+| `npm run desktop:build`                 | Build the normal unsigned macOS `.app` bundle                                                                        |
+| `npm run release:check`                 | Check production permissions, instrumentation exclusions and reviewed helper resources                               |
+| `npm run release:smoke -- <executable>` | Probe a built executable's decoder and in-memory SQLite without opening a user catalog                               |
+| `npm run test:release`                  | Run production-preflight and dependency regressions, also included in `npm run check`                                |
 
 Run the native test build and suite sequentially after `npm run check`; they share frontend build output. Test instrumentation must stay out of production. Additional fixture, format, helper and performance probes are documented in [Development](docs/DEVELOPMENT.md).
 

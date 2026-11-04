@@ -35,6 +35,10 @@ Paths in the audit are relative to `crates/core/src/` unless otherwise qualified
 
 ## Release blockers and next gates
 
+**Owner-confirmed external block, 2026-11-04:** Windows/Apple signing and notarization credentials, clean target machines and owner backup test endpoints are unavailable. Full M6 cannot be completed in this setup. Keep signing, clean-machine install/upgrade/restore and applicable external acceptance unrun; neither an unsigned executable nor disposable CI servers substitute. Whole-app accessibility, performance attribution and exact-version independent recovery also retain their existing gates. Do not enable production mutations or declare a release to bypass this block.
+
+Hosted macOS ARM64 capacity is separately observed: PR #19's first transport job is canceled with “The job was not acquired by Runner of type hosted even after multiple attempts” and capacity notices. Its Windows transport job succeeds. Preserve those distinct outcomes rather than inferring a macOS result or switching architectures silently. The new clean-install candidate has its own CI runs; outcomes are recorded independently.
+
 Current-main CI correction, 2026-11-04: run 41869615079 fails before native tests on both targets due to an extractor-path assumption, and additionally a Windows separator assertion. [Dependency evidence](M6_DEPENDENCY_HARDENING.md#current-main-ci-portability-correction--2026-11-04) now distinguishes the patched JavaScript extractor from native-first dispatch and records the exact generated regressions. Local focused Windows validation passes; this does not establish a fresh whole-matrix or release pass.
 
 | Gate                                 | Required next evidence                                                                                                                                                                                                                                                                             |

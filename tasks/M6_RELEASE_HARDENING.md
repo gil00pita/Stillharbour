@@ -28,6 +28,8 @@ Write user documentation for root modes, duplicate modes, template preview, quar
 
 ## Gate
 
+2026-11-04 owner response confirms signing/notarization credentials, clean native target machines and owner test endpoints are unavailable. M6 therefore remains blocked at the release gate even when available code/tooling checks pass. Continue only independent generated-fixture development validation; no trusted-signing, clean-machine, physical independence, release-complete or production-mutation claim may replace the missing evidence. See M6 readiness and PR #19 for current source/CI correction and its exact run outcomes.
+
 All applicable acceptance tests are mapped to real evidence. Missing macOS/Windows execution, signing credentials, codec coverage or transport restore tests are explicit release blockers, not inferred successes. Deliver packages only when their support claims match results. Summarize remaining post-v1 work without treating it as part of the shipped release.
 
 ## Version 1.1 release blockers
