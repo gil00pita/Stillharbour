@@ -37,3 +37,5 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 - [ADR-0076: M4B append-only review and native revalidation](ADR-0076-m4b-append-review.md).
 - [ADR-0077: Separate staging and generated append recovery](ADR-0077-separate-staging-append-fixture.md).
 - [ADR-0078: Generated retained replacement and disposable transport labs](ADR-0078-generated-retained-replacement-and-transport-labs.md).
+
+- [ADR-0088: Remove vulnerable development dependency paths](ADR-0088-development-dependency-advisory-remediation.md).
