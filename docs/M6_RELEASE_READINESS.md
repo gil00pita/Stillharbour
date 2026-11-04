@@ -35,6 +35,8 @@ Paths in the audit are relative to `crates/core/src/` unless otherwise qualified
 
 ## Release blockers and next gates
 
+Current-main CI correction, 2026-11-04: run 41869615079 fails before native tests on both targets due to an extractor-path assumption, and additionally a Windows separator assertion. [Dependency evidence](M6_DEPENDENCY_HARDENING.md#current-main-ci-portability-correction--2026-11-04) now distinguishes the patched JavaScript extractor from native-first dispatch and records the exact generated regressions. Local focused Windows validation passes; this does not establish a fresh whole-matrix or release pass.
+
 | Gate                                 | Required next evidence                                                                                                                                                                                                                                                                             |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Preservation / enabled product scope | Complete AC/PS mapping with actual current native failures, process exits, concurrent jobs, byte/version/companion/metadata/journal survival and independent exact-version recovery. Disabled production operations remain disabled. No quiet reduction of v1 scope.                               |

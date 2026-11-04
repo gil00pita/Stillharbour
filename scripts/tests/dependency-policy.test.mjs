@@ -14,7 +14,9 @@ const service = import.meta.resolve('@wdio/tauri-service');
 const utilities = resolve('@wdio/utils/node', service);
 const browserModule = resolve('@puppeteer/browsers', utilities);
 const browser = await import(browserModule);
-const { unpackArchive } = await import(new URL('./fileUtil.js', browserModule));
+const { unpackArchive, extractZipWithYauzl } = await import(
+  new URL('./fileUtil.js', browserModule)
+);
 
 function fixture(t) {
   const directory = fs.mkdtempSync(join(tmpdir(), 'stillharbour-dependency-policy-'));
@@ -22,21 +24,58 @@ function fixture(t) {
   return directory;
 }
 
-test('the Tauri service browser helper rejects an escaping ZIP symlink and retains neighbors', async (t) => {
+test('the browser helper JavaScript extractor rejects escaping ZIP symlinks and retains neighbors', async (t) => {
   const directory = fixture(t);
   const output = join(directory, 'output');
   const outside = join(directory, 'outside');
   fs.mkdirSync(output);
   fs.mkdirSync(outside);
   fs.writeFileSync(join(outside, 'neighbor.txt'), 'retain this exact version');
-  const zip = new JSZip();
-  zip.file('escape', '../outside', { unixPermissions: 0o120777 });
-  const archive = join(directory, 'hostile.zip');
-  fs.writeFileSync(archive, await zip.generateAsync({ type: 'nodebuffer', platform: 'UNIX' }));
-  await assert.rejects(unpackArchive(archive, output), /symlink|outside|traversal/i);
+  // unpackArchive tries native tar/PowerShell/unzip first. Their platform-specific
+  // behavior is not the JavaScript fallback's containment guarantee.
+  assert.equal(typeof extractZipWithYauzl, 'function');
+  for (const target of ['../outside', 'nested/../../outside', outside]) {
+    const zip = new JSZip();
+    zip.file('escape', target, { unixPermissions: 0o120777 });
+    const archive = join(directory, 'hostile.zip');
+    fs.writeFileSync(archive, await zip.generateAsync({ type: 'nodebuffer', platform: 'UNIX' }));
+    await assert.rejects(
+      extractZipWithYauzl(archive, output),
+      (error) =>
+        error instanceof Error &&
+        error.cause instanceof Error &&
+        /Zip symlink .*outside of the target directory/.test(error.cause.message),
+      'Require the containment rejection, not an unavailable extractor or filesystem error',
+    );
+    assert.equal(fs.existsSync(join(output, 'escape')), false);
+  }
   assert.deepEqual(fs.readdirSync(outside), ['neighbor.txt']);
   assert.equal(fs.readFileSync(join(outside, 'neighbor.txt'), 'utf8'), 'retain this exact version');
   assert.equal(fs.existsSync(join(output, 'escape')), false);
+});
+
+test('default and JavaScript browser extractors preserve generated regular files and neighbors', async (t) => {
+  const directory = fixture(t);
+  const neighbor = join(directory, 'neighbor.txt');
+  fs.writeFileSync(neighbor, 'retain this version');
+  const zip = new JSZip();
+  zip.file('nested/photo-α.txt', 'generated archive content', { unixPermissions: 0o100644 });
+  const archive = join(directory, 'regular.zip');
+  fs.writeFileSync(archive, await zip.generateAsync({ type: 'nodebuffer', platform: 'UNIX' }));
+  for (const [name, extract] of [
+    ['default', unpackArchive],
+    ['javascript', extractZipWithYauzl],
+  ]) {
+    const output = join(directory, name);
+    fs.mkdirSync(output);
+    await extract(archive, output);
+    assert.equal(fs.lstatSync(join(output, 'nested', 'photo-α.txt')).isFile(), true);
+    assert.equal(
+      fs.readFileSync(join(output, 'nested', 'photo-α.txt'), 'utf8'),
+      'generated archive content',
+    );
+    assert.equal(fs.readFileSync(neighbor, 'utf8'), 'retain this version');
+  }
 });
 
 test('the upgraded browser helper preserves every export used by the pinned WebdriverIO utility', async () => {
@@ -91,7 +130,7 @@ test('patched glob/minimatch retain native-tooling pattern and CommonJS compatib
     '**/*.txt',
     '!**/skip.txt',
   ]);
-  assert.deepEqual(matches, ['nested/photo-α.txt']);
+  assert.deepEqual(matches, [join('nested', 'photo-α.txt')]);
   const { Minimatch } = require('minimatch');
   assert.equal(new Minimatch('**/photo-{α,β}.txt').match('nested/photo-α.txt'), true);
   assert.equal(new Minimatch('**/photo-{α,β}.txt').match('nested/skip.txt'), false);
