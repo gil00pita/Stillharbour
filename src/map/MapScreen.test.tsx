@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '../test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AssetQuery, LibraryStatus, MapCluster, MapView } from '../bindings';
+import type { AssetQuery, LibraryStatus, MapCluster, MapView, PlaceSummary } from '../bindings';
 import { libraryData } from '../ipc';
 import { fixtureAsset } from '../library/__tests__/fixtures';
 import { MapScreen } from './MapScreen';
@@ -95,6 +95,13 @@ const status: LibraryStatus = {
   previewAvailable: true,
 };
 const show = vi.fn();
+const londonPlace: PlaceSummary = {
+  id: 'places-v1:city:2643743',
+  label: 'London, England, United Kingdom',
+  kind: 'city',
+  area: 'Within 25 km of the city centre',
+  bounds: { west: -0.5, east: 0.3, south: 51.2, north: 51.8 },
+};
 function Harness({ revision = '1' }: { revision?: string }) {
   const [state, onState] = useState(initialMapState);
   return (
@@ -107,10 +114,25 @@ function Harness({ revision = '1' }: { revision?: string }) {
   );
 }
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   show.mockReset();
   vi.mocked(libraryData)
     .mockReset()
     .mockImplementation(async (request) => {
+      if (request.kind === 'places')
+        return {
+          matches: request.text ? [londonPlace] : [],
+          selected: request.selected_id ? londonPlace : null,
+          more: false,
+          credits: 'GeoNames · Natural Earth',
+        } as never;
       if (request.kind === 'map_view') return view as never;
       return {
         assets: [asset],
@@ -121,6 +143,78 @@ beforeEach(() => {
     });
 });
 describe('local map browsing', () => {
+  it('applies an offline place alongside date search and carries its identity into Photos', async () => {
+    render(<Harness />);
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search filenames or dates' }), {
+      target: { value: '10-10-2025' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
+    fireEvent.change(await screen.findByRole('searchbox', { name: 'City or country' }), {
+      target: { value: 'London' },
+    });
+    fireEvent.click(await screen.findByRole('button', { name: /London, England, United Kingdom/ }));
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'query',
+          query: expect.objectContaining({
+            name: '10-10-2025',
+            placeId: londonPlace.id,
+            mapBounds: londonPlace.bounds,
+            location: 'known',
+          }),
+        }),
+        'page',
+      ),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Show in library' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Show in library' }));
+    expect(show).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '10-10-2025', placeId: londonPlace.id }),
+      null,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear place filter' }));
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'query',
+          query: expect.objectContaining({ name: '10-10-2025', placeId: null }),
+        }),
+        'page',
+      ),
+    );
+  });
+  it('shares date search text between map membership and photo queries and can clear it', async () => {
+    render(<Harness />);
+    const search = screen.getByRole('searchbox', { name: 'Search filenames or dates' });
+    expect(search).toHaveAttribute('title', expect.stringContaining('DD-MM-YYYY'));
+    fireEvent.change(search, { target: { value: '10-10-2025' } });
+    for (const [kind, result] of [
+      ['map_view', 'map_view'],
+      ['query', 'page'],
+    ] as const) {
+      await waitFor(() =>
+        expect(libraryData).toHaveBeenCalledWith(
+          expect.objectContaining({
+            kind,
+            query: expect.objectContaining({ name: '10-10-2025', includeMissing: false }),
+          }),
+          result,
+        ),
+      );
+    }
+    fireEvent.change(search, { target: { value: '' } });
+    await waitFor(() => expect(search).toHaveValue(''));
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenLastCalledWith(
+        expect.objectContaining({ kind: 'query', query: expect.objectContaining({ name: '' }) }),
+        'page',
+      ),
+    );
+  });
   it('keeps an open viewer through catalog refreshes without losing its filter scope', async () => {
     const { rerender } = render(<Harness />);
     fireEvent.click(await screen.findByRole('button', { name: `Open ${asset.name}` }));

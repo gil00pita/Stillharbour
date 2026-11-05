@@ -3998,9 +3998,31 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         newest.year,
       ),
     );
+    // The generated EXIF fixture is capture-local leap day with a +05:30
+    // offset. Both search formats must find it through real Rust IPC and UI.
+    for (const day of ['29-02-1964', '1964-02-29']) {
+      await $('input[aria-label="Search filenames or dates"]').setValue('');
+      await browser.waitUntil(async () =>
+        browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
+      );
+      await $('input[aria-label="Search filenames or dates"]').setValue(day);
+      await browser.waitUntil(async () =>
+        browser.execute(() => {
+          const assets = [...document.querySelectorAll('.gallery .asset')];
+          return (
+            assets.length === 1 &&
+            document.querySelectorAll('.date-rail').length === 1 &&
+            assets[0].dataset.date?.startsWith('1964-02-29') &&
+            assets[0].querySelector('[aria-label="Open Generated-00.jpg"]') !== null
+          );
+        }),
+      );
+      assert.equal(await browser.execute(() => document.querySelectorAll('.date-rail').length), 1);
+    }
+    await browser.saveScreenshot('.context/screenshots/gallery-date-search.png');
     // The JPEG sensor is 600×450 with EXIF orientation 6. Its decoded image
     // and chronological tile must both be portrait, including existing catalogs.
-    await $('input[aria-label="Search filenames"]').setValue('Generated-06.jpg');
+    await $('input[aria-label="Search filenames or dates"]').setValue('Generated-06.jpg');
     await browser.waitUntil(async () =>
       browser.execute(() => {
         const assets = [...document.querySelectorAll('.gallery .asset')];
@@ -4026,11 +4048,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       JSON.stringify(oriented),
     );
     await browser.saveScreenshot('.context/screenshots/gallery-oriented-portrait.png');
-    await $('input[aria-label="Search filenames"]').setValue('');
+    await $('input[aria-label="Search filenames or dates"]').setValue('');
     await browser.waitUntil(async () =>
       browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
     );
-    await $('input[aria-label="Search filenames"]').setValue('No fixture matches %_literal');
+    await $('input[aria-label="Search filenames or dates"]').setValue(
+      'No fixture matches %_literal',
+    );
     await browser.waitUntil(async () =>
       browser.execute(
         () => document.querySelector('.empty-results h2')?.textContent === 'No matching photos yet',
@@ -4041,7 +4065,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       0,
     );
     assert.equal(await browser.execute(() => document.querySelectorAll('.date-rail').length), 0);
-    await $('input[aria-label="Search filenames"]').setValue('');
+    await $('input[aria-label="Search filenames or dates"]').setValue('');
     await browser.waitUntil(async () =>
       browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
     );
@@ -4242,7 +4266,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             : (button.getAttribute('aria-label') ?? button.textContent.trim()),
         ),
       ),
-      ['Collapse navigation', 'Filter', 'Jobs', 'Catalog', 'Saved plans'],
+      ['Collapse navigation', 'Search places', 'Filter', 'Jobs', 'Catalog', 'Saved plans'],
     );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
@@ -5412,7 +5436,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       core.invoke('test_scroll_catalog'),
     );
     assert.equal(seeded, 960);
-    await $('input[aria-label="Search filenames"]').setValue('Synthetic');
+    await $('input[aria-label="Search filenames or dates"]').setValue('Synthetic');
     await openFilters();
     await changeSizeUnit('Sort', 'name');
     await $('button=Apply filters').click();
@@ -5571,7 +5595,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
   });
   it('configures text columns and sorts the native catalog without requesting images', async () => {
     await browser.setWindowSize(1180, 780);
-    await $('input[aria-label="Search filenames"]').setValue('Generated');
+    await $('input[aria-label="Search filenames or dates"]').setValue('Generated');
     await browser.waitUntil(async () =>
       browser.execute(() =>
         document.querySelector('.list .asset-open')?.textContent.includes('Generated'),

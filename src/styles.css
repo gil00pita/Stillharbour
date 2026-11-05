@@ -1982,6 +1982,12 @@ input.switch-control:disabled {
   .photo-toolbar {
     padding: 12px 16px;
     gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .photo-toolbar .fixed-search {
+    flex-basis: calc(100% - 48px);
+    max-width: none;
   }
   .photo-toolbar h1 {
     display: none;

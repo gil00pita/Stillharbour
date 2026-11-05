@@ -1,0 +1,36 @@
+{
+  "policy": "stillharbour-offline-places-v1",
+  "retrievedAt": "2026-11-05",
+  "cityRadiusKm": 25,
+  "sources": {
+    "cities15000.zip": {
+      "url": "https://download.geonames.org/export/dump/cities15000.zip",
+      "sha256": "6e5bb17e2c265df549ca7d8cae1762d8cf4ce04a9edca9426c2cdbf378b42c0e",
+      "bytes": 3366174
+    },
+    "countries.geojson": {
+      "url": "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/ca96624a56bd078437bca8184e78163e5039ad19/geojson/ne_10m_admin_0_countries.geojson",
+      "sha256": "239eec57ac17f100a11e2536cffc56752c318b50ae765b0918ff7aab4ce8f255",
+      "bytes": 13287234
+    },
+    "countryInfo.txt": {
+      "url": "https://download.geonames.org/export/dump/countryInfo.txt",
+      "sha256": "79f8f59ea01cbb40438bf1856dd6c2ff201f03f8fc72d0530b2646aaf603ef04",
+      "bytes": 32112
+    },
+    "admin1CodesASCII.txt": {
+      "url": "https://download.geonames.org/export/dump/admin1CodesASCII.txt",
+      "sha256": "2e4867f5397acb056ea26377601b57af37cb4c81399770225018e9e439e91ad3",
+      "bytes": 151571
+    }
+  },
+  "files": {
+    "assets/places/cities.json.gz": "d4e7f9d62bb7a10ec4ddfac92eb9fadbfaec119b37a03316c54defcad5f59021",
+    "assets/places/countries.json.gz": "a004a1e3635a336fad22213e7fea3d77d9a33dcc24aed4f9ba7bb810d36d4892",
+    "assets/places/NOTICE.md": "75756a7d3854140bd754a5d3551a45d2cb31169e6281bdd76c48941b91982803"
+  },
+  "counts": {
+    "cities": 34204,
+    "countriesAndTerritories": 258
+  }
+}

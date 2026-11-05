@@ -1,5 +1,6 @@
 import { createSystem, defaultBaseConfig, defineConfig, defineRecipe } from '@chakra-ui/react';
 import { fieldRecipe } from './recipes';
+import { placeSearchRecipe } from '../components/PlaceSearch/PlaceSearch.slot-recipe';
 
 const focus = { outline: '2px solid', outlineColor: 'brand.focusRing', outlineOffset: '2px' };
 
@@ -11,6 +12,14 @@ export const system = createSystem(
     preflight: false,
     theme: {
       tokens: {
+        spacing: {
+          1: { value: '0.25rem' },
+          2: { value: '0.5rem' },
+          3: { value: '0.75rem' },
+          4: { value: '1rem' },
+        },
+        fontSizes: { xs: { value: '12px' }, sm: { value: '13px' } },
+        zIndex: { popover: { value: 1500 } },
         colors: {
           harbour: {
             canvas: { value: '#16191b' },
@@ -36,7 +45,12 @@ export const system = createSystem(
           heading: { value: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
         },
         radii: { control: { value: '8px' }, panel: { value: '12px' } },
-        sizes: { control: { value: '36px' } },
+        sizes: {
+          control: { value: '36px' },
+          full: { value: '100%' },
+          sm: { value: '24rem' },
+          64: { value: '16rem' },
+        },
       },
       semanticTokens: {
         colors: {
@@ -113,6 +127,7 @@ export const system = createSystem(
         },
         textarea: { ...fieldRecipe, className: 'chakra-textarea' },
       },
+      slotRecipes: { popover: placeSearchRecipe },
     },
   }),
 );

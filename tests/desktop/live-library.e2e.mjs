@@ -95,8 +95,8 @@ const filter = {
           mode: 'referenced',
           filter,
         });
-        await $('input[aria-label="Search filenames"]').waitForDisplayed();
-        await $('input[aria-label="Search filenames"]').setValue('Generated-00.jpg');
+        await $('input[aria-label="Search filenames or dates"]').waitForDisplayed();
+        await $('input[aria-label="Search filenames or dates"]').setValue('Generated-00.jpg');
         await $('button[aria-label="Open Generated-00.jpg"]').waitForDisplayed();
         await monitor('monitor');
         await browser.waitUntil(
@@ -118,7 +118,7 @@ const filter = {
           async () => !(await $('button[aria-label="Open Generated-00.jpg"]').isExisting()),
           { timeout: 45000 },
         );
-        await $('input[aria-label="Search filenames"]').setValue('Live-moved.jpg');
+        await $('input[aria-label="Search filenames or dates"]').setValue('Live-moved.jpg');
         await $('button[aria-label="Open Live-moved.jpg"]').waitForDisplayed({ timeout: 45000 });
         assert.deepEqual(manifest(fixtureRoot), renamed);
         await writeFile(join(output, 'renamed-after.json'), JSON.stringify(manifest(fixtureRoot)));

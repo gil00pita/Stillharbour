@@ -1,5 +1,7 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0089](decisions/ADR-0089-offline-place-search.md) records the owner's explicit choice of offline GPS city/country search: bounded disambiguated suggestions, 25 km city areas, source country polygons, versioned place IDs and shared native query membership. Catalog schema/identities, network permissions and production preservation gates remain intact.
+
 [ADR-0088](decisions/ADR-0088-development-dependency-advisory-remediation.md) continues owner-authorized M6 with exact development overrides for glob, minimatch and the nested Puppeteer browser helper. Generated ZIP/cancellation regressions fail before the update and pass afterward; all runtime npm pins remain unchanged. [M6 dependency evidence](M6_DEPENDENCY_HARDENING.md) owns actual advisory and native/build results. Production capability and release gates remain intact.
 
 [ADR-0084](decisions/ADR-0084-reviewed-metadata-exports-and-tag-history.md) completes the remaining M5 implementation with schema-17 reviewed tag changes, removal overrides, reversible history and explicit new-output portable catalog/XMP exports. Native folder authority, immutable plans, bounded namespace-aware parsing, fresh companion inventory, no-replace publication and completion receipts preserve original files. [M5 validation](M5_VALIDATION.md) records actual checks and unclosed acceptance gates. Earlier slice records below remain historical.

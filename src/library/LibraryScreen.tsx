@@ -98,6 +98,8 @@ export function LibraryScreen({
       section={section}
       value={query.name}
       onSearch={(name) => filter({ name })}
+      placeId={query.placeId}
+      onPlace={(place) => filter({ placeId: place?.id ?? null })}
       busy={batchBusy}
       onPlans={() => setPlansOpen(true)}
       onCatalog={() => setCatalogOpen(true)}

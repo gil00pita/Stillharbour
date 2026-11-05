@@ -661,6 +661,7 @@ pub(super) fn narrow_name_scope(
     known_total: Option<u32>,
 ) -> Result<(String, Vec<Value>)> {
     if query.name.is_empty()
+        || super::search::day(&query.name).is_some()
         || !matches!(known_total, Some(1..=NAME_CANDIDATE_LIMIT))
         || query.root_id.is_some()
         || !inventory_query(&AssetQuery {
@@ -709,12 +710,15 @@ pub(crate) fn query_where(query: &AssetQuery) -> Result<(String, Vec<Value>)> {
     {
         return Err(invalid("Start date exceeds end date."));
     }
-    // Keep the cheap media rejection first, then reject unmatched names before
-    // presence/preparation checks. Leave index selection to SQLite: forcing the
-    // name index slows broad searches on the measured catalog.
+    // Keep the cheap media rejection first. Exact dates use the same indexed
+    // local-date range as browsing filters, without a timezone conversion.
+    // Leave index selection to SQLite for filename searches.
     let mut sql = String::from("is_media=1");
     let mut values = Vec::new();
-    if !query.name.is_empty() {
+    if let Some(day) = super::search::day(&query.name) {
+        sql.push_str(" AND date>=? AND date<?");
+        values.extend([day.clone().into(), format!("{day}T99").into()]);
+    } else if !query.name.is_empty() {
         sql.push_str(" AND name LIKE ? ESCAPE '\\'");
         values.push(format!("%{}%", escape_like(&query.name)).into());
     }
@@ -788,6 +792,7 @@ pub(crate) fn query_where(query: &AssetQuery) -> Result<(String, Vec<Value>)> {
         return Err(invalid("Unknown sort order."));
     }
     super::geography::query_filter(query, &mut sql, &mut values)?;
+    super::places::query_filter(query, &mut sql, &mut values)?;
     super::catalog_metadata::query_filter(query, &mut sql, &mut values)?;
     Ok((sql, values))
 }
@@ -856,7 +861,8 @@ fn query_hash(query: &AssetQuery) -> Result<String> {
 }
 
 fn inventory_query(query: &AssetQuery) -> bool {
-    query.album_id.is_none()
+    query.place_id.is_none()
+        && query.album_id.is_none()
         && query.rejected.is_none()
         && query.min_rating.is_none()
         && query.map_bounds.is_none()

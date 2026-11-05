@@ -11,6 +11,13 @@ import {
 
 const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
 const mapManifest = JSON.parse(readFileSync('assets/maps/manifest.json', 'utf8'));
+const placeManifest = JSON.parse(readFileSync('assets/places/manifest.json', 'utf8'));
+for (const [path, hash] of Object.entries(placeManifest.files))
+  assert.equal(
+    createHash('sha256').update(readFileSync(path)).digest('hex'),
+    hash,
+    `Bundled place data checksum: ${path}`,
+  );
 for (const [path, hash] of Object.entries(mapManifest.files))
   assert.equal(
     createHash('sha256').update(readFileSync(path)).digest('hex'),

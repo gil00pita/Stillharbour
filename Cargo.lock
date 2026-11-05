@@ -3548,6 +3548,7 @@ dependencies = [
  "chrono",
  "core-foundation",
  "crc32fast",
+ "flate2",
  "fs2",
  "globset",
  "image",
