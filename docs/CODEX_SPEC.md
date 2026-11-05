@@ -18,6 +18,8 @@ Read AGENTS.md and docs/PRESERVATION_CONTRACT.md before implementation. Read doc
 
 ## 1. Product outcome and boundaries
 
+Owner-approved utilities refinement (2026-11-05): flat secondary buttons, sidebar Jobs immediately above Settings, Utilities grouping, and offline place suggestions inside the main filename/date search. Duplicates uses a searchable cluster/evidence workspace with preview slider, side-by-side and difference heatmap, conservative keeper suggestions and a visibly gated cleanup preview. Integrity focuses on health/baseline findings; Storage focuses on size/treemap observations. Missing visual scores, audio/lineage signals, edit/capture/album rankings and production cleanup must remain explicitly unavailable rather than fabricated. [Utilities UI](UTILITIES_UI.md) defines this bounded presentation revision; preservation and release gates remain unchanged.
+
 Owner-approved Settings presentation refinement (2026-11-02): preserve the existing brand and section order; align defaults actions, separate import controls by 12px, retain at least 13px browsing-control text at narrow widths, and explain unavailable import preferences visibly and accessibly. Use plain folder-reconnection and import guidance without changing approval or preservation requirements.
 
 Build Stillharbour, a local-first photo organizer that lets a person understand, organize, verify, and back up their real photo folders without surrendering control of those folders. The application combines a chronological photo browser, a folder organizer with dry-run previews, a duplicate review tool, a storage analyzer, a map browser, and recoverable backups.

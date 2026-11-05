@@ -227,6 +227,8 @@ async function reviewReadOnlyInspections(evidence) {
     ['Integrity', 'Start quick header check'],
   ]) {
     await $(`button[aria-label="${section}"]`).click();
+    if (!(await $('.inspection-controls').isDisplayed()))
+      await $('.inspection-setup > summary').click();
     await $('.inspection-controls').waitForDisplayed();
     if (section === 'Integrity') await changeSizeUnit('Integrity mode', 'quick');
     const before = (await native({ kind: 'inspection_jobs' })).data.map((job) => job.id);
@@ -241,7 +243,11 @@ async function reviewReadOnlyInspections(evidence) {
       { timeout: 45000, interval: 200, timeoutMsg: `${section} native inspection did not finish` },
     );
     assert.ok(['completed', 'partial'].includes(job.state), job.message);
-    await $('section[aria-label="Inspected files"] tbody tr:first-child').waitForDisplayed();
+    await $(
+      section === 'Duplicates'
+        ? '.duplicate-totals'
+        : 'section[aria-label="Inspected files"] tbody tr:first-child',
+    ).waitForDisplayed();
     const report = (await native({ kind: 'inspection_report', job_id: job.id })).data;
     const files = (await native({ kind: 'inspection_findings', job_id: job.id, after: null })).data;
     assert.ok(files.rows.length > 0);
@@ -261,28 +267,83 @@ async function reviewReadOnlyInspections(evidence) {
     await browser.saveScreenshot(
       `.context/screenshots/m3-${section.toLowerCase()}-${process.platform}.png`,
     );
-    const displayedRows = await browser.execute(() =>
-      [...document.querySelectorAll('section[aria-label="Inspected files"] tbody tr')].map(
-        (row) => ({
-          name: row.querySelector('th > span').textContent,
-          bytes: row.children[1].textContent.replace(/\D/g, ''),
-          content: row.children[4].textContent,
-        }),
-      ),
-    );
-    assert.deepEqual(
-      displayedRows.map(({ name, bytes }) => ({ name, bytes })),
-      files.rows.map(({ name, bytes }) => ({ name, bytes })),
-    );
-    assert.ok(
-      displayedRows.every((row, index) =>
-        row.content.includes(files.rows[index].content.replaceAll('_', ' ')),
-      ),
-    );
-    await $('section[aria-label="Inspected files"] h2').scrollIntoView({ block: 'start' });
-    await browser.saveScreenshot(
-      `.context/screenshots/m3-${section.toLowerCase()}-results-${process.platform}.png`,
-    );
+    let displayedRows = [];
+    if (section === 'Duplicates') {
+      const groups = (await native({ kind: 'inspection_groups', job_id: job.id, after: null }))
+        .data;
+      await browser.waitUntil(
+        async () => (await $$('.duplicate-cluster')).length === groups.groups.length,
+      );
+      assert.equal(await $('section[aria-label="Inspected files"]').isExisting(), false);
+      await $('.duplicate-studio').scrollIntoView({ block: 'start' });
+      await browser.saveScreenshot('.context/screenshots/duplicates-native-overview.png');
+      if (groups.groups.length) {
+        await $('.duplicate-cluster button').click();
+        await $('.duplicate-signals').waitForDisplayed();
+        assert.equal(
+          (await $('.duplicate-detail-head').getText()).includes('duplicate candidate'),
+          true,
+        );
+        if (await $('.duplicate-comparison').isExisting()) {
+          for (const mode of ['Side by side', 'Slider', 'Difference heatmap']) {
+            await $(`button=${mode}`).click();
+            await $('.duplicate-stage').scrollIntoView({ block: 'center' });
+            await browser.saveScreenshot(
+              `.context/screenshots/duplicates-${mode.toLowerCase().replaceAll(' ', '-')}.png`,
+            );
+          }
+        }
+      }
+      await $('button=Cleanup rules').click();
+      await $('dialog[aria-label="Cleanup rules"]').waitForDisplayed();
+      await $('button=Preview cleanup').scrollIntoView({ block: 'center' });
+      await $('button=Preview cleanup').click();
+      assert.equal(await $('button=Move to Recently Deleted unavailable').isEnabled(), false);
+      await browser.saveScreenshot('.context/screenshots/duplicates-rules.png');
+      await $('dialog[aria-label="Cleanup rules"]').$('button=Close').click();
+      assert.equal(await $('button=Cleanup rules').isFocused(), true);
+      await browser.setWindowSize(660, 560);
+      await $('.duplicate-studio').scrollIntoView({ block: 'start' });
+      assert.equal(
+        await browser.execute(() => document.documentElement.scrollWidth <= innerWidth),
+        true,
+      );
+      await browser.saveScreenshot('.context/screenshots/duplicates-minimum.png');
+      await browser.setWindowSize(1180, 780);
+    } else {
+      displayedRows = await browser.execute(
+        (section) =>
+          [...document.querySelectorAll('section[aria-label="Inspected files"] tbody tr')].map(
+            (row) => ({
+              name: row.querySelector('th > span, th > bdi').textContent,
+              ...(section === 'Storage'
+                ? { bytes: row.children[1].textContent.replace(/\D/g, '') }
+                : {}),
+              content: row.children[section === 'Storage' ? 4 : 2].textContent,
+            }),
+          ),
+        section,
+      );
+      assert.deepEqual(
+        displayedRows.map(({ name }) => name),
+        files.rows.map(({ name }) => name),
+      );
+      if (section === 'Storage')
+        assert.deepEqual(
+          displayedRows.map(({ bytes }) => bytes),
+          files.rows.map(({ bytes }) => bytes),
+        );
+      if (section === 'Integrity')
+        assert.ok(
+          displayedRows.every((row, index) =>
+            row.content.includes(files.rows[index].content.replaceAll('_', ' ')),
+          ),
+        );
+      await $('section[aria-label="Inspected files"] h2').scrollIntoView({ block: 'start' });
+      await browser.saveScreenshot(
+        `.context/screenshots/m3-${section.toLowerCase()}-results-${process.platform}.png`,
+      );
+    }
     let folderEvidence = null;
     if (section === 'Storage') {
       await $('.inspection-storage').scrollIntoView({ block: 'start' });
@@ -3489,7 +3550,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     if (process.env.STILLHARBOUR_TEST_JOBS_COMPLETED === '1')
       assert.deepEqual(observedProgress, { value: '100', text: 'Scan complete' });
     observations.progressAtOpen = observedProgress;
-    assert.equal(await $('header button[aria-label="Jobs"]').getAttribute('aria-expanded'), 'true');
+    assert.equal(
+      await $('.sidebar-footer button[aria-label="Jobs"]').getAttribute('aria-expanded'),
+      'true',
+    );
     await browser.saveScreenshot('.context/screenshots/jobs-dropdown-after-save-desktop.png');
     await browser.setWindowSize(660, 560);
     assert.equal(
@@ -4001,11 +4065,11 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     // The generated EXIF fixture is capture-local leap day with a +05:30
     // offset. Both search formats must find it through real Rust IPC and UI.
     for (const day of ['29-02-1964', '1964-02-29']) {
-      await $('input[aria-label="Search filenames or dates"]').setValue('');
+      await $('input[aria-label="Search filenames, dates or places"]').setValue('');
       await browser.waitUntil(async () =>
         browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
       );
-      await $('input[aria-label="Search filenames or dates"]').setValue(day);
+      await $('input[aria-label="Search filenames, dates or places"]').setValue(day);
       await browser.waitUntil(async () =>
         browser.execute(() => {
           const assets = [...document.querySelectorAll('.gallery .asset')];
@@ -4022,7 +4086,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.saveScreenshot('.context/screenshots/gallery-date-search.png');
     // The JPEG sensor is 600×450 with EXIF orientation 6. Its decoded image
     // and chronological tile must both be portrait, including existing catalogs.
-    await $('input[aria-label="Search filenames or dates"]').setValue('Generated-06.jpg');
+    await $('input[aria-label="Search filenames, dates or places"]').setValue('Generated-06.jpg');
     await browser.waitUntil(async () =>
       browser.execute(() => {
         const assets = [...document.querySelectorAll('.gallery .asset')];
@@ -4048,11 +4112,11 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       JSON.stringify(oriented),
     );
     await browser.saveScreenshot('.context/screenshots/gallery-oriented-portrait.png');
-    await $('input[aria-label="Search filenames or dates"]').setValue('');
+    await $('input[aria-label="Search filenames, dates or places"]').setValue('');
     await browser.waitUntil(async () =>
       browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
     );
-    await $('input[aria-label="Search filenames or dates"]').setValue(
+    await $('input[aria-label="Search filenames, dates or places"]').setValue(
       'No fixture matches %_literal',
     );
     await browser.waitUntil(async () =>
@@ -4065,7 +4129,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       0,
     );
     assert.equal(await browser.execute(() => document.querySelectorAll('.date-rail').length), 0);
-    await $('input[aria-label="Search filenames or dates"]').setValue('');
+    await $('input[aria-label="Search filenames, dates or places"]').setValue('');
     await browser.waitUntil(async () =>
       browser.execute(() => document.querySelectorAll('.gallery .asset').length > 1),
     );
@@ -4170,7 +4234,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.saveScreenshot('.context/screenshots/gallery-scroll-fixed.png');
   });
 
-  it('keeps Jobs in the header and Settings in the sidebar footer in expanded and collapsed navigation', async () => {
+  it('keeps Jobs above Settings in the sidebar footer in expanded and collapsed navigation', async () => {
     for (const [width, height, label] of [
       [1180, 780, 'desktop'],
       [660, 560, 'minimum'],
@@ -4184,7 +4248,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         const layout = await browser.execute(() => {
           const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
           const footer = document.querySelector('.sidebar-footer').getBoundingClientRect();
-          const jobs = document.querySelector('header button[aria-label="Jobs"]');
+          const jobs = document.querySelector('.sidebar-footer button[aria-label="Jobs"]');
           const settings = document.querySelector('.sidebar-footer button[aria-label="Settings"]');
           const version = document.querySelector('.sidebar-version').getBoundingClientRect();
           const toggle = document.querySelector('button.sidebar-toggle');
@@ -4200,8 +4264,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               toggleRect.left <= sidebar.right + 8,
             toggleBeforeTitle: toggle.nextElementSibling?.tagName === 'H1',
             inside: footer.top >= sidebar.top && footer.bottom <= sidebar.bottom + 1,
-            jobsInHeader:
-              Boolean(jobs) && !document.querySelector('.sidebar button[aria-label="Jobs"]'),
+            jobsAboveSettings:
+              Boolean(jobs) &&
+              jobs.getBoundingClientRect().bottom <= settings.getBoundingClientRect().top &&
+              !document.querySelector('header button[aria-label="Jobs"]'),
             aboveVersion: settings.getBoundingClientRect().bottom <= version.top,
             primaryContainsActions: Boolean(
               document.querySelector(
@@ -4215,7 +4281,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         assert.equal(layout.toggleAtTopEdge, true);
         assert.equal(layout.toggleBeforeTitle, true);
         assert.equal(layout.inside, true);
-        assert.equal(layout.jobsInHeader, true);
+        assert.equal(layout.jobsAboveSettings, true);
         assert.equal(layout.aboveVersion, true);
         assert.equal(layout.primaryContainsActions, false);
         assert.ok(layout.footerTop > height / 2);
@@ -4266,7 +4332,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             : (button.getAttribute('aria-label') ?? button.textContent.trim()),
         ),
       ),
-      ['Collapse navigation', 'Search places', 'Filter', 'Jobs', 'Catalog', 'Saved plans'],
+      ['Collapse navigation', 'Filter', 'Catalog', 'Saved plans'],
     );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
@@ -5436,7 +5502,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       core.invoke('test_scroll_catalog'),
     );
     assert.equal(seeded, 960);
-    await $('input[aria-label="Search filenames or dates"]').setValue('Synthetic');
+    await $('input[aria-label="Search filenames, dates or places"]').setValue('Synthetic');
     await openFilters();
     await changeSizeUnit('Sort', 'name');
     await $('button=Apply filters').click();
@@ -5595,7 +5661,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
   });
   it('configures text columns and sorts the native catalog without requesting images', async () => {
     await browser.setWindowSize(1180, 780);
-    await $('input[aria-label="Search filenames or dates"]').setValue('Generated');
+    await $('input[aria-label="Search filenames, dates or places"]').setValue('Generated');
     await browser.waitUntil(async () =>
       browser.execute(() =>
         document.querySelector('.list .asset-open')?.textContent.includes('Generated'),
@@ -5695,6 +5761,34 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         ),
       };
     });
+    await browser.saveScreenshot('.context/screenshots/text-columns-alignment-check.png');
+    await writeFile(
+      '.context/screenshots/text-columns-alignment.json',
+      JSON.stringify(
+        await browser.execute(() => ({
+          viewport: innerWidth,
+          page: document.documentElement.scrollWidth,
+          overflow: [...document.querySelectorAll('body *')]
+            .filter((element) => {
+              const bounds = element.getBoundingClientRect();
+              return (
+                bounds.width > 0 &&
+                (bounds.right > innerWidth + 1 || bounds.left < -1) &&
+                getComputedStyle(element).position !== 'absolute'
+              );
+            })
+            .slice(0, 48)
+            .map((element) => ({
+              tag: element.tagName,
+              className: String(element.className),
+              width: element.getBoundingClientRect().width,
+              right: element.getBoundingClientRect().right,
+            })),
+        })),
+        null,
+        2,
+      ),
+    );
     assert.equal(aligned.noPageOverflow, true);
     assert.equal(aligned.sameWidth, true);
     assert.ok(aligned.offsets.every((offset) => offset < 2));

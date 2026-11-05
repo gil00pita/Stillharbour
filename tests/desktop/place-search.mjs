@@ -6,8 +6,8 @@ import { native, query } from './m5-metadata-helpers.mjs';
 export async function verifyOfflinePlaceSearch(directory) {
   const cityId = 'places-v1:city:2643743';
   const countryId = 'places-v1:country:GBR';
-  const search = 'input[placeholder="For example, London or Portugal"]';
-  const trigger = 'button[aria-label="Search places"]';
+  const search = 'input[placeholder="Search filenames, dates or places…"]';
+  const trigger = search;
   await $(trigger).click();
   await $(search).waitForDisplayed();
   await $(search).setValue('London');

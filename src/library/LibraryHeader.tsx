@@ -1,4 +1,4 @@
-import { Button, Input } from '../components/ui/controls';
+import { Button } from '../components/ui/controls';
 import type { ReactNode } from 'react';
 import type { Section } from './model';
 import { PlaceSearch } from '../components/PlaceSearch';
@@ -36,20 +36,13 @@ export function LibraryHeader({
     <header className="toolbar photo-toolbar">
       {navigationControl}
       <h1>{section === 'Tags' ? 'Albums / Tags' : section}</h1>
-      <label className="fixed-search">
-        <span className="screen-reader-status">Search filenames or dates</span>
-        <Input
-          type="search"
-          aria-label="Search filenames or dates"
-          placeholder="Search filenames or dates…"
-          title="Search filenames or a day: DD-MM-YYYY or YYYY-MM-DD"
-          value={value}
-          maxLength={256}
-          disabled={busy}
-          onChange={(event) => onSearch(event.target.value)}
-        />
-      </label>
-      <PlaceSearch selectedId={placeId} onChange={onPlace} disabled={busy} />
+      <PlaceSearch
+        value={value}
+        onSearch={onSearch}
+        selectedId={placeId}
+        onChange={onPlace}
+        disabled={busy}
+      />
       <Button
         onClick={onFilter}
         disabled={busy}

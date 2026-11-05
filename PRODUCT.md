@@ -87,3 +87,7 @@ M2 begins with a catalog-only preview from the Photos selection toolbar for 1–
 ## Restrained polish — owner approval, 2026-10-30
 
 Retain Stillharbour's current photo-first brand and layouts while making shared controls, spacing and supporting text consistent. Use neutral secondary actions, 36px standard fields/selects, 44px primary/viewer targets, native system type, readable help text and restrained confirmed-favorite feedback. Library names lead over UUIDs in organization previews; identities remain available for inspection. No backend capability, milestone or original-file permission changes. See docs/INTERFACE_POLISH.md.
+
+## Utilities and search refinement — 2026-11-05
+
+Flat secondary actions, a Utilities navigation group and Jobs immediately above Settings replace the earlier outlined/header-Jobs treatment. Photos/Tags/Map place lookup is inside the main filename/date search. Duplicates becomes a cluster/evidence workspace with real cached-preview comparison modes and conservative keeper review; Integrity and Storage present their distinct results. Unmeasured visual/audio/lineage/ranking data and production cleanup remain explicitly unavailable under the preservation gates. See docs/UTILITIES_UI.md for exact delivered scope.

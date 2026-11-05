@@ -16,7 +16,9 @@ import { InspectionJobProgress } from '../inspection/InspectionJobProgress';
 export function JobsDropdown({
   status,
   onRefresh,
+  sidebar = false,
 }: {
+  sidebar?: boolean;
   status: LibraryStatus | null;
   onRefresh: () => Promise<void>;
 }) {
@@ -49,11 +51,11 @@ export function JobsDropdown({
     function place() {
       const rect = opener.current?.getBoundingClientRect();
       if (!rect) return;
-      const top = Math.max(16, Math.min(rect.bottom + 8, window.innerHeight - 160));
+      const top = sidebar ? 16 : Math.max(16, Math.min(rect.bottom + 8, window.innerHeight - 160));
       setPosition({
         top,
         right: Math.min(
-          Math.max(16, window.innerWidth - rect.right),
+          Math.max(16, window.innerWidth - (sidebar ? rect.right + 406 : rect.right)),
           Math.max(16, window.innerWidth - 406),
         ),
         maxHeight: Math.max(120, window.innerHeight - top - 16),
@@ -91,7 +93,7 @@ export function JobsDropdown({
       document.removeEventListener('scroll', scroll, true);
       window.removeEventListener('resize', place);
     };
-  }, [open]);
+  }, [open, sidebar]);
   const entries = (jobs: ScanJob[]) =>
     jobs.map((job) => (
       <JobEntry
@@ -122,6 +124,7 @@ export function JobsDropdown({
             strokeLinejoin="round"
           />
         </svg>
+        {sidebar && <span className="nav-label">Jobs</span>}
         {activeCount > 0 && (
           <span className="jobs-count" aria-hidden="true">
             {activeCount}

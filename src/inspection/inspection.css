@@ -12,17 +12,17 @@
 .inspection-content > * {
   max-width: 1440px;
 }
-.inspection-content h2 {
+.inspection-content h2:not(:where(.duplicate-studio *)) {
   font-size: 18px;
   margin: 24px 0 12px;
 }
-.inspection-content h3 {
+.inspection-content h3:not(:where(.duplicate-studio *)) {
   font-size: 16px;
 }
-.inspection-content p {
+.inspection-content p:not(:where(.duplicate-studio *)) {
   color: var(--muted);
 }
-.inspection-content label {
+.inspection-content label:not(:where(.duplicate-studio *)) {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -30,7 +30,7 @@
   margin: 12px 0;
   font-size: 13px;
 }
-.inspection-content label:has(> input[type='checkbox']) {
+.inspection-content label:not(:where(.duplicate-studio *)):has(> input[type='checkbox']) {
   flex-direction: row;
   align-items: center;
 }
@@ -41,8 +41,8 @@
   max-width: 80ch;
   font-size: 13px;
 }
-.inspection-content input:not([type='checkbox']),
-.inspection-content select {
+.inspection-content input:not([type='checkbox']):not(:where(.duplicate-studio *)),
+.inspection-content select:not(:where(.duplicate-studio *)) {
   padding: 7px 10px;
   max-width: 100%;
   color: inherit;
@@ -216,4 +216,46 @@
 .inspection-storage .inspection-table-wrap :is(th, td):not(:first-child) {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.inspection-setup {
+  margin-block: 24px;
+}
+.inspection-setup > summary {
+  cursor: pointer;
+  color: var(--secondary);
+  font-size: 13px;
+  padding-block: 12px;
+  border-block: 1px solid var(--border);
+}
+.inspection-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.inspection-controls > legend,
+.inspection-controls > .inspection-roots,
+.inspection-controls > p,
+.inspection-controls > fieldset,
+.inspection-controls > .primary {
+  grid-column: 1 / -1;
+}
+.inspection-controls > .primary {
+  justify-self: start;
+}
+.inspection-content :is(button, input, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.inspection-content input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+.inspection-content ::selection {
+  background: var(--accent);
+  color: var(--background);
+}
+@media (max-width: 760px) {
+  .inspection-controls {
+    display: block;
+  }
 }

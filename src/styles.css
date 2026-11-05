@@ -587,7 +587,7 @@ label {
   color: var(--secondary);
 }
 button:not(.primary):not(.asset-open):not(.chakra-button) {
-  border: 1px solid #3c4643;
+  border: 1px solid transparent;
   background: var(--surface);
   color: var(--stillharbour-colors-fg, #e7e9e8);
   border-radius: var(--control-radius);
@@ -3135,4 +3135,38 @@ button.explorer-entry.asset-open:hover:enabled {
   button:not(.asset-open) {
     transition: none;
   }
+}
+
+/* Workspace utilities and persistent job access. */
+.nav-group-label {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 24px 12px 8px;
+}
+.navigation-collapsed .nav-group-label {
+  font-size: 0;
+  height: 1px;
+  background: var(--border);
+  margin: 20px 12px 12px;
+}
+.sidebar-footer .jobs-trigger {
+  justify-content: flex-start;
+  width: 100%;
+}
+.sidebar-footer .jobs-count {
+  position: static;
+  margin-left: auto;
+}
+
+.unified-search {
+  position: relative;
+}
+.unified-search .place-search-chip {
+  font-size: 12px;
+  min-height: 28px;
+  margin-top: 4px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
