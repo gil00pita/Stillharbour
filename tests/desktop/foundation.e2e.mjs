@@ -2004,7 +2004,8 @@ describe('native read-only library', () => {
       core.invoke('foundation_request', { request: { kind: 'status' } }),
     );
     assert.equal(status.data.catalogSchema, 17);
-    assert.equal(await $('.sidebar-version').getText(), `Version ${status.data.version}`);
+    assert.equal(await $('.brand-version').getText(), status.data.version);
+    assert.equal(await $('.sidebar-footer .brand-version').isExisting(), false);
     assert.equal(
       await browser.execute(() =>
         document.querySelector('.sidebar').textContent.includes('Local by design.'),
@@ -4248,7 +4249,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.saveScreenshot('.context/screenshots/gallery-scroll-fixed.png');
   });
 
-  it('keeps Jobs above Settings in the sidebar footer in expanded and collapsed navigation', async () => {
+  it('keeps Jobs, Settings and the navigation toggle in the sidebar footer in both states', async () => {
     for (const [width, height, label] of [
       [1180, 780, 'desktop'],
       [660, 560, 'minimum'],
@@ -4264,30 +4265,28 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           const footer = document.querySelector('.sidebar-footer').getBoundingClientRect();
           const jobs = document.querySelector('.sidebar-footer button[aria-label="Jobs"]');
           const settings = document.querySelector('.sidebar-footer button[aria-label="Settings"]');
-          const version = document.querySelector('.sidebar-version').getBoundingClientRect();
           const toggle = document.querySelector('button.sidebar-toggle');
           const toggleRect = toggle.getBoundingClientRect();
-          const header = toggle.closest('header')?.getBoundingClientRect();
           return {
-            toggleInHeader: Boolean(header) && !toggle.closest('.sidebar'),
-            toggleAtTopEdge:
-              Boolean(header) &&
-              toggleRect.top >= header.top &&
-              toggleRect.bottom <= header.bottom &&
-              Math.abs(toggleRect.left - sidebar.right - 16) <= 1,
+            toggleInMenu:
+              Boolean(toggle.closest('.sidebar-footer nav')) && !toggle.closest('header'),
+            toggleFits:
+              toggleRect.top >= footer.top &&
+              toggleRect.bottom <= footer.bottom &&
+              toggleRect.left >= sidebar.left &&
+              toggleRect.right <= sidebar.right,
             toolbarActionsFit: [...document.querySelectorAll('.photo-toolbar > button')].every(
               (button) => {
                 const bounds = button.getBoundingClientRect();
                 return bounds.left >= sidebar.right && bounds.right <= innerWidth;
               },
             ),
-            toggleBeforeTitle: toggle.nextElementSibling?.tagName === 'H1',
+            toggleBelowSettings: settings.getBoundingClientRect().bottom <= toggleRect.top,
             inside: footer.top >= sidebar.top && footer.bottom <= sidebar.bottom + 1,
             jobsAboveSettings:
               Boolean(jobs) &&
               jobs.getBoundingClientRect().bottom <= settings.getBoundingClientRect().top &&
               !document.querySelector('header button[aria-label="Jobs"]'),
-            aboveVersion: settings.getBoundingClientRect().bottom <= version.top,
             primaryContainsActions: Boolean(
               document.querySelector(
                 '.sidebar > nav button[aria-label="Jobs"],.sidebar > nav button[aria-label="Settings"]',
@@ -4296,13 +4295,12 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             footerTop: footer.top,
           };
         });
-        assert.equal(layout.toggleInHeader, true);
-        assert.equal(layout.toggleAtTopEdge, true);
+        assert.equal(layout.toggleInMenu, true);
+        assert.equal(layout.toggleFits, true);
         assert.equal(layout.toolbarActionsFit, true);
-        assert.equal(layout.toggleBeforeTitle, true);
+        assert.equal(layout.toggleBelowSettings, true);
         assert.equal(layout.inside, true);
         assert.equal(layout.jobsAboveSettings, true);
-        assert.equal(layout.aboveVersion, true);
         assert.equal(layout.primaryContainsActions, false);
         assert.ok(layout.footerTop > height / 2);
         await browser.waitUntil(async () =>
@@ -4352,7 +4350,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             : (button.getAttribute('aria-label') ?? button.textContent.trim()),
         ),
       ),
-      ['Collapse navigation', 'Filter', 'Catalog', 'Saved plans'],
+      ['Filter', 'Catalog', 'Saved plans'],
     );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
