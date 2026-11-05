@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { AssetQuery, CatalogCollection, LibraryRoot } from '../bindings';
 import { Button } from '../components/ui/controls';
+import { libraryData } from '../ipc';
 
 const labels: Record<keyof AssetQuery, string> = {
+  placeId: 'Place',
   rootId: 'Library',
   directoryId: 'Indexed folder',
   folder: 'Folder path',
-  name: 'Filename',
+  name: 'Filename or date',
   fromDate: 'From date',
   throughDate: 'Through date',
   minBytes: 'Minimum bytes',
@@ -78,9 +80,7 @@ function FilterSummary({
           return (
             <div key={key}>
               <dt>{labels[key as keyof AssetQuery] ?? key}</dt>
-              <dd>
-                <bdi>{display}</bdi>
-              </dd>
+              <dd>{key === 'placeId' ? <PlaceLabel id={display} /> : <bdi>{display}</bdi>}</dd>
             </div>
           );
         })}
@@ -92,6 +92,24 @@ function FilterSummary({
       )}
     </dl>
   );
+}
+
+function PlaceLabel({ id }: { id: string }) {
+  const [result, setResult] = useState<{ id: string; label: string } | null>(null);
+  useEffect(() => {
+    let active = true;
+    void libraryData({ kind: 'places', text: '', selected_id: id }, 'places')
+      .then((value) => {
+        if (active) setResult({ id, label: value.selected?.label ?? 'Place unavailable' });
+      })
+      .catch(() => {
+        if (active) setResult({ id, label: 'Place details could not be loaded' });
+      });
+    return () => {
+      active = false;
+    };
+  }, [id]);
+  return <bdi>{result?.id === id ? result.label : 'Loading place…'}</bdi>;
 }
 
 export function SavedSearchReview({

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { browser, $, $$ } from '@wdio/globals';
+import { verifyOfflinePlaceSearch } from './place-search.mjs';
 
 import {
   native,
@@ -191,6 +192,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       await browser.setWindowSize(660, 560);
       await browser.saveScreenshot(`${directory}/minimum.png`);
       await browser.setWindowSize(1180, 780);
+      const placeSearch = await verifyOfflinePlaceSearch(directory);
       const metadataEvidence = await reviewCatalogMetadata(directory);
       const exportEvidence = await finishMetadataExports(directory);
       const audit = await browser.tauri.execute(({ core }) =>
@@ -211,6 +213,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             zero,
             selectedCount,
             keyboardZoomVerified,
+            placeSearch,
             metadataEvidence,
             exportEvidence,
             externalResources: external,

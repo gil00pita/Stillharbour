@@ -12,9 +12,20 @@ Advanced settings control hidden files, hidden folders, exclusions, extensions a
 
 Use Photos for timeline/grid/text views, Folders for immediate indexed children, filename search and Filter for query choices. Apply commits filter drafts; Close discards them. Text list does not start image-preview work. Explicit Select all results includes unloaded matches through a backend selection; day selection covers only the displayed group. Jobs shows actual work, cancellation requests, retained outcomes and issues. A running discovery has no known total, so its activity bar is not a completion percentage.
 
+In Photos and Map, search a filename or enter a full date as **DD-MM-YYYY** or **YYYY-MM-DD**. For example, **10-10-2025** shows photos dated **10 October 2025**, using the timeline's capture-local date and its existing fallback when capture metadata is unavailable. Other active filters still apply, including date ranges, and sorting does not change which day is searched. Clear the search to restore the remaining filters. Invalid or incomplete dates stay filename searches; a full filename such as `10-10-2025.jpg` also searches by filename. Folders continues to search immediate child names.
+
 Opening a photo gives zoom, pan, neighboring photos, filmstrip and Info. Original-quality viewing is limited to admitted formats and sizes; labelled derived previews remain previews. Closing returns to the collection. Visual Compare of 2–4 selections establishes no duplicate equality.
 
 An offline folder retains catalog records and available cached previews. Offline, inaccessible, missing, unsupported and failed are different states. Reconnect or explicitly relink the original folder, then retry the affected work. A failed listing does not mean the folder is empty. Unsupported/damaged inputs stay preserved; the app does not repair or delete them automatically.
+
+Choose **Places** beside Photos/Map search to find photos by GPS, entirely offline.
+Enter a city or country, then choose the match with the right region/country.
+Cities mean **within 25 km of the listed centre**; countries use approximate
+boundaries. Only photos with indexed GPS can match. Date text and other filters
+still apply. **Clear place filter** removes just that place; closing without a
+choice changes nothing. Map keeps its viewport when you clear the place. Some
+small towns/names and photos without GPS will not be found; credits and coverage
+are available in the picker. See [offline place search](PLACE_SEARCH.md).
 
 ## Catalog annotations and exports
 
@@ -55,6 +66,6 @@ If work is interrupted, keep sources, staged outputs, history, catalog and repos
 
 ## Map, privacy and support limits
 
-Map uses a bundled offline world overview with attribution, not street-level online tiles or geocoding. Missing GPS is separate from valid zero coordinates. The photo list works without graphics. Existing scans may need an explicitly requested rescan to acquire previously unextracted GPS; a preview does not silently rescan. No online map provider is configured.
+Map uses a bundled offline world overview with attribution, plus local city/country lookup. Street-level online tiles and online geocoding are unavailable. Missing GPS is separate from valid zero coordinates. The photo list works without graphics. Existing scans may need an explicitly requested rescan to acquire previously unextracted GPS; a preview does not silently rescan. No online map provider is configured.
 
 The tested primary paths are Apple Silicon macOS and bounded Windows local NTFS, with exact format/OS evidence in [format support](FORMAT_SUPPORT.md) and [M5 closeout](M5_CLOSEOUT.md). Configured minimum macOS, Intel builds, network-root behavior, untested cameras/color/HDR, cloud imports, basic editing and mobile are not implied supported capabilities. Updates remain disabled pending signature-verification acceptance. Keyboard/focus evidence and a bounded owner VoiceOver review exist; full-app VoiceOver/NVDA, high-DPI and reduced-motion acceptance remain M6 work.

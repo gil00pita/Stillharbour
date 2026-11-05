@@ -14,6 +14,7 @@ use stillharbour_core::{
     library::geography::*,
     library::metadata_export::model::*,
     library::model::*,
+    library::places::*,
     operations::generated_rename::*,
     operations::original_jobs::*,
     operations::*,
@@ -25,6 +26,9 @@ use ts_rs::TS;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ts_rs::Config::default();
     let declarations = [
+        PlaceKind::decl(&config),
+        PlaceSummary::decl(&config),
+        PlaceSearchReply::decl(&config),
         MetadataExportKind::decl(&config),
         MetadataExportFile::decl(&config),
         MetadataExportReview::decl(&config),

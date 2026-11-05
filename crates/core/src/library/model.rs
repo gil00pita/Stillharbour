@@ -189,6 +189,9 @@ pub struct FolderEntry {
 pub struct AssetQuery {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
+    pub place_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional = nullable)]
     pub album_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional = nullable)]
@@ -231,6 +234,7 @@ pub struct AssetQuery {
 impl Default for AssetQuery {
     fn default() -> Self {
         Self {
+            place_id: None,
             album_id: None,
             rejected: None,
             min_rating: None,
@@ -523,6 +527,10 @@ pub struct MaintenanceResult {
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum LibraryRequest {
+    Places {
+        text: String,
+        selected_id: Option<String>,
+    },
     MetadataExportCancel,
     MetadataExportPreview {
         export_kind: super::metadata_export::model::MetadataExportKind,
@@ -954,6 +962,7 @@ pub enum LibraryRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum LibraryResponse {
+    Places(super::places::PlaceSearchReply),
     MetadataExportReview(super::metadata_export::model::MetadataExportReview),
     MetadataExportSaved(super::metadata_export::model::MetadataExportSaved),
     CatalogMetadata(super::catalog_metadata::model::CatalogMetadataReply),

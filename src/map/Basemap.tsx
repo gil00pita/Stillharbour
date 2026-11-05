@@ -28,6 +28,7 @@ export default function Basemap({
   onViewport,
   onCluster,
   onUnavailable,
+  placeView,
 }: {
   bounds: MapBounds;
   zoom: number;
@@ -37,6 +38,7 @@ export default function Basemap({
   onViewport: (bounds: MapBounds, zoom: number) => void;
   onCluster: (cluster: MapCluster) => void;
   onUnavailable: () => void;
+  placeView: { bounds: MapBounds; zoom: number } | null;
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<Map | null>(null);
@@ -119,6 +121,17 @@ export default function Basemap({
       instance.remove();
     };
   }, []);
+  useEffect(() => {
+    if (!map || !placeView) return;
+    const { bounds: b, zoom: maximumZoom } = placeView;
+    map.fitBounds(
+      [
+        [b.west, b.south],
+        [b.east < b.west ? b.east + 360 : b.east, b.north],
+      ],
+      { duration: 0, maxZoom: maximumZoom },
+    );
+  }, [map, placeView]);
   return (
     <div className="map-basemap" ref={container}>
       {map &&

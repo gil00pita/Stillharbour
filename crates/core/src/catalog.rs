@@ -518,6 +518,7 @@ fn open_database(path: &Path, expected: Option<&ExistingCatalog>) -> Result<Cata
         flags |= OpenFlags::SQLITE_OPEN_NOFOLLOW;
     }
     let mut connection = Connection::open_with_flags(path, flags)?;
+    crate::library::places::register(&connection)?;
     if let Some(expected) = expected {
         expected.validate(path)?;
     }

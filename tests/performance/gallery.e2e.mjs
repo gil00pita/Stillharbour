@@ -357,7 +357,7 @@ describe(`${phase} native diagnostic route — generated sources and synthetic o
       await drain('text_and_scan');
       await diagnostic('start');
       await browser.execute(() => window.__stillharbourPerf.start());
-      await $('input[aria-label="Search filenames"]').setValue('Generated');
+      await $('input[aria-label="Search filenames or dates"]').setValue('Generated');
       await browser.waitUntil(async () =>
         browser.execute(() =>
           document.querySelector('.asset-open')?.textContent.includes('Generated'),

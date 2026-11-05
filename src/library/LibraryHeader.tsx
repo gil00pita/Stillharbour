@@ -1,12 +1,16 @@
 import { Button, Input } from '../components/ui/controls';
 import type { ReactNode } from 'react';
 import type { Section } from './model';
+import { PlaceSearch } from '../components/PlaceSearch';
+import type { PlaceSummary } from '../bindings';
 export function LibraryHeader({
   jobsControl,
   navigationControl,
   section,
   value,
   onSearch,
+  placeId,
+  onPlace,
   busy,
   onFilter,
   filterOpen,
@@ -19,6 +23,8 @@ export function LibraryHeader({
   section: Section;
   value: string;
   onSearch: (value: string) => void;
+  placeId?: string | null | undefined;
+  onPlace: (place: PlaceSummary | null) => void;
   busy: boolean;
   onFilter: () => void;
   filterOpen: boolean;
@@ -31,17 +37,19 @@ export function LibraryHeader({
       {navigationControl}
       <h1>{section === 'Tags' ? 'Albums / Tags' : section}</h1>
       <label className="fixed-search">
-        <span className="screen-reader-status">Search filenames</span>
+        <span className="screen-reader-status">Search filenames or dates</span>
         <Input
           type="search"
-          aria-label="Search filenames"
-          placeholder="Search filenames…"
+          aria-label="Search filenames or dates"
+          placeholder="Search filenames or dates…"
+          title="Search filenames or a day: DD-MM-YYYY or YYYY-MM-DD"
           value={value}
           maxLength={256}
           disabled={busy}
           onChange={(event) => onSearch(event.target.value)}
         />
       </label>
+      <PlaceSearch selectedId={placeId} onChange={onPlace} disabled={busy} />
       <Button
         onClick={onFilter}
         disabled={busy}

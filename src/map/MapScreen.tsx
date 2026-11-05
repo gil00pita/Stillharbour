@@ -15,6 +15,7 @@ import { CachedPreviewImage } from '../library/CachedPreviewImage';
 import { previewKey, previewUrl, usePreviews } from '../library/previews';
 import { mapPhotoQuery, WORLD, type MapBrowseState } from './state';
 import './map.css';
+import { PlaceSearch } from '../components/PlaceSearch';
 
 const Basemap = lazy(() => import('./Basemap'));
 export function MapScreen({
@@ -44,6 +45,7 @@ export function MapScreen({
   );
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [mapUnavailable, setMapUnavailable] = useState(false);
+  const [placeView, setPlaceView] = useState<{ bounds: MapBounds; zoom: number } | null>(null);
   const [viewer, setViewer] = useState<{ scope: string; asset: AssetSummary } | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   useEffect(() => {
@@ -110,16 +112,34 @@ export function MapScreen({
           {navigationControl}
           <h1>Map</h1>
           <label className="fixed-search">
-            <span className="screen-reader-status">Search filenames</span>
+            <span className="screen-reader-status">Search filenames or dates</span>
             <Input
               type="search"
-              aria-label="Search filenames"
+              aria-label="Search filenames or dates"
+              title="Search filenames or a day: DD-MM-YYYY or YYYY-MM-DD"
               maxLength={256}
               value={state.query.name}
               onChange={(e) => filter({ name: e.target.value })}
-              placeholder="Search filenames…"
+              placeholder="Search filenames or dates…"
             />
           </label>
+          <PlaceSearch
+            selectedId={state.query.placeId}
+            onChange={(place) => {
+              setPlaceView(
+                place ? { bounds: place.bounds, zoom: place.kind === 'city' ? 10 : 3 } : null,
+              );
+              onState({
+                ...state,
+                query: { ...state.query, placeId: place?.id ?? null },
+                bounds: place?.bounds ?? state.bounds,
+                zoom: place ? (place.kind === 'city' ? 10 : 3) : state.zoom,
+                cell: null,
+                selectedId: null,
+                unlocated: false,
+              });
+            }}
+          />
           {jobsControl}
         </header>
         <div className="map-filters">
@@ -186,6 +206,7 @@ export function MapScreen({
                   onViewport={viewport}
                   onCluster={cluster}
                   onUnavailable={unavailable}
+                  placeView={placeView}
                 />
               </Suspense>
             )}

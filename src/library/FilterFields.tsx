@@ -275,7 +275,7 @@ export function ActiveFilters({
     'maxBytes',
   ] as const;
   const names = {
-    name: 'Filename',
+    name: 'Filename or date',
     folder: 'Folder',
     tag: 'Tag',
     extension: 'Extension',
@@ -301,6 +301,11 @@ export function ActiveFilters({
       {query.favoritesOnly && (
         <Button type="button" onClick={() => filter({ favoritesOnly: false })}>
           Favorites ×
+        </Button>
+      )}
+      {query.placeId && (
+        <Button type="button" onClick={() => filter({ placeId: null })}>
+          Place ×
         </Button>
       )}
       {query.albumId && (

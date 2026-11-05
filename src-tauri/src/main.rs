@@ -695,6 +695,9 @@ async fn library_request(
     tauri::async_runtime::spawn_blocking(move || -> Result<LibraryResponse> {
         let _catalog_admission = catalog_admission;
         Ok(match request {
+            LibraryRequest::Places { text, selected_id } => LibraryResponse::Places(
+                stillharbour_core::library::places::search(&text, selected_id.as_deref())?,
+            ),
             LibraryRequest::BackupSync { request } => {
                 LibraryResponse::BackupSync(library.backup_sync(request)?)
             }
