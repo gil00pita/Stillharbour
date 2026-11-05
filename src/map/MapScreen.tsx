@@ -1,4 +1,5 @@
-import { Button, Input, Select } from '../components/ui/controls';
+import { Button } from '../components/ui/controls';
+import { MapFilters } from '../components/MapFilters';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   AssetPage,
@@ -148,74 +149,45 @@ export function MapScreen({
         <header className="toolbar photo-toolbar">
           {navigationControl}
           <h1>Map</h1>
-          <PlaceSearch
-            value={state.query.name}
-            onSearch={(name) => filter({ name })}
-            selectedId={state.query.placeId}
-            onChange={(place) => {
-              setAllPhotosScope(null);
-              setPlaceView(
-                place ? { bounds: place.bounds, zoom: place.kind === 'city' ? 10 : 3 } : null,
-              );
-              onState({
-                ...state,
-                query: {
-                  ...state.query,
-                  name: place ? '' : state.query.name,
-                  placeId: place?.id ?? null,
-                },
-                bounds: place?.bounds ?? state.bounds,
-                zoom: place ? (place.kind === 'city' ? 10 : 3) : state.zoom,
-                cell: null,
-                selectedId: null,
-                unlocated: false,
-              });
-            }}
-          />
+          <div className="map-search-controls">
+            <PlaceSearch
+              value={state.query.name}
+              onSearch={(name) => filter({ name })}
+              selectedId={state.query.placeId}
+              onChange={(place) => {
+                setAllPhotosScope(null);
+                setPlaceView(
+                  place ? { bounds: place.bounds, zoom: place.kind === 'city' ? 10 : 3 } : null,
+                );
+                onState({
+                  ...state,
+                  query: {
+                    ...state.query,
+                    name: place ? '' : state.query.name,
+                    placeId: place?.id ?? null,
+                  },
+                  bounds: place?.bounds ?? state.bounds,
+                  zoom: place ? (place.kind === 'city' ? 10 : 3) : state.zoom,
+                  cell: null,
+                  selectedId: null,
+                  unlocated: false,
+                });
+              }}
+            />
+            <MapFilters
+              query={state.query}
+              roots={status.roots}
+              unlocated={state.unlocated}
+              unavailable={visibleMap?.unavailable ?? null}
+              onFilter={filter}
+              onLocation={() => {
+                setAllPhotosScope(null);
+                onState({ ...state, unlocated: !state.unlocated, cell: null, selectedId: null });
+              }}
+            />
+          </div>
           {jobsControl}
         </header>
-        <div className="map-filters">
-          <label>
-            Library folder
-            <Select
-              value={state.query.rootId ?? ''}
-              onChange={(e) => filter({ rootId: e.target.value || null })}
-            >
-              <option value="">All folders</option>
-              {status.roots.map((root) => (
-                <option key={root.id} value={root.id}>
-                  {root.label}
-                  {root.availability === 'offline' ? ' · Offline' : ''}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label>
-            From
-            <Input
-              type="date"
-              value={state.query.fromDate}
-              onChange={(e) => filter({ fromDate: e.target.value })}
-            />
-          </label>
-          <label>
-            Through
-            <Input
-              type="date"
-              value={state.query.throughDate}
-              onChange={(e) => filter({ throughDate: e.target.value })}
-            />
-          </label>
-          <Button
-            aria-pressed={state.unlocated}
-            onClick={() => {
-              setAllPhotosScope(null);
-              onState({ ...state, unlocated: !state.unlocated, cell: null, selectedId: null });
-            }}
-          >
-            No usable location{visibleMap ? ` (${visibleMap.unavailable.toLocaleString()})` : ''}
-          </Button>
-        </div>
         {!state.unlocated && (
           <section className="map-geography" aria-label="Geographic overview">
             {mapUnavailable ? (
@@ -358,7 +330,9 @@ export function MapScreen({
           <p className="map-disclosure">
             Locations are last observed catalog metadata. Offline originals remain offline. Missing,
             invalid or unextracted coordinates appear under “No usable location”. The offline
-            overview has no street detail; polar markers are shown at the map edge.
+            overview has no street detail; polar markers are shown at the map edge. Satellite is an
+            online NASA overview with limited detail. Selecting it sends viewed map areas to NASA;
+            your photos are not sent.
           </p>
         </section>
       </div>

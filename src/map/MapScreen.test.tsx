@@ -311,9 +311,12 @@ describe('local map browsing', () => {
   it('uses native folder and date filters without treating offline originals as missing', async () => {
     render(<Harness />);
     await screen.findByRole('button', { name: 'Choose cluster 3' });
-    fireEvent.change(screen.getByLabelText('Library folder'), { target: { value: 'root' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Map filters' }));
+    await screen.findByRole('dialog', { name: 'Map filters' });
+    fireEvent.change(await screen.findByLabelText('Library folder'), { target: { value: 'root' } });
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
     fireEvent.change(screen.getByLabelText('Through'), { target: { value: '2026-11-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close filters' }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Choose cluster 3' })).toBeEnabled(),
     );
@@ -336,6 +339,8 @@ describe('local map browsing', () => {
   });
   it('lists absent or invalid locations with no zero-coordinate substitution', async () => {
     render(<Harness />);
+    await screen.findByRole('button', { name: 'Choose cluster 3' });
+    fireEvent.click(screen.getByRole('button', { name: 'Map filters' }));
     fireEvent.click(await screen.findByRole('button', { name: 'No usable location (1)' }));
     await waitFor(() =>
       expect(libraryData).toHaveBeenCalledWith(

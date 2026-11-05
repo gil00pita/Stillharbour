@@ -1480,6 +1480,7 @@ input.switch-control:disabled {
 }
 .fixed-search > svg {
   position: absolute;
+  z-index: 1;
   inset: 10px auto auto 12px;
   color: var(--muted);
   pointer-events: none;

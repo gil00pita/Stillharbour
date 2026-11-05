@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { assertMapNetworkPolicy } from './map-network-policy.mjs';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -60,7 +61,7 @@ for (const [platform, configName] of [
 run(process.execPath, ['scripts/backup-helpers.mjs', '--check']);
 assert.equal(config.bundle.externalBin, undefined);
 assert.ok(!config.app.security.csp.includes('unsafe-eval'));
-assert.ok(!config.app.security.csp.includes('https:'));
+assertMapNetworkPolicy(config.app.security);
 const source = readFileSync('src-tauri/src/main.rs', 'utf8');
 assert.ok(source.includes('#[cfg(all(feature = "desktop-test", not(debug_assertions)))]'));
 // Confirm the default release dependency graph has no test server or fixture spike.

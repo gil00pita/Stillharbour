@@ -8,6 +8,29 @@ Current evidence, 2026-11-03: Windows Foundation at `a2b3d10` passes the native 
 
 The owner requested continuing M5 on 2026-11-02. [ADR-0081](decisions/ADR-0081-offline-geographic-browsing.md) records the first geographic slice. M4 preservation certification and production mutation restrictions remain unchanged; M5 as a whole is not complete.
 
+## Compact map toolbar — 2026-11-05
+
+The map's folder, From/Through dates and No usable location controls live in a
+**Filters** popover next to the top search input. It starts closed, retains
+applied values across dismissal and reports the active filter count on its
+trigger. Controls apply the same native query scopes as before. Selecting No
+usable location closes the popover and shows that list. Escape and the labelled Close filters action return focus to the trigger.
+Clicking outside also dismisses the popover; the portalled panel stays within
+the narrow desktop viewport.
+
+The existing search magnifier is visible inside the shared search input, above
+its Field/input background, with space reserved for text and no pointer-event
+interception. The map canvas starts immediately beneath the compact toolbar.
+Map/Satellite, thumbnail containment, click-loaded photos and preservation gates
+are unchanged. MapFilters owns the popover and colocated focus/state regression;
+the native map scenario captures expanded/collapsed toolbars at both widths.
+
+## Map and satellite views — 2026-11-05
+
+The owner selects NASA's no-key, online satellite overview. [ADR-0092](decisions/ADR-0092-nasa-satellite-overview.md) records the provider/privacy/cache decision and supersedes earlier network-free-only statements below for this explicit choice. **Map** remains the bundled offline default. **Satellite** adds actual NASA GIBS Blue Marble imagery (limited detail, source zoom 0–8) without recreating the canvas or changing photo scope. Visible attribution, loading/connection states and a retryable return to Map remain available. View choice is session-only; opening Map again starts offline.
+
+The whole-world reset uses a globe icon with accessible name **Whole world** and tooltip **Show whole world**. Map/Satellite choices stay beside it at desktop/minimum widths. Selecting Satellite sends viewed map tile areas to NASA; originals, private filenames, catalog records and credentials are not uploaded. The fixed-path CSP and request transformer reject arbitrary resources. No persistent app imagery cache, prefetch, API key or new dependency is added. Component/provider tests are in Basemap.test.tsx; generated live-provider and failure checks are in tests/desktop/map-satellite.mjs. Actual outcomes belong in IMPLEMENTATION_LOG.md.
+
 ## Marker containment and click-to-load browsing — 2026-11-05
 
 Map thumbnails stay inside a clipped image frame within each 48×48 marker; the
@@ -42,7 +65,7 @@ Backend clusters are bounded to 256, using a world-aligned angular grid with ada
 
 The production data path is bundled Natural Earth 1:110m land, pinned to upstream commit `ca96624a56bd078437bca8184e78163e5039ad19`. [Natural Earth's terms](https://www.naturalearthdata.com/about/terms-of-use/) permit public-domain redistribution and offline use. The original data/license and hashes are in `assets/maps`; no reference screenshot is shipped as map data. Attribution remains visible even though the license does not require credit.
 
-There is no online provider, tile cache, prefetch or runtime data download. World overview geometry is compiled into the lazy basemap module; the MapLibre module worker is bundled locally with one worker. No glyphs, external sprites, style URL or reverse geocoder are configured. The map request transformer rejects resource URLs, and the existing restricted production CSP remains intact. The overview deliberately has no street detail. Adding online detail requires a new reviewed provider decision.
+In the original offline-only increment there was no online provider, tile cache, prefetch or runtime data download; ADR-0092 now permits only the explicitly selected NASA overview. World overview geometry is compiled into the lazy basemap module; the MapLibre module worker is bundled locally with one worker. No glyphs, external sprites, style URL or reverse geocoder are configured. The map request transformer rejects resource URLs, and the existing restricted production CSP remains intact. The overview deliberately has no street detail. Adding online detail requires a new reviewed provider decision.
 
 Native resource-timing observations cover the main WebView, not independently intercepted worker/OS traffic. Do not describe a static source/CSP inspection or browser test as a complete native network trace. Actual native outcomes, screenshots and the precise evidence boundary are recorded below when run.
 
