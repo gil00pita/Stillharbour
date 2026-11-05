@@ -111,19 +111,9 @@ export function MapScreen({
         <header className="toolbar photo-toolbar">
           {navigationControl}
           <h1>Map</h1>
-          <label className="fixed-search">
-            <span className="screen-reader-status">Search filenames or dates</span>
-            <Input
-              type="search"
-              aria-label="Search filenames or dates"
-              title="Search filenames or a day: DD-MM-YYYY or YYYY-MM-DD"
-              maxLength={256}
-              value={state.query.name}
-              onChange={(e) => filter({ name: e.target.value })}
-              placeholder="Search filenames or dates…"
-            />
-          </label>
           <PlaceSearch
+            value={state.query.name}
+            onSearch={(name) => filter({ name })}
             selectedId={state.query.placeId}
             onChange={(place) => {
               setPlaceView(
@@ -131,7 +121,11 @@ export function MapScreen({
               );
               onState({
                 ...state,
-                query: { ...state.query, placeId: place?.id ?? null },
+                query: {
+                  ...state.query,
+                  name: place ? '' : state.query.name,
+                  placeId: place?.id ?? null,
+                },
                 bounds: place?.bounds ?? state.bounds,
                 zoom: place ? (place.kind === 'city' ? 10 : 3) : state.zoom,
                 cell: null,

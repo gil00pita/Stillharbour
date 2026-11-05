@@ -12,17 +12,20 @@
 .inspection-content > * {
   max-width: 1440px;
 }
-.inspection-content h2 {
+.inspection-content h2:not(:where(.duplicate-studio *)) {
   font-size: 18px;
   margin: 24px 0 12px;
 }
-.inspection-content h3 {
+.inspection-content h3:not(:where(.duplicate-studio *)) {
   font-size: 16px;
 }
-.inspection-content p {
+.inspection-content p:not(:where(.duplicate-studio *)) {
   color: var(--muted);
 }
-.inspection-content label:not(.inspection-choice-card):not(.inspection-choice-label) {
+.inspection-content
+  label:not(:where(.duplicate-studio *)):not(.inspection-choice-card):not(
+    .inspection-choice-label
+  ) {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -30,7 +33,7 @@
   margin: 12px 0;
   font-size: 13px;
 }
-.inspection-content label:has(> input[type='checkbox']) {
+.inspection-content label:not(:where(.duplicate-studio *)):has(> input[type='checkbox']) {
   flex-direction: row;
   align-items: center;
 }
@@ -41,8 +44,9 @@
   max-width: 80ch;
   font-size: 13px;
 }
-.inspection-content input:not([type='checkbox']):not([type='radio']),
-.inspection-content select {
+.inspection-content
+  input:not([type='checkbox']):not([type='radio']):not(:where(.duplicate-studio *)),
+.inspection-content select:not(:where(.duplicate-studio *)) {
   padding: 7px 10px;
   max-width: 100%;
   color: inherit;
@@ -218,6 +222,48 @@
   font-variant-numeric: tabular-nums;
 }
 
+.inspection-setup {
+  margin-block: 24px;
+}
+.inspection-setup > summary {
+  cursor: pointer;
+  color: var(--secondary);
+  font-size: 13px;
+  padding-block: 12px;
+  border-block: 1px solid var(--border);
+}
+.inspection-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+.inspection-controls > legend,
+.inspection-controls > .inspection-roots,
+.inspection-controls > p,
+.inspection-controls > fieldset,
+.inspection-controls > .primary {
+  grid-column: 1 / -1;
+}
+.inspection-controls > .primary {
+  justify-self: start;
+}
+.inspection-content :is(button, input, summary):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.inspection-content input[type='checkbox'] {
+  accent-color: var(--accent);
+}
+.inspection-content ::selection {
+  background: var(--accent);
+  color: var(--background);
+}
+@media (max-width: 760px) {
+  .inspection-controls {
+    display: block;
+  }
+}
+
 /* Illustrated matching choices belong to the flat duplicate-search canvas. */
 .inspection-controls.duplicate-controls {
   padding: 0;
@@ -247,4 +293,9 @@
   .inspection-content:has(.duplicate-controls) {
     padding: 20px 16px;
   }
+}
+
+.inspection-controls > .duplicate-match-options,
+.inspection-controls > .inspection-choice-group {
+  grid-column: 1 / -1;
 }

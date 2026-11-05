@@ -162,12 +162,16 @@ it('keeps failed settings explicit and retries without silently using defaults',
   await ready();
 });
 
-it('opens Jobs in the current header without a sidebar destination or changing Settings', async () => {
+it('opens Jobs above Settings in the sidebar without changing the current page', async () => {
   render(<App />);
   await ready();
   const jobs = screen.getByRole('button', { name: 'Jobs' });
-  expect(jobs.closest('header')).not.toBeNull();
-  expect(jobs.closest('.sidebar')).toBeNull();
+  expect(jobs.closest('header')).toBeNull();
+  expect(jobs.closest('.sidebar-footer')).not.toBeNull();
+  expect(
+    jobs.compareDocumentPosition(screen.getByRole('button', { name: 'Settings' })) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   fireEvent.click(screen.getByRole('button', { name: 'Jobs' }));
   expect(screen.getByRole('dialog', { name: 'Jobs' })).toBeVisible();

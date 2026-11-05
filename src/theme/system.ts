@@ -132,8 +132,8 @@ export const system = createSystem(
               outline: {
                 bg: 'bg.panel',
                 color: 'fg',
-                borderColor: 'border.button',
-                _hover: { bg: 'bg.hover', borderColor: 'border.control' },
+                borderColor: 'transparent',
+                _hover: { bg: 'bg.hover', borderColor: 'transparent' },
                 _active: { bg: 'brand.selected' },
               },
               solid: {

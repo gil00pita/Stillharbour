@@ -25,3 +25,7 @@ Primary API reference: [Chakra UI RadioCard](https://chakra-ui.com/docs/componen
 The pinned embedded desktop driver simulates radio arrow keys by assigning checked and firing only change; Ark expects a click. Its synthetic keyboard result is not a physical WebKit keyboard test. Keep the standard Chakra behavior, check keyboard selection/focus in the real browser, and exercise native card clicks and real IPC separately. Do not add production event workarounds for this harness limitation.
 
 The conditional property fieldset has a stable wrapper. In the inspected Chromium build, inserting it directly into the outer fieldset could collapse the preceding radio group and lose focus; the wrapper preserves the rendered choices and keyboard focus across all three modes. The card group uses normal block flow with an internal grid.
+
+## Utilities integration — 2026-11-05
+
+The illustrated matching choices remain inside the expandable duplicate inspection settings below the cluster workspace. Retain main's card assets, radio semantics, file scope, advanced algorithms, property-rule combinations and explicit native Start action. Search/group/keeper review is a distinct read-only workspace; no card or visual confidence preview approves removal. See [Utilities UI](UTILITIES_UI.md). Native card checks scroll the settings into view before inspecting their layout.

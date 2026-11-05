@@ -357,3 +357,7 @@ The owner continued to M2 and selected organization templates/previews as the pr
 [ADR-0086](decisions/ADR-0086-owned-catalog-flushing-and-publication.md) retains writable owned-output handles for durable flushing and permits catalog-parent write sharing for retained snapshot publication; original-file guards and production gates remain unchanged.
 
 [ADR-0087](decisions/ADR-0087-supervised-windows-exif-metadata.md) fills the Windows dimensions-only metadata gap with bounded EXIF/GPS in the supervised stdin worker, revision-bound rescan refresh and explicit format limits. Fresh native Windows acceptance remains required.
+
+## Utilities and duplicate-review presentation — 2026-11-05
+
+The owner requests flat secondary actions, unified filename/date/place search, sidebar Jobs above Settings, Utilities grouping and a prototype-inspired duplicate workspace. Reuse the read-only native job/member/keeper APIs and existing preview protocol. Keep Integrity and Storage results specific to their tasks. Missing confidence/audio/lineage/ranking capabilities and original mutations remain visibly gated; a threshold or client preference cannot create safety evidence. No catalog migration, identity change, dependency addition or production permission is needed. [UTILITIES_UI.md](UTILITIES_UI.md) records the implemented boundary and remaining requested capabilities.

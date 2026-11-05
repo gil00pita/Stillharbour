@@ -1,0 +1,42 @@
+import type { DuplicateGroup, InspectionFinding } from '../../bindings';
+export function member(id: string, patch: Partial<InspectionFinding> = {}): InspectionFinding {
+  return {
+    id,
+    assetId: null,
+    rootId: 'root',
+    folderId: 'folder',
+    name: `${id}.png`,
+    displayPath: `/generated/${id}.png`,
+    bytes: '100',
+    reportedAllocatedBytes: null,
+    objectId: id,
+    links: '1',
+    isMedia: false,
+    inventory: 'present',
+    content: 'not_checked',
+    checksum: 'not_checked',
+    comparisonName: null,
+    filesystemModified: null,
+    filesystemCreated: null,
+    readonly: false,
+    baselineId: null,
+    decoderPolicy: null,
+    pixelSignature: null,
+    pixelDigest: null,
+    width: 10,
+    height: 10,
+    format: 'png',
+    coverage: 'Not checked',
+    error: null,
+    ...patch,
+  };
+}
+export const group: DuplicateGroup = {
+  id: 'exact',
+  evidence: 'exact_bytes',
+  memberIds: ['a', 'b'],
+  memberCount: 2,
+  membersTruncated: false,
+  mutationAvailable: false,
+  explanation: 'Complete bytes matched at inspection.',
+};

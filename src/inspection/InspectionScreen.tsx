@@ -3,7 +3,6 @@ import { DuplicateMatchOptions } from '../components/DuplicateMatchOptions';
 import { InspectionChoiceCards } from '../components/InspectionChoiceCards';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
-  AssetSummary,
   HealthMode,
   DuplicateOptions,
   DuplicatePage,
@@ -14,9 +13,9 @@ import type {
   PropertyRules,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
-import { ComparisonViewer } from '../library/ComparisonViewer';
 import { StorageReview } from './StorageReview';
-import { KeeperControls } from './KeeperControls';
+import { DuplicateStudio } from '../components/DuplicateStudio';
+import { IntegrityFindings } from '../components/IntegrityFindings';
 import { InspectionIssues } from './InspectionIssues';
 import { displayBytes } from './format';
 import './inspection.css';
@@ -96,10 +95,12 @@ export function InspectionScreen({
         { kind: 'inspection_findings', job_id: record.id, after: null },
         'inspection_findings',
       ),
-      libraryData(
-        { kind: 'inspection_groups', job_id: record.id, after: null },
-        'inspection_groups',
-      ),
+      record.input.task.kind === 'duplicates'
+        ? libraryData(
+            { kind: 'inspection_groups', job_id: record.id, after: null },
+            'inspection_groups',
+          )
+        : Promise.resolve(null),
     ]);
     if (token !== epoch.current) return;
     setReport(summary);
@@ -266,7 +267,7 @@ export function InspectionScreen({
       options.rules.content,
     ].some(Boolean);
   return (
-    <div className="inspection-page">
+    <div className={`inspection-page inspection-section-${section.toLowerCase()}`}>
       <header className="toolbar">
         {navigationControl}
         <h1>{section}</h1>
@@ -285,150 +286,173 @@ export function InspectionScreen({
             {error}
           </p>
         )}
-        <fieldset
-          disabled={busy || running}
-          className={`inspection-controls ${section === 'Duplicates' ? 'duplicate-controls' : ''}`}
-        >
-          <legend className={section === 'Duplicates' ? 'screen-reader-status' : undefined}>
-            New inspection
-          </legend>
-          {section === 'Duplicates' && (
-            <DuplicateMatchOptions
-              options={options}
-              onChange={setOptions}
-              disabled={busy || running}
-            />
-          )}
-          <div className="inspection-roots">
-            {status.roots.map((root) => (
-              <label key={root.id}>
-                <input
-                  type="checkbox"
-                  checked={rootIds.includes(root.id)}
-                  onChange={(event) =>
-                    setRootIds(
-                      event.target.checked
-                        ? [...rootIds, root.id]
-                        : rootIds.filter((id) => id !== root.id),
-                    )
-                  }
-                />
-                {root.label}
-                <small>{root.availability}</small>
-              </label>
-            ))}
-          </div>
-          {section === 'Duplicates' ? (
-            <InspectionChoiceCards
-              label="File scope"
-              value={scope}
-              choices={fileScopeChoices}
-              disabled={busy || running}
-              onChange={setScope}
-            />
-          ) : (
-            <label>
-              File scope
-              <Select
-                value={scope}
-                onChange={(event) => setScope(event.target.value as typeof scope)}
-              >
-                <option value="indexed_media_companions">
-                  Indexed photos, videos and matching companion files
-                </option>
-                <option value="all_eligible_files">All files within the exclusions below</option>
-              </Select>
-            </label>
-          )}
-          <p>
-            Your hidden-file, hidden-folder, filename-pattern and size exclusions still apply.
-            Gallery file-type and date filters do not limit this inspection. Links, special files
-            and cloud placeholders are reported, never followed or downloaded.
-          </p>
-          {section === 'Duplicates' && (
-            <>
-              <p>
-                Exact matches are confirmed by comparing every byte. Matching names, sizes or other
-                properties only identify candidates; they never authorize quarantine.
-              </p>
-              <div>
-                {options.mode === 'properties' && (
-                  <PropertyControls
-                    rules={options.rules}
-                    disabled={busy || running}
-                    onChange={(rules) => setOptions({ ...options, rules })}
-                  />
-                )}
-              </div>
-            </>
-          )}
-          {unavailable && (
-            <p role="status">
-              Reconnect selected unavailable folders before inspecting. Their retained inventory is
-              not an empty folder.
-            </p>
-          )}
-          {invalidRules && <p role="status">Choose at least one property criterion.</p>}
-          {section === 'Integrity' && (
-            <>
-              <label>
-                Integrity mode
-                <Select
-                  aria-label="Integrity mode"
-                  value={healthMode}
-                  onChange={(event) => {
-                    setHealthMode(event.target.value as HealthMode);
-                    setBaselineAcknowledged(false);
-                  }}
-                >
-                  <option value="compare_baseline">Compare with saved checksums</option>
-                  <option value="establish_baseline">Record new checksum baselines</option>
-                  <option value="quick">Quick signature and header check</option>
-                  <option value="deep">Decode supported still images</option>
-                </Select>
-              </label>
-              <p>
-                Checksums read complete file bytes. A mismatch means changed since baseline, not
-                proven damage. Previous baselines remain in history; these checks do not establish
-                backup or original-file recovery.
-              </p>
-              {healthMode === 'establish_baseline' && (
-                <label>
+        {section === 'Duplicates' && (
+          <DuplicateStudio
+            key={`${job?.id ?? 'new'}:${groups?.groups[0]?.id ?? 'empty'}`}
+            job={job}
+            groups={groups}
+            findings={files}
+            status={status}
+            next={() => void nextGroups()}
+          />
+        )}
+        <details className="inspection-setup" open={!job}>
+          <summary>
+            {section === 'Duplicates'
+              ? 'Duplicate inspection settings'
+              : section === 'Integrity'
+                ? 'Health check settings'
+                : 'Storage measurement settings'}
+          </summary>
+          <fieldset
+            disabled={busy || running}
+            className={`inspection-controls ${section === 'Duplicates' ? 'duplicate-controls' : ''}`}
+          >
+            <legend className={section === 'Duplicates' ? 'screen-reader-status' : undefined}>
+              {section === 'Duplicates'
+                ? 'Find duplicate clusters'
+                : section === 'Integrity'
+                  ? 'Check file health'
+                  : 'Measure storage usage'}
+            </legend>
+            {section === 'Duplicates' && (
+              <DuplicateMatchOptions
+                options={options}
+                onChange={setOptions}
+                disabled={busy || running}
+              />
+            )}
+            <div className="inspection-roots">
+              {status.roots.map((root) => (
+                <label key={root.id}>
                   <input
                     type="checkbox"
-                    checked={baselineAcknowledged}
-                    onChange={(event) => setBaselineAcknowledged(event.target.checked)}
+                    checked={rootIds.includes(root.id)}
+                    onChange={(event) =>
+                      setRootIds(
+                        event.target.checked
+                          ? [...rootIds, root.id]
+                          : rootIds.filter((id) => id !== root.id),
+                      )
+                    }
                   />
-                  Record newly read baselines and retain every previous baseline.
+                  {root.label}
+                  <small>{root.availability}</small>
                 </label>
-              )}
-            </>
-          )}
-          {
-            <Button
-              className="primary"
-              disabled={
-                !rootIds.length ||
-                unavailable ||
-                invalidRules ||
-                (section === 'Integrity' &&
-                  healthMode === 'establish_baseline' &&
-                  !baselineAcknowledged)
-              }
-              onClick={() => void start()}
-            >
-              {section === 'Integrity'
-                ? healthMode === 'establish_baseline'
-                  ? 'Establish checksum baselines'
-                  : healthMode === 'quick'
-                    ? 'Start quick header check'
-                    : healthMode === 'deep'
-                      ? 'Start deep image check'
-                      : 'Start checksum comparison'
-                : `Start ${section === 'Duplicates' ? 'duplicate' : 'storage'} inspection`}
-            </Button>
-          }
-        </fieldset>
+              ))}
+            </div>
+            {section === 'Duplicates' ? (
+              <InspectionChoiceCards
+                label="File scope"
+                value={scope}
+                choices={fileScopeChoices}
+                disabled={busy || running}
+                onChange={setScope}
+              />
+            ) : (
+              <label>
+                File scope
+                <Select
+                  value={scope}
+                  onChange={(event) => setScope(event.target.value as typeof scope)}
+                >
+                  <option value="indexed_media_companions">
+                    Indexed photos, videos and matching companion files
+                  </option>
+                  <option value="all_eligible_files">All files within the exclusions below</option>
+                </Select>
+              </label>
+            )}
+            <p>
+              Your hidden-file, hidden-folder, filename-pattern and size exclusions still apply.
+              Gallery file-type and date filters do not limit this inspection. Links, special files
+              and cloud placeholders are reported, never followed or downloaded.
+            </p>
+            {section === 'Duplicates' && (
+              <>
+                <p>
+                  Exact matches are confirmed by comparing every byte. Matching names, sizes or
+                  other properties only identify candidates; they never authorize quarantine.
+                </p>
+                <div>
+                  {options.mode === 'properties' && (
+                    <PropertyControls
+                      rules={options.rules}
+                      disabled={busy || running}
+                      onChange={(rules) => setOptions({ ...options, rules })}
+                    />
+                  )}
+                </div>
+              </>
+            )}
+            {unavailable && (
+              <p role="status">
+                Reconnect selected unavailable folders before inspecting. Their retained inventory
+                is not an empty folder.
+              </p>
+            )}
+            {invalidRules && <p role="status">Choose at least one property criterion.</p>}
+            {section === 'Integrity' && (
+              <>
+                <label>
+                  Integrity mode
+                  <Select
+                    aria-label="Integrity mode"
+                    value={healthMode}
+                    onChange={(event) => {
+                      setHealthMode(event.target.value as HealthMode);
+                      setBaselineAcknowledged(false);
+                    }}
+                  >
+                    <option value="compare_baseline">Compare with saved checksums</option>
+                    <option value="establish_baseline">Record new checksum baselines</option>
+                    <option value="quick">Quick signature and header check</option>
+                    <option value="deep">Decode supported still images</option>
+                  </Select>
+                </label>
+                <p>
+                  Checksums read complete file bytes. A mismatch means changed since baseline, not
+                  proven damage. Previous baselines remain in history; these checks do not establish
+                  backup or original-file recovery.
+                </p>
+                {healthMode === 'establish_baseline' && (
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={baselineAcknowledged}
+                      onChange={(event) => setBaselineAcknowledged(event.target.checked)}
+                    />
+                    Record newly read baselines and retain every previous baseline.
+                  </label>
+                )}
+              </>
+            )}
+            {
+              <Button
+                className="primary"
+                disabled={
+                  !rootIds.length ||
+                  unavailable ||
+                  invalidRules ||
+                  (section === 'Integrity' &&
+                    healthMode === 'establish_baseline' &&
+                    !baselineAcknowledged)
+                }
+                onClick={() => void start()}
+              >
+                {section === 'Integrity'
+                  ? healthMode === 'establish_baseline'
+                    ? 'Establish checksum baselines'
+                    : healthMode === 'quick'
+                      ? 'Start quick header check'
+                      : healthMode === 'deep'
+                        ? 'Start deep image check'
+                        : 'Start checksum comparison'
+                  : `Start ${section === 'Duplicates' ? 'duplicate' : 'storage'} inspection`}
+              </Button>
+            }
+          </fieldset>
+        </details>
         {history.length > 0 && (
           <label>
             Retained inspection
@@ -488,7 +512,12 @@ export function InspectionScreen({
         {report && (
           <>
             {job && <InspectionIssues key={job.id} jobId={job.id} />}
-            <p>{report.id3Applicability}</p>
+            {section === 'Duplicates' && (
+              <details>
+                <summary>Format applicability</summary>
+                <p>{report.id3Applicability}</p>
+              </details>
+            )}
             <p className="inspection-coverage">
               Inventory:{' '}
               {report.coverage.enumerationComplete
@@ -498,76 +527,60 @@ export function InspectionScreen({
               {report.coverage.inaccessibleEntries} inaccessible/unsupported entries ·{' '}
               {report.coverage.incompleteDirectories} incomplete directories.
             </p>
-            <div className="inspection-table-wrap">
-              <table className="inspection-volumes">
-                <caption>
-                  Observed actual volumes · capacity is separate from selected-scope totals
-                </caption>
-                <thead>
-                  <tr>
-                    <th>Registered roots on volume</th>
-                    <th>Total bytes</th>
-                    <th>Available bytes</th>
-                    <th>Observed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.volumes.map((volume) => (
-                    <tr key={volume.id}>
-                      <th scope="row">
-                        {volume.rootIds
-                          .map(
-                            (id) =>
-                              status.roots.find((root) => root.id === id)?.label ?? id.slice(0, 8),
-                          )
-                          .join(', ')}
-                      </th>
-                      <td>{displayBytes(volume.totalBytes)}</td>
-                      <td>{displayBytes(volume.availableBytes)}</td>
-                      <td>
-                        {volume.observedAt}
-                        <br />
-                        {volume.coverage}
-                      </td>
+            {section === 'Storage' && (
+              <div className="inspection-table-wrap">
+                <table className="inspection-volumes">
+                  <caption>
+                    Observed actual volumes · capacity is separate from selected-scope totals
+                  </caption>
+                  <thead>
+                    <tr>
+                      <th>Registered roots on volume</th>
+                      <th>Total bytes</th>
+                      <th>Available bytes</th>
+                      <th>Observed</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {report.storage && job && (
+                  </thead>
+                  <tbody>
+                    {report.volumes.map((volume) => (
+                      <tr key={volume.id}>
+                        <th scope="row">
+                          {volume.rootIds
+                            .map(
+                              (id) =>
+                                status.roots.find((root) => root.id === id)?.label ??
+                                id.slice(0, 8),
+                            )
+                            .join(', ')}
+                        </th>
+                        <td>{displayBytes(volume.totalBytes)}</td>
+                        <td>{displayBytes(volume.availableBytes)}</td>
+                        <td>
+                          {volume.observedAt}
+                          <br />
+                          {volume.coverage}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {section === 'Storage' && report.storage && job && (
               <StorageReview key={job.id} jobId={job.id} summary={report.storage} />
             )}
           </>
         )}
-        {job && groups && groups.groups.length > 0 && (
-          <section aria-label="Duplicate groups">
-            <h2>Reviewed evidence groups</h2>
-            <p>
-              Exact bytes, property candidates and linked paths remain separate. Quarantine is
-              unavailable until independent exact-version recovery and applicable native gates pass.
-            </p>
-            {groups.groups.map((group) => (
-              <GroupReview
-                key={`${job.id}:${group.id}`}
-                jobId={job.id}
-                group={group}
-                status={status}
-              />
-            ))}
-            {groups.next && <Button onClick={() => void nextGroups()}>Next group page</Button>}
-          </section>
-        )}
-        {job && report && groups?.groups.length === 0 && job.input.task.kind === 'duplicates' && (
-          <p>
-            {job.state === 'completed'
-              ? 'No matching groups were reported in this inspected scope.'
-              : 'No completed groups are retained in this partial inspection; unavailable scope remains unknown.'}
-          </p>
-        )}
-        {files && (
+        {files && section !== 'Duplicates' && (
           <section aria-label="Inspected files">
-            <h2>Files · largest logical size first</h2>
-            <FindingTable rows={files.rows} />
+            {section === 'Integrity' ? (
+              <IntegrityFindings key={job?.id} rows={files.rows} />
+            ) : (
+              <>
+                <h2>Largest files</h2>
+                <FindingTable rows={files.rows} />
+              </>
+            )}
             {files.next && <Button onClick={() => void nextFiles()}>Next file page</Button>}
           </section>
         )}
@@ -701,10 +714,7 @@ function FindingTable({ rows }: { rows: FindingPage['rows'] }) {
             <th>Logical bytes</th>
             <th>Allocation</th>
             <th>Inventory / linked object</th>
-            <th>Content and coverage</th>
-            <th>Checksum</th>
-            <th>Backup</th>
-            <th>Comparison key</th>
+            <th>Coverage</th>
           </tr>
         </thead>
         <tbody>
@@ -723,165 +733,13 @@ function FindingTable({ rows }: { rows: FindingPage['rows'] }) {
                 {row.links} links · {row.objectId?.slice(0, 16) ?? 'Object unknown'}
               </td>
               <td>
-                {row.content.replaceAll('_', ' ')}
-                <br />
-                {row.format ?? 'Format unknown'}
-                {row.width != null && row.height != null ? ` · ${row.width} × ${row.height}` : ''}
-                <br />
                 {row.coverage}
-                {row.pixelSignature && (
-                  <details>
-                    <summary>Declared pixel policy and candidate fingerprint</summary>
-                    <p>{row.pixelSignature}</p>
-                    <code>{row.pixelDigest}</code>
-                    <p>
-                      Fingerprint match is manual-review evidence and grants no cleanup authority.
-                    </p>
-                  </details>
-                )}
                 {row.error && <p>{row.error.message}</p>}
               </td>
-              <td>{row.checksum.replaceAll('_', ' ')}</td>
-              <td>Not assessed · M4 recovery unavailable</td>
-              <td>{row.comparisonName ?? 'Unknown / not requested'}</td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  );
-}
-
-function GroupReview({
-  jobId,
-  group,
-  status,
-}: {
-  jobId: string;
-  group: DuplicatePage['groups'][number];
-  status: LibraryStatus;
-}) {
-  const [members, setMembers] = useState<FindingPage | null>(null);
-  const [keep, setKeep] = useState<Set<string>>(new Set());
-  const [error, setError] = useState<string | null>(null);
-  const [comparison, setComparison] = useState<AssetSummary[] | null>(null);
-  const generation = useRef(0);
-  useEffect(
-    () => () => {
-      generation.current += 1;
-    },
-    [],
-  );
-  async function load(after: string | null = null) {
-    const token = ++generation.current;
-    try {
-      const rows = await libraryData(
-        { kind: 'inspection_group_members', job_id: jobId, group_id: group.id, after },
-        'inspection_findings',
-      );
-      if (token === generation.current) {
-        setMembers(rows);
-        setError(null);
-      }
-    } catch (failure) {
-      if (token === generation.current) setError(errorMessage(failure));
-    }
-  }
-  async function compare() {
-    const selected = members?.rows.filter((row) => row.isMedia && row.assetId).slice(0, 4) ?? [];
-    const token = ++generation.current;
-    try {
-      const details = await Promise.all(
-        selected.map((row) => libraryData({ kind: 'detail', asset_id: row.assetId! }, 'detail')),
-      );
-      if (token === generation.current) setComparison(details.map((detail) => detail.asset));
-    } catch (failure) {
-      if (token === generation.current) setError(errorMessage(failure));
-    }
-  }
-  return (
-    <article className="inspection-group">
-      <h3>
-        {group.evidence.replaceAll('_', ' ')} · {group.memberCount.toLocaleString()} paths
-      </h3>
-      <p>{group.explanation}</p>
-      {error && <p role="alert">{error}</p>}
-      <div className="inspection-actions">
-        <Button onClick={() => void load()}>Review group members</Button>
-        <Button
-          disabled={(members?.rows.filter((row) => row.isMedia && row.assetId).length ?? 0) < 2}
-          onClick={() => void compare()}
-        >
-          Compare photo previews
-        </Button>
-        <Button
-          disabled
-          title="Independent recovery and fresh complete bundle verification are required"
-        >
-          Quarantine unavailable
-        </Button>
-      </div>
-      {members && (
-        <>
-          <p>
-            Choose manual keepers below, then retain a backend review. Keep multiple when uncertain;
-            no files are moved. Incomplete or unique companions require separate verification.
-          </p>
-          <div className="inspection-pair">
-            {members.rows.slice(0, 4).map((row) => (
-              <section key={row.id}>
-                <h4>{row.name}</h4>
-                <p>{row.displayPath}</p>
-                <dl>
-                  <dt>Logical bytes</dt>
-                  <dd>{displayBytes(row.bytes)}</dd>
-                  <dt>Filesystem modified</dt>
-                  <dd>{row.filesystemModified ?? 'Unknown'}</dd>
-                  <dt>Filesystem created/birth</dt>
-                  <dd>{row.filesystemCreated ?? 'Unknown'}</dd>
-                  <dt>Linked object</dt>
-                  <dd>
-                    {row.objectId?.slice(0, 16) ?? 'Unknown'} · {row.links} links
-                  </dd>
-                </dl>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={keep.has(row.id)}
-                    onChange={(event) => {
-                      const next = new Set(keep);
-                      if (event.target.checked) next.add(row.id);
-                      else next.delete(row.id);
-                      setKeep(next);
-                    }}
-                  />
-                  Keep in this review
-                </label>
-              </section>
-            ))}
-          </div>
-          <KeeperControls
-            jobId={jobId}
-            groupId={group.id}
-            rows={members.rows}
-            keep={keep}
-            onKeep={setKeep}
-          />
-          <FindingTable rows={members.rows} />
-          {members.next && (
-            <Button onClick={() => void load(members.next)}>Next member page</Button>
-          )}
-        </>
-      )}
-      {comparison && (
-        <ComparisonViewer
-          returnLabel="Back to duplicate review"
-          assets={comparison}
-          status={status}
-          onClose={() => setComparison(null)}
-          onError={(failure) => setError(errorMessage(failure))}
-        />
-      )}
-    </article>
   );
 }

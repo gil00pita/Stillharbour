@@ -143,22 +143,25 @@ beforeEach(() => {
     });
 });
 describe('local map browsing', () => {
-  it('applies an offline place alongside date search and carries its identity into Photos', async () => {
+  it('chooses an offline place from the main search and carries its identity into Photos', async () => {
     render(<Harness />);
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Search filenames or dates' }), {
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }), {
       target: { value: '10-10-2025' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
-    fireEvent.change(await screen.findByRole('searchbox', { name: 'City or country' }), {
-      target: { value: 'London' },
-    });
+    fireEvent.focus(screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }));
+    fireEvent.change(
+      await screen.findByRole('searchbox', { name: 'Search filenames, dates or places' }),
+      {
+        target: { value: 'London' },
+      },
+    );
     fireEvent.click(await screen.findByRole('button', { name: /London, England, United Kingdom/ }));
     await waitFor(() =>
       expect(libraryData).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: 'query',
           query: expect.objectContaining({
-            name: '10-10-2025',
+            name: '',
             placeId: londonPlace.id,
             mapBounds: londonPlace.bounds,
             location: 'known',
@@ -172,16 +175,16 @@ describe('local map browsing', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Show in library' }));
     expect(show).toHaveBeenCalledWith(
-      expect.objectContaining({ name: '10-10-2025', placeId: londonPlace.id }),
+      expect.objectContaining({ name: '', placeId: londonPlace.id }),
       null,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
+    fireEvent.focus(screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Clear place filter' }));
     await waitFor(() =>
       expect(libraryData).toHaveBeenCalledWith(
         expect.objectContaining({
           kind: 'query',
-          query: expect.objectContaining({ name: '10-10-2025', placeId: null }),
+          query: expect.objectContaining({ name: '', placeId: null }),
         }),
         'page',
       ),
@@ -189,7 +192,7 @@ describe('local map browsing', () => {
   });
   it('shares date search text between map membership and photo queries and can clear it', async () => {
     render(<Harness />);
-    const search = screen.getByRole('searchbox', { name: 'Search filenames or dates' });
+    const search = screen.getByRole('searchbox', { name: 'Search filenames, dates or places' });
     expect(search).toHaveAttribute('title', expect.stringContaining('DD-MM-YYYY'));
     fireEvent.change(search, { target: { value: '10-10-2025' } });
     for (const [kind, result] of [

@@ -835,3 +835,17 @@ Other rejected requests retain the brief-wait/retry advice.
 - Native presentation testing may use the existing desktop-test picker interceptor
   to inject a labelled generated error. Such a screenshot is a notification test,
   not evidence of actual native catalog saturation or a personal-library failure.
+
+## Utilities interface refinement — 2026-11-05
+
+These presentation checks supplement existing M3/M6 gates; they do not pass production duplicate removal.
+
+- Secondary actions have flat fills, with visible keyboard focus and pressed states. Utilities contains exactly Duplicates, Integrity, Storage and Backup & Sync. Jobs opens from above Settings in the sidebar footer, at desktop/minimum widths and with collapsed navigation, without changing the current page.
+- Photos/Tags/Map have one filename/date/place search and no Places button. Typing, explicit city/country choice, same-name disambiguation, clearing, lookup failure/retry, keyboard focus and Escape work. Selecting a place clears the lookup term; filename/date typing can subsequently narrow its GPS scope.
+- Duplicate clusters expose retained evidence and file/candidate counts. Search/filter and shown-group selection have explicit page scope. Exact matches remain separate from normalized/property candidates and linked objects; Can automate reports the closed recovery gate.
+- Selecting a cluster loads native members. Two indexed media files support side by side, range-controlled overlay and rendered-preview heatmap, including unavailable/retry states. Labels disclose the 512 px limit and absence of original equality/cleanup authority.
+- Keeper suggestions require complete group loading; unknown resolution and ties retain multiple. Largest-file preference preserves integer precision. Retained backend manual/date/protected-folder choices still use validated IDs and grant no mutation authority.
+- Threshold/protection/ranking previews never fabricate scores, recovery, edit/capture provenance, album membership or enforcement. At any threshold, no unmeasured group qualifies. Linked, incomplete, offline and candidate evidence cannot become reclaimable-byte claims. Recently Deleted, blocked confirmation and disabled Undo never report simulated moves or expiry.
+- Integrity filters health findings while distinguishing unavailable, unchecked, changed-baseline and decoder states. Storage retains actual volume/folder/treemap/size observations without the repeated health table. Original manifests remain unchanged in every generated native scenario.
+
+See [Utilities UI](UTILITIES_UI.md) for current capability limitations and verification commands.

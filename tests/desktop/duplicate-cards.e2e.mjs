@@ -29,6 +29,7 @@ describe('Illustrated duplicate matching cards', () => {
       [660, 560],
     ]) {
       await browser.setWindowSize(width, height);
+      await $('.duplicate-match-options').scrollIntoView({ block: 'start' });
       const metrics = await browser.execute(() => {
         const cards = [
           ...document.querySelectorAll('.duplicate-match-options .inspection-choice-card'),

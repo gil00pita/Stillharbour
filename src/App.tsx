@@ -51,7 +51,7 @@ function ConnectedApplication() {
   const [navigationOverride, setNavigationOverride] = useState<boolean | null>(null);
   const collapsed = navigationOverride ?? preferences?.navigationCollapsed ?? false;
   const hasLibrary = Boolean(status?.roots.length);
-  const jobsControl = <JobsDropdown status={status} onRefresh={refresh} />;
+  const jobsControl = null;
   const navigationControl = (
     <NavigationToggle collapsed={collapsed} onToggle={() => setNavigationOverride(!collapsed)} />
   );
@@ -61,6 +61,7 @@ function ConnectedApplication() {
       className={`app-shell ${hasLibrary ? 'has-library' : ''} ${collapsed ? 'navigation-collapsed' : ''}`}
     >
       <Sidebar
+        jobsControl={<JobsDropdown status={status} onRefresh={refresh} sidebar />}
         hasLibrary={hasLibrary}
         version={foundation?.version}
         section={section}
@@ -182,7 +183,9 @@ function Sidebar({
   section,
   onNavigate,
   collapsed,
+  jobsControl,
 }: {
+  jobsControl: ReactNode;
   hasLibrary: boolean;
   version: string | undefined;
   section: AppSection;
@@ -225,7 +228,8 @@ function Sidebar({
                 <span className="nav-label">Map</span>
               </Button>
             </div>
-            <div className="nav-group" role="group" aria-label="Library care">
+            <div className="nav-group" role="group" aria-label="Utilities">
+              <div className="nav-group-label">Utilities</div>
               {(['Duplicates', 'Integrity', 'Storage', 'Backup & Sync'] as const).map((item) => (
                 <Button
                   key={item}
@@ -238,13 +242,6 @@ function Sidebar({
                   <span className="nav-label">{item}</span>
                 </Button>
               ))}
-            </div>
-            <div className="nav-group" role="group" aria-label="Additional tools">
-              <Button disabled title="File operations remain unavailable in this read-only release">
-                <NavigationIcon section="Utilities" />
-                <span className="nav-label">Utilities</span>
-                <small>Later</small>
-              </Button>
             </div>
           </>
         ) : (
@@ -264,6 +261,7 @@ function Sidebar({
       </nav>
       <footer className="sidebar-footer">
         <nav aria-label="Workspace actions">
+          {jobsControl}
           {(['Settings'] as const).map((item) => (
             <Button
               key={item}

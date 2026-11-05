@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '../../test/render';
+import { act, fireEvent, render, screen, waitFor } from '../../test/render';
 import { libraryData } from '../../ipc';
 import { PlaceSearch } from './PlaceSearch';
 import type { PlaceSearchReply, PlaceSummary } from '../../bindings';
@@ -58,8 +58,8 @@ beforeEach(() => {
 it('offers labelled geographic matches and applies only the explicitly chosen place', async () => {
   render(<PlaceSearch onChange={changed} />);
   expect(libraryData).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
-  const input = await screen.findByRole('searchbox', { name: 'City or country' });
+  act(() => screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }).focus());
+  const input = await screen.findByRole('searchbox', { name: 'Search filenames, dates or places' });
   await waitFor(() => expect(input).toHaveFocus());
   fireEvent.change(input, { target: { value: 'London' } });
   const choose = await screen.findByRole('button', { name: /London, England, United Kingdom/ });
@@ -68,16 +68,20 @@ it('offers labelled geographic matches and applies only the explicitly chosen pl
   expect(changed).not.toHaveBeenCalled();
   fireEvent.click(choose);
   expect(changed).toHaveBeenCalledWith(london);
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Search places' })).toHaveFocus());
+  await waitFor(() =>
+    expect(
+      screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }),
+    ).toHaveFocus(),
+  );
 });
 
 it('clears an existing place and can close without changing the query', async () => {
   render(<PlaceSearch selectedId={london.id} onChange={changed} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
+  act(() => screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }).focus());
   expect(await screen.findByText(`Selected: ${london.label}`)).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Close place search' }));
   expect(changed).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
+  act(() => screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }).focus());
   fireEvent.click(await screen.findByRole('button', { name: 'Clear place filter' }));
   expect(changed).toHaveBeenCalledWith(null);
 });
@@ -85,11 +89,12 @@ it('clears an existing place and can close without changing the query', async ()
 it('reports a failed lookup and retries without applying a fictional place', async () => {
   vi.mocked(libraryData).mockRejectedValueOnce(new Error('Offline index unavailable.'));
   render(<PlaceSearch onChange={changed} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
+  act(() => screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }).focus());
   expect(await screen.findByRole('alert')).toHaveTextContent('Offline index unavailable.');
   expect(changed).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Retry place search' }));
-  expect(await screen.findByText('Enter at least two characters.')).toBeVisible();
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  expect(screen.getByRole('searchbox')).toHaveAttribute('aria-expanded', 'false');
 });
 
 it('discards a late lookup after another search has completed', async () => {
@@ -103,8 +108,8 @@ it('discards a late lookup after another search has completed', async () => {
     return reply(request.text === 'Portugal' ? [portugal] : []) as never;
   });
   render(<PlaceSearch onChange={changed} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
-  const input = await screen.findByRole('searchbox', { name: 'City or country' });
+  act(() => screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }).focus());
+  const input = await screen.findByRole('searchbox', { name: 'Search filenames, dates or places' });
   fireEvent.change(input, { target: { value: 'London' } });
   await waitFor(() => expect(release).toBeDefined());
   fireEvent.change(input, { target: { value: 'Portugal' } });
@@ -118,16 +123,34 @@ it('discards a late lookup after another search has completed', async () => {
 
 it('keeps the picker unavailable while catalog actions block filter changes', () => {
   render(<PlaceSearch onChange={changed} disabled />);
-  expect(screen.getByRole('button', { name: 'Search places' })).toBeDisabled();
+  expect(
+    screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }),
+  ).toBeDisabled();
   expect(libraryData).not.toHaveBeenCalled();
 });
 
 it('lets an unavailable saved place be cleared without claiming it is still loading', async () => {
   vi.mocked(libraryData).mockRejectedValue(new Error('This place is unavailable.'));
   render(<PlaceSearch selectedId="places-v1:city:missing" onChange={changed} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Search places' }));
+  act(() => screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }).focus());
   expect(await screen.findByRole('alert')).toHaveTextContent('This place is unavailable.');
   expect(screen.getByText('Selected: Place details unavailable')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: 'Clear place filter' }));
   expect(changed).toHaveBeenCalledWith(null);
+});
+
+it('keeps filename results clear when there are no matching places', async () => {
+  vi.mocked(libraryData).mockResolvedValue(reply([]) as never);
+  render(<PlaceSearch onChange={changed} />);
+  const input = screen.getByRole('searchbox');
+  act(() => input.focus());
+  fireEvent.change(input, { target: { value: 'Generated-00.jpg' } });
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenCalledWith(
+      expect.objectContaining({ text: 'Generated-00.jpg' }),
+      'places',
+    ),
+  );
+  await waitFor(() => expect(input).toHaveAttribute('aria-expanded', 'false'));
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 });

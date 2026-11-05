@@ -61,6 +61,14 @@ describe('Bottom application error notification', () => {
       assert.equal(geometry.welcomeTop, before);
       assert.equal(geometry.horizontalOverflow, false);
       for (let i = 0; i < 3; i++) await picker.click();
+      // Picker rejection and React's toast update settle after the native click returns.
+      await browser.waitUntil(
+        async () =>
+          browser.execute(
+            () => document.querySelectorAll('[data-scope="toast"][data-part="root"]').length === 1,
+          ),
+        { timeoutMsg: 'The final failed request did not settle to one error notification' },
+      );
       assert.equal(
         await browser.execute(
           () => document.querySelectorAll('[data-scope="toast"][data-part="root"]').length,

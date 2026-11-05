@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
 import { browser, $ } from '@wdio/globals';
+import { mkdir } from 'node:fs/promises';
 
 describe('Reference timeline navigation through bounded native pages', () => {
   it('navigates during a captured drag, retains the rail across seeks, and follows the actual photo position', async function () {
     this.timeout(120000);
+    await mkdir('.context/timeline-reference', { recursive: true });
     const invoke = (command, args) =>
       browser.tauri.execute(
         async ({ core }, command, args) => core.invoke(command, args),
@@ -36,7 +38,7 @@ describe('Reference timeline navigation through bounded native pages', () => {
         if (event.detail.kind === 'seek_index') window.__timelineRequests.push(event.detail);
       });
     });
-    await $('input[aria-label="Search filenames or dates"]').setValue('Synthetic');
+    await $('input[aria-label="Search filenames, dates or places"]').setValue('Synthetic');
     await browser.waitUntil(() =>
       browser.execute(() => document.querySelector('.date-scrubber')?.max === '959'),
     );

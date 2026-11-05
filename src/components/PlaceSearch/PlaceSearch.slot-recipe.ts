@@ -5,6 +5,7 @@ export const placeSearchRecipe = defineSlotRecipe({
   base: {
     positioner: { zIndex: 'popover' },
     content: {
+      _closed: { display: 'none' },
       bg: 'bg.panel',
       color: 'fg',
       fontSize: 'sm',

@@ -3,6 +3,8 @@ import {
   Input as ChakraInput,
   Textarea as ChakraTextarea,
   chakra,
+  mergeProps,
+  useFieldContext,
 } from '@chakra-ui/react';
 import type { ComponentPropsWithRef } from 'react';
 import { fieldRecipe } from '../../theme/recipes';
@@ -32,10 +34,11 @@ const StyledSelect = chakra('select', {
   base: { ...fieldRecipe.base, minHeight: 'control', paddingRight: '36px' },
 });
 export function Select(props: ComponentPropsWithRef<'select'>) {
+  const field = useFieldContext();
   const { size, className, ...rest } = props;
   return (
     <StyledSelect
-      {...rest}
+      {...mergeProps(field?.getSelectProps() ?? {}, rest)}
       className={['chakra-native-select', className].filter(Boolean).join(' ')}
       htmlSize={size}
     />

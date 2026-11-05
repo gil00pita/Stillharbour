@@ -379,3 +379,9 @@ Escape dismisses when the notification has focus. Contextual field validation,
 job outcomes and blocking recovery states remain at their existing decision
 points. The library load-failure state retains its heading/Retry library action;
 its detailed error appears once in the toast.
+
+## Utilities refinement — 2026-11-05
+
+The owner replaces secondary action outlines with flat neutral fills while preserving visible keyboard focus and selected states. Utilities is a navigation group for Duplicates, Integrity, Storage and Backup & Sync; Map stays with library browsing. Jobs moves into the persistent sidebar footer immediately above Settings, retaining its nonmodal disclosure and active-job badge. This supersedes earlier header-Jobs instructions.
+
+The main Photos/Tags/Map search anchors offline city/country suggestions alongside filename/date entry. An explicit place choice becomes a visible clearable filter; no separate Places action remains. Duplicates uses a queue/inspector composition, restrained metric dividers, actual cached preview comparison and a right-edge rules drawer. Integrity uses health-specific findings; Storage retains capacity, folder treemap and size observations. Preserve the current warm-charcoal/system-type/sage studio identity and 65% dark dialog backdrop. Missing scores/recovery/ranking signals remain textual unavailable states, and original-file actions stay gated. Source and evidence boundaries: docs/UTILITIES_UI.md and the dated implementation log.

@@ -780,3 +780,9 @@ an existing test-only picker fault interceptor, verifies both window sizes,
 deduplication/dismissal/Escape/no layout shift and saves generated captures under
 .context/error-toast. Build with an isolated target when the developer app is
 active, then restore the normal production frontend and release preflight.
+
+## Utilities interface revision — 2026-11-05
+
+[UTILITIES_UI.md](UTILITIES_UI.md) documents the revised sidebar, unified search and distinct inspection workflows. New shared components and keeper/accounting fixtures are colocated under `src/components/DuplicateStudio`, `DuplicateComparison` and `IntegrityFindings`. The studio owns its Chakra recipe; native root/operation authority and IPC types are unchanged. Run full checks and the existing generated-only desktop suite after updating selectors. Its inspection checks now validate health and size tables separately, and duplicate clusters instead of the shared findings table. Native captures live under `.context/screenshots/duplicates-*.png`; their presence alone is not a pass. Rebuild ordinary frontend output after instrumented tests. Missing pinned helpers use the verified preparation workflow above; no application-data reset or personal library is needed.
+
+When a desktop development watcher is active, isolate instrumented validation from its relinks, as the existing `scripts/map-desktop-test.mjs` does. The 2026-11-05 utilities run copies the completed instrumented executable beside the ordinary binary as `stillharbour-utilities-test` and points both WebdriverIO service/capability paths at that copy through an ignored config. It uses port 15445 and retains the copied binary hash. Do not terminate another development process or infer that a later default binary has the tested instrumentation. Native outcomes and artifact paths are in IMPLEMENTATION_LOG.md.

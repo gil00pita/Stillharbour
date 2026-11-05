@@ -4,7 +4,7 @@ Owner-approved scope, 2026-11-05: GPS-based city/country search working offline.
 [ADR-0089](decisions/ADR-0089-offline-place-search.md) records the architecture and
 compatibility decisions. M6 and original-file preservation gates remain intact.
 
-Choose **Places** beside Photos/Map search, enter at least two characters, then
+Choose **the main search field** beside Photos/Map search, enter at least two characters, then
 choose the city/country with the correct region/country label. At most twenty
 suggestions appear; add a region or country to narrow broad matches. Names and
 alternate names are case/accent insensitive. Cities match **within 25 km of the
@@ -47,3 +47,7 @@ and notice pins. Generated native EXIF fixtures supply London, zero, opposite
 hemisphere, antimeridian, invalid and missing GPS, with independent source audits.
 Only actual results in the implementation log establish platform evidence; no
 Windows, large-catalog performance or trusted-release acceptance is inferred.
+
+## Unified search refinement — 2026-11-05
+
+Photos/Tags and Map now show offline place suggestions inside the main filename/date search. Choosing a suggestion clears the lookup text and applies the place ID atomically; clearing the place retains any subsequent text. The separate Places button is removed. Existing geometry, provenance, native query membership and network/privacy limits remain unchanged. See [Utilities UI](UTILITIES_UI.md).

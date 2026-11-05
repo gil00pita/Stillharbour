@@ -39,7 +39,7 @@ describe('native common-format previews — generated sources only', () => {
         await picker.mockRestore();
       }
       await $('.asset-viewport').waitForDisplayed();
-      await $('input[aria-label="Search filenames or dates"]').setValue('Native HEIC');
+      await $('input[aria-label="Search filenames, dates or places"]').setValue('Native HEIC');
       await browser.waitUntil(
         async () =>
           browser.execute(
@@ -180,7 +180,7 @@ describe('native common-format previews — generated sources only', () => {
       await browser.keys('Escape');
       await $('.asset-viewport').waitForDisplayed();
       assert.equal(
-        await $('input[aria-label="Search filenames or dates"]').getValue(),
+        await $('input[aria-label="Search filenames, dates or places"]').getValue(),
         'Native HEIC',
       );
       const verified = await browser.tauri.execute(async ({ core }) =>

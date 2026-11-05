@@ -1,3 +1,4 @@
+import { Field } from '@chakra-ui/react';
 import { createRef } from 'react';
 import { fireEvent, render, screen } from '../../test/render';
 import { expect, it, vi } from 'vitest';
@@ -68,4 +69,19 @@ it('keeps non-submit actions, native refs and disabled approvals intact', () => 
   fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
   expect(approved).not.toHaveBeenCalled();
   expect(submitted).not.toHaveBeenCalled();
+});
+
+it('connects native selects to Chakra field labels and helper text', () => {
+  render(
+    <Field.Root>
+      <Field.Label>Keeper preference</Field.Label>
+      <Select defaultValue="largest">
+        <option value="largest">Largest file</option>
+      </Select>
+      <Field.HelperText>Keep ties for review.</Field.HelperText>
+    </Field.Root>,
+  );
+  const select = screen.getByLabelText('Keeper preference');
+  expect(select).toHaveValue('largest');
+  expect(select).toHaveAccessibleDescription('Keep ties for review.');
 });

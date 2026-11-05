@@ -20,11 +20,12 @@ it('keeps secondary actions named and operable when their visible labels collaps
       onPlans={onPlans}
     />,
   );
-  expect(screen.getByRole('searchbox', { name: 'Search filenames or dates' })).toHaveAttribute(
-    'title',
-    'Search filenames or a day: DD-MM-YYYY or YYYY-MM-DD',
-  );
-  expect(screen.getByRole('button', { name: 'Search places' })).toBeEnabled();
+  expect(
+    screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }),
+  ).toHaveAttribute('title', 'Search a filename, DD-MM-YYYY / YYYY-MM-DD, city or country');
+  expect(
+    screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }),
+  ).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: 'Catalog' }));
   fireEvent.click(screen.getByRole('button', { name: 'Saved plans' }));
   fireEvent.click(screen.getByRole('button', { name: 'Filter (2 active)' }));
@@ -50,7 +51,9 @@ it('keeps secondary actions named and operable when their visible labels collaps
       onPlans={onPlans}
     />,
   );
-  expect(screen.getByRole('button', { name: 'Search places' })).toBeDisabled();
+  expect(
+    screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }),
+  ).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Catalog' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Saved plans' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Filter (2 active)' })).toBeDisabled();
