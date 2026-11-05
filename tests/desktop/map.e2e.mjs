@@ -127,7 +127,45 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       });
       await $('button[aria-label="Map"]').click();
       await $('.map-marker').waitForDisplayed({ timeout: 30000 });
-      await browser.waitUntil(async () => $('.map-filmstrip li:first-child button').isExisting());
+      await browser.waitUntil(async () => $('.map-marker').isEnabled());
+      assert.equal((await $$('.map-filmstrip li')).length, 0);
+      await browser.execute(() => {
+        window.__mapCanvas = document.querySelector('.map-basemap canvas');
+      });
+      await browser.waitUntil(() =>
+        browser.execute(() =>
+          [...document.querySelectorAll('.map-marker img')].some(
+            (image) => image.complete && image.naturalWidth > 0,
+          ),
+        ),
+      );
+      const markerGeometry = await browser.execute(() =>
+        [...document.querySelectorAll('.map-marker img')].map((image) => {
+          const frame = image.closest('.map-marker-image').getBoundingClientRect();
+          const photo = image.getBoundingClientRect();
+          const button = image.closest('button').getBoundingClientRect();
+          return {
+            width: button.width,
+            height: button.height,
+            contained:
+              photo.left >= frame.left - 0.5 &&
+              photo.right <= frame.right + 0.5 &&
+              photo.top >= frame.top - 0.5 &&
+              photo.bottom <= frame.bottom + 0.5,
+            clipping: getComputedStyle(image.parentElement).overflow,
+          };
+        }),
+      );
+      assert.ok(markerGeometry.length > 0);
+      assert.ok(
+        markerGeometry.every(
+          (marker) =>
+            marker.width === 48 &&
+            marker.height === 48 &&
+            marker.contained &&
+            marker.clipping === 'hidden',
+        ),
+      );
       assert.equal(await $('.map-basemap canvas').isDisplayed(), true);
       assert.equal(
         await $('.map-attribution').getText(),
@@ -152,19 +190,48 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       await browser.execute(() => document.querySelector('.map-basemap canvas').focus());
       await browser.keys('=');
       await browser.waitUntil(async () => {
-        const count = Number((await $('.map-photo-heading p').getText()).match(/^(\d+)/)?.[1]);
-        return count > 0 && count < 6 && (await $('button[aria-label="Zoom out"]').isEnabled());
+        const total = await browser.execute(() =>
+          [...document.querySelectorAll('.map-marker-count')].reduce(
+            (sum, badge) => sum + Number(badge.textContent),
+            0,
+          ),
+        );
+        return (
+          total > 0 &&
+          total < 6 &&
+          (await $('.map-marker').isEnabled()) &&
+          (await $('button[aria-label="Zoom out"]').isEnabled())
+        );
       });
       const keyboardZoomVerified = true;
+      assert.equal((await $$('.map-filmstrip li')).length, 0);
+      assert.equal(
+        await browser.execute(
+          () => window.__mapCanvas === document.querySelector('.map-basemap canvas'),
+        ),
+        true,
+      );
       await $('button=Whole world').click();
       await browser.waitUntil(async () => !(await $('button[aria-label="Zoom out"]').isEnabled()));
       await $('button[aria-label="Zoom in"]').click();
       await browser.waitUntil(async () => {
-        const count = Number((await $('.map-photo-heading p').getText()).match(/^(\d+)/)?.[1]);
-        return count > 0 && count < 6 && (await $('button[aria-label="Zoom out"]').isEnabled());
+        const total = await browser.execute(() =>
+          [...document.querySelectorAll('.map-marker-count')].reduce(
+            (sum, badge) => sum + Number(badge.textContent),
+            0,
+          ),
+        );
+        return (
+          total > 0 &&
+          total < 6 &&
+          (await $('.map-marker').isEnabled()) &&
+          (await $('button[aria-label="Zoom out"]').isEnabled())
+        );
       });
       await $('button=Whole world').click();
-      await browser.waitUntil(async () => (await $$('.map-marker')).length === 1);
+      await browser.waitUntil(
+        async () => (await $$('.map-marker')).length === 1 && (await $('.map-marker').isEnabled()),
+      );
       await browser.saveScreenshot(`${directory}/overview.png`);
       await $('.map-marker').click();
       await browser.saveScreenshot(`${directory}/after-marker.png`);
@@ -213,6 +280,9 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             zero,
             selectedCount,
             keyboardZoomVerified,
+            markerGeometry,
+            photosRequireClick: true,
+            canvasRetainedAcrossZoom: true,
             placeSearch,
             metadataEvidence,
             exportEvidence,

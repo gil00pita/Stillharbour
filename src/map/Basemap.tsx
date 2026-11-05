@@ -25,6 +25,7 @@ export default function Basemap({
   clusters,
   previews,
   selectedId,
+  updating,
   onViewport,
   onCluster,
   onUnavailable,
@@ -35,6 +36,7 @@ export default function Basemap({
   clusters: MapCluster[];
   previews: Record<string, ThumbnailResult>;
   selectedId: string | null;
+  updating: boolean;
   onViewport: (bounds: MapBounds, zoom: number) => void;
   onCluster: (cluster: MapCluster) => void;
   onUnavailable: () => void;
@@ -139,6 +141,7 @@ export default function Basemap({
           <PhotoMarker
             key={cluster.key}
             map={map}
+            disabled={updating}
             cluster={cluster}
             previews={previews}
             selected={selectedId === cluster.representative.id}
@@ -184,12 +187,14 @@ function PhotoMarker({
   cluster,
   previews,
   selected,
+  disabled,
   onClick,
 }: {
   map: Map;
   cluster: MapCluster;
   previews: Record<string, ThumbnailResult>;
   selected: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   const [element] = useState(() => document.createElement('div'));
@@ -211,6 +216,7 @@ function PhotoMarker({
     <button
       className={`map-marker${selected ? ' selected' : ''}`}
       aria-pressed={selected}
+      disabled={disabled}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
@@ -218,11 +224,13 @@ function PhotoMarker({
       }}
       aria-label={`${cluster.count} ${cluster.count === 1 ? 'photo' : 'photos'} in this area; sample location ${cluster.latitude.toFixed(3)}, ${cluster.longitude.toFixed(3)}`}
     >
-      {edge ? (
-        <CachedPreviewImage src={previewUrl(asset, edge)} alt="" />
-      ) : (
-        <span aria-hidden="true">◇</span>
-      )}
+      <span className="map-marker-image">
+        {edge ? (
+          <CachedPreviewImage src={previewUrl(asset, edge)} alt="" />
+        ) : (
+          <span aria-hidden="true">◇</span>
+        )}
+      </span>
       <span className="map-marker-count">{cluster.count}</span>
     </button>,
     element,

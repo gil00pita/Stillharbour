@@ -237,7 +237,7 @@ Creating unrelated staging siblings must not invalidate that authority. A fixtur
 failure before actual denial supplies no unreadable-root acceptance evidence.
 
 | AC-074 | Photos have valid zero coordinates, missing coordinates, identical coordinates and positions across the antimeridian. Missing GPS does not become (0,0); viewport results/clusters remain correct. |
-| AC-075 | Clicking a map cluster and switching to timeline preserves date/root filters and selection. Large queries use bounded data; markers do not explode into one DOM node per library asset. |
+| AC-075 | Clicking a map cluster and switching to timeline preserves date/root filters and selection. Marker images remain inside their frames and count badges remain readable. Panning/zooming retain the canvas and visible markers while clusters update, with stale marker selection disabled; photos load only after marker selection or an explicit photo-list action. No-location and graphics-fallback lists remain usable. Large queries use bounded data; markers do not explode into one DOM node per library asset. |
 | AC-076 | Go offline and inspect network logs. No unapproved photo metadata upload; map clearly reports unavailable tiles; attribution and provider cache/offline policy are respected. |
 | AC-077 | Install on clean Windows/macOS machines without Rust/Node/Perl/Homebrew. Packaged metadata, thumbnails, optional codecs and backup helpers function for every advertised capability. |
 | AC-078 | Release signing/notarization and updater verification are tested with actual credentials/artifacts. Missing credentials are reported as a release blocker, not called passed. |

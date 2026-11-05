@@ -18,6 +18,8 @@ Read AGENTS.md and docs/PRESERVATION_CONTRACT.md before implementation. Read doc
 
 ## 1. Product outcome and boundaries
 
+Owner map repair (2026-11-05): contain thumbnail images inside their marker frames while keeping count badges visible. Panning/zooming retain the map canvas and visible markers during bounded cluster updates; they do not automatically load the photo strip. Load photos on marker selection or an explicit Show photos in view action, preserving no-location and graphics-fallback browsing. Pending markers cannot apply stale viewport membership. See [map browsing](M5_MAP.md). No backend, dependency, original-file authority or release gate changes.
+
 Owner timeline refinement (2026-11-05): adapt the supplied Google Photos-style vertical-navigation reference into the existing indexed photo timeline, with real month dots, readable year labels, a wider drag target and aligned floating date preview. Preserve filtered catalog seeks, bounded pages, keyboard/wheel behavior, cancellation and exact endpoints. See [timeline navigation](TIMELINE_NAVIGATION.md); no new dependency or original-file authority is required.
 
 Owner-approved visual refinement (2026-11-05): use the quiet photographic studio direction: warm charcoal surfaces, warm white native system typography, restrained sage, grouped sidebar navigation, a clearer photo-toolbar hierarchy and more deliberate Settings spacing. Retain the unchanged owner mark, existing workflows and safety states. Catalog/Saved plans remain accessible as named icon controls at narrow desktop sizes. See [interface polish](INTERFACE_POLISH.md) and DESIGN.md for exact presentation values; this changes no backend, original-file authority or milestone gate.

@@ -8,9 +8,31 @@ Current evidence, 2026-11-03: Windows Foundation at `a2b3d10` passes the native 
 
 The owner requested continuing M5 on 2026-11-02. [ADR-0081](decisions/ADR-0081-offline-geographic-browsing.md) records the first geographic slice. M4 preservation certification and production mutation restrictions remain unchanged; M5 as a whole is not complete.
 
+## Marker containment and click-to-load browsing — 2026-11-05
+
+Map thumbnails stay inside a clipped image frame within each 48×48 marker; the
+count badge remains outside the image frame. Opening Map, panning and zooming
+load bounded cluster summaries and representative previews only. They do not
+load the photo strip. Click a marker (or explicitly choose **Show photos in
+view**) to request photos. **All photos in view** expands an existing selection.
+Camera changes clear the photo selection and return to the click prompt.
+
+Retain the map canvas and previous markers while a camera query is pending.
+Those markers cannot be selected until their viewport membership is current;
+filter or catalog revision changes hide prior-scope markers. Marker selection
+and filmstrip paging do not refetch clusters. No-location browsing and the
+unavailable-graphics photo-list alternative remain usable. Keep the 256-cluster,
+80-summary paging limits, revision checks and late-response rejection.
+
+Focused component coverage is in `src/map/MapScreen.test.tsx`. The generated
+native map scenario checks actual image containment, canvas identity across
+zooming, an empty strip before clicking and the existing navigation/source
+audits. Native place-search and metadata scenarios explicitly request photos.
+Actual outcomes and platform limitations belong in the implementation log.
+
 ## Implemented scope
 
-The Map sidebar opens an offline world overview with catalog-derived thumbnail clusters, folder/date/filename filters and a paged photo strip. Selecting a cluster restricts the strip to its exact viewport/grid membership. Show in library carries those filters and the representative selection; Return to map retains map context. Photos can use the existing native viewer and catalog annotation commands. Coordinates are read-only observations, with no manual geotagging or embedded metadata write.
+The Map sidebar opens an offline world overview with catalog-derived thumbnail clusters, folder/date/filename filters and a click-loaded paged photo strip. Selecting a cluster restricts the strip to its exact viewport/grid membership. Show in library carries those filters and the representative selection; Return to map retains map context. Photos can use the existing native viewer and catalog annotation commands. Coordinates are read-only observations, with no manual geotagging or embedded metadata write.
 
 “No usable location” includes missing, invalid and unextracted GPS. Both numeric zero coordinates are valid. Offline roots keep retained observations; map presence never proves source accessibility or integrity. Existing scans generally lack GPS because the prior ExifTool allowlist omitted it. Explicitly rescanning a generated/authorized root can acquire GPS; this increment performs no automatic rescan. The legacy Windows basic adapter did not extract GPS; ADR-0087 adds bounded EXIF/GPS in its supervised worker, with legacy observations refreshed on explicit rescan. Fresh native Windows validation remains required.
 
