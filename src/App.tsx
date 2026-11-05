@@ -52,9 +52,6 @@ function ConnectedApplication() {
   const collapsed = navigationOverride ?? preferences?.navigationCollapsed ?? false;
   const hasLibrary = Boolean(status?.roots.length);
   const jobsControl = null;
-  const navigationControl = (
-    <NavigationToggle collapsed={collapsed} onToggle={() => setNavigationOverride(!collapsed)} />
-  );
   const configuring = Boolean(selected) || (!hasLibrary && section !== 'Settings');
   return (
     <div
@@ -66,6 +63,7 @@ function ConnectedApplication() {
         version={foundation?.version}
         section={section}
         collapsed={collapsed}
+        onToggleNavigation={() => setNavigationOverride(!collapsed)}
         onNavigate={(item) => {
           setSection(item);
           setSelected(null);
@@ -84,7 +82,6 @@ function ConnectedApplication() {
             section={section}
             busy={busy}
             jobsControl={jobsControl}
-            navigationControl={navigationControl}
             onChoose={() => void chooseFolder()}
           />
         )}
@@ -107,7 +104,6 @@ function ConnectedApplication() {
               }));
               setSection('Photos');
             }}
-            navigationControl={navigationControl}
             app={app}
             settings={settings}
             jobsControl={jobsControl}
@@ -152,6 +148,7 @@ function NavigationToggle({ collapsed, onToggle }: { collapsed: boolean; onToggl
           strokeWidth="1.5"
         />
       </svg>
+      <span className="nav-label">{collapsed ? 'Expand' : 'Collapse'}</span>
     </Button>
   );
 }
@@ -183,6 +180,7 @@ function Sidebar({
   section,
   onNavigate,
   collapsed,
+  onToggleNavigation,
   jobsControl,
 }: {
   jobsControl: ReactNode;
@@ -191,13 +189,23 @@ function Sidebar({
   section: AppSection;
   onNavigate: (section: AppSection) => void;
   collapsed: boolean;
+  onToggleNavigation: () => void;
 }) {
   return (
     <aside id="app-sidebar" className="sidebar" aria-label="Stillharbour">
       <div className="brand">
         <img src={logo} alt="" width="32" height="34" />
         <span>
-          Stillharbour<small>Photo &amp; Video Library</small>
+          Stillharbour
+          {version && (
+            <>
+              {' '}
+              <span className="brand-version" aria-label="Application version">
+                {version}
+              </span>
+            </>
+          )}
+          <small>Photo &amp; Video Library</small>
         </span>
       </div>
       <nav aria-label="Main navigation">
@@ -274,12 +282,8 @@ function Sidebar({
               <span className="nav-label">{item}</span>
             </Button>
           ))}
+          <NavigationToggle collapsed={collapsed} onToggle={onToggleNavigation} />
         </nav>
-        {version && (
-          <p className="sidebar-version" aria-label="Application version">
-            Version {version}
-          </p>
-        )}
       </footer>
     </aside>
   );
@@ -372,7 +376,6 @@ function LibraryOnboarding({
 
 function SetupHeader({
   jobsControl,
-  navigationControl,
   hasLibrary,
   section,
   busy,
@@ -381,13 +384,11 @@ function SetupHeader({
   hasLibrary: boolean;
   section: AppSection;
   jobsControl: ReactNode;
-  navigationControl: ReactNode;
   busy: boolean;
   onChoose: () => void;
 }) {
   return (
     <header className="toolbar">
-      {navigationControl}
       <h1>{hasLibrary ? (section === 'Tags' ? 'Albums / Tags' : section) : 'Your library'}</h1>
       <div className="header-actions">
         {hasLibrary && (
@@ -408,7 +409,6 @@ function WorkspaceContent({
   onShowLibrary,
   onReturnToMap,
   jobsControl,
-  navigationControl,
   app,
   settings,
   section,
@@ -421,7 +421,6 @@ function WorkspaceContent({
   onShowLibrary: (query: AssetQuery, selectedId: string | null) => void;
   onReturnToMap: () => void;
   jobsControl: ReactNode;
-  navigationControl: ReactNode;
   app: ReturnType<typeof useFoundation>;
   settings: ReturnType<typeof usePreferences>;
   section: AppSection;
@@ -494,7 +493,6 @@ function WorkspaceContent({
           return value;
         }}
         jobsControl={jobsControl}
-        navigationControl={navigationControl}
         preferences={preferences}
         status={status}
         onSave={async (value) => {
@@ -517,10 +515,10 @@ function WorkspaceContent({
   if (section === 'Backup & Sync')
     return status ? (
       <BackupScreen
+        navigationControl={null}
         key={foundation?.catalogId ?? 'catalog'}
         status={status}
         catalogId={foundation?.catalogId ?? null}
-        navigationControl={navigationControl}
         jobsControl={jobsControl}
       />
     ) : null;
@@ -531,17 +529,16 @@ function WorkspaceContent({
         state={mapState}
         onState={onMapState}
         onShowLibrary={onShowLibrary}
-        navigationControl={navigationControl}
         jobsControl={jobsControl}
       />
     ) : null;
   if ((section === 'Duplicates' || section === 'Integrity' || section === 'Storage') && status)
     return (
       <InspectionScreen
+        navigationControl={null}
         key={`${foundation?.catalogId ?? 'catalog'}:${section}`}
         section={section}
         status={status}
-        navigationControl={navigationControl}
         jobsControl={jobsControl}
       />
     );
@@ -550,7 +547,6 @@ function WorkspaceContent({
     return (
       <FolderExplorer
         jobsControl={jobsControl}
-        navigationControl={navigationControl}
         status={status}
         onError={showError}
         onRefresh={refresh}
@@ -565,7 +561,6 @@ function WorkspaceContent({
         onReturnToMap={libraryLaunch ? onReturnToMap : undefined}
         catalogId={foundation?.catalogId ?? null}
         jobsControl={jobsControl}
-        navigationControl={navigationControl}
         defaults={preferences}
         status={status}
         section={section}
