@@ -753,3 +753,85 @@ M5-A12 — Repeated exports of the same source sidecar produce distinct preserve
 ## M6 dependency regressions — 2026-11-04
 
 Within AC-080's supply-chain work, `scripts/tests/dependency-policy.test.mjs` must reject escaping ZIP symlinks through the exact JavaScript extractor resolved from the Tauri service's browser helper, retaining an outside neighbor inside the generated test root. Require its pinned optional parser peer to resolve inside this checkout rather than an ancestor. Require the containment error for parent, descent-then-parent and absolute targets; an unavailable tool or generic error is insufficient. Separately exercise default/native-first dispatch and the JavaScript path with a regular generated archive, without claiming hostile native extraction is certified. Aborting glob at the first directory read must prevent descendant reads. Import the pinned utility consumer to detect ESM/removed-export incompatibility and exercise Unicode/brace/exclusion matching through the actual CommonJS archive utility with native expected path separators. Earlier before/after results and the current-main CI correction retain their separate scope in [M6 dependency evidence](M6_DEPENDENCY_HARDENING.md). These tests neither authorize browser downloads nor establish installed-package acceptance.
+
+
+## Quiet photographic studio presentation — 2026-11-05
+
+- First-run onboarding displays the approved product tagline, clear folder guidance and the real chooser. Selection remains unscanned until explicit Save & Start scanning.
+- At 1440×900 and the native 660×560 minimum, navigation, current-section state, filename search, Filter, Jobs, Catalog and Saved plans remain reachable. At the minimum, the last two use named icons and tooltips; no toolbar action clips beyond the window. Collapsed navigation retains accessible names and the anchored Settings action.
+- Sidebar groups distinguish collection destinations from library-care workflows without adding decorative headings. Map remains operable; Utilities retains its disabled reason. Navigation scrolls independently when needed.
+- Shared theme colours agree with DESIGN.md; muted text meets 4.5:1 and meaningful field/button boundaries and focus meet 3:1 against their adjacent standard surfaces. Keep textual offline/error/safety states.
+- Settings scrolls naturally to its save/discard controls; its narrow layout wraps folder actions without horizontal overflow. The Filter dialog keeps Close and persistent Apply/Reset visible at minimum size; Escape restores the opener.
+- Standard controls remain 36px and primary actions 44px; native dropdown/date semantics, visible keyboard focus and reduced-motion behavior remain. Regenerating Chakra types preserves required tag fields.
+- Photo layout, bounded loading, selection, original access and all mutation/recovery gates retain their existing acceptance requirements. Browser visual fixtures alone do not pass native Windows/macOS acceptance.
+
+Actual outcomes and artifacts are recorded in IMPLEMENTATION_LOG.md.
+
+
+## Reference-inspired timeline navigation — 2026-11-05
+
+- At ordinary and 660×560 sizes, reserve an 88px/80px timeline with legible real-year labels, bounded month dots and a ≥24px-wide vertical range hit area. The gallery remains free of horizontal overflow.
+- Hover previews a real filtered month without seeking; the actual-position grip stays in place. Year labels remain named keyboard-accessible jump buttons. Unknown dates stay separate.
+- The date readout and grip use the same inset track coordinates, including both ends; neither clips beyond the rail. Render at most 80 month markers even in a dense catalog.
+- Dragging within the current month scrolls loaded rows; an unloaded date uses the existing indexed seek on release, including release outside the rail. Escape, blur, pointercancel and lost capture cancel pending navigation.
+- Keep keyboard/Home/End, wheel forwarding, Ctrl+wheel behavior, reduced motion, exact final-period progress and current-gallery tracking after focus. No full catalog/date list or filesystem authority is added; previews retain their existing read-only access policy.
+
+See TIMELINE_NAVIGATION.md and IMPLEMENTATION_LOG.md for the reference, implementation and actual evidence.
+
+### Illustrated duplicate choices (2026-11-05)
+
+Verify labelled, keyboard-operable radio cards for all three existing match modes, two file scopes and property AND/OR logic; content algorithms remain selectable under Advanced. Exact/BLAKE3 defaults and explicit Start are preserved. Changing options alone creates no inspection. Property criteria still require at least one choice. Active jobs disable controls; errors and cancellation retain native behavior. Decorative artwork loads offline and announces no redundant alternative text. At 1440×1000, 1180×780 and 660×560, cards remain readable, focus stays visible and the scrolling page has no horizontal overflow. Verify actual native exact-content request/default scope and unchanged generated sources. Pixel results remain bounded static PNG8 manual review; properties remain candidates only. Retained-job history may remain a dropdown. See DUPLICATE_MATCH_CARDS.md and tests/desktop/duplicate-cards.e2e.mjs. Windows execution and preservation gates remain independent.
+
+### Confirmed favorite heart burst (2026-11-05)
+
+A successful catalog-backed viewer favorite plays one 800ms heart/ring/seven-pair particle burst, ending in a filled rose heart. A failed write never bursts or presents a saved favorite. Unfavorite, initial favorites and navigation do not celebrate. Ring/particle animation completion cannot clear the heart sequence early. Test ms/s duration parsing, the completion guard, hidden-window completion, interruption/repetition and Reduced Motion with no spatial animation. The accessible pressed/busy state, visible focus, 44px target and neighboring viewer tools remain usable at 1180×780 and 660×560. Real native fixture saves and independent unchanged-source verification remain separate from browser/component animation checks. See ORIGINAL_IMAGE_VIEWING.md and tests/desktop/favorite-heart.e2e.mjs.
+
+### Reference timeline correction (2026-11-05)
+
+Verify unequal month counts occupy proportional photo-index space, with exact first/last photo endpoints and stable ordering for identical dates/Undated. Press must navigate before release; dragging must update through unloaded portions of one dense month and retain the same rail DOM node across page replacement. One active native replacement and one latest pending target bound request work. Normal scrolling and bidirectional feed changes use returned native startIndex; stale targets/filters cannot publish. Hover changes only preview; the label bottom aligns to its 72×2px underline and the selected indicator is 40×1px. Check 24px end insets/label, year-derived filler dots and the 56px hit lane at desktop/minimum size. Escape/cancel/blur stop later input without undoing earlier live selections. Maintain keyboard, Ctrl+wheel, reduced motion, explicit errors and generated-source preservation. Validate seek_index limits/filter membership and packed-v1 optional metadata with Rust/component/native regressions. See ADR-0090 and TIMELINE_NAVIGATION.md; old release-only/Escape-undo expectations no longer apply.
+
+### macOS catalog Keychain startup regression — 2026-11-05
+
+- Ordinary lookup, write, update and delete use process-level no-interaction protection plus the existing query policy, under one native mutex. Authentication-required is a typed error, never absence.
+- Healthy startup never requests authorization. A blocked catalog selector offers a single explicit Authorize/Quit action; authorization reads only the exact scoped activation item, restores no-interaction policy and reruns native selection once.
+- Cancel, denied consent and failed retry stop with all catalogs/credentials retained; no automatic loop, reenrollment or fallback catalog. In-use, stale selector and schema failures never request Keychain authorization.
+- Generated separate native launches reopen the same catalog with one executable without a new prompt. Cross-rebuild trust with stable signing and actual manual OS-dialog consent require separate evidence; an ad-hoc build cannot certify either. See KEYCHAIN_STARTUP.md and IMPLEMENTATION_LOG.md.
+
+The activation-lock regression must keep a generated unrelated Unix child
+paused before exec, close the activation owner, and successfully reopen without
+waiting for that child's CLOEXEC cleanup. An active owner before and after this
+handoff must still reject another opener. Explicit unlock applies only on final
+owned-guard drop; never delete the lockfile, force-unlock an active owner or retry
+a denied writer as a workaround.
+
+### Specific catalog queue/worker diagnostics — 2026-11-05
+
+Hold a generated catalog actor, fill all 16 waiting slots, and verify summary,
+query/update, snapshot and recovery-freeze requests fail BUSY with their operation,
+capacity and not-queued/retry details. The rejected query must never execute and
+the rejected snapshot must create no output. Stop the actual actor and verify
+all four requests fail CATALOG with not-queued/reopen guidance, not a full-queue
+message. Commit a generated catalog edit then panic before replying: report
+unconfirmed completion, retain the committed edit and exclude the panic payload
+from serialized errors. No automatic replay, queue expansion or original-file
+operation is authorized.
+
+A full recovery-freeze request specifically requires closing and reopening before
+retrying: the recovery workflow has already closed ordinary session admission.
+Other rejected requests retain the brief-wait/retry advice.
+
+### Bottom error notification acceptance — 2026-11-05
+
+- Full backend details appear in one bottom-centred portal toast without shifting
+  the workspace or duplicating the message in the library failure state.
+- Unchanged polling errors retain one notification; a changed message replaces
+  it. It remains after two minutes and disappears on dismissal, error clearance
+  or session unmount. Reconnect invokes the existing explicit reconnect path.
+- Focus stays with the current control. Dismiss has an accessible name; a focused
+  toast supports Escape. Long text wraps, can be copied and can be scrolled.
+- The error toast remains visible/in bounds at 1180×780 and 660×560. Its appearance
+  has no animation, including Reduced Motion. No remote assets or dependency are
+  added. Contextual validation/recovery/job states keep their existing semantics.
+- Native presentation testing may use the existing desktop-test picker interceptor
+  to inject a labelled generated error. Such a screenshot is a notification test,
+  not evidence of actual native catalog saturation or a personal-library failure.

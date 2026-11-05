@@ -69,3 +69,27 @@ If work is interrupted, keep sources, staged outputs, history, catalog and repos
 Map uses a bundled offline world overview with attribution, plus local city/country lookup. Street-level online tiles and online geocoding are unavailable. Missing GPS is separate from valid zero coordinates. The photo list works without graphics. Existing scans may need an explicitly requested rescan to acquire previously unextracted GPS; a preview does not silently rescan. No online map provider is configured.
 
 The tested primary paths are Apple Silicon macOS and bounded Windows local NTFS, with exact format/OS evidence in [format support](FORMAT_SUPPORT.md) and [M5 closeout](M5_CLOSEOUT.md). Configured minimum macOS, Intel builds, network-root behavior, untested cameras/color/HDR, cloud imports, basic editing and mobile are not implied supported capabilities. Updates remain disabled pending signature-verification acceptance. Keyboard/focus evidence and a bounded owner VoiceOver review exist; full-app VoiceOver/NVDA, high-DPI and reduced-motion acceptance remain M6 work.
+
+If macOS Keychain blocks catalog startup, Stillharbour offers **Authorize** for one OS permission request. This needs your Mac login password if macOS asks, not your backup repository password; Stillharbour does not receive it. Choose **Always Allow** only for a build you trust. Unlock a locked login keychain in Keychain Access before retrying. Development rebuilds may require authorization again because their signing identity changes. Failed authorization leaves the existing catalogs retained. Do not delete Keychain items or reset the catalog to get past the error. See [Keychain startup](KEYCHAIN_STARTUP.md) for troubleshooting and signing limits.
+
+Catalog errors now identify the failed operation and the stage:
+
+- **Request queue is full (16 waiting requests):** this request was not queued.
+  Wait briefly, then try again. If the failed operation is catalog recovery,
+  close and reopen Stillharbour before trying again.
+- **Catalog database worker has stopped:** this request was not queued. Close
+  and reopen Stillharbour.
+- **Completion could not be confirmed:** the request was queued, but its reply
+  was lost. Close and reopen Stillharbour and check the result before repeating
+  the action; a change may already have been saved.
+
+These messages are separate from Keychain authorization. They do not diagnose
+catalog damage or disk capacity. Repeated failures need investigation; richer
+messages alone do not resolve the cause of a busy/stopped worker.
+
+Global request errors now appear at the bottom of the window. The notification
+keeps the full details until you dismiss it with **Dismiss error**, or focus it
+and press Escape. Reconnect remains available for an unavailable desktop
+connection. A failed library read keeps **Retry library** in the workspace.
+Notifications never retry an operation automatically. Form validation and
+blocking recovery/job outcomes remain beside their related controls.

@@ -30,14 +30,27 @@ export function PhotoCollection({
 }) {
   const { query, page, loading, feed } = c;
   const { ids: selected, frozen, busy: batchBusy } = c.selection;
-  const [visibleDate, setVisibleDate] = useState({ date: '', scrolling: false, progress: 0 });
-  const onVisibleDate = useCallback((date: string, scrolling: boolean, progress: number) => {
-    setVisibleDate((previous) =>
-      previous.date === date && previous.scrolling === scrolling && previous.progress === progress
-        ? previous
-        : { date, scrolling, progress },
-    );
-  }, []);
+  const [visibleDate, setVisibleDate] = useState({
+    date: '',
+    scrolling: false,
+    progress: 0,
+    index: 0,
+    id: '',
+  });
+  const onVisibleDate = useCallback(
+    (date: string, scrolling: boolean, progress: number, index = 0, id = '') => {
+      setVisibleDate((previous) =>
+        previous.date === date &&
+        previous.scrolling === scrolling &&
+        previous.progress === progress &&
+        previous.index === index &&
+        previous.id === id
+          ? previous
+          : { date, scrolling, progress, index, id },
+      );
+    },
+    [],
+  );
   function scrollTimeline(delta: number, mode: number) {
     viewportHandle.current?.scrollBy(delta, mode);
   }
@@ -56,6 +69,7 @@ export function PhotoCollection({
             onNearStart={feed.hasBefore ? feed.previous : undefined}
             onNearEnd={feed.hasAfter ? feed.next : undefined}
             assets={page.assets}
+            startIndex={page.startIndex ?? 0}
             mode={mode}
             selected={selected}
             selectionFrozen={frozen || batchBusy}
@@ -69,6 +83,17 @@ export function PhotoCollection({
               c.buckets.length && ['capture', 'added'].includes(query.sort) ? (
                 <CollectionTimeline
                   controller={c}
+                  pageKey={feed.key}
+                  index={
+                    page.assets.some((asset) => asset.id === visibleDate.id)
+                      ? visibleDate.index
+                      : (page.startIndex ?? 0)
+                  }
+                  onIndex={(index) => {
+                    if (viewportHandle.current?.scrollToIndex(index)) return true;
+                    c.jumpIndex(index);
+                    return false;
+                  }}
                   onScroll={scrollTimeline}
                   progress={visibleDate.progress}
                   onPosition={(period, progress) =>
@@ -191,6 +216,9 @@ function CollectionEmpty({
 }
 function CollectionTimeline({
   controller: c,
+  pageKey,
+  index,
+  onIndex,
   date,
   scrolling,
   onScroll,
@@ -198,6 +226,9 @@ function CollectionTimeline({
   onPosition,
 }: {
   controller: LibraryController;
+  pageKey: string;
+  index: number;
+  onIndex: (index: number) => boolean;
   date: string;
   scrolling: boolean;
   onScroll: (delta: number, mode: number) => void;
@@ -207,6 +238,9 @@ function CollectionTimeline({
   if (!['capture', 'added'].includes(c.query.sort) || !c.buckets.length) return null;
   return (
     <DateTimeline
+      pageKey={pageKey}
+      index={index}
+      onIndex={onIndex}
       progress={progress}
       onPosition={onPosition}
       buckets={c.buckets}

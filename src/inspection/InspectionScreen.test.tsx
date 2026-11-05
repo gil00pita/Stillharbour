@@ -106,3 +106,76 @@ it('blocks an offline root and renders native failures without fake results', as
   expect(screen.getByRole('button', { name: 'Start storage inspection' })).toBeDisabled();
   expect(await screen.findByRole('alert')).toHaveTextContent('Catalog unavailable');
 });
+
+it('uses illustrated radio choices without starting an inspection until explicit approval', async () => {
+  setup('Duplicates');
+  const exact = screen.getByRole('radio', { name: 'Identical file contents' });
+  expect(exact).toBeChecked();
+  expect(screen.getByRole('radiogroup', { name: 'Match mode' })).toBeVisible();
+  expect(screen.queryByRole('combobox', { name: 'Match mode' })).not.toBeInTheDocument();
+  expect(document.querySelectorAll('.duplicate-match-options img')).toHaveLength(3);
+  fireEvent.click(screen.getByRole('radio', { name: 'Matching file properties' }));
+  expect(screen.getByRole('radio', { name: 'Matching file properties' })).toBeChecked();
+  expect(exact).not.toBeChecked();
+  expect(await screen.findByRole('group', { name: 'Advanced candidate rules' })).toBeVisible();
+  fireEvent.click(screen.getByRole('radio', { name: 'Any selected criterion' }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('radio', { name: 'Any selected criterion' }).closest('label'),
+    ).toHaveAttribute('data-state', 'checked'),
+  );
+  fireEvent.click(screen.getByRole('radio', { name: 'All eligible files' }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('radio', { name: 'All eligible files' }).closest('label'),
+    ).toHaveAttribute('data-state', 'checked'),
+  );
+  fireEvent.click(screen.getByText('Advanced matching options'));
+  fireEvent.click(screen.getByRole('radio', { name: 'Direct bytes' }));
+  expect(libraryData).not.toHaveBeenCalledWith(
+    expect.objectContaining({ kind: 'inspection_start' }),
+    expect.anything(),
+  );
+  await waitFor(() =>
+    expect(screen.getByRole('radio', { name: 'Direct bytes' }).closest('label')).toHaveAttribute(
+      'data-state',
+      'checked',
+    ),
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Start duplicate inspection' }));
+  await screen.findByText('Reading generated scope');
+  expect(libraryData).toHaveBeenCalledWith(
+    {
+      kind: 'inspection_start',
+      input: {
+        rootIds: ['root'],
+        scope: 'all_eligible_files',
+        task: {
+          kind: 'duplicates',
+          options: expect.objectContaining({
+            mode: 'properties',
+            algorithm: 'direct_bytes',
+            rules: expect.objectContaining({ logic: 'any', filename: true }),
+          }),
+        },
+      },
+    },
+    'inspection_job',
+  );
+  expect(screen.getByRole('radio', { name: 'Identical file contents' })).toBeDisabled();
+  expect(screen.getByRole('radio', { name: 'All eligible files' })).toBeDisabled();
+  expect(screen.getByRole('radio', { name: 'Direct bytes' })).toBeDisabled();
+});
+
+it('preserves PNG-only manual review and blocks empty property rules with card selection', async () => {
+  setup('Duplicates');
+  fireEvent.click(screen.getByRole('radio', { name: 'Static PNG8 pixels' }));
+  expect(screen.getByText('Manual review only')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Start duplicate inspection' })).toBeEnabled();
+  fireEvent.click(screen.getByRole('radio', { name: 'Matching file properties' }));
+  fireEvent.click(await screen.findByRole('checkbox', { name: 'Base filename' }));
+  expect(screen.getByRole('button', { name: 'Start duplicate inspection' })).toBeDisabled();
+  expect(screen.getByText('Choose at least one property criterion.')).toBeVisible();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Logical size' }));
+  expect(screen.getByRole('button', { name: 'Start duplicate inspection' })).toBeEnabled();
+});

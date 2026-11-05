@@ -460,6 +460,10 @@ impl Library {
         result
     }
 
+    pub fn seek_index(&self, query: AssetQuery, index: u32, limit: u32) -> Result<AssetPage> {
+        store::seek_index(&self.catalog, query, index, limit)
+    }
+
     pub fn seek_asset(
         &self,
         query: AssetQuery,

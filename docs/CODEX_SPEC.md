@@ -18,6 +18,10 @@ Read AGENTS.md and docs/PRESERVATION_CONTRACT.md before implementation. Read doc
 
 ## 1. Product outcome and boundaries
 
+Owner timeline refinement (2026-11-05): adapt the supplied Google Photos-style vertical-navigation reference into the existing indexed photo timeline, with real month dots, readable year labels, a wider drag target and aligned floating date preview. Preserve filtered catalog seeks, bounded pages, keyboard/wheel behavior, cancellation and exact endpoints. See [timeline navigation](TIMELINE_NAVIGATION.md); no new dependency or original-file authority is required.
+
+Owner-approved visual refinement (2026-11-05): use the quiet photographic studio direction: warm charcoal surfaces, warm white native system typography, restrained sage, grouped sidebar navigation, a clearer photo-toolbar hierarchy and more deliberate Settings spacing. Retain the unchanged owner mark, existing workflows and safety states. Catalog/Saved plans remain accessible as named icon controls at narrow desktop sizes. See [interface polish](INTERFACE_POLISH.md) and DESIGN.md for exact presentation values; this changes no backend, original-file authority or milestone gate.
+
 Owner-approved Settings presentation refinement (2026-11-02): preserve the existing brand and section order; align defaults actions, separate import controls by 12px, retain at least 13px browsing-control text at narrow widths, and explain unavailable import preferences visibly and accessibly. Use plain folder-reconnection and import guidance without changing approval or preservation requirements.
 
 Build Stillharbour, a local-first photo organizer that lets a person understand, organize, verify, and back up their real photo folders without surrendering control of those folders. The application combines a chronological photo browser, a folder organizer with dry-run previews, a duplicate review tool, a storage analyzer, a map browser, and recoverable backups.
@@ -836,7 +840,7 @@ Fix the original-format gate rejecting otherwise viewable HEIC images. Extend th
 
 ### Owner-approved restrained interface polish — 2026-10-30
 
-Apply [INTERFACE_POLISH.md](INTERFACE_POLISH.md) across the existing app: consistent 36px standard native fields/selects, 44px primary/viewer controls, readable system typography, neutral secondary actions and ordinary spacing. Keep the original logo, graphite/sea-green identity, image layout algorithms/4px gutters and native focus/availability states. Shortened help retains preservation and validation meaning; organization rows show library names with stable IDs available for inspection and losslessly grouped byte totals. Favorites retain backend confirmation and Reduced Motion with a restrained 180ms ease-out response. This presentation change does not authorize M2 execution or waive preservation, performance or platform gates.
+Apply [INTERFACE_POLISH.md](INTERFACE_POLISH.md) across the existing app: consistent 36px standard native fields/selects, 44px primary/viewer controls, readable system typography, neutral secondary actions and ordinary spacing. Keep the original logo, graphite/sea-green identity, image layout algorithms/4px gutters and native focus/availability states. Shortened help retains preservation and validation meaning; organization rows show library names with stable IDs available for inspection and losslessly grouped byte totals. Favorites retain backend confirmation and Reduced Motion; the owner’s 2026-11-05 refinement replaces the restrained press with the 800ms heart/ring/paired-particle CSS animation documented in ORIGINAL_IMAGE_VIEWING.md. This presentation change does not authorize M2 execution or waive preservation, performance or platform gates.
 
 
 ### Owner-approved Windows local NTFS scanning — 2026-10-30
@@ -954,3 +958,45 @@ M5 Windows metadata clarification: ADR-0087 adds bounded read-only EXIF/GPS obse
 ## M5 implemented profile — 2026-11-03
 
 [M5 closeout](M5_CLOSEOUT.md) records completion of the development gate for offline geographic browsing, schema-17 catalog organization/provenance, reversible tags and reviewed portable-catalog/XMP exports into new files. Final PR #16's exact merged application tree passes both-platform Foundation/transport CI, including deterministic repeated-XMP export, native keyboard/focus and independent generated-source preservation. The earlier bounded owner VoiceOver result remains separately identified. Untested packaged format/platform combinations remain explicitly unverified as the M5 gate permits; full RAW validation, clean-machine installation, broader accessibility, M4 independent recovery/production original mutations and M6 release acceptance retain their existing requirements. No product scope or safety invariant changes. Stop before M6.
+
+Owner duplicate-controls refinement (2026-11-05): use illustrated radio cards for the existing exact-content, property-candidate and bounded static PNG8 pixel modes, plus compact radio choices for file scope and property AND/OR logic. Content algorithms and hard-link exclusion remain available under Advanced matching options. Preserve exact/BLAKE3 defaults, explicit start, typed native requests, exclusions, disabled running states and evidence restrictions. No similarity capability or original mutation is authorized. See DUPLICATE_MATCH_CARDS.md.
+
+Owner timeline correction (2026-11-05): replace the earlier equal-month/release-only interpretation with the reference's photo-ordinal scale and live selection on press/drag. Preserve filtered, bounded paging via typed read-only seek_index and optional chronological page startIndex metadata; never send the full catalog's dates to the renderer. Keep the rail mounted and coalesce replacement requests. Match the reference's horizontal selected line, underlined dark date label, year/dot spacing and idle behavior, while retaining desktop scope, keyboard/reduced-motion handling and all preservation gates. ADR-0090 and TIMELINE_NAVIGATION.md supersede the earlier timeline interaction description.
+
+### Explicit macOS catalog authorization — 2026-11-05
+
+Ordinary native credential operations must suppress implicit file-keychain and SecItem authentication UI. If catalog startup requires Keychain permission, offer one explicit native Authorize/Quit action for only the held appdata scope, then retry the unchanged safe selection once. Cancellation and failed authorization retain all catalogs and stop; they never initialize replacement authority or fall back to an empty catalog. Background jobs and unrelated catalog errors cannot prompt. Preserve service/account IDs, catalog identities and recovery checks. Ad-hoc rebuilds may need new OS consent; stable cross-build trust requires a consistent signing identity. See [Keychain startup](KEYCHAIN_STARTUP.md) and ADR-0091.
+
+Activation lock ownership must end on final native guard drop even when an
+unrelated Unix helper has transiently inherited a CLOEXEC descriptor before
+exec. Explicitly release only that owned lock; retain it while an actual catalog
+owner or worker is active. No lockfile deletion or forced active unlock is
+permitted. The generated pre-exec regression and ADR-0091 record this startup
+lifetime correction.
+
+### Catalog request errors — 2026-11-05
+
+Keep the catalog queue bounded at 16 waiting requests. Report a full queue as
+BUSY and a disconnected worker as CATALOG, with the fixed operation description
+and a clear distinction between rejection before admission and loss of an
+accepted request's reply. A rejected request was not queued; a lost reply has
+unconfirmed completion and must never imply rollback or earn automatic replay.
+Messages include appropriate retry/reopen guidance without private paths, SQL,
+metadata, secrets or panic payloads. Schema, IPC shape and execution gates stay
+unchanged.
+
+A full recovery-freeze request specifically requires closing and reopening before
+retrying: the recovery workflow has already closed ordinary session admission.
+Other rejected requests retain the brief-wait/retry advice.
+
+### Bottom application error toast — 2026-11-05
+
+Render global request and connection errors in a single persistent, dismissible
+bottom toast rather than an inline workspace banner. Preserve complete detailed
+messages, native connection Reconnect, and keyboard/focus behavior. Bound the
+notification to one message, replace changed errors, deduplicate unchanged
+polling errors and remove session-owned notifications on unmount. Do not add
+auto-retry, auto-dismiss critical details or convert a failed library read into
+an empty success. Keep contextual validation and explicit blocking recovery/job
+states in place. No native authentication dialog, backend authority or original
+operation changes follow from this presentation change.

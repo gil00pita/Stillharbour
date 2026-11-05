@@ -258,8 +258,58 @@ mod platform {
     };
     use security_framework_sys::{
         item::*,
+        keychain::SecKeychainSetUserInteractionAllowed,
         keychain_item::{SecItemAdd, SecItemCopyMatching, SecItemDelete, SecItemUpdate},
     };
+    // SecItem's query-level UI policy does not cover every file-keychain
+    // authentication path. Serialize the process-wide legacy policy too. Only
+    // the explicit native startup action may temporarily enable interaction.
+    static INTERACTION: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    struct Interaction {
+        _guard: std::sync::MutexGuard<'static, ()>,
+    }
+    impl Interaction {
+        fn enter(allowed: bool) -> Result<Self> {
+            let guard = INTERACTION.lock().map_err(|_| unavailable())?;
+            // SAFETY: changes only this process's Keychain UI policy; no item,
+            // ACL, login-keychain lock or password is changed.
+            let status = unsafe { SecKeychainSetUserInteractionAllowed(u8::from(allowed)) };
+            if status != 0 {
+                return Err(keychain_error(status));
+            }
+            Ok(Self { _guard: guard })
+        }
+    }
+    impl Drop for Interaction {
+        fn drop(&mut self) {
+            // SAFETY: the mutex remains held until after this call. Every
+            // subsequent operation also sets deny before accessing an item.
+            unsafe { SecKeychainSetUserInteractionAllowed(0) };
+        }
+    }
+    fn keychain_error(status: i32) -> AppError {
+        let message = match status {
+            -25308 | -25315 | -25293 => {
+                return AppError::new(
+                    ErrorCode::CredentialAccessRequired,
+                    "macOS Keychain needs permission for this build of Stillharbour. Unlock your login keychain if it is locked, then authorize access. Rebuilt ad-hoc development apps may need permission again; a consistently signed build retains its signing identity.",
+                );
+            }
+            -25291 => {
+                "macOS Keychain is unavailable. Sign in to your Mac and unlock your login keychain, then reopen Stillharbour."
+            }
+            -128 => {
+                "macOS Keychain authorization was canceled. Reopen Stillharbour to try again; existing credentials and catalogs are unchanged."
+            }
+            _ => {
+                "macOS Keychain could not complete the request. Existing credentials and catalogs have been retained."
+            }
+        };
+        AppError::new(
+            ErrorCode::Unsupported,
+            format!("{message} (Keychain status {status}.)"),
+        )
+    }
     // The pinned sys crate exposes UI Skip but not UI Fail. Skip deliberately
     // hides protected items as absent, which cannot certify consent revocation.
     // This SDK constant is available on all supported macOS versions.
@@ -299,6 +349,7 @@ mod platform {
         if secret.len() > MAX_SECRET + 68 {
             return Err(unavailable());
         }
+        let _interaction = Interaction::enter(false)?;
         let mut pairs = query(key);
         // SAFETY: immortal Security constant, retained by the dictionary.
         let data_key = unsafe { CFString::wrap_under_get_rule(kSecValueData) };
@@ -311,21 +362,38 @@ mod platform {
             return Ok(());
         }
         if status != -25299 {
-            return Err(unavailable());
+            return Err(keychain_error(status));
         }
         let matching = CFDictionary::from_CFType_pairs(&query(key));
         let update = CFDictionary::from_CFType_pairs(&[(data_key, data.as_CFType())]);
         // SAFETY: exact service/account query and retained bounded value; UI Fail
         // remains in the query, including for background schedule marker writes.
-        if unsafe { SecItemUpdate(matching.as_concrete_TypeRef(), update.as_concrete_TypeRef()) }
-            != 0
-        {
-            return Err(unavailable());
+        let status =
+            unsafe { SecItemUpdate(matching.as_concrete_TypeRef(), update.as_concrete_TypeRef()) };
+        if status != 0 {
+            return Err(keychain_error(status));
         }
         Ok(())
     }
     pub(super) fn get(key: &str) -> Result<Option<Zeroizing<Vec<u8>>>> {
+        let _interaction = Interaction::enter(false)?;
+        read(key, false)
+    }
+    /// Native catalog startup only, after the owner's explicit Authorize action.
+    /// One exact existing item; never an enumeration, write or ACL replacement.
+    pub(super) fn authorize(key: &str) -> Result<()> {
+        let _interaction = Interaction::enter(true)?;
+        let _value = read(key, true)?;
+        Ok(())
+    }
+    fn read(key: &str, authorize: bool) -> Result<Option<Zeroizing<Vec<u8>>>> {
         let mut pairs = query(key);
+        if authorize {
+            // SAFETY: immortal SDK constant. Omit UI Fail only for this one
+            // foreground call; ordinary reads keep both denial mechanisms.
+            let ui = unsafe { CFString::wrap_under_get_rule(kSecUseAuthenticationUI) };
+            pairs.retain(|(key, _)| key != &ui);
+        }
         // SAFETY: immortal Security constant retained by the dictionary.
         pairs.push((
             unsafe { CFString::wrap_under_get_rule(kSecReturnData) },
@@ -339,7 +407,10 @@ mod platform {
         if status == -25300 {
             return Ok(None);
         }
-        if status != 0 || raw.is_null() {
+        if status != 0 {
+            return Err(keychain_error(status));
+        }
+        if raw.is_null() {
             return Err(unavailable());
         }
         // SAFETY: successful Copy transfers one ownership reference.
@@ -351,17 +422,51 @@ mod platform {
         Ok(Some(Zeroizing::new(data.bytes().to_vec())))
     }
     pub(super) fn delete(key: &str) -> Result<()> {
+        let _interaction = Interaction::enter(false)?;
         let query = CFDictionary::from_CFType_pairs(&query(key));
         // SAFETY: exact service/account only, no wildcard or interaction fallback.
         match unsafe { SecItemDelete(query.as_concrete_TypeRef()) } {
             0 | -25300 => Ok(()),
-            _ => Err(unavailable()),
+            status => Err(keychain_error(status)),
         }
     }
 
     #[cfg(test)]
     mod tests {
         use super::*;
+        #[test]
+        fn authentication_failures_are_not_missing_items_or_reenrollment_requests() {
+            for status in [-25308, -25315, -25293] {
+                let error = keychain_error(status);
+                assert_eq!(error.code, ErrorCode::CredentialAccessRequired);
+                assert!(error.message.contains("permission"));
+                assert!(!error.message.contains("setup again"));
+            }
+            for status in [-25291, -128, -34018, -25294] {
+                let error = keychain_error(status);
+                assert_eq!(error.code, ErrorCode::Unsupported);
+                assert!(error.message.contains(&status.to_string()));
+            }
+        }
+        #[test]
+        fn file_keychain_access_disables_implicit_password_dialogs() {
+            let key = format!("generated-no-prompt-probe/{}", uuid::Uuid::new_v4());
+            assert!(get(&key).unwrap().is_none());
+            let mut allowed = 1;
+            // SAFETY: valid Boolean output; reads only this process's UI policy.
+            assert_eq!(
+                unsafe {
+                    security_framework_sys::keychain::SecKeychainGetUserInteractionAllowed(
+                        &mut allowed,
+                    )
+                },
+                0
+            );
+            assert_eq!(
+                allowed, 0,
+                "file-based Keychain must not prompt during catalog startup or polling"
+            );
+        }
         #[test]
         fn every_keychain_operation_uses_fail_instead_of_hiding_authenticated_items() {
             let pairs = query("generated-nonpersistent-query-test");
