@@ -19,6 +19,7 @@ const harness = () => (window as Window & { __stillharbourPerf?: Harness }).__st
 afterEach(() => {
   harness()?.stop();
   delete (window as Window & { __stillharbourPerf?: Harness }).__stillharbourPerf;
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
 it('stays off and exposes no harness in ordinary builds', () => {
@@ -29,25 +30,40 @@ it('stays off and exposes no harness in ordinary builds', () => {
 });
 it('requires explicit opt-in, drops at the cap and records numeric sizes without private contents', () => {
   vi.stubEnv('MODE', 'desktop-test');
+  const clock = vi.spyOn(performance, 'now').mockReturnValue(1000);
   installDiagnostics();
   expect(diagnosticClock()).toBeUndefined();
   harness()!.start();
-  diagnosticPayload('ipc_request_bytes', {
+  // A valid elapsed time can contain a GPS substring. Keep that collision
+  // deterministic and verify the permitted structure rather than serialized text.
+  clock.mockReturnValue(1051.125);
+  const payload = {
     path: '/private/photo.jpg',
     gps: '51.1,0.2',
     credential: 'secret',
-  });
+  };
+  diagnosticPayload('ipc_request_bytes', payload);
   diagnosticValue('layout_ms', Number.NaN);
   diagnosticValue('layout_ms', -1);
   diagnosticValue('/private/photo.jpg' as never, 4);
   for (let index = 0; index < 5000; index++) diagnosticValue('layout_ms', 1);
   const trace = harness()!.read();
   expect(trace.events).toHaveLength(trace.capacity);
-  expect(trace.dropped).toBeGreaterThan(0);
-  const encoded = JSON.stringify(trace);
-  expect(encoded).not.toContain('/private');
-  expect(encoded).not.toContain('secret');
-  expect(encoded).not.toContain('51.1');
+  expect(trace.dropped).toBe(5001 - trace.capacity);
+  expect(Object.keys(trace).sort()).toEqual(['capacity', 'dropped', 'events']);
+  expect(new Set(trace.events.map((event) => Object.keys(event).sort().join(',')))).toEqual(
+    new Set(['metric,tMs,value']),
+  );
+  expect(trace.events[0]).toEqual({
+    metric: 'ipc_request_bytes',
+    value: new TextEncoder().encode(JSON.stringify(payload)).byteLength,
+    tMs: 51.125,
+  });
+  expect(new Set(trace.events.slice(1).map((event) => event.metric))).toEqual(
+    new Set(['layout_ms']),
+  );
+  expect(new Set(trace.events.slice(1).map((event) => event.value))).toEqual(new Set([1]));
+  expect(new Set(trace.events.map((event) => event.tMs))).toEqual(new Set([51.125]));
   harness()!.stop();
   expect(diagnosticClock()).toBeUndefined();
 });

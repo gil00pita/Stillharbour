@@ -35,6 +35,16 @@ Logs: `cargo-audit-install.log`, `cargo-audit.json`, `cargo-audit.stderr`, `carg
 
 ## Validation boundary
 
+### Current-main CI portability correction — 2026-11-04
+
+Foundation run 41869615079 at `a7c9af1` fails the dependency ZIP test on both macOS and Windows, plus the native-path expectation on Windows. This supersedes any inference that the earlier local pass established these test assumptions on every host. The resolved browser helper's `unpackArchive` prefers native `tar.exe`/PowerShell/`unzip` before its JavaScript fallback; the symlink containment logic inspected during remediation belongs to exported `extractZipWithYauzl`. A native extractor successfully returning is not evidence that the JavaScript check failed, or that arbitrary native extraction is contained.
+
+The regression now invokes that exact resolved JavaScript implementation and requires its specific nested containment error for parent escape, descent-then-parent escape and absolute targets. Missing optional tools or unrelated filesystem errors cannot satisfy it. Both default and JavaScript paths separately extract an ordinary generated ZIP, checking exact bytes and an unchanged generated neighbor. This benign default-path test grants no hostile-archive/native-extractor safety claim. Automatic native driver downloads remain disabled; no bespoke extractor, dependency change, advisory ignore or production authority is added.
+
+The archive utility returns native separators. Its expected file uses `path.join`, retaining the comparison with the installed glob and the same Unicode/exclusion/brace assertions. No execution path is normalized or assertions skipped. All ten release/dependency Node cases pass locally on Windows after reproducing both failures. Fresh full checks and actual remote platform outcomes are recorded in the implementation log.
+
+The first draft-PR run, 41896607946 at `ee77709`, then exposes the missing optional `yauzl` peer on the clean Windows runner. The nested local worktree had resolved it from its preserved ancestor checkout. Keep that failure: it is not a successful containment rejection. Pin test-only `yauzl 3.4.0`, which satisfies the browser helper's declared peer range, plus its locked `pend 1.2.0` dependency (both MIT). Registry integrity matches the committed lock. A new regression requires that the actual consumer resolve version 3.4.0 inside this checkout's node_modules. A clean `npm ci --ignore-scripts` and all eleven Node cases pass; every one of the 183 production package records and root production pins compare exactly unchanged. No framework/helper/Cargo change, implicit download, audit ignore or runtime permission is added. Fresh npm audit reports zero findings.
+
 Full checks and expanded native preservation/desktop validation are recorded below. Prior M6's 22-case Foundation smoke and two selected opt-ins remain historical results on their earlier lock. Current Windows, signing, clean-machine, whole-app screen-reader and complete performance/preservation acceptance remain open. No release certification follows from fixing these dependency paths.
 
 ## Current standard and native preservation results

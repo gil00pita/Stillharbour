@@ -34,6 +34,7 @@
     "fixtures:smoke": "node scripts/cargo.mjs run -p stillharbour-core --features fixture-probes --example foundation_probe",
     "media:smoke": "node scripts/media-smoke.mjs",
     "release:check": "node scripts/release-check.mjs",
+    "release:smoke": "node scripts/release-smoke.mjs",
     "native:cross-volume": "node scripts/cross-volume.mjs",
     "perf:catalog:build": "node scripts/cargo.mjs build --locked --release -p stillharbour-core --features fixture-probes --example performance_probe",
     "perf:catalog": "python3 scripts/performance/run.py",
@@ -80,7 +81,8 @@
     "prettier": "3.9.10",
     "typescript": "6.0.3",
     "typescript-eslint": "8.72.1",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "yauzl": "3.4.0"
   },
   "allowScripts": {
     "edgedriver@6.3.1": true,
