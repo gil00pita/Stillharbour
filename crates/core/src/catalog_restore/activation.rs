@@ -149,11 +149,26 @@ fn binding(path: &Path) -> Result<CurrentCatalogBinding> {
 pub struct ActivationStore {
     path: PathBuf,
     chain: DirectoryChain,
-    lock: File,
+    lock: ActivationLock,
     lock_identity: FileIdentity,
     scope: String,
     restores: bridge::Root,
     transaction: Mutex<()>,
+}
+struct ActivationLock(File);
+impl std::ops::Deref for ActivationLock {
+    type Target = File;
+    fn deref(&self) -> &File {
+        &self.0
+    }
+}
+impl Drop for ActivationLock {
+    fn drop(&mut self) {
+        // As for CatalogLock, close alone can retain flock in an unrelated
+        // forked helper until exec closes its inherited CLOEXEC descriptor.
+        // Release only this owner's lock on final drop, including open errors.
+        let _ = fs2::FileExt::unlock(&self.0);
+    }
 }
 /// Native-only handoff; no renderer can manufacture or deserialize this type.
 pub struct StartupSelection {
@@ -249,6 +264,7 @@ impl ActivationStore {
             )
             .caused_by(e)
         })?;
+        let lock = ActivationLock(lock);
         let parent = bridge::Root::existing(
             appdata.to_owned(),
             chain.identity().clone(),
@@ -559,6 +575,14 @@ impl ActivationStore {
             activated = true;
         }
         self.active(&value, activated)
+    }
+    /// Native startup shell only after explicit permission. The held lifetime
+    /// lock binds this to the same appdata identity and exact existing OS item.
+    /// No authority, descriptor, catalog, ACL or root approval is rewritten.
+    pub fn authorize_startup_access(&self) -> Result<()> {
+        let _guard = self.transaction.lock().map_err(|_| blocked())?;
+        self.revalidate()?;
+        authority::authorize(&self.scope)
     }
     pub fn confirm_initialized(&self, selection: &StartupSelection) -> Result<()> {
         let _guard = self.transaction.lock().map_err(|_| blocked())?;

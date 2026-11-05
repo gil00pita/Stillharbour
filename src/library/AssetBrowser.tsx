@@ -31,6 +31,7 @@ export type PhotoViewportHandle = {
   remember: (followTop?: boolean) => void;
   scrollBy: (delta: number, mode: number) => void;
   scrollToPeriod: (period: string, progress: number) => boolean;
+  scrollToIndex: (index: number) => boolean;
 };
 
 interface AssetBrowserProps {
@@ -40,6 +41,7 @@ interface AssetBrowserProps {
   onNearEnd?: (() => void) | undefined;
   pagingPaused?: boolean;
   assets: AssetSummary[];
+  startIndex?: number;
   mode: ViewMode;
   selected: ReadonlySet<string>;
   selectionFrozen: boolean;
@@ -48,7 +50,13 @@ interface AssetBrowserProps {
   onInspect: (id: string, opener: HTMLButtonElement) => void;
   onMode?: (mode: ViewMode) => void;
   onError: (error: unknown) => void;
-  onVisibleDate: (date: string, scrolling: boolean, progress: number) => void;
+  onVisibleDate: (
+    date: string,
+    scrolling: boolean,
+    progress: number,
+    index?: number,
+    id?: string,
+  ) => void;
   pageKey: string;
   onSelectGroup?: (ids: string[]) => void;
   onClearSelection?: () => void;
@@ -69,6 +77,7 @@ export function AssetBrowser({
   onNearEnd,
   pagingPaused = false,
   assets,
+  startIndex = 0,
   mode,
   selected,
   selectionFrozen,
@@ -102,9 +111,11 @@ export function AssetBrowser({
     remember,
     scrollToAsset,
     scrollToPeriod,
+    scrollToIndex,
     isRestorationScroll,
   } = usePhotoViewport({
     assets,
+    startIndex,
     mode,
     target,
     grouping,
@@ -137,6 +148,7 @@ export function AssetBrowser({
     viewportHandle,
     () => ({
       remember,
+      scrollToIndex,
       scrollToPeriod: (period, progress) => {
         const found = scrollToPeriod(period, progress);
         if (found && !pagingPaused && progress === 0) onNearStart?.();
@@ -151,7 +163,7 @@ export function AssetBrowser({
         element.scrollBy({ top: distance, behavior: 'instant' });
       },
     }),
-    [remember, viewport, scrollToPeriod, pagingPaused, onNearStart],
+    [remember, viewport, scrollToIndex, scrollToPeriod, pagingPaused, onNearStart],
   );
   function endEdge() {
     const element = viewport.current;

@@ -53,9 +53,9 @@ export async function reviewCatalogMetadata(directory) {
       ),
     };
   });
-  assert.equal(theme.canvas, '#16191b');
+  assert.equal(theme.canvas, '#191b19');
   assert.equal(theme.button.fontSize, '13px');
-  assert.equal(theme.input.background, 'rgb(22, 26, 28)');
+  assert.equal(theme.input.background, 'rgb(23, 26, 23)');
   assert.equal(theme.input.minHeight, '36px');
   assert.equal(theme.selectHasArrow, true);
   const setField = async (label, value) => {

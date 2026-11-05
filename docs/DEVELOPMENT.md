@@ -703,3 +703,80 @@ Managed-destination native tests must wait for the generated policy option and t
 `npm run test:release` now includes four locked-dependency safety/compatibility cases alongside the five production-preflight cases. Generated ZIP symlink and traversal-cancellation cases fail against the prior lock and pass with exact glob/minimatch/browser-helper overrides. The browser helper resolves through the Tauri service's actual utility dependency; tests also import that consumer and exercise CommonJS archive matching. No browser/driver download, server or photo library is needed for these Node tests. Run `npm ci --ignore-scripts`, `npm run check`, current native tests and production resource preflight; the full npm audit must be rechecked after lock changes. See [ADR-0088](decisions/ADR-0088-development-dependency-advisory-remediation.md) and [M6 evidence](M6_DEPENDENCY_HARDENING.md) for version, license and platform qualifications.
 
 The evidence document gives the exact isolated `cargo-audit 0.22.2` install/run commands. This developer tool and its RustSec checkout live under `.context/` and are not bundled or application dependencies. Keep the database commit and informational warnings with the report; do not turn a zero vulnerability count into a universal safety or native-platform claim.
+
+## Studio interface refinement — 2026-11-05
+
+The visual authority remains DESIGN.md, with the latest studio values taking precedence over historical captures. Shared surfaces live in src/theme/system.ts and src/styles.css; the existing App sidebar and LibraryHeader own their semantic groups and responsive toolbar actions. Regenerate the custom Chakra types after theme changes with `npx --yes @chakra-ui/cli@3.37.0 typegen ./src/theme/system.ts`, then run `npm run typecheck`, `npm run lint`, `npm test` and `npm run build`. The theme explicitly includes the pinned default Field slot recipe; omitting it from a custom base system removes Field recipe typing during generation.
+
+For native checks, prepare the existing pinned helpers with `node scripts/backup-helpers.mjs --download` before `npm run rust:check` and `npm run desktop:test:build`, then `npm run desktop:test` sequentially. Keep TLS and checksum verification enabled; a missing helper or local trust-store error is a failed prerequisite, not a native pass. Browser visual checks may use an isolated ignored .context configuration and generated catalog responses; never point them at a personal library or ship their adapters/media. See INTERFACE_POLISH.md and the implementation log for observed results.
+
+Avoid rebuilding the same target/debug executable from a development run while native automation is using it. The studio validation retained a hash-matched desktop-test artifact under a separate ignored executable name and used a local WDIO configuration pointing to that exact binary. Its commands/receipts are evidence for that local run, not committed test infrastructure or authorization to open a personal catalog.
+
+## Timeline navigation refinement — 2026-11-05
+
+DateTimeline remains the UI adapter for filtered DateBucket data; timeline.ts owns pure real-month marker sampling. Source/acceptance details are in TIMELINE_NAVIGATION.md. Focused regressions: `npm test -- --run src/library/DateTimeline.test.tsx src/library/timeline.test.tsx`. Native foundation tests retain actual wheel/drag/year-seek/endpoints and add hit/marker/coordinate checks. When desktop-dev is running, build native test output with `CARGO_TARGET_DIR="$PWD/.context/timeline-native/target" npm run desktop:test:build` and point the local test configuration at that directory's instrumented executable. Do not overwrite or test through an independently rebuilt development binary. Local ignored configs are diagnostic artifacts; the committed default native configuration is unchanged.
+
+### Duplicate matching card validation (2026-11-05)
+
+The illustrated controls, generated bundled assets and unchanged inspection boundaries are documented in [DUPLICATE_MATCH_CARDS.md](DUPLICATE_MATCH_CARDS.md). Run `npx vitest run src/inspection/InspectionScreen.test.tsx` for selection/payload/disabled-state regressions. After `npm run desktop:test:build`, run `npm run desktop:test -- --spec tests/desktop/duplicate-cards.e2e.mjs` for the disposable native fixture flow. When a user development executable is active, build into an absolute `CARGO_TARGET_DIR` ending in `/target` under the root ignored `.context`, and use an ignored WDIO config selecting that executable plus an unused `TAURI_WEBDRIVER_PORT`; do not overwrite or stop the independent dev app. The card test verifies three viewport sizes, card selection, an actual read-only job and unchanged generated originals. Theme changes require the pinned Chakra CLI typegen before strict type checking: `npx --yes @chakra-ui/cli@3.37.0 typegen ./src/theme/system.ts`. No new runtime dependency is needed.
+
+### Favorite heart motion (2026-11-05)
+
+See [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) for the owner-requested CSS heart/ring/particle sequence. Focused regressions: `npx vitest run src/library/FavoriteHeart.test.tsx src/library/PhotoViewer.test.tsx src/library/OriginalPhoto.test.tsx`. After an instrumented build, run `npm run desktop:test -- --spec tests/desktop/favorite-heart.e2e.mjs`; use the isolated target/port procedure above when a separate dev app is active. Browser visual QA should inspect in-flight layers, repeat clicks, keyboard activation and emulated Reduced Motion. Never toggle favorites on a personal catalog as a development fixture.
+
+### Importing offline search into the studio UI (2026-11-05)
+
+Commit `9837ae6` is integrated with the quiet studio toolbar, timeline, illustrated duplicate choices and favorite animation. The shared theme registers Field, RadioCard and Places Popover recipes together, retaining the search tokens and studio palette/control radius. The toolbar keeps its search glyph, date-search label/title, Places picker and compact secondary actions. `src/library/LibraryHeader.test.tsx` checks the combined search label/availability and disabled state alongside the existing action callbacks. Regenerate Chakra types after recipe integration, run the repository checks, and validate native place search at desktop/minimum widths using the isolated target procedure above. The source commit’s data/format/performance and release limits remain in PLACE_SEARCH.md.
+
+### Reference-aligned live timeline (2026-11-05)
+
+ADR-0090 replaces the previous release-only, equal-month adapter. Focused checks: `npx vitest run src/library/DateTimeline.test.tsx src/library/timeline.test.tsx src/library/useAssetFeed.test.tsx src/library/AssetBrowser.test.tsx src/pageTransport.test.tsx`; `node scripts/cargo.mjs test --locked -p stillharbour-core --lib timeline_tests`. Regenerate bindings after seek_index/startIndex contract changes. After the isolated instrumented build, run `npm run desktop:test -- --spec tests/desktop/timeline-navigation.e2e.mjs`. Match output **bottom**/underline coordinates when checking geometry; hover preview may differ from the selected line. The upstream MIT notice ships through public/licenses. Actual results, limitations and failures remain in IMPLEMENTATION_LOG.md; this read-only navigation change grants no original-file authority.
+
+### Catalog Keychain startup — 2026-11-05
+
+[KEYCHAIN_STARTUP.md](KEYCHAIN_STARTUP.md) and ADR-0091 describe the no-prompt native adapter and single explicit startup authorization exception. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib backup::credentials` and `node scripts/cargo.mjs test --locked -p stillharbour catalog_startup`, then the standard checks and generated three-process catalog restart suite with an isolated instrumented executable. Keep real user credentials/catalogs untouched. The original process-policy regression fails before the fix (allowed 1) and passes afterward (allowed 0); it never reads a saved user item. Ad-hoc executable hashes change on rebuild, so Always Allow cannot promise trust across different builds. Tauri bundle signing configuration does not sign the ordinary `tauri dev` executable. Do not reset Keychain, relax item ACLs or remove activation authority to unblock testing.
+
+The startup repair also fixes activation-lock inheritance across unrelated Unix
+helper fork/exec. Run `node scripts/cargo.mjs test --locked -p stillharbour-core
+--lib closing_activation_releases_lock_while_an_unrelated_child_is_pre_exec`.
+This controlled generated regression initially fails CatalogInUse after owner
+closure. ActivationLock now matches the existing CatalogLock RAII unlock policy;
+a still-active owner must continue rejecting another writer. Preserve the first
+aggregate run's failure, even after the deterministic fix and final rerun pass.
+
+### Catalog queue diagnostics — 2026-11-05
+
+Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib queue_tests`
+for the real actor saturation, stopped-receiver and committed-but-lost-reply
+regressions in catalog_queue_tests.rs. catalog.rs owns the single 16-slot bound,
+submission classification and controlled operation labels. Full means BUSY;
+disconnected/reply loss means CATALOG. Keep raw SQL, paths and panic payloads out
+of IPC. This diagnostic change introduces no automatic retries or capacity
+change; a lost reply cannot certify that a write did not happen. Run the normal
+checks and generated native catalog restart smoke with an isolated executable;
+never stress a personal catalog to reproduce saturation.
+
+A full recovery-freeze request specifically requires closing and reopening before
+retrying: the recovery workflow has already closed ordinary session admission.
+Other rejected requests retain the brief-wait/retry advice.
+
+### Error toast presentation — 2026-11-05
+
+ErrorToast owns one session-scoped Chakra v3 createToaster instance and the
+colocated toast slot recipe. Its composition follows the pinned Chakra CLI
+snippet; no module-global notification store survives application unmount.
+The global App error source remains useFoundation; memoize Reconnect so normal
+status polling cannot recreate the notification. Library read failure retains
+its unavailable heading/retry action and forwards detailed messages to that
+same global source. Do not move field-validation or blocking recovery outcomes
+into this notification.
+
+Run `npx vitest run src/components/ErrorToast/ErrorToast.test.tsx src/App.test.tsx
+src/library/failures.test.tsx`, the normal frontend/format/type/binding/release
+checks and `npx react-doctor@latest --verbose --scope changed`. After theme
+changes regenerate with the pinned `@chakra-ui/cli@3.37.0 typegen
+./src/theme/system.ts`. The native `tests/desktop/error-toast.e2e.mjs` uses only
+an existing test-only picker fault interceptor, verifies both window sizes,
+deduplication/dismissal/Escape/no layout shift and saves generated captures under
+.context/error-toast. Build with an isolated target when the developer app is
+active, then restore the normal production frontend and release preflight.

@@ -11,13 +11,16 @@ import { libraryData } from '../ipc';
 import { defaultQuery, type Section } from './model';
 import { useAssetFeed } from './useAssetFeed';
 import { selectionScope, toggleSelection } from './selection';
-type BrowseState = { query: AssetQuery; period: string | null };
+type BrowseState = { query: AssetQuery; period: string | null; index: number | null };
 type BrowseAction =
-  { type: 'filter'; patch: Partial<AssetQuery> } | { type: 'period'; period: string };
+  | { type: 'filter'; patch: Partial<AssetQuery> }
+  | { type: 'period'; period: string }
+  | { type: 'index'; index: number };
 function reducer(state: BrowseState, action: BrowseAction): BrowseState {
-  return action.type === 'filter'
-    ? { query: { ...state.query, ...action.patch }, period: null }
-    : { ...state, period: action.period };
+  if (action.type === 'filter')
+    return { query: { ...state.query, ...action.patch }, period: null, index: null };
+  if (action.type === 'index') return { ...state, period: null, index: action.index };
+  return { ...state, period: action.period, index: null };
 }
 export function useLibraryController({
   initialQuery,
@@ -46,6 +49,7 @@ export function useLibraryController({
       ...initialQuery,
     },
     period: null,
+    index: null,
   });
   const [ids, setIds] = useState<ReadonlySet<string>>(
     () => new Set(initialSelectedId ? [initialSelectedId] : []),
@@ -69,7 +73,14 @@ export function useLibraryController({
     }),
     [browse.query],
   );
-  const feed = useAssetFeed(query, browse.period, status.revision, onError, onWindowChange);
+  const feed = useAssetFeed(
+    query,
+    browse.period,
+    status.revision,
+    onError,
+    onWindowChange,
+    browse.index,
+  );
   const { page, loading } = feed;
   useEffect(() => {
     let active = true;
@@ -249,6 +260,8 @@ export function useLibraryController({
     jump: (period: string) => {
       dispatch({ type: 'period', period });
     },
+    jumpIndex: (index: number) =>
+      dispatch({ type: 'index', index: Math.max(0, Math.round(index)) }),
     previous: feed.previous,
     next: feed.next,
   };

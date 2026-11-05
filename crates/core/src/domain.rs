@@ -8,6 +8,7 @@ pub enum ErrorCode {
     Catalog,
     CatalogInUse,
     CatalogSchemaNewer,
+    CredentialAccessRequired,
     Unsupported,
     Conflict,
     InvalidInput,

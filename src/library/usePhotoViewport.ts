@@ -6,6 +6,7 @@ import { PHOTO_GUTTER, photoRows, type DateGrouping, type ViewMode } from './mod
 
 export function usePhotoViewport({
   assets,
+  startIndex = 0,
   mode,
   target,
   grouping,
@@ -15,10 +16,17 @@ export function usePhotoViewport({
   hasAfter,
 }: {
   assets: AssetSummary[];
+  startIndex?: number;
   mode: ViewMode;
   target: number;
   grouping: DateGrouping;
-  onVisibleDate: (date: string, scrolling: boolean, progress: number) => void;
+  onVisibleDate: (
+    date: string,
+    scrolling: boolean,
+    progress: number,
+    index?: number,
+    id?: string,
+  ) => void;
   pageKey: string;
   hasBefore: boolean;
   hasAfter: boolean;
@@ -120,6 +128,12 @@ export function usePhotoViewport({
         tail ? (grouping === 'added' ? tail.addedAt : tail.date) : date,
         instance.isScrolling,
         progress,
+        startIndex +
+          Math.max(
+            0,
+            assets.findIndex((item) => item.id === (tail ?? asset)?.id),
+          ),
+        (tail ?? asset)?.id,
       );
     },
   });
@@ -186,6 +200,17 @@ export function usePhotoViewport({
     visibleHeight: virtualizer.scrollRect?.height ?? 0,
     isScrolling: virtualizer.isScrolling,
     remember: rememberAnchor,
+    scrollToIndex: (index: number) => {
+      const local = index - startIndex;
+      if (local < 0 || local >= assets.length) return false;
+      const row = rows.findIndex((row) =>
+        row.assets.some((asset) => asset.id === assets[local]?.id),
+      );
+      if (row < 0) return false;
+      restoredScroll.current = null;
+      virtualizer.scrollToIndex(row, { align: 'start', behavior: 'auto' });
+      return true;
+    },
     scrollToPeriod: (period: string, progress: number) => {
       const range = timelineScrollRange(
         rows,

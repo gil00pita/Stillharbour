@@ -1674,7 +1674,7 @@ async function assertPhotoScanningArt() {
   });
   assert.deepEqual(palettes, {
     light: { accent: 'rgb(55, 120, 89)', frame: 'rgb(255, 255, 255)' },
-    dark: { accent: 'rgb(182, 214, 200)', frame: 'rgb(29, 33, 35)' },
+    dark: { accent: 'rgb(193, 208, 181)', frame: 'rgb(33, 36, 32)' },
   });
 }
 async function assertFormControlsAligned(selector) {
@@ -1938,7 +1938,7 @@ describe('native read-only library', () => {
       false,
     );
     assert.equal(status.data.originalMutationsEnabled, false);
-    assert.equal(await $('h2').getText(), 'Start by selecting your Photo library folder.');
+    assert.equal(await $('h2').getText(), 'A home for the moments you keep.');
     assert.equal(await $('.empty-library-art').isExisting(), false);
     for (const [command, request] of [
       ['foundation_request', { kind: 'pick_directory', path: '/not-authorised' }],
@@ -3799,21 +3799,28 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           expectedDate,
         ),
       );
-      assert.equal(
-        await browser.execute(() => {
-          const year = document
-            .querySelector('.date-rail [aria-current="date"]')
-            .getBoundingClientRect();
-          const bubble = document.querySelector('.timeline-current').getBoundingClientRect();
-          return (
-            bubble.right <= year.left ||
-            bubble.left >= year.right ||
-            bubble.bottom <= year.top ||
-            bubble.top >= year.bottom
-          );
-        }),
-        true,
-      );
+      const timelineGeometry = await browser.execute(() => {
+        const slider = document.querySelector('.date-scrubber');
+        const bounds = slider.getBoundingClientRect();
+        const bubble = document.querySelector('.timeline-current').getBoundingClientRect();
+        const thumb = document.querySelector('.date-scrubber-track i').getBoundingClientRect();
+        const rail = document.querySelector('.date-rail').getBoundingClientRect();
+        const expected = bounds.top + (Number(slider.value) / Number(slider.max)) * bounds.height;
+        return {
+          vertical: slider.getAttribute('aria-orientation') === 'vertical',
+          hitWidth: bounds.width,
+          markerCount: document.querySelectorAll('.timeline-tick').length,
+          aligned:
+            Math.abs(bubble.bottom - expected) <= 1 &&
+            Math.abs((thumb.top + thumb.bottom) / 2 - expected) <= 1,
+          contained: thumb.top >= rail.top && thumb.bottom <= rail.bottom,
+        };
+      });
+      assert.equal(timelineGeometry.vertical, true);
+      assert.ok(timelineGeometry.hitWidth >= 24);
+      assert.ok(timelineGeometry.markerCount >= 0 && timelineGeometry.markerCount <= 80);
+      assert.equal(timelineGeometry.aligned, true);
+      assert.equal(timelineGeometry.contained, true);
       const sticky = await browser.execute(() => {
         const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
         const heading = [...document.querySelectorAll('.date-heading')].find((element) => {
@@ -4196,8 +4203,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               Boolean(header) &&
               toggleRect.top >= header.top &&
               toggleRect.bottom <= header.bottom &&
-              toggleRect.left >= sidebar.right &&
-              toggleRect.left <= sidebar.right + 8,
+              Math.abs(toggleRect.left - sidebar.right - 16) <= 1,
+            toolbarActionsFit: [...document.querySelectorAll('.photo-toolbar > button')].every(
+              (button) => {
+                const bounds = button.getBoundingClientRect();
+                return bounds.left >= sidebar.right && bounds.right <= innerWidth;
+              },
+            ),
             toggleBeforeTitle: toggle.nextElementSibling?.tagName === 'H1',
             inside: footer.top >= sidebar.top && footer.bottom <= sidebar.bottom + 1,
             jobsInHeader:
@@ -4213,6 +4225,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         });
         assert.equal(layout.toggleInHeader, true);
         assert.equal(layout.toggleAtTopEdge, true);
+        assert.equal(layout.toolbarActionsFit, true);
         assert.equal(layout.toggleBeforeTitle, true);
         assert.equal(layout.inside, true);
         assert.equal(layout.jobsInHeader, true);

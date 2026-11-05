@@ -1,6 +1,14 @@
-import { createSystem, defaultBaseConfig, defineConfig, defineRecipe } from '@chakra-ui/react';
+import {
+  createSystem,
+  defaultBaseConfig,
+  defaultConfig,
+  defineConfig,
+  defineRecipe,
+} from '@chakra-ui/react';
 import { fieldRecipe } from './recipes';
 import { placeSearchRecipe } from '../components/PlaceSearch/PlaceSearch.slot-recipe';
+import { inspectionChoiceCardsRecipe } from '../components/InspectionChoiceCards/InspectionChoiceCards.slot-recipe';
+import { errorToastRecipe } from '../components/ErrorToast/ErrorToast.slot-recipe';
 
 const focus = { outline: '2px solid', outlineColor: 'brand.focusRing', outlineOffset: '2px' };
 
@@ -22,20 +30,23 @@ export const system = createSystem(
         zIndex: { popover: { value: 1500 } },
         colors: {
           harbour: {
-            canvas: { value: '#16191b' },
-            panel: { value: '#1d2123' },
-            input: { value: '#161a1c' },
-            ink: { value: '#e7e9e8' },
-            muted: { value: '#a9b3b2' },
-            secondary: { value: '#c7cecb' },
-            border: { value: '#303638' },
-            controlBorder: { value: '#46504f' },
-            buttonBorder: { value: '#3c4643' },
-            hover: { value: '#232827' },
-            accent: { value: '#b6d6c8' },
-            accentHover: { value: '#cee5da' },
-            onAccent: { value: '#162b22' },
-            selected: { value: '#3c5147' },
+            canvas: { value: '#191b19' },
+            sidebar: { value: '#131612' },
+            toolbar: { value: '#1c1f1b' },
+            navigation: { value: '#2b3327' },
+            panel: { value: '#212420' },
+            input: { value: '#171a17' },
+            ink: { value: '#eeeee8' },
+            muted: { value: '#a9afa4' },
+            secondary: { value: '#c8ccc2' },
+            border: { value: '#323830' },
+            controlBorder: { value: '#6d7567' },
+            buttonBorder: { value: '#687161' },
+            hover: { value: '#2b3029' },
+            accent: { value: '#c1d0b5' },
+            accentHover: { value: '#d4dfcb' },
+            onAccent: { value: '#202a1b' },
+            selected: { value: '#374231' },
             danger: { value: '#f2c5b4' },
             dangerBg: { value: '#30231e' },
           },
@@ -44,11 +55,12 @@ export const system = createSystem(
           body: { value: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
           heading: { value: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' },
         },
-        radii: { control: { value: '8px' }, panel: { value: '12px' } },
+        radii: { control: { value: '6px' }, panel: { value: '12px' } },
         sizes: {
           control: { value: '36px' },
           full: { value: '100%' },
           sm: { value: '24rem' },
+          toast: { value: '34rem' },
           64: { value: '16rem' },
         },
       },
@@ -57,6 +69,9 @@ export const system = createSystem(
           bg: {
             DEFAULT: { value: '{colors.harbour.canvas}' },
             panel: { value: '{colors.harbour.panel}' },
+            sidebar: { value: '{colors.harbour.sidebar}' },
+            toolbar: { value: '{colors.harbour.toolbar}' },
+            navigation: { value: '{colors.harbour.navigation}' },
             input: { value: '{colors.harbour.input}' },
             hover: { value: '{colors.harbour.hover}' },
           },
@@ -83,6 +98,12 @@ export const system = createSystem(
           },
         },
       },
+      slotRecipes: {
+        field: defaultConfig.theme!.slotRecipes!.field!,
+        radioCard: inspectionChoiceCardsRecipe,
+        popover: placeSearchRecipe,
+        toast: errorToastRecipe,
+      },
       recipes: {
         button: defineRecipe({
           className: 'chakra-button',
@@ -90,7 +111,12 @@ export const system = createSystem(
             font: 'inherit',
             fontSize: '13px',
             lineHeight: '20px',
-            fontWeight: 400,
+            fontWeight: 500,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            flexShrink: 0,
             borderRadius: 'control',
             border: '1px solid',
             padding: '7px 12px',
@@ -107,7 +133,8 @@ export const system = createSystem(
                 bg: 'bg.panel',
                 color: 'fg',
                 borderColor: 'border.button',
-                _hover: { bg: 'bg.hover' },
+                _hover: { bg: 'bg.hover', borderColor: 'border.control' },
+                _active: { bg: 'brand.selected' },
               },
               solid: {
                 bg: 'brand.solid',
@@ -115,6 +142,7 @@ export const system = createSystem(
                 borderColor: 'transparent',
                 fontWeight: 600,
                 _hover: { bg: 'brand.hover' },
+                _active: { bg: 'brand.solid' },
               },
             },
           },
@@ -127,7 +155,6 @@ export const system = createSystem(
         },
         textarea: { ...fieldRecipe, className: 'chakra-textarea' },
       },
-      slotRecipes: { popover: placeSearchRecipe },
     },
   }),
 );

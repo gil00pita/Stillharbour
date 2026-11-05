@@ -11,6 +11,8 @@ import {
 } from './assetFeed';
 type FeedState = {
   key: string;
+  queryKey: string;
+  navigationId: number;
   revision: string;
   pages: AssetPage[];
   hasBefore: boolean;
@@ -22,10 +24,14 @@ export function useAssetFeed(
   revision: string,
   onError: (error: unknown) => void,
   onWindowChange?: (followTop?: boolean) => void,
+  index: number | null = null,
 ) {
-  const key = JSON.stringify([query, period]);
+  const queryKey = JSON.stringify(query);
+  const key = JSON.stringify([query, period, index]);
   const [state, setState] = useState<FeedState>({
     key: '',
+    queryKey: '',
+    navigationId: 0,
     revision: '',
     pages: [],
     hasBefore: false,
@@ -33,6 +39,10 @@ export function useAssetFeed(
   });
   const [busy, setBusy] = useState(false);
   const gate = useRef(false);
+  const replacements = useRef<{ running: boolean; pending: (() => Promise<void>) | null }>({
+    running: false,
+    pending: null,
+  });
   const generation = useRef(0);
   const activeKey = useRef('');
   const request = useCallback(
@@ -43,7 +53,7 @@ export function useAssetFeed(
       const tail = current.pages.at(-1)?.nextCursor;
       if (direction === 'before' && (!current.hasBefore || !first)) return;
       if (direction === 'after' && !tail) return;
-      let native: LibraryRequest = firstRequest(query, period);
+      let native: LibraryRequest = firstRequest(query, period, index);
       if (direction === 'after')
         native = { kind: 'query', query, cursor: tail ?? null, limit: FEED_PAGE_SIZE };
       if ((direction === 'before' || (direction === 'refresh' && current.hasBefore)) && first)
@@ -88,9 +98,12 @@ export function useAssetFeed(
           if (direction === 'replace' || direction === 'refresh')
             return {
               key,
+              queryKey,
+              navigationId: previous.navigationId,
               revision: observedRevision,
               pages,
-              hasBefore: direction === 'refresh' ? current.hasBefore : Boolean(period),
+              hasBefore:
+                direction === 'refresh' ? current.hasBefore : Boolean(period) || index !== null,
               error: null,
             };
           const combined =
@@ -98,6 +111,8 @@ export function useAssetFeed(
           const overflow = combined.length > FEED_WINDOW_PAGES;
           return {
             key,
+            queryKey,
+            navigationId: previous.navigationId,
             revision: observedRevision,
             pages:
               direction === 'before'
@@ -127,47 +142,69 @@ export function useAssetFeed(
         }
       }
     },
-    [key, query, period, revision, state, onError, onWindowChange],
+    [key, queryKey, query, period, index, revision, state, onError, onWindowChange],
   );
   useEffect(() => {
     activeKey.current = key;
     const token = ++generation.current;
     gate.current = true;
     setBusy(true);
-    readChain(query, firstRequest(query, period), 1)
-      .then((pages) => {
-        if (token === generation.current)
-          setState({
-            key,
-            revision: pages.at(-1)!.revision,
-            pages,
-            hasBefore: Boolean(period),
-            error: null,
-          });
-      })
-      .catch((error) => {
-        if (token === generation.current) {
-          setState({
-            key,
-            revision: '0',
-            pages: [],
-            hasBefore: false,
-            error: { direction: 'replace', message: errorMessage(error) },
-          });
-          onError(error);
+    const replace = () =>
+      readChain(query, firstRequest(query, period, index), 1)
+        .then((pages) => {
+          if (token === generation.current)
+            setState({
+              key,
+              queryKey,
+              navigationId: token,
+              revision: pages.at(-1)!.revision,
+              pages,
+              hasBefore: Boolean(period) || index !== null,
+              error: null,
+            });
+        })
+        .catch((error) => {
+          if (token === generation.current) {
+            setState({
+              key,
+              queryKey,
+              navigationId: token,
+              revision: '0',
+              pages: [],
+              hasBefore: false,
+              error: { direction: 'replace', message: errorMessage(error) },
+            });
+            onError(error);
+          }
+        })
+        .finally(() => {
+          if (token === generation.current) {
+            gate.current = false;
+            setBusy(false);
+          }
+        });
+    const scheduler = replacements.current;
+    scheduler.pending = replace;
+    async function drain() {
+      if (scheduler.running) return;
+      scheduler.running = true;
+      try {
+        while (scheduler.pending) {
+          const next = scheduler.pending;
+          scheduler.pending = null;
+          await next();
         }
-      })
-      .finally(() => {
-        if (token === generation.current) {
-          gate.current = false;
-          setBusy(false);
-        }
-      });
+      } finally {
+        scheduler.running = false;
+      }
+    }
+    void drain();
     return () => {
       generation.current = token + 1;
       gate.current = false;
+      scheduler.pending = null;
     };
-  }, [key, query, period, onError]);
+  }, [key, queryKey, query, period, index, onError]);
   useEffect(() => {
     if (
       !busy &&
@@ -179,14 +216,15 @@ export function useAssetFeed(
       void request('refresh');
   }, [busy, state, key, revision, request]);
   const matched = state.key === key;
-  const page = useMemo(() => (matched ? mergeFeed(state.pages) : null), [matched, state.pages]);
+  const retain = matched || state.queryKey === queryKey;
+  const page = useMemo(() => (retain ? mergeFeed(state.pages) : null), [retain, state.pages]);
   return {
-    key,
+    key: page ? `${state.key}:${state.navigationId}` : key,
     page,
     loading: !matched || (busy && !page),
     busy,
     error: matched ? state.error : null,
-    hasBefore: matched && state.hasBefore,
+    hasBefore: retain && state.hasBefore,
     hasAfter: Boolean(page?.nextCursor),
     next: () => void request('after'),
     previous: () => void request('before'),

@@ -11,6 +11,7 @@ vi.mock('../ipc', async (original) => ({
 const onError = vi.fn();
 function page(start: number) {
   return {
+    startIndex: start,
     assets: Array.from({ length: 240 }, (_, index) => fixtureAsset(String(start + index))),
     nextCursor: start >= 960 ? null : String(start + 240),
     total: 1200,
@@ -30,6 +31,7 @@ beforeEach(() => {
             : Number(request.asset_id),
         );
       if (request.kind === 'seek_date') return page(480);
+      if (request.kind === 'seek_index') return page(request.index);
       throw new Error('Unexpected request');
     });
 });
@@ -120,4 +122,37 @@ it('refreshes the beginning to include new files above the previous first asset'
   rerender({ revision: '2' });
   await waitFor(() => expect(result.current.page?.assets[0]?.id).toBe('1000'));
   expect(remember).toHaveBeenCalledWith(true);
+});
+
+it('keeps the rail page mounted and coalesces rapid ordinal seeks to one active and the latest pending target', async () => {
+  const { result, rerender } = renderHook(
+    ({ index }) => useAssetFeed(defaultQuery, null, '1', onError, undefined, index),
+    { initialProps: { index: null as number | null } },
+  );
+  await waitFor(() => expect(result.current.page?.startIndex).toBe(0));
+  let finish!: (value: ReturnType<typeof page>) => void;
+  vi.mocked(libraryData).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  rerender({ index: 100 });
+  expect(result.current.page?.startIndex).toBe(0);
+  const beforeKey = result.current.key;
+  rerender({ index: 200 });
+  rerender({ index: 300 });
+  expect(result.current.key).toBe(beforeKey);
+  expect(
+    vi.mocked(libraryData).mock.calls.filter(([request]) => request.kind === 'seek_index'),
+  ).toHaveLength(1);
+  await act(async () => finish(page(100)));
+  await waitFor(() => expect(result.current.page?.startIndex).toBe(300));
+  expect(
+    vi
+      .mocked(libraryData)
+      .mock.calls.filter(([request]) => request.kind === 'seek_index')
+      .map(([request]) => (request.kind === 'seek_index' ? request.index : null)),
+  ).toEqual([100, 300]);
+  expect(result.current.page?.assets).toHaveLength(240);
 });

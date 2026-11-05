@@ -15,8 +15,13 @@ use std::{
 };
 
 pub const SCHEMA_VERSION: u32 = 17;
+const CATALOG_QUEUE_CAPACITY: usize = 16;
 const APPLICATION_ID: i32 = 0x53544842; // STHB
 const INITIAL_SCHEMA: &str = "CREATE TABLE catalog_identity (singleton INTEGER PRIMARY KEY CHECK(singleton=1), uuid TEXT NOT NULL UNIQUE); CREATE TABLE job_events (sequence INTEGER PRIMARY KEY, job_id TEXT NOT NULL, state TEXT NOT NULL);";
+
+#[cfg(test)]
+#[path = "catalog_queue_tests.rs"]
+mod queue_tests;
 
 /// Build the trusted comparison schema only from compiled application SQL.
 /// Imported schema strings never become an input to migration execution.
@@ -115,6 +120,19 @@ enum Request {
     Run(CatalogWork),
     Stop,
 }
+impl Request {
+    // Fixed product descriptions only. Never derive these from SQL, paths,
+    // asset IDs, imported metadata or the contents of a queued closure.
+    fn action(&self) -> &'static str {
+        match self {
+            Self::Summary(_) => "read the catalog summary",
+            Self::Snapshot(_, _) => "create a catalog snapshot",
+            Self::FreezeForRestore(_) => "prepare catalog recovery",
+            Self::Run(_) => "run a catalog query or update",
+            Self::Stop => "stop the catalog database worker",
+        }
+    }
+}
 
 // Fields drop in declaration order: close SQLite before releasing the lifetime
 // lock, including early returns and unwinding on the actor thread.
@@ -212,7 +230,7 @@ impl Catalog {
     fn open_inner(path: PathBuf, expected: Option<ExistingCatalog>) -> Result<Self> {
         #[cfg(feature = "fixture-probes")]
         let performance_volume = crate::performance::path_volume(&path);
-        let (sender, receiver) = mpsc::sync_channel(16);
+        let (sender, receiver) = mpsc::sync_channel(CATALOG_QUEUE_CAPACITY);
         let (ready_tx, ready_rx) = mpsc::sync_channel(1);
         let worker = thread::Builder::new()
             .name("catalog".into())
@@ -264,7 +282,10 @@ impl Catalog {
                     }
                 }
             })?;
-        let native_path = ready_rx.recv().map_err(|_| stopped())??;
+        let native_path = ready_rx.recv().map_err(|_| {
+            AppError::new(ErrorCode::Catalog,
+                "The catalog database worker stopped while opening the catalog. Close and reopen Stillharbour.")
+        })??;
         Ok(Self {
             native_path,
             #[cfg(feature = "fixture-probes")]
@@ -279,7 +300,10 @@ impl Catalog {
 
     /// Native lifetime ownership only, never renderer or imported authority.
     pub fn retain_native_owner(&self, owner: std::sync::Arc<dyn Send + Sync>) -> Result<()> {
-        let mut current = self.native_owner.lock().map_err(|_| stopped())?;
+        let mut current = self.native_owner.lock().map_err(|_| {
+            AppError::new(ErrorCode::Catalog,
+                "The catalog's native ownership guard is unavailable. Close and reopen Stillharbour.")
+        })?;
         if current.is_some() {
             return Err(AppError::new(
                 ErrorCode::Conflict,
@@ -365,10 +389,35 @@ impl Catalog {
 
     pub fn summary(&self) -> Result<CatalogSummary> {
         let (reply, response) = mpsc::sync_channel(1);
-        self.sender
-            .try_send(Request::Summary(reply))
-            .map_err(|_| busy())?;
-        response.recv().map_err(|_| stopped())?
+        let action = self.submit(Request::Summary(reply))?;
+        response
+            .recv()
+            .map_err(|_| completion_unconfirmed(action))?
+    }
+
+    fn submit(&self, request: Request) -> Result<&'static str> {
+        let action = request.action();
+        let retry_advice = match &request {
+            // Recovery has already closed ordinary session admission before
+            // requesting this barrier; a rejected barrier needs a fresh session.
+            Request::FreezeForRestore(_) => "Close and reopen Stillharbour, then try again.",
+            _ => "Wait a moment, then try again.",
+        };
+        match self.sender.try_send(request) {
+            Ok(()) => Ok(action),
+            Err(mpsc::TrySendError::Full(_)) => Err(AppError::new(
+                ErrorCode::Busy,
+                format!(
+                    "Stillharbour could not {action} because the catalog request queue is full ({CATALOG_QUEUE_CAPACITY} waiting requests). This request was not queued. {retry_advice}"
+                ),
+            )),
+            Err(mpsc::TrySendError::Disconnected(_)) => Err(AppError::new(
+                ErrorCode::Catalog,
+                format!(
+                    "The catalog database worker has stopped, so it could not {action}. This request was not queued. Close and reopen Stillharbour."
+                ),
+            )),
+        }
     }
 
     /// Backend scope validation only. Never use this display-independent native
@@ -397,19 +446,19 @@ impl Catalog {
         #[cfg(feature = "fixture-probes")]
         let volume = performance::volume_alias(self.performance_volume);
         let (reply, response) = mpsc::sync_channel(1);
-        self.sender
-            .try_send(Request::Run(Box::new(move |connection, cache| {
-                performance::since(Metric::CatalogQueueWait, Endpoint::Catalog, queued, 0);
-                let _work = Span::new(Metric::CatalogWork, Endpoint::Catalog);
-                #[cfg(feature = "fixture-probes")]
-                let before = performance::catalog_counters(connection);
-                let result = work(connection, cache);
-                #[cfg(feature = "fixture-probes")]
-                performance::catalog_io(connection, before, volume);
-                let _ = reply.send(result);
-            })))
-            .map_err(|_| busy())?;
-        response.recv().map_err(|_| stopped())?
+        let action = self.submit(Request::Run(Box::new(move |connection, cache| {
+            performance::since(Metric::CatalogQueueWait, Endpoint::Catalog, queued, 0);
+            let _work = Span::new(Metric::CatalogWork, Endpoint::Catalog);
+            #[cfg(feature = "fixture-probes")]
+            let before = performance::catalog_counters(connection);
+            let result = work(connection, cache);
+            #[cfg(feature = "fixture-probes")]
+            performance::catalog_io(connection, before, volume);
+            let _ = reply.send(result);
+        })))?;
+        response
+            .recv()
+            .map_err(|_| completion_unconfirmed(action))?
     }
 
     /// Diagnostic-only bounded counter; absent from production and IPC.
@@ -421,10 +470,10 @@ impl Catalog {
     /// Backend-owned destination only; M0 does not expose catalog export through IPC.
     pub fn snapshot(&self, destination: PathBuf) -> Result<()> {
         let (reply, response) = mpsc::sync_channel(1);
-        self.sender
-            .try_send(Request::Snapshot(destination, reply))
-            .map_err(|_| busy())?;
-        response.recv().map_err(|_| stopped())?
+        let action = self.submit(Request::Snapshot(destination, reply))?;
+        response
+            .recv()
+            .map_err(|_| completion_unconfirmed(action))?
     }
 
     /// Irreversible for this actor lifetime. The native shell first closes RPC
@@ -433,10 +482,10 @@ impl Catalog {
     /// Failure recovery requires reopening the retained original catalog.
     pub fn freeze_writes_for_restore(&self) -> Result<()> {
         let (reply, response) = mpsc::sync_channel(1);
-        self.sender
-            .try_send(Request::FreezeForRestore(reply))
-            .map_err(|_| busy())?;
-        response.recv().map_err(|_| stopped())?
+        let action = self.submit(Request::FreezeForRestore(reply))?;
+        response
+            .recv()
+            .map_err(|_| completion_unconfirmed(action))?
     }
 
     pub fn schema_fingerprint(&self) -> Result<Vec<crate::catalog_restore::SchemaObject>> {
@@ -453,11 +502,13 @@ impl Drop for Catalog {
     }
 }
 
-fn busy() -> AppError {
-    AppError::new(ErrorCode::Busy, "The catalog queue is full or unavailable.")
-}
-fn stopped() -> AppError {
-    AppError::new(ErrorCode::Catalog, "The catalog worker stopped.")
+fn completion_unconfirmed(action: &str) -> AppError {
+    AppError::new(
+        ErrorCode::Catalog,
+        format!(
+            "The catalog database worker stopped before returning a result while trying to {action}. This request was queued, but its completion could not be confirmed. Close and reopen Stillharbour, then check the result before repeating the action."
+        ),
+    )
 }
 
 fn open_database(path: &Path, expected: Option<&ExistingCatalog>) -> Result<CatalogDatabase> {
