@@ -533,6 +533,10 @@ Use distinct statuses: not_checked, quick_pass, deep_pass, unsupported, inaccess
 
 ### 14.2 Size views
 
+Latest owner reference (2026-11-05): within Storage results, put search/type/camera/last-modified/minimum-size controls and removable chips above the storage overview, followed by the treemap/list workspace and inspector. Keep existing Stillharbour styling, typed native data and all safety gates. This later filters-top HTML supersedes the earlier overview-first placement.
+
+Owner-approved Storage content revision (2026-11-05): retain the current shell and styling, use a compact physical drive overview alongside a logical file-type breakdown, and provide File type / Age / Camera exploration with filters, proportional folder/file maps, list, inspector and planning-only review simulation. Native physical totals are not reconstructed from logical categories; unknown capacity/free space and partial loaded observations stay explicit. [Utilities UI](UTILITIES_UI.md#storage-content-refinement--2026-11-05) records the bounded read-only implementation and limits. The complete retained folder accounting remains accessible; no preservation or milestone gate changes.
+
 Provide a descending largest-files table with root/path, format, dimensions, logical bytes, allocated bytes when available, and health/backup states. Provide a zoomable treemap and an accessible sortable folder table. Area represents the explicitly selected size metric. A SpaceSniffer-style treemap is an interaction reference, not a code-copy request. [R09]
 
 Offer "indexed media and companions" and "all eligible files in selected roots" as separate scopes. Scanning all files for storage size does not turn the application into an audio organizer. Show excluded/unreadable/unknown space and the last scan time.

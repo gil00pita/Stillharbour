@@ -69,36 +69,10 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
   return (
     <section className="inspection-storage" aria-labelledby="storage-totals-title">
       <h2 id="storage-totals-title">Storage in this inspection</h2>
-      <dl className="inspection-metrics">
-        <div>
-          <dt>Total file size</dt>
-          <dd>{displayBytes(summary.total.logicalBytes)}</dd>
-        </div>
-        <div>
-          <dt>File size counting hard links once</dt>
-          <dd>{displayBytes(summary.total.uniqueObjectLogicalBytes)}</dd>
-        </div>
-        <div>
-          <dt>Disk allocation reported by the filesystem</dt>
-          <dd>{displayBytes(summary.total.reportedAllocatedBytes)}</dd>
-        </div>
-        <div>
-          <dt>Potential duplicate file size</dt>
-          <dd>{displayBytes(summary.potentialDuplicateLogicalBytes)}</dd>
-        </div>
-        <div>
-          <dt>Estimated disk space that could be freed</dt>
-          <dd>{displayBytes(summary.reclaimablePhysicalBytes)}</dd>
-        </div>
-      </dl>
-      <p>
-        Total file size counts each hard-linked path separately. Reported disk allocation does not
-        prove how much space can be freed on compressed, cloned or snapshotted storage. Moving to
-        same-volume quarantine frees {displayBytes(summary.quarantineFreedBytes)}.
+      <p data-bytes={summary.total.logicalBytes}>
+        Total file size: {displayBytes(summary.total.logicalBytes)}. Logical sizes count hard-linked
+        paths separately; allocation is not recoverable space.
       </p>
-      {summary.accountingIncomplete && (
-        <p role="status">Object accounting reached its bound. Unknown metrics remain unmeasured.</p>
-      )}
       <nav className="inspection-breadcrumbs" aria-label="Storage folders">
         {trail.map((node, index) => (
           <Button
@@ -160,10 +134,10 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
                   <th>Files</th>
                   <th aria-sort={ascending ? 'ascending' : 'descending'}>
                     <Button onClick={() => setAscending(!ascending)}>
-                      Logical bytes · sort this page
+                      File size · sort this page
                     </Button>
                   </th>
-                  <th>Unique-object logical bytes</th>
+                  <th>Hard links counted once</th>
                   <th>Reported allocation</th>
                 </tr>
               </thead>
@@ -171,7 +145,9 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
                 <tr>
                   <th scope="row">Total: {current.parent.name}</th>
                   <td>{current.parent.files.toLocaleString()}</td>
-                  <td>{displayBytes(current.parent.logicalBytes)}</td>
+                  <td data-bytes={current.parent.logicalBytes}>
+                    {displayBytes(current.parent.logicalBytes)}
+                  </td>
                   <td>{displayBytes(current.parent.uniqueObjectLogicalBytes)}</td>
                   <td>{displayBytes(current.parent.reportedAllocatedBytes)}</td>
                 </tr>

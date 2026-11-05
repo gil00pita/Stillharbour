@@ -13,7 +13,7 @@ import type {
   PropertyRules,
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
-import { StorageReview } from './StorageReview';
+import { StorageExplorer } from '../components/StorageExplorer';
 import { DuplicateStudio } from '../components/DuplicateStudio';
 import { IntegrityFindings } from '../components/IntegrityFindings';
 import { InspectionIssues } from './InspectionIssues';
@@ -527,60 +527,21 @@ export function InspectionScreen({
               {report.coverage.inaccessibleEntries} inaccessible/unsupported entries ·{' '}
               {report.coverage.incompleteDirectories} incomplete directories.
             </p>
-            {section === 'Storage' && (
-              <div className="inspection-table-wrap">
-                <table className="inspection-volumes">
-                  <caption>
-                    Observed actual volumes · capacity is separate from selected-scope totals
-                  </caption>
-                  <thead>
-                    <tr>
-                      <th>Registered roots on volume</th>
-                      <th>Total bytes</th>
-                      <th>Available bytes</th>
-                      <th>Observed</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.volumes.map((volume) => (
-                      <tr key={volume.id}>
-                        <th scope="row">
-                          {volume.rootIds
-                            .map(
-                              (id) =>
-                                status.roots.find((root) => root.id === id)?.label ??
-                                id.slice(0, 8),
-                            )
-                            .join(', ')}
-                        </th>
-                        <td>{displayBytes(volume.totalBytes)}</td>
-                        <td>{displayBytes(volume.availableBytes)}</td>
-                        <td>
-                          {volume.observedAt}
-                          <br />
-                          {volume.coverage}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            {section === 'Storage' && report.storage && job && (
-              <StorageReview key={job.id} jobId={job.id} summary={report.storage} />
+            {section === 'Storage' && report.storage && job && files && (
+              <StorageExplorer
+                key={job.id}
+                jobId={job.id}
+                summary={report.storage}
+                volumes={report.volumes}
+                roots={status.roots}
+                firstPage={files}
+              />
             )}
           </>
         )}
-        {files && section !== 'Duplicates' && (
+        {files && section === 'Integrity' && (
           <section aria-label="Inspected files">
-            {section === 'Integrity' ? (
-              <IntegrityFindings key={job?.id} rows={files.rows} />
-            ) : (
-              <>
-                <h2>Largest files</h2>
-                <FindingTable rows={files.rows} />
-              </>
-            )}
+            <IntegrityFindings key={job?.id} rows={files.rows} />
             {files.next && <Button onClick={() => void nextFiles()}>Next file page</Button>}
           </section>
         )}
@@ -700,46 +661,5 @@ function PropertyControls({
         unknown.
       </p>
     </fieldset>
-  );
-}
-
-function FindingTable({ rows }: { rows: FindingPage['rows'] }) {
-  return (
-    <div className="inspection-table-wrap">
-      <table>
-        <caption>Retained file observations</caption>
-        <thead>
-          <tr>
-            <th>File</th>
-            <th>Logical bytes</th>
-            <th>Allocation</th>
-            <th>Inventory / linked object</th>
-            <th>Coverage</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id}>
-              <th scope="row">
-                <span>{row.name}</span>
-                <small>{row.displayPath}</small>
-                {row.error && <small>{row.error.message}</small>}
-              </th>
-              <td>{displayBytes(row.bytes)}</td>
-              <td>{displayBytes(row.reportedAllocatedBytes)}</td>
-              <td>
-                {row.inventory.replaceAll('_', ' ')}
-                <br />
-                {row.links} links · {row.objectId?.slice(0, 16) ?? 'Object unknown'}
-              </td>
-              <td>
-                {row.coverage}
-                {row.error && <p>{row.error.message}</p>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }

@@ -849,3 +849,15 @@ These presentation checks supplement existing M3/M6 gates; they do not pass prod
 - Integrity filters health findings while distinguishing unavailable, unchecked, changed-baseline and decoder states. Storage retains actual volume/folder/treemap/size observations without the repeated health table. Original manifests remain unchanged in every generated native scenario.
 
 See [Utilities UI](UTILITIES_UI.md) for current capability limitations and verification commands.
+
+
+## Storage content revision — 2026-11-05
+
+- Keep the existing application shell and tokens. Display actual volume used/available totals separately from logical file-type proportions; partial scans and capacity-only observations never imply free space. Filters, navigation and simulations preserve drive totals.
+- Offer exactly File type, Age and Camera colour modes. Changing colour alone preserves tile geometry. Combine filename/path, type, minimum size, retained last-modified age and recorded-camera filters with removable chips and Reset. Do not infer camera identity from names or extensions.
+- Label loaded-observation coverage and the 2,048-file display bound. Keep complete retained native folder totals/paging available. Never label partial file-type totals as a full-drive physical breakdown.
+- Support explicit folder opening and double-click, breadcrumbs/parent, grouping, map/list, expansion, selection and inspector. Tiny aggregates open a list; empty files remain discoverable as 0 B without area. All visible inspection sizes use decimal units and numeric sorting retains raw integer precision.
+- Keep camera failures/unread metadata unknown and offer retry; non-camera media is distinct. Show a file icon when an actual preview is unavailable. Preserve protection and make tray exclusion a labelled simulation with no reclaimed-space or mutation claim.
+- Validate generated-fixture desktop/narrow bounds, keyboard focus and inspector placement, component integration, native original manifests and fresh-install build. Browser fixtures are visibly labelled and excluded from production. Record actual results and outstanding native/platform gates without claiming a new release qualification.
+
+Latest Storage reference follow-up (2026-11-05): filters and chips precede the overview; controls read Search, File type, Camera, Age · last modified, Minimum size, Reset. Include 5 GB and 10 GB minimum options. Existing invariance, native authority, scope disclosure, read-only and responsive criteria remain unchanged.

@@ -1,5 +1,6 @@
-import { RadioCard } from '@chakra-ui/react';
+import { RadioCard, useSlotRecipe } from '@chakra-ui/react';
 import { useId } from 'react';
+import { inspectionChoiceCardsRecipe } from './InspectionChoiceCards.slot-recipe';
 
 export type InspectionChoice<Value extends string> = {
   value: Value;
@@ -25,37 +26,44 @@ export function InspectionChoiceCards<Value extends string>({
   presentation?: 'illustrated' | 'compact' | 'inline';
 }) {
   const id = useId();
+  const styles = useSlotRecipe({ recipe: inspectionChoiceCardsRecipe })({ presentation });
   return (
     <RadioCard.Root
       className="inspection-choice-group"
       name={id}
       value={value}
       disabled={disabled}
-      presentation={presentation}
+      css={styles.root}
       onValueChange={({ value: next }) => {
         const choice = choices.find((item) => item.value === next);
         if (choice && !disabled) onChange(choice.value);
       }}
     >
-      <RadioCard.Label className="inspection-choice-label">{label}</RadioCard.Label>
+      <RadioCard.Label css={styles.label} className="inspection-choice-label">
+        {label}
+      </RadioCard.Label>
       <div className="inspection-choice-grid">
         {choices.map((choice) => (
           <RadioCard.Item
             key={choice.value}
             value={choice.value}
             className="inspection-choice-card"
+            css={styles.item}
           >
             <RadioCard.ItemHiddenInput
               aria-describedby={choice.description ? `${id}-${choice.value}` : undefined}
             />
-            <RadioCard.ItemControl>
+            <RadioCard.ItemControl css={styles.itemControl}>
               {choice.image && (
                 <img src={choice.image} alt="" width="640" height="427" decoding="async" />
               )}
-              <RadioCard.ItemContent>
-                <RadioCard.ItemText>{choice.label}</RadioCard.ItemText>
+              <RadioCard.ItemContent css={styles.itemContent}>
+                <RadioCard.ItemText css={styles.itemText}>{choice.label}</RadioCard.ItemText>
                 {choice.description && (
-                  <RadioCard.ItemDescription id={`${id}-${choice.value}`}>
+                  <RadioCard.ItemDescription
+                    css={styles.itemDescription}
+                    id={`${id}-${choice.value}`}
+                  >
                     {choice.description}
                     {choice.badge && (
                       <span className="inspection-choice-badge">{choice.badge}</span>
@@ -63,7 +71,7 @@ export function InspectionChoiceCards<Value extends string>({
                   </RadioCard.ItemDescription>
                 )}
               </RadioCard.ItemContent>
-              <RadioCard.ItemIndicator />
+              <RadioCard.ItemIndicator css={styles.itemIndicator} />
             </RadioCard.ItemControl>
           </RadioCard.Item>
         ))}

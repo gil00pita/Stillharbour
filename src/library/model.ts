@@ -1,4 +1,5 @@
 import { diagnosticClock, diagnosticSince } from '../performance';
+import { displayBytes } from '../inspection/format';
 import { justifiedLayout } from './justifiedLayout';
 import {
   DEFAULT_PHOTO_EXTENSIONS,
@@ -156,11 +157,7 @@ export function dayLabel(day: string, now = new Date(), compact = false): string
 }
 
 export function fileSize(value: string): string {
-  const size = Number(value);
-  if (!Number.isFinite(size)) return 'Unknown size';
-  if (size < 1024) return `${size} B`;
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+  return displayBytes(value);
 }
 export function displayDate(value: string): string {
   // Capture-local timestamps with unknown offsets must not be shifted through Date/UTC.
