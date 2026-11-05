@@ -2602,6 +2602,390 @@ Add a reusable memory-only executable probe from the earlier development experim
 
 **Request/scope:** publish the current workspace changes against main, following the attached PR instructions. Review the complete tracked/untracked diff, source/data notices and retained validation logs; fetch origin/main and confirm the branch starts at its current head. Include calendar-day search, offline GPS city/country search, generated regressions, documentation and fresh-workspace pinned-helper troubleshooting. Keep the existing branch name and all M6/preservation gates. No further application change or broad test rerun is needed; the actual feature checks and limitations above remain the validation record. Check final documentation formatting and patch whitespace before committing and publishing.
 
+## Quiet photographic studio interface — 2026-11-05
+
+**Request/scope:** owner asked for a professional, expensive-looking UI and selected quiet photographic studio from the design-direction question. Apply the Impeccable workflow to the existing desktop interface; keep the selected brand/unchanged aperture, source preservation and all milestone/release gates. No backend, schema, persisted identity, dependency or production-authority change.
+
+**Changes:** shared warm-charcoal/warm-white/sage palette; semantic sidebar/toolbar/navigation surfaces; 6px control corners, consistent 13px/500 controls, readable focus/field boundaries, native dark controls, themed selection/caret/scrollbars and data-only tabular numerals. The 240px sidebar groups Collection, Library care and unavailable Utilities, with Settings/version anchored and independent navigation scrolling. A panel-toggle glyph and the 76px photo toolbar clarify hierarchy; search has a glyph and 360px cap, Filter stays outlined, and Catalog/Saved plans use Chakra IconButton with named icons/tooltips at narrow widths. Settings has stronger headings and 32px divided-section spacing. Onboarding uses the previously approved product tagline and explicit folder/originals guidance; choosing remains separate from saving/scanning.
+
+**Files/decisions:** src/App.tsx, src/App.test.tsx, src/library/LibraryHeader.tsx and its new regression test, src/styles.css, src/theme/system.ts, the existing native foundation spec, DESIGN.md and the relevant specification/acceptance/development/polish documents. The native spec follows the approved 16px toggle inset and asserts every photo-toolbar action fits at desktop/minimum sizes in expanded/collapsed navigation. Theme regeneration exposed required-field type loss with Field absent from the custom recipe registry; register the pinned default Field slot recipe and regenerate with Chakra CLI 3.37.0. No architecture ADR is needed.
+
+**Checks observed so far:** all 483 frontend/harness cases across 77 files pass; strict TypeScript, ESLint, full Prettier, eleven release/dependency cases, generated IPC bindings and git diff whitespace pass. Production frontend build passes with the existing large-chunk warning. Focused toolbar/App and tag tests pass after the respective changes. React Doctor changed-source diagnostics report no issues; its remote score endpoint timed out, so no numeric score/regression claim is made. The Impeccable detector reports eleven palette-only advisories against the earlier design record, including existing translucent backdrops/shadows; the new palette is now documented in DESIGN.md, and pre-existing transparency values remain intentional. The older design sidecar remains stale and was not regenerated as an unrelated repair.
+
+**Visual checks:** isolated Chromium checks at 1440×900, 1180×780 and 660×560 cover Photos, expanded/collapsed navigation, Settings, Filters, empty collection and first-run chooser. The minimum toolbar ends within the viewport and Settings has no horizontal overflow; standard primary action measures 44px. Palette calculations give muted text 6.99:1 against the panel, field borders 3.67:1 against the field and primary action text 9.20:1. This is scoped contrast evidence, not a full accessibility audit. Screenshots are .context/studio-gallery.png, studio-gallery-minimum.png, studio-gallery-collapsed.png, studio-settings.png, studio-settings-minimum.png, studio-filter-minimum.png, studio-welcome.png and studio-welcome-minimum.png. Browser catalog data is synthetic and imagery is system wallpaper thumbnails copied only into ignored .context; the normal build imports no fixture adapter or sample media. The older Playwright launcher failed to resolve its CLI; the installed agent-browser CLI was used instead.
+
+**Native prerequisite history:** the first Rust/application builds stopped at absent pinned restic; the normal Python 3.14 download failed local TLS certificate validation, including a retry with the system CA bundle. The unchanged preparation script succeeds with /usr/bin/python3 and verifies both macOS helper archive/executable pins; TLS/hash checks remain enabled. Native instrumented builds then pass; rebuild again after the final UI edits before testing. No personal catalog/library or backup endpoint is used. Final Rust/native results follow. M6 signing, clean-machine, Windows/current-source, full accessibility and recovery gates remain as documented.
+
+**Native test correction:** the first full desktop attempt failed its scanning-art dark-colour assertion because it still expected the previous palette; subsequent timeline checks lacked the fixture state left unfinished by that failure. Stop that attempt, update the exact dark accent/frame expectations to the approved palette, and retain .context/studio-native-tests.log. A later runner was stopped to guarantee final-build completion before starting the authoritative rerun; that interrupted launch is not a pass. The minimum-window visual check also found an overly narrow Comfortable thumbnail-size select; restore its 160px bound and rebuild. Current native build completes successfully in .context/studio-native-build-verified.log; the sequential complete-suite rerun uses .context/studio-native-tests-verified.log.
+
+**Concurrent native-output qualification:** further desktop attempts retain service-before-hook failures (`executeAsync.bind`), a mismatched startup/preparation screen, and a startup CatalogInUse error. Inspection found an independently started Conductor desktop-dev run rebuilding the shared target/debug/stillharbour. Do not stop or alter that running app. The previously verified desktop-test artifact remains at target/debug/deps/stillharbour-ea39ab2f82e33920 with SHA-256 2d0b2b2b2d67e916088254f890687d7f5eeae61ccaac762e94824beaabfb09c4; copy it to a separate ignored executable and use an ignored WDIO config/port for the targeted smoke. Earlier concurrent-output desktop attempts do not establish a full-suite pass. The default native authority refused the active data directory, rather than opening another writable catalog.
+
+**Rust detail:** rustfmt and warnings-denied Clippy pass; owned Rust unit/integration binaries pass 539 cases total (including 508 core unit cases), with fifteen existing ignored core cases. The original aggregate command then fails its rustdoc stage with E0463 for notify during concurrent compilation. A separate serial workspace documentation-test invocation succeeds (zero doctests). Retain .context/studio-rust-check-final.log and .context/studio-rust-doc-retry.log; do not label the original aggregate command itself a pass.
+
+**Targeted native result:** the hash-matched, separately named instrumented binary passes the isolated macOS UI smoke in 4.1s (.context/studio-native-isolated-final.log). The test starts from a genuinely fresh disposable catalog, verifies the approved chooser copy, uses the generated native picker selection, confirms selection alone has not registered/scanned a root, then explicitly saves/scans through real IPC. It checks every toolbar action and anchored Settings at 1180×780/660×560 with expanded/collapsed navigation, opens the real Filters dialog, reaches Settings Save defaults, and verifies more than twenty unchanged generated source files. Native screenshots are .context/studio-native-1180-expanded.png, studio-native-1180-collapsed.png, studio-native-660-expanded.png and studio-native-660-collapsed.png. An initial isolated smoke attempt used a plural selector under the current strict-selector driver and was corrected to explicitly select the first photo; no application behavior changed. The same isolated executable now runs the complete five-spec repository desktop suite in .context/studio-native-full-isolated.log; its result remains separate from the one-case smoke.
+
+**Full native pass checkpoint:** the isolated full run completes all five specs in 2m28s: foundation (22 cases, three platform skips), live-library (one case) and M4 application backup/restore (one case) pass. Map and metadata-export both stop in their shared theme assertion, which still pins the former canvas/input colours. Update only those two expected colours in tests/desktop/m5-metadata-helpers.mjs to #191b19 and rgb(23, 26, 23), retaining the 13px/36px controls, native select arrow and all behavioral/source-preservation assertions. Re-run the two affected M5 specs against the unchanged hash-matched instrumented binary; its receipt is .context/studio-native-m5-verified.log. Retain the original .context/studio-native-full-isolated.log rather than call that combined attempt a pass.
+
+**Final result:** both corrected M5 specs pass in the sequential isolated rerun (7.4s map, 5.3s metadata export; 15s total). Across the full run and the affected-spec rerun, all five repository native specs pass their 26 macOS cases, with three existing platform skips; the separate UI smoke also passes. This is not a claim that the earlier combined attempt exited successfully. Source/companion checks remain intact, including the native metadata export and backup/restore assertions. Final frontend production build/release exclusions, strict types, ESLint, formatting and whitespace checks pass. Current-source Windows visuals/native execution, whole-app accessibility, signing/clean-machine and exact-version independent recovery remain separate gates. Stop at the presentation-refinement boundary. Leave the independently running desktop-dev process untouched; all custom browser/native configurations, fixture media and receipts remain ignored under .context or target.
+
+## Reference-inspired gallery date scrollbar — 2026-11-05
+
+**Request/scope:** owner asked to start by fixing the scrollbar using https://github.com/alumbo/react-timeline-vertical-navigation. Inspect the supplied screenshot/README/package and its linked Stencil implementation at the revisions pinned in TIMELINE_NAVIGATION.md. Adapt the date-dot/year-label/floating-readout pattern into the existing DateTimeline; do not install the React-17 wrapper, add a second runtime, download fonts or give it every photo's date. Keep the prior studio work, real filtered buckets, bounded gallery, indexed seeks and preservation/release gates.
+
+**Changes:** 88px desktop/80px narrow rail, collision-aware 12px year controls, real month-start dots sampled to at most eighty, a 28px input hit lane and 14×28px visible grip. Align the floating 28px date bubble to the same 14px inset track as pointer input and the thumb, fixing earlier whole-rail/inset coordinate drift. Hover has a separate candidate marker/output and does not seek; actual position remains visible. Add vertical range semantics and instructions. Escape/blur discard pending drag/keyboard navigation; later pointer release cannot commit a canceled drag. Preserve outside release, pointer cancellation, current-month loaded-row scrolling, release-time indexed month seeks, keyboard/wheel/Ctrl+wheel and exact endpoints. No Rust, IPC, source-access, schema, dependency or identity change.
+
+**Files:** src/library/DateTimeline.tsx and tests, timeline.ts and new pure-helper tests, timeline-specific styles/column widths in src/styles.css, native foundation geometry assertions, DESIGN.md, CODEX_SPEC.md, ACCEPTANCE_TESTS.md, DEVELOPMENT.md, TIMELINE_NAVIGATION.md and this log. The first broad stylesheet selector hit an earlier responsive override; restore that file from the exact start-turn Conductor checkpoint and reapply only the unique main timeline block/column selectors. Verify the diff preserves the preceding studio changes and the unrelated size-unit column width. No other file or Git branch was restored/renamed.
+
+**Observed checks so far:** seventeen focused timeline cases pass; the complete frontend/harness suite passes 488 cases in 78 files. Strict TypeScript and ESLint pass. Browser checks at 1440×900 and 660×560 show real-period marker rendering, clear year/hover labels, shared preview coordinates, no horizontal overflow and Escape canceling a drag released outside the lane. Captures: .context/timeline-reference/timeline-hover.png and timeline-minimum.png (synthetic catalog/system wallpaper imagery only). The normal app imports no mock adapter/reference screenshot.
+
+**Native isolation:** a separate CARGO_TARGET_DIR instrumented build is running so the user's existing desktop-dev executable stays untouched. The normal repository Rust checks are also running; actual results and any failures follow. Existing native foundation checks now assert vertical semantics, hit width ≥24px, one to eighty markers, thumb/readout alignment and containment at desktop/minimum sizes. No personal photo folder or catalog is a development fixture.
+
+**Validation continuation:** the first isolated macOS executable starts with an unsupported resource path because Tauri's debug resource discovery requires a literal target directory plus its Cargo marker. Inspect the pinned installed tauri-utils source, move only this run's generated build directory to src-tauri/.context/timeline-native/target, and rerun without changing app source or the user's development output. Future commands use an absolute CARGO_TARGET_DIR ending in /target.
+
+The actual native gallery checks pass the new pointer-target, bounded markers, vertical semantics, shared bubble/grip coordinates and containment assertions at desktop/minimum sizes, as well as existing wheel/outside-release, exact endpoint, scrolling, selection and viewer/source checks. The wider foundation run later times out in the unrelated M2 two-source import case after repeated embedded-driver execute/async scrollIntoView timeouts; live-library then passes. Stop that known-failing wider run rather than claim completion; preserve native-tests-verified.log and driver logs. A focused final-source native timeline smoke follows the last renderer-only helper extraction.
+
+React Doctor initially identifies the expanded component's control-flow complexity. Move pointer, keyboard and current-period/endpoint calculations into pure timeline helpers, with direct regressions for clamping, unsupported keys and missing pointer geometry; retain existing behavior. The verified changed-source diagnostic pass reports no issues and no suppression (its remote numeric score remains 93, so no numeric improvement claim). A first in-project baseline experiment scanned zero ignored files and is discarded; the isolated external baseline scans one file. The initial aggregate Rust check passes all unit/integration/doc stages; final totals and renderer checks follow.
+
+**Final results:** all 490 frontend/harness tests across 78 files pass; nineteen focused timeline cases pass. The complete documented Rust check exits zero: rustfmt, warnings-denied Clippy, 539 unit/integration cases and zero doctests pass, with fifteen existing ignored core cases. The final instrumented renderer is rebuilt after the pure-helper extraction and its separate native smoke passes in 4.7s. At 1180×780 and 660×560, real native pointer actions verify preview-without-seek, ≥24px hit width, one to eighty markers, one-pixel grip/readout alignment, containment/no horizontal overflow, and Escape followed by outside pointer-up causing zero indexed seeks. The fixture verifier confirms more than twenty source files unchanged. Native captures are .context/timeline-reference/native-hover-1180.png and native-hover-660.png. Final executable SHA-256: dcaa0167deda60d20daec19df5b49d43499cfcc06f9b059e584ca8cf0276f454. Receipts: native-build-final.log and native-final-smoke.log in .context/timeline-reference.
+
+Move this run's generated native cache into the root-ignored .context/timeline-native/target after compilation, preserving the required target basename, so repository ESLint does not traverse generated compressed JavaScript under a nested src-tauri/.context. The initial nested-cache lint attempt fails on generated binary/script output; after moving only the owned cache, normal lint passes without changing lint configuration. Strict types, final normal production build/release exclusion checks and changed-file formatting/whitespace pass. The existing Vite large-chunk warning remains. Windows/current-source native execution, full accessibility and release/recovery gates remain open. The broader desktop attempt retains its M2 import-review timeout and is not counted as a complete suite pass. No user library or independently running development process was changed by validation.
+
+## 2026-11-05 — Illustrated duplicate matching radio cards
+
+**Request and scope:** replace the Duplicates screen’s matching dropdowns with radio cards and matching illustrations, retaining the approved quiet photographic studio palette. Add three locally bundled 640×427 transparent paper-and-sage illustrations generated for this request (938,298 bytes combined), paired with identical-content, property-candidate and static PNG8 pixel labels. File scope and property-rule AND/OR choices become compact radio cards. Content algorithms and hard-link exclusion move into an initially closed Advanced disclosure. Retained job history remains a dynamic dropdown. Preserve all existing option values/defaults, typed requests, explicit Start, validation, disabled running states, cancellation, evidence limits and original-file protections. No backend, schema, dependency, decoder, identity or milestone change.
+
+**Files:** new src/components/DuplicateMatchOptions and InspectionChoiceCards folders with barrels and colocated slot recipe; assets/illustrations/duplicates; InspectionScreen.tsx/tests and inspection.css; theme/system.ts registration; tests/desktop/duplicate-cards.e2e.mjs; new docs/DUPLICATE_MATCH_CARDS.md plus DESIGN.md, CODEX_SPEC.md, ACCEPTANCE_TESTS.md, INTERFACE_POLISH.md, DEVELOPMENT.md and this log. The earlier studio and timeline changes remain intact. Run the pinned Chakra CLI typegen successfully after recipe registration; no generated dependency or lockfile changes.
+
+**Corrections during verification:** component tests now await controlled radio updates before the next selection, preventing test-only stale-payload races. Initial native keyboard attempts fail because tauri-plugin-wdio-webdriver 1.5.1 radio_step_js assigns checked and emits change without the click expected by the pinned Ark handler. Inspect the driver’s local source and event trace; remove the experimental production input-event bridge rather than adapt production code to synthetic input. The committed native test uses card clicks; actual Chromium keyboard checks independently cycle all three modes and verify the two-pixel focus ring. A separate Chromium layout issue collapses the first radio group when a property fieldset is inserted directly into the outer fieldset; a stable wrapper around the conditional property controls preserves the choices and keyboard focus. The final card root uses block flow and an internal responsive grid.
+
+**Final checks:** all 492 frontend/harness tests in 78 files pass (.context/duplicates-frontend-complete.log); strict types through the final production build, ESLint, full Prettier check, bindings check, eleven release/dependency policy tests and production release exclusions pass. The full documented Rust check exits zero: rustfmt, warnings-denied Clippy, 539 unit/integration cases, fifteen existing ignored cases and zero doctests (.context/duplicates-rust-check.log). Final normal build retains the existing large-chunk warning. React Doctor’s final changed-source scan reports no issues, score 86, matching this request’s initial scan; the preceding timeline scan used a different changed-file set and reported 93, so no numerical improvement claim is made. No suppression is added. Impeccable’s regex-only scan finds zero anti-patterns and two pre-existing radius advisories in inspection.css; parsed-page/whole-app accessibility coverage is not implied.
+
+**Native evidence:** the final isolated instrumented macOS build passes the committed duplicate-card spec in 5.9s (.context/duplicates-native-final-source.log). At 1440×1000, 1180×780 and 660×560 it verifies loaded artwork, correct columns/stacked rows and no horizontal overflow. Card selection preserves visible matching controls and property-rule appearance; changing choices alone creates no inspection. Explicit Start creates an actual native exact-content/BLAKE3 job with indexed-media-companion scope. Its partial result retains the generated fixture’s unsupported/link limitations instead of presenting complete coverage. The fixture verifier confirms more than twenty original files unchanged. Final binary SHA-256: cc211857713ca89a32c8c1c9209dc20e387af2c07fadff0da380e45ef9d256a3. Native screenshots: .context/duplicates-native-1440.png, duplicates-native-1180.png, duplicates-native-660.png and duplicates-native-properties.png. Browser captures use only the ignored synthetic adapter; the native captures use actual Rust IPC and generated media.
+
+**Limits/next gate:** the complete desktop suite is not rerun for this request; the earlier timeline run’s unrelated M2 import timeout remains recorded. Native physical-key behavior, current-source Windows execution, full accessibility, signing/clean-machine and independent exact-version recovery gates remain separate. Production duplicate quarantine remains unavailable. No user library or independently running development process is modified by validation.
+
+## 2026-11-05 — Owner-requested CSS favorite heart burst
+
+**Request:** implement the animation from Nicolas Escoffier’s Prototypr article, Twitter’s Heart Animation in Full CSS, on the existing photo favorite heart. Read the supplied article and apply the interaction-design/Impeccable animation guidance within the existing viewer. This explicitly supersedes the earlier restrained favorite press without changing any catalog or original-file behavior.
+
+**Changes:** FavoriteHeart retains its existing SVG/accessibility and adds a decorative expanding ring plus seven pairs of particles. Scoped CSS choreographs an 800ms rose heart pop, ring and rose/sage/gold/lilac dots, settling into the confirmed rose fill. Only successful catalog-backed favorites animate; initial favorites, failed writes, navigation and unfavorite do not celebrate. The heart’s own named animation ends the sequence, so decorative events cannot truncate it. Keep ms/s duration parsing, an 800ms fallback, hidden-document immediate completion and timer cleanup. Reduced Motion removes all spatial effects and displays the saved fill. All layers ignore pointer input; no sprite, downloaded article artwork, dependency or JavaScript animation library is introduced. A shared button rule had overridden the nominal 44px minimum; increase the specificity of the favorite’s existing viewer-scoped rule to restore its actual 44px target, without changing neighboring controls.
+
+**Files:** src/library/FavoriteHeart.tsx/tests, PhotoViewer.test.tsx, the existing favorite block in src/styles.css and new tests/desktop/favorite-heart.e2e.mjs. Update DESIGN.md, CODEX_SPEC.md, ACCEPTANCE_TESTS.md, ORIGINAL_IMAGE_VIEWING.md, INTERFACE_POLISH.md, DEVELOPMENT.md and this log. Preserve all earlier studio, timeline and duplicate-card work. No backend, IPC/schema, dependency, identity, safety gate or original-file operation changes.
+
+**Verification:** sixteen focused viewer/heart/original-image cases pass. All 494 frontend/harness cases in 78 files pass (.context/heart-frontend-final.log). Strict TypeScript through the normal production build, ESLint, full Prettier/whitespace checks and release instrumentation exclusions pass; Vite retains its existing large-chunk warning. React Doctor reports no changed-source issues, score 86, matching the preceding request. The regex-only Impeccable scan is advisory; it does not establish whole-app accessibility. Focused tests initially fail because jsdom has no AnimationEvent and React registers webkitAnimationEnd; dispatch that registered event with its real animationName to exercise completion instead of accepting the old ignored synthetic event. Keep the earlier failed receipts.
+
+**Browser evidence:** an ignored fixture renders the real FavoriteHeart and stylesheet. All sixteen CSS animations (heart, ring, fourteen particles) report 800ms. Inspect a paused 280ms frame in .context/heart-burst.png; this is a component review capture, not native catalog evidence. Real keyboard Space toggles the button with a visible 2px focus outline. Emulated Reduced Motion reports animation:none for heart/ring/particles while the confirmed rose fill remains. An optional video recording attempt cannot start because ffmpeg is absent; no recording is produced and no dependency is installed.
+
+**Native evidence:** the final isolated macOS instrumented build passes the committed favorite-heart spec in 6.5s (.context/heart-native-complete.log). It uses a genuinely disposable catalog and generated media, verifies actual favorite writes/read-back, two complete favorite/unfavorite cycles, all three named animation layers and the 0.8s duration, settled fill, no unlike burst, visible 44px targets at 1180×780/660×560, and more than twenty unchanged generated originals. Screenshots: .context/heart-native-1180.png and heart-native-660.png. Earlier native attempts establish the animation/save behavior but fail target geometry; diagnostics identify the shared min-height rule and the scoped CSS correction addresses it. One later test attempt uses an unavailable guessed fixture name; the final test selects an actually loaded generated image instead. Do not count those attempts as passes.
+
+**Remaining limits:** current-source Windows execution, physical native keyboard/assistive-technology acceptance, complete desktop-suite rerun, clean-machine/signing and independent preservation/recovery gates remain separate. The user’s personal catalogs/libraries and independently running dev app are untouched. Final Rust aggregate result follows.
+
+**Final aggregate result:** npm run rust:check exits zero: rustfmt, warnings-denied Clippy, 539 unit/integration tests and zero doctests pass, with fifteen existing ignored core cases (.context/heart-rust-check.log). The core suite takes 289.14s; its long fixture/recovery cases are not a UI-animation performance measurement. Final instrumented executable SHA-256: ce05aa95b12bf5157d93d4bab5f7d39c47f98ad234294f6c856b226a6248f1b9. Normal production build and release exclusions pass after the final scoped target-size correction. Final regex audit reports zero anti-patterns and five existing shadow-color advisories; no suppression or unrelated design-system repair is added.
+
+## 2026-11-05 — Import commit 9837ae6 into the studio workspace
+
+**Request:** get the changes from 9837ae6b00a92dd26a7cd210f4a41a716ac224bf, Add calendar-day and offline GPS place search, while preserving current work. Its parent exactly matches the workspace HEAD, 3951b3e. Save the complete tracked/untracked UI state in a named local Git stash, with a binary patch/status/immutable stash OID under .context/import-9837ae6, fast-forward the existing feat/ui-professional-redesign branch to the exact requested commit, then apply the saved UI state. No branch rename, duplicate cherry-pick commit, push, reset, original-file operation or independent dev-process change is performed. The checkpoint stash remains available as a backup.
+
+**Resolution:** combine the three stash-apply conflicts explicitly. LibraryHeader keeps the studio search glyph, compact secondary controls, filename/date label/title and Places picker. The theme keeps the studio palette/6px control radius, imported Places spacing/size/font/stacking tokens and all three used Field/RadioCard/Popover slot recipes in one registry. The implementation log retains both complete appended histories. Auto-merged CSS retains the imported narrow toolbar wrapping alongside timeline/heart/studio styling; native foundation retains the imported date-search/Places expectations and existing timeline geometry checks. Update LibraryHeader.test.tsx for required onPlace and the combined search/disabled state; append DEVELOPMENT.md guidance and this log. The original UI edits remain unstaged/uncommitted after restoration, matching their pre-import state. All conflicts are resolved and the index is empty; this is a completed fast-forward plus stash restoration, not an unfinished merge requiring a new UI commit.
+
+**Preservation audit:** compare restored bytes against the immutable stash tree. Fifteen non-overlapping tracked modifications and thirteen original untracked files are byte-identical. The fourteenth untracked file, LibraryHeader.test.tsx, receives only the explicitly reviewed integration props/assertions. Eight shared paths are reconciled: four specification/development/log documents, LibraryHeader.tsx, styles.css, theme/system.ts and the native foundation spec. Retain .context/import-9837ae6/preservation-check.txt and the stash OID. No incoming backend, dataset, manifest, schema/binding or helper implementation is rewritten during resolution.
+
+**Checks completed:** pinned Chakra typegen succeeds; strict types through the final normal production build, ESLint, full Prettier and whitespace checks pass. The complete frontend/harness run passes 502 cases in 79 files, followed by seven passing combined toolbar/Places cases after the extra integration assertions. Binding consistency and all eleven release/dependency policy cases pass. Final production release checks validate offline data/helper pins and exclude desktop-test instrumentation. The existing Vite large-chunk warning remains. React Doctor reports no changed-source issues; its numeric score is 71 for the newly expanded base/diff scope, compared with 86 before importing the source commit. Do not claim a numeric improvement or add suppressions when the tool reports no actionable diagnostics.
+
+**Native integration:** an isolated instrumented macOS build passes all three selected specs in 30s: map/metadata/offline Places (12.4s), duplicate radio cards (5.8s) and heart burst (6.6s). The imported place flow verifies London disambiguation, country membership, frozen selection, clear/restore behavior, the combined toolbar/popover at 660×560 and no external main-WebView resources. Metadata exports retain independent source/output audits; both retained UI specs verify generated originals unchanged. Receipts are .context/import-9837ae6/native-tests.log and .context/m5-native/place-search.json. This validates the combined source, not just the source commit’s older receipts. No personal library is used.
+
+**Limits/next gate:** the complete desktop/format/performance suites and current-source Windows execution are not rerun here. Earlier unrelated broader desktop limitations, whole-app accessibility, large-catalog country performance, clean-machine/signing and independent original recovery gates remain unchanged. The complete Rust check is running; its final outcome follows.
+
+**Final result:** npm run rust:check exits zero: rustfmt, warnings-denied Clippy, 546 unit/integration cases and zero doctests pass, with fifteen existing ignored core cases. The core suite’s 515 cases finish in 288.13s; these fixture/recovery timings are not a place-search performance result. Binding consistency, final normal production build/release exclusions, formatting, lint and whitespace checks pass. The exact combined-source instrumented executable used by all three passing native specs has SHA-256 21406b61908acffa7b46f59483e4d2c207ac666d0d2d94e0df6dcc5f2e4e0c1e. HEAD remains the requested 9837ae6; the restored UI edits and integration documentation/test adjustments remain uncommitted, with no unresolved index entries.
+
+## 2026-11-05 — Get latest main while retaining UI work
+
+Fetch origin/main at 577fbec (the merged PR #20 version of the previously imported 9837ae6). Both commits have the identical tree af1a050d066983ea537125e91e49310482ba90de. Merge origin/main into the existing feat/ui-professional-redesign branch with a normal merge commit; do not rename/switch branches or include the uncommitted UI edits. Verify all 37 edited/new files against pre-merge SHA-256 snapshots under .context/get-main: every file is byte-identical after the merge, main is an ancestor of HEAD, the index is empty and no conflicts remain. Append only this dated integration record afterward.
+
+There is no implementation difference to retest: the preceding import's frontend, Rust and native evidence still describes the same source. For this history/documentation-only request, run the preservation/ancestry checks, scoped documentation formatting and git diff --check; no new application test run or platform evidence is claimed. Existing UI work remains uncommitted; preservation/release gates and the local backup stash remain unchanged.
+
+## 2026-11-05 — Correct timeline behavior to match the referenced navigator
+
+**Request and reproduction:** the owner reports that the scrollbar is still not working properly and explicitly requests the behavior of alumbo/react-timeline-vertical-navigation. Compare the current wrapper and its unchanged Stencil source at relyfe/timeline-vertical-navigation, 9e7849dba58e6e21779ce334d362d4f47f7beaa9. The old adapter implements visual inspiration with equal month slots and release-only distant seeking. Its two new component regressions fail: max 3 instead of 52 for 53 photos, and no press-time navigation. Retain .context/timeline-reference/repro-live.log. This is the red-capable reference-contract loop; the change intentionally supersedes the previous release-only/Escape-undo behavior.
+
+**Behavior and architecture:** use photo ordinals, live selection on press/drag, hover-only previews and actual visible-photo feedback. Add validated read-only seek_index to the existing Rust service/IPC path, with chronological query, u32 index and 1–240 page limit; resolve a stable ID and reuse existing keyset page logic. Chronological AssetPage/PackedAssetPage responses carry optional startIndex, retaining packed-v1's 27 asset fields and catalog schema. Native prefix ranks respect all existing query filters and date/id ties; no original is opened. Propagate first-page rank through the bounded feed and viewport. Preserve the same-query gallery/rail during replacement; one active replacement plus one replaceable latest pending target prevents a drag from flooding requests. Stale generations cannot publish over newer targets/filters. Loaded targets scroll locally; other targets load one bounded page directly, including targets beyond 720 photos within one month. ADR-0090 records the decision, native race/failure behavior and unmeasured large-catalog latency limit.
+
+**Reference presentation:** replace the sage grip/left bubble with the source's 56px inner lane, 24px end insets, compact dark years, 4px/12px filler dots between years, blue 40×1px selected line and 72×2px underline, and a dark 24px date label whose bottom aligns to the underline. Keep the system font, keyboard/ARIA, wheel/Ctrl+wheel, reduced motion and empty/single-photo handling. The native check catches label drift when measured React height lags layout; place the label and both indicators on the same inset CSS track instead. A further visibility assertion catches active fade-in suspended at zero opacity in the native WebView; active visibility is immediate, with idle delay/fade retained. Escape/cancel/blur stop future tracking without undoing live navigation already committed.
+
+**Files:** core library model/service/store plus new timeline_tests.rs, Tauri request dispatch and generated src/bindings.ts; frontend pageTransport/tests, assetFeed/useAssetFeed/tests, useLibraryController, PhotoCollection, AssetBrowser/tests, usePhotoViewport, DateTimeline/tests, timeline helpers/tests and the specific timeline stylesheet/grid columns. Update native foundation geometry expectations to the reference's label-bottom alignment, and add tests/desktop/timeline-navigation.e2e.mjs. Update DESIGN.md, CODEX_SPEC.md, ACCEPTANCE_TESTS.md, DEVELOPMENT.md, DEPENDENCIES.md and TIMELINE_NAVIGATION.md, and add ADR-0090. Retain the upstream MIT notice verbatim in public/licenses/timeline-vertical-navigation-MIT.txt; confirm normal Vite output copies identical bytes into dist/licenses, embedded with the native frontend. CSS minification does not retain the full comment, so the distributed notice is explicit. No package/helper upgrade, remote font, schema/UUID change, source mutation or preservation/milestone gate expansion. Preserve earlier studio, Places, duplicate-card and heart work.
+
+**Frontend/Rust checks:** final complete frontend/harness run passes 502 cases in 79 files; 27 focused timeline/feed/wire cases and 19 final interaction cases pass. Regressions cover unequal counts, live press/move, pending-page continuity, retained window ranks, one-active/latest-pending scheduling, endpoint/Undated/tie behavior, cancellation, visible scrolling identities, optional wire metadata and invalid native indices/limits/scopes. The complete documented Rust check exits zero: rustfmt, warnings-denied Clippy, 548 unit/integration cases (517 core cases) and zero doctests, with fifteen existing ignored core cases. Core duration 320.23s is not an ordinal-seek performance result. Strict types/build, bindings consistency, lint, full formatting/whitespace, eleven release/dependency policy cases and final production instrumentation/data/helper exclusions pass. Vite retains its existing large-chunk warning. React Doctor reports no changed-source diagnostics (numeric score 77 for this changed set); no suppression is added.
+
+**Native evidence:** the final targeted macOS timeline spec passes in 4.2s (.context/timeline-reference/ordinal-visible-native.log). Against an isolated executable/disposable generated catalog, an actual native ordinal seek and target photo appear while the pointer remains down; rail identity stays mounted across page replacement. Verify at most 720 retained summaries, exact Home/End target IDs through native IPC, aligned/visible reference-sized controls at 1180×780 and 660×560, Escape/outside-release behavior and more than twenty unchanged generated original files. Final instrumented binary SHA-256: aec0294f5e8fd3f6c6675af81f1d9d5b9faab4e8f66abc011487de3eb3d2c786. Captures: .context/timeline-reference/reference-native-1180.png and reference-native-660.png. The 960-record seed is explicitly a catalog-only placeholder fixture; choose the real Text list control before seeding, so it never requests nonexistent original/preview bytes. The photo-gallery component tests and common viewport/rail integration remain exercised separately.
+
+**Failed-attempt qualification:** earlier native attempts establish live seeking/retained rail but fail shared-label geometry, active visibility or cancellation-test assumptions. Initial placeholder-gallery attempts request invalid synthetic thumbnail revisions; the corrected fixture uses Text list. A subsequent list attempt still queried a gallery-only CSS selector, corrected to the common asset viewport. A local loaded target legitimately issues no new native request, so the cancellation assertion checks selection/future movement rather than demand a redundant IPC call. One four-spec run begins while the last instrumented build is completing and is not the authoritative timeline receipt; the final isolated timeline run follows confirmed build completion. Preserve those receipts instead of counting failed attempts as passes.
+
+**Other native checks and limits:** duplicate-card (5.1s) and heart-burst (4.9s) specs pass in the broader current-source run. The map/metadata spec times out waiting for a displayed .map-marker; an isolated retry repeats that timeout (.context/timeline-reference/ordinal-map-isolated.log). Do not claim a full native-suite pass or infer the cause from the timeline fix. Current-source Windows, physical accessibility, full format/performance/native suites and independent release/recovery gates remain open. No personal library or independently running development process is changed. The requested timeline's final native interaction/visibility check passes; the separate Map failure remains explicitly recorded.
+
+## 2026-11-05 — Bound macOS Keychain prompts and catalog startup recovery
+
+**Request and diagnosis:** the owner reports repeated startup password prompts and intermittent catalog-load failure. Apply the diagnosing-bugs workflow. The new native regression invokes the real credential lookup for a random absent account and checks the OS process interaction flag. Before the fix it fails (allowed 1, expected 0; .context/keychain-startup/red.log), after the fix it passes (.context/keychain-startup/green.log). This proves the process-policy gap without opening any saved user item or triggering a password dialog; it does not reproduce a particular personal catalog error. The installed Security SDK notes that legacy keychain items can activate UI despite query-level no-authentication settings. Rank rebuild trust, incomplete UI suppression and unrelated catalog failures separately. Read-only codesign inspection finds a linker/ad-hoc executable whose designated requirement contains a code hash, and security find-identity reports zero valid code-signing identities. Apple documents the significance of designated requirements for continuity. Ask the owner asynchronously for the exact prompt/error; no password is requested. No exact personal catalog error has yet been supplied.
+
+**Change:** add a serialized process-interaction guard around macOS credential get/set/update/delete while retaining UI Fail, exact service/account and non-synchronizing queries. Ordinary operations explicitly disable legacy Keychain UI before item access. Map authentication-required statuses to typed CREDENTIAL_ACCESS_REQUIRED, distinguish cancellation/unavailable/other numeric errors, and never collapse them into missing items. Add a native-only exact-scope activation authorization method. After an actual startup selection returns the typed permission error, offer Authorize/Quit; only the explicit Authorize action permits one foreground read of that activation record. Restore deny policy, then retry the unchanged safe selector once. Healthy startup does not prompt; cancellation, denied permission or a failed retry stop; other catalog errors cannot offer authorization. Five shell regressions exercise this branching, authorization-before-retry ordering and bounded retries. Existing safe selection/history/generation/schema/native-identity checks remain authoritative. No credential reenrollment, authority reset, ACL weakening, fallback empty catalog, cache substitute or source mutation is added.
+
+**Files/docs:** core backup/credentials.rs, its catalog_restore adapter, catalog_restore/activation.rs and domain.rs; new src-tauri/src/catalog_startup.rs and main.rs wiring; regenerated src/bindings.ts. Add KEYCHAIN_STARTUP.md and ADR-0091; update CODEX_SPEC.md, ACCEPTANCE_TESTS.md, DEVELOPMENT.md, USER_GUIDE.md and this log. No dependency, credential service/account, application ID, catalog UUID/schema/path or preservation gate change. Retain all earlier workspace UI/scrollbar work. The explicit foreground startup exception is deliberately documented as a narrow revision to the former universal no-interaction policy, not a background authentication fallback.
+
+**Completed checks so far:** the native process-policy regression and all five startup-selection regressions pass. Full frontend/harness tests pass 502 cases in 79 files; strict TypeScript, regenerated-binding consistency, lint, full formatting and eleven release/dependency cases pass. An isolated instrumented macOS build succeeds with the existing Vite chunk-size advisory. The native restart run's first local config resolves no specs (zero workers); preserve that failed receipt, correct only the ignored config to absolute spec paths, and run the actual three-process catalog suite. Full Rust/native/production outcomes follow below.
+
+**Limits:** the automatic loop and authorization retry have deterministic coverage; successful manual OS consent, a locked personal login keychain and trust across different rebuilt binaries are not inferred. Rebuilt ad-hoc code can still need new permission. Persistent cross-rebuild identity requires a consistent valid signer; none is installed, created or configured in this repair. No password, certificate/private key, keychain search list, personal catalog or photo library is read/changed by tests. Current Windows execution and full M6 signing/clean-machine/recovery gates remain separate. The prior Map smoke timeout is not retested or declared fixed by this task.
+
+**Additional reproduced startup defect:** the first full Rust run exits nonzero
+with 518 passing core cases, fifteen existing ignored cases and one retained
+activation failure at retained_tests.rs:37: CatalogInUse immediately after closing
+the generated prior owner. This is not a Keychain error. Its focused retry and
+all three retained-source cases pass, so do not dismiss the aggregate failure.
+A new controlled Unix pre-exec child test reproduces it deterministically
+(.context/keychain-startup/activation-lock-red.log). The child transiently inherits
+the activation-lock descriptor; closing the parent's fd alone does not end flock.
+Wrap the acquired native activation lock in ActivationLock and explicitly unlock
+only on final owned-guard drop, including post-acquisition open failures, matching
+the existing CatalogLock precedent. The test still requires live-owner rejection
+before closure and after successful reopening, and releases/joins the bounded
+child before asserting the result. No timing extension, retry, lockfile deletion
+or active-owner unlock is used. Update activation/tests.rs, the startup guide,
+ADR-0091, specification, acceptance and development notes. Repeat the aggregate
+Rust check and native restart suite against the final lock correction.
+
+**Earlier native receipt:** the first isolated three-process macOS catalog suite
+passes all three specs in 43s (27.7s, 8.7s, 1.7s). Its completion receipt confirms
+three distinct real launches, generated directory removal, and exact generated
+credential/authority cleanup (.context/m4-catalog-restart/35daf9c5d646ce431e559bb4bb2f9966/complete.json).
+Executable SHA-256 c79413b90757fa5b3fcb8ba9b21e6f1c505f8c4cdde5fb7208adbafb59f1f0b9.
+This precedes the additional activation-lock correction; final-source evidence
+follows. Normal production build/resource/instrumentation preflight also passes
+before that correction, with the existing Vite chunk-size advisory.
+
+**Final-source native evidence:** the activation-lock pre-exec regression turns
+green (.context/keychain-startup/activation-lock-green.log), preserving both
+live-owner rejection assertions. Rebuild the isolated instrumented executable,
+SHA-256 74a980ffb5b12af35f10cdb5aec2ea388200fa57032201cc2e275b726df2b389.
+All three actual macOS catalog-launch specs pass again in 44s (27.9s, 8.9s, 1.7s;
+.context/keychain-startup/native-catalog-restart-final.log). Final completion
+receipt .context/m4-catalog-restart/54f55ddf3b2a4d99e77e4080b3a30ae8/complete.json
+confirms three distinct launches, generated credential/authority cleanup and
+removal of only the exact generated session directory. This includes native
+catalog recovery preparation, retained copies, forward activation and unchanged
+generated-source audits; it does not substitute for manual OS authentication or
+certified independent recovery. The current aggregate Rust run passes the
+previously failing retained activation case and the new deterministic lock case;
+its final outcome follows.
+
+**Owner clarification:** the owner confirms the new app authorization message and
+supplies a screenshot of the standard macOS confidential-information/login-Keychain
+dialog naming stillharbour.backup.v1. Explain that this existing shared service
+also holds catalog activation authority, and that the OS needs the Mac login
+password plus Always Allow for a trusted build, not repository reenrollment.
+Do not copy/publish the personal screenshot or record any password. This confirms
+the permission-prompt category; it supplies no separate catalog-schema/in-use
+error for the personal catalog. Keep cross-rebuild signing and manual-consent
+limitations explicit.
+
+**Final aggregate result:** npm run rust:check exits zero after the activation-lock
+fix: rustfmt, warnings-denied Clippy and 556 unit/integration cases pass, including
+520 core cases, seven shell cases, 29 integration cases and zero doctests; fifteen
+existing core ignores remain (.context/keychain-startup/rust-check-final.log).
+The core suite's 283.98s is not a startup/performance measurement. Retain the first
+failed aggregate receipt and both deterministic red/green regressions. The full
+502-case frontend pass remains applicable: the subsequent correction changes only
+Rust native lock lifetime/tests and documentation. Final strict production build,
+resource/instrumentation preflight and generated-binding consistency pass after
+native testing; lint, full formatting and eleven release/dependency cases pass,
+with final documentation/whitespace checks after this record. The final native
+three-launch receipt and executable hash above describe the final code. No
+personal-catalog validation, manual OS approval, stable signing, current Windows
+execution, full native/format/performance/accessibility suite or release-gate
+completion is claimed. Rebuilt ad-hoc apps can still require fresh OS consent;
+the source fix removes automatic prompt loops and the reproduced closed-owner
+lock leak without bypassing the catalog authority boundary.
+
+## 2026-11-05 — Specific catalog queue and worker errors
+
+**Request:** replace “The catalog queue is full or unavailable” with specific,
+useful detail. All four actor submission paths currently collapse full and
+disconnected TrySendError into BUSY. Add three generated real-actor regressions:
+hold the worker/fill its 16-slot queue, actually stop the receiver, and lose an
+accepted request's reply. All three fail against the old reporting
+(.context/catalog-errors/red-runtime.log); an earlier test compilation needs an
+explicit unit-channel type and is retained separately in red.log.
+
+**Change:** catalog.rs centralizes the unchanged 16-slot capacity and classifies
+submission errors in one private helper. Full remains BUSY and includes the
+operation, 16 waiting requests, not-queued fact and retry guidance; disconnected
+is CATALOG with not-queued/reopen guidance. Lost replies identify the operation,
+state unconfirmed completion and require checking the result after reopening
+before repeating. Separate startup/native-ownership failures also name their
+actual stage. Four fixed operation labels cover summary, query/update, snapshot
+and catalog recovery; paths, SQL, metadata and panic text never become labels.
+No new IPC fields/error enum, schema, dependency, logging, retry, queue capacity,
+original mutation or safety gate change. Preserve the existing Keychain/activation
+and UI work. Update specification, acceptance, development and user guide.
+
+**Regressions:** catalog_queue_tests.rs checks all four admission paths, no
+execution/output for rejected work and privacy of serialized errors. Strengthen
+the lost-reply fixture with a real committed generated edit before the worker
+panic and independently reopen read-only to prove why completion is uncertain.
+The initial three-case green run precedes that strengthened assertion; final
+aggregate results follow. No personal library/catalog or saved credential is
+used. Native smoke uses a separately built instrumented executable and generated
+three-launch catalog recovery session. This improves diagnostics; it does not
+claim the owner's actual saturation source or unexpected worker exit is fixed.
+
+**Recovery guidance review:** the recovery-freeze barrier is submitted after
+ordinary RPC admission closes. Its full-queue message therefore requires a
+fresh session, rather than a brief retry in that session. Add operation-specific
+reopen advice and extend the same full-queue regression; ordinary summary,
+query/update and snapshot requests keep wait/retry guidance. This final wording
+refinement follows the aggregate run's compilation; rerun the focused actor
+regressions, Clippy and rebuilt native smoke for it. No execution/retry policy
+changes. Final receipts follow.
+
+**Validation:** the aggregate Rust check exits zero with rustfmt, warnings-denied
+Clippy, 559 unit/integration cases (523 core, seven shell, 29 integration), zero
+doctests and fifteen existing core ignores (.context/catalog-errors/rust-check.log).
+Core duration 286.38s is not a queue performance measurement. That aggregate
+compiles before the last recovery-only advice refinement; all three actual actor
+regressions and both default-core/workspace all-target feature Clippy checks pass
+again afterward (queue-final.log, clippy-final.log, clippy-all-final.log), including
+the committed-edit/read-only audit and recovery-specific retry guidance. Full
+frontend/harness tests pass 502 cases in 79 files; strict types, lint and eleven
+release/dependency cases pass. No React/layout source changes or extra IPC fields
+need regeneration; binding consistency is checked normally.
+
+**Native smoke:** the initial generated three-launch suite passes in 41s before
+the recovery-only wording refinement (native-catalog.log). One final-source run
+times out waiting for the recovery review's Approve catalog switch control;
+subsequent phases cannot find its missing first receipt. Preserve the failed
+session and native-catalog-final.log. An unchanged-binary retry with test-only
+alert capture passes all three specs in 44s (native-catalog-retry.log), with no
+failure alert to diagnose; do not infer a cause or count the failed attempt as a
+pass. The completion receipt under
+.context/m4-catalog-restart/3ed63cd01cae158cf5745e19f01cedbd/complete.json confirms
+three distinct native processes, retained-catalog/source audits and exact generated
+credential/authority/session cleanup. Executable SHA-256:
+a00d65a22a6cd473873ad1f81767ec3cf2f504d1ea3e365753bf20bbe208af02.
+Final normal frontend build, resource/instrumentation preflight, bindings and
+format/whitespace checks follow native testing; the existing Vite chunk advisory
+remains. This is not a full native-suite, current Windows, physical accessibility,
+signing, personal-catalog stress or release/recovery certification claim. Actual
+owner queue pressure remains to be diagnosed if it recurs; this request improves
+its error specificity without expanding work queues or replaying operations.
+
+**Final checks:** normal production build, release resource/instrumentation preflight,
+binding consistency, complete formatting and git diff --check all exit zero after
+the last native run. No required check remains running.
+
+## 2026-11-05 — Bottom application error toast
+
+**Request:** move the recently improved errors to a toast at the bottom. Use
+Impeccable's established Operate guidance and the Chakra UI v3 composition.
+Inspect the pinned CLI toaster dry run and adapt it to a session-scoped store
+in new components/ErrorToast, with a colocated slot recipe/barrel/tests. Replace
+App's inline ConnectionNotice and remove its global-error CSS. Keep full backend
+details, explicit Reconnect/Dismiss and the existing error source. Memoize the
+existing reconnect callback so status polling does not rebuild the toast. Remove
+the duplicated detailed error from LibraryScreen's failed-load state while
+retaining the failure heading/Retry library action.
+
+**Behavior/design:** one bottom-centred notification, 16px inset/34rem maximum,
+studio panel/control border/rose icon, selectable wrapped description bounded
+at 40vh with keyboard scrolling. It persists until dismissed/cleared; repeats
+keep the same instance and changed errors replace it. Portal mounting adds no
+workspace height and never steals focus; Escape works while it has focus.
+Use no appearance animation so native frame suspension cannot hide an error.
+Close/Reconnect remove the store item immediately, then invoke their explicit
+existing actions. Cleanup removes the scoped item on unmount. Contextual
+validation, job details and blocking recovery outcomes stay in place. No backend,
+IPC/schema, dependency, Keychain dialog, operation/retry or safety-gate change.
+Add the toast size token/recipe registration and regenerate custom theme types.
+Update DESIGN.md, specification, acceptance, development, user guide and this log.
+
+**Focused checks:** fifteen notification/onboarding/library-failure cases pass.
+New regressions cover complete portal content, persistence after two minutes,
+deduplication/replacement/clear/unmount, Reconnect, focus retention and Escape.
+Initial dismissal tests find the controlled toast's closed presence still in
+jsdom; immediate scoped store removal makes dismissal deterministic and avoids
+leaving an invisible alert. Keep focused.log and the passing focused-complete.log.
+Typegen, strict types and lint pass. React Doctor retains score 77 with no new
+changed-source diagnostics; no suppression is added. Full/native results follow.
+
+**Native plan/limits:** add tests/desktop/error-toast.e2e.mjs against an isolated
+instrumented executable and disposable native appdata. Inject a clearly labelled
+picker error through the existing desktop-test-only interceptor, never saturate
+a personal catalog. Verify complete visible bottom toast at desktop/minimum
+widths, one instance across repeats, no layout shift/overflow, Dismiss and Escape.
+This is native presentation evidence with an injected fault, not an actual Rust
+queue failure. No real library, saved credential or independent developer app is
+used as a test fixture. Existing platform/release/recovery limits remain.
+
+**Final UI/native evidence:** all 506 frontend/harness cases in 80 files pass
+again after the final Escape propagation guard (frontend-final.log). All fifteen
+focused notification/onboarding/library-failure cases, strict types/build, lint,
+binding consistency and eleven release/dependency cases pass. React Doctor
+again reports no changed-source issues, score 77. ErrorToast consumes Escape
+before it reaches background shortcuts. Visual review confirms studio palette,
+complete wrapped text, accessible close control and inset placement in the
+native 1180×780 and 660×560 captures. Explicit borderStyle is required with the
+existing no-preflight system; include it in the final slot recipe.
+
+The final macOS notification spec passes in 741ms / two seconds including runner
+startup (.context/error-toast/native-verified.log), against isolated instrumented
+binary SHA-256 9e153e315fd434b5e66f8b64737f89f39cbd9491fc6192ad5c39422240a4cf54.
+It verifies complete visible text, bottom placement, viewport bounds, one toast
+through repeated faults, no workspace movement/overflow, Dismiss and focused
+Escape. Captures: .context/error-toast/native-1180.png and native-660.png. The
+first native attempt verifies the toast but fails because the icon-only Dismiss
+control has an accessible name rather than visible button text; fix the test's
+selector to its aria-label, not the product control. Preserve native.log and the
+passing final receipts. Screenshots are labelled generated notification faults;
+no real catalog saturation or source-mutation acceptance is claimed.
+
+**Broader Rust qualification:** rustfmt and warnings-denied Clippy pass, but the
+aggregate run exits nonzero: seven shell cases pass; core has 521 passes, two
+failures and fifteen existing ignores, so later integrations are not reached
+(.context/error-toast/rust-check.log). The managed_destination_requires_explicit_root_policy_and_fresh_grant_for_both_actions
+and import_projected_workflow_reviews_subset_and_separately_approves_both_actions
+scenarios return “Invalid operation job transition/progress” from their generated
+child processes. Both pass as isolated unchanged-binary reruns in 1.79s and 1.50s
+(managed-destination-focused.log/import-projected-focused.log). Backend source is
+unchanged by this UI request; no root cause, full Rust pass or unrelated executor
+repair is inferred. Keep this aggregate failure visible as an unresolved broader
+validation limitation, alongside existing platform/release/recovery gates.
+Normal production frontend/resource/instrumentation preflight is restored after
+native automation; final documentation and whitespace checks follow.
+
+## 2026-11-05 — Prepare accumulated workspace changes for pull request
+
+**Request/scope:** publish the owner's approved workspace state from the existing
+feat/ui-professional-redesign branch onto main, following the attached PR
+instructions and PR skill template. Review tracked changes and all new source,
+illustration, license, test and documentation files. Fetch confirms origin/main
+at 577fbec; the existing merge already includes it. Include the complete studio
+shell, reference-aligned bounded timeline/native ordinal seek, illustrated
+duplicate choices, confirmed favorite animation, Keychain/activation fixes,
+specific catalog errors and persistent bottom toast. Preserve the branch name
+and existing gates; no original-file or personal-catalog operation is added.
+Commit the reviewed complete change and publish this branch for review.
+
+**Validation record:** reuse the completed implementation receipts rather than
+claim a new test execution for publishing. The latest frontend run passes 506
+cases in 80 files; focused/native notification checks, production build/resource
+preflight, bindings, lint and formatting pass. Earlier native timeline, duplicate,
+heart and three-launch catalog receipts retain their exact-source qualifications.
+The latest full Rust run has two generated executor transition/progress failures
+that pass individually, and the separate Map smoke timeout remains open. Include
+these limits in the PR evidence instead of claiming a clean full native/Rust or
+release/preservation gate. For this publishing/documentation step, run scoped
+formatting, diff whitespace and staged/base-diff inventory checks before commit.
+
+Packaging review confirms the three bundled duplicate PNGs are 640×426 with
+alpha; correct the current duplicate-card guide to match the actual assets.
+No illustration pixels or application behavior change in this publishing step.
+
 ## 2026-11-05 — Utilities navigation and duplicate-review interface
 
 **Request/scope:** inspect the supplied Duplicate Studio HTML and current native application; flatten secondary buttons, integrate places into the main search, move Jobs above Settings, group utility destinations and separate duplicate/health/storage workflows. Add a read-only duplicate cluster queue, search/filter/selection, actual preview comparison modes, explainable available evidence, conservative keeper suggestions, rules/threshold preview and explicit blocked Recently Deleted/Undo states. Preserve all originals and production recovery gates; no score, audio fingerprint, edit lineage, album ranking, successful move or storage recovery is invented. Missing capabilities and exact limits are documented in UTILITIES_UI.md and acceptance/specification updates.
@@ -2621,3 +3005,19 @@ Add a reusable memory-only executable probe from the earlier development experim
 **Final native/UI outcome:** all five isolated macOS specs pass, 26 cases in 3m02s (`.context/ui-native-isolated-final.log`), including Foundation, live-library, application snapshot lifecycle, Map and metadata export. The isolated binary remains unchanged at SHA-256 786bc92fe4d96b678f14c5a6640e54233b56f17587d50fb20e875ec8ca02c747 during that run. The final browser keyboard pass additionally reveals focus returning to the document after drawer dismissal; close the native dialog before unmounting and explicitly restore the actual opener. Its regression passes. Add explicit pending-state copy so an active inspection is not presented as an empty completed result. Rebuild the isolated app and pass the final three native Foundation/onboarding/inspection cases in 22.8s, including opener-focus assertion and unchanged-source audit (`.context/ui-native-final-focused.log`). Retain the final copied-app hashes before/after validation separately; they match. No original-file operation is enabled.
 
 **Final checks/artifacts:** strict TypeScript, lint and all 501 frontend cases in 81 files pass after the last changes (`.context/ui-last-frontend-validation.log`). Ordinary `npm run build` and `npm run release:check` pass; retain the existing chunk-size warning. The production frontend/default graph exclude desktop-test routes and instrumentation, and helpers/place data/ExifTool pins pass. This is preflight, not signing or installed-package acceptance. Native captures include `.context/screenshots/duplicates-native-overview.png`, `duplicates-rules.png`, `duplicates-minimum.png` and distinct Storage/Integrity results. Labelled browser captures under `.context/duplicates-browser-*.png` cover filled groups, all comparison modes, narrow layout and blocked rules; their generated images and IPC mocks remain only in ignored `.context`. The two temporary browser/image servers and this task's named browser session are stopped; the separate development watcher is left alone. Final document formatting and `git diff --check` are checked after this entry. Windows execution, measured visual/audio/lineage signals, additional ranking data, real removal/Undo and the existing M6 release gates remain unclosed. The failed aggregate and earlier native attempts remain distinct evidence despite the passing targeted recovery and isolated runs.
+
+## 2026-11-05 — Commit utilities UI and merge current main
+
+**Request/scope:** commit the current UI work, fetch main and resolve conflicts on the existing branch. Commit the complete reviewed UI as f7012a6, fetch origin/main at d84dd9f (PR #21), and merge without rebasing or renaming the branch. Preserve main's catalog-startup/Keychain and timeline fixes, error toasts, warm studio tokens, named icon tools and illustrated duplicate cards alongside unified search, sidebar Jobs/Utilities, flat actions and distinct inspection results. Retain both specification/evidence histories; the latest utilities navigation/search requirements supersede older header-Jobs/Places text. No dependency, identity or preservation gate changes are introduced by conflict resolution.
+
+**Resolution:** reconcile eleven conflicted files. Embed main's matching/scope/property cards inside the branch's expandable inspection setup, retaining the cluster/evidence workspace and health/size results. Preserve Collection grouping and name the care group Utilities, with Jobs above Settings. Keep main's search glyph and named secondary icons inside the unified search/header. Keep focus/active styling while secondary borders remain transparent. Combine card/radio CSS exceptions with studio-style isolation. Update newly imported search selectors and card scroll setup. Regenerate Chakra types for main's added recipes rather than casting around the missing presentation variant. Validation and final merge result follow below.
+
+**Merge validation so far:** regenerate Chakra types, then the complete `npm run check` passes formatting, lint/types, all 517 frontend cases in 84 files, eleven Node cases, IPC drift, Rustfmt, both Clippy configurations, seven desktop units, 523 core cases (15 existing opt-ins ignored; 309.00s), all 29 integrations, doctests and production build. The instrumented build passes in 48.09s and the imported native duplicate-card case passes. The native toast case initially observes zero nodes between clearing a previous picker failure and rendering the last rejection. Wait for that asynchronous result before retaining its exact-one assertion; an absent or duplicate final notification still fails. Record the initial native failure separately and rerun this focused case. Native outcomes follow below.
+
+**Native timeline reconciliation:** the imported Foundation harness still contains three pre-reference assumptions: a month index passed to the slider, the first overscan DOM photo as the jumped-to visible photo, and a 0–1 range for 960 same-date photos. Main's ADR-0090 intentionally replaces those semantics. Keep the actual application implementation and correct the harness to use ordinal keyboard navigation, visible year/target geometry, the 0–959 range and a native seek_index result while the pointer remains down. Retain outside-pointer release, exact endpoints, bounded-window and unchanged-original assertions. The first broad native run's failures remain recorded in `.context/merge-native-tests.log`; rerun the affected suites after these harness corrections.
+
+**Fresh-workspace harness setup:** the dedicated reference-timeline case reaches its screenshot step but the ignored `.context/timeline-reference` directory is absent. Create that artifact directory in the case, as the other native suites do. The initial broad native run finishes six passed/three failed suites; only the toast/Foundation/timeline harnesses need rerunning. Production code remains unchanged after the passing aggregate check.
+
+**Final native merge evidence:** the targeted retry passes error-toast and reference timeline navigation; Foundation finishes twenty passing/two failing/three platform skips (`.context/merge-native-retry.log`). Its two remaining failures are repeated ArrowDown navigation to the oldest year and the small-fixture outside-handle drag's visible-year/exact-end assertion. A separate two-case diagnostic reproduces both (`.context/merge-timeline-diagnostic.log`): after repeated ArrowDown, the slider is still zero with newest-year photos mounted. Do not classify these remaining failures as merely stale assertions or claim a full native pass; their root cause remains unresolved. The dedicated 960-photo captured-drag/keyboard-endpoint suite passes. Across the broad run and focused retry, eight of nine native suites pass; Foundation remains failing. Keep its assertions active rather than weakening them. No additional application behavior is invented during conflict resolution. The isolated native executable remains unchanged at SHA-256 283c824f65ca42e634fe21eb78cb41ed94bb2bffd6bf6772811196ba18b5c3c5. The fixture manifest audit passes; no personal library is scanned or mutated.
+
+**Finalization:** restore the ordinary production frontend with `npm run build` and run `npm run release:check`; both pass. The existing bundle-size advisory remains. Pinned macOS ARM64 helpers, ExifTool manifest and exclusion of desktop-test instrumentation pass preflight; this is not signed-package, Windows or new preservation/recovery qualification. Scoped native-harness ESLint/formatting pass. Stage the resolved merge and its documentation, verify no unmerged entries/conflict markers and clean staged whitespace, then create the merge commit on the unchanged feat/duplicates-integrity-ui-fix branch. Preserve the two native Foundation failures as the outstanding validation limit.

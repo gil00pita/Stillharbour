@@ -90,6 +90,19 @@ pub(crate) fn read(scope: &str) -> Result<Option<Authority>> {
     authority.validate()?;
     Ok(Some(authority))
 }
+/// Exact-scope foreground authorization, never credential reenrollment.
+pub(crate) fn authorize(scope: &str) -> Result<()> {
+    let key = key(scope)?;
+    #[cfg(target_os = "macos")]
+    {
+        platform::authorize(&key)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = key;
+        Err(rejected())
+    }
+}
 fn write(scope: &str, value: &Authority) -> Result<()> {
     value.validate()?;
     let mut bytes = Zeroizing::new(b"SHCA1".to_vec());

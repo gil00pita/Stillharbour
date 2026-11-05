@@ -173,7 +173,7 @@ export function LibraryScreen({
               />
             )}
             {queryError ? (
-              <QueryFailure message={queryError} loading={loading} onRetry={c.retry} />
+              <QueryFailure loading={loading} onRetry={c.retry} />
             ) : (
               <PhotoCollection
                 columns={columns}
@@ -275,19 +275,10 @@ export function LibraryScreen({
   );
 }
 
-function QueryFailure({
-  message,
-  loading,
-  onRetry,
-}: {
-  message: string;
-  loading: boolean;
-  onRetry: () => void;
-}) {
+function QueryFailure({ loading, onRetry }: { loading: boolean; onRetry: () => void }) {
   return (
     <div className="empty-results">
       <h2>Library couldn’t be loaded</h2>
-      <p>{message}</p>
       <Button disabled={loading} onClick={onRetry}>
         {loading ? 'Retrying library…' : 'Retry library'}
       </Button>

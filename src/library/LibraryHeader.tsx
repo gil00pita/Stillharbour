@@ -1,4 +1,5 @@
 import { Button } from '../components/ui/controls';
+import { IconButton } from '@chakra-ui/react';
 import type { ReactNode } from 'react';
 import type { Section } from './model';
 import { PlaceSearch } from '../components/PlaceSearch';
@@ -51,18 +52,60 @@ export function LibraryHeader({
         aria-expanded={filterOpen}
         aria-controls="library-filter-panel"
       >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path
+            d="M4 7h16M4 17h16M9 4v6m6 4v6"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
         Filter{activeCount > 0 && <span className="filter-count">{activeCount}</span>}
       </Button>
       {jobsControl}
       {onCatalog && (
-        <Button disabled={busy} onClick={onCatalog}>
-          Catalog
-        </Button>
+        <IconButton
+          type="button"
+          variant="outline"
+          className="toolbar-secondary"
+          aria-label="Catalog"
+          title="Catalog"
+          disabled={busy}
+          onClick={onCatalog}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M4 5h16v15H4ZM8 3v4m8-4v4M4 10h16M8 14h3m-3 3h7"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="toolbar-action-label">Catalog</span>
+        </IconButton>
       )}
       {onPlans && (
-        <Button onClick={onPlans} disabled={busy}>
-          Saved plans
-        </Button>
+        <IconButton
+          type="button"
+          variant="outline"
+          className="toolbar-secondary"
+          aria-label="Saved plans"
+          title="Saved plans"
+          onClick={onPlans}
+          disabled={busy}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+              d="M6 3h12v18l-6-4-6 4Z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span className="toolbar-action-label">Saved plans</span>
+        </IconButton>
       )}
     </header>
   );

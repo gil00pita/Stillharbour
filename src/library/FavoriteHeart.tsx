@@ -16,22 +16,22 @@ export function FavoriteHeart({
   const hidden = useDocumentHidden();
   const button = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    if (!animate) return;
+    if (!animate || !favorite) return;
     const value = button.current
       ? getComputedStyle(button.current).getPropertyValue('--like-pop').trim()
       : '';
-    // Bundled CSS may serialize milliseconds as seconds (180ms becomes .18s).
+    // Bundled CSS may serialize milliseconds as seconds (800ms becomes .8s).
     const milliseconds =
       parseFloat(value) * (value.endsWith('ms') ? 1 : value.endsWith('s') ? 1000 : NaN);
-    const duration = Number.isFinite(milliseconds) && milliseconds >= 0 ? milliseconds : 180;
+    const duration = Number.isFinite(milliseconds) && milliseconds >= 0 ? milliseconds : 800;
     // Occluded WebViews can suspend animationend; always finish at saved state.
     const timer = setTimeout(onAnimationEnd, hidden ? 0 : duration + 70);
     return () => clearTimeout(timer);
-  }, [animate, hidden, onAnimationEnd]);
+  }, [animate, favorite, hidden, onAnimationEnd]);
   return (
     <button
       ref={button}
-      className={`viewer-favorite t-like ${animate ? 'is-animating' : ''} ${hidden ? 'without-motion' : ''}`}
+      className={`viewer-favorite t-like ${animate && favorite ? 'is-animating' : ''} ${hidden ? 'without-motion' : ''}`}
       data-liked={favorite}
       aria-label="Favorite photo"
       aria-pressed={favorite}
@@ -40,9 +40,24 @@ export function FavoriteHeart({
       disabled={busy}
       onClick={onClick}
     >
-      <span className="t-like-icon" onAnimationEnd={onAnimationEnd}>
+      <span className="t-like-icon" aria-hidden="true">
+        <span className="t-like-ring" />
+        <span className="t-like-particles">
+          {Array.from({ length: 7 }, (_, index) => (
+            <span
+              key={index}
+              className="t-like-spark"
+              style={{ rotate: `${(index * 360) / 7}deg` }}
+            />
+          ))}
+        </span>
         <svg
           className="t-like-heart"
+          onAnimationEnd={(event) => {
+            if (event.target === event.currentTarget && event.animationName === 't-like-pop') {
+              onAnimationEnd();
+            }
+          }}
           width="24"
           height="24"
           viewBox="0 0 24 24"

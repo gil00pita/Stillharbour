@@ -2,32 +2,33 @@
 name: Stillharbour
 description: Quiet native photo workspace — photo canvas, indexed folders and cached viewer
 colors:
-  background: '#16191b'
-  sidebar: '#121516'
-  surface: '#1d2123'
-  text: '#e7e9e8'
-  border: '#303638'
-  muted: '#a9b3b2'
-  secondary: '#c7cecb'
-  accent: '#b6d6c8'
-  action-text: '#162b22'
-  action-hover: '#cee5da'
-  navigation: '#26322e'
+  background: '#191b19'
+  sidebar: '#131612'
+  toolbar: '#1c1f1b'
+  surface: '#212420'
+  text: '#eeeee8'
+  border: '#323830'
+  muted: '#a9afa4'
+  secondary: '#c8ccc2'
+  accent: '#c1d0b5'
+  action-text: '#202a1b'
+  action-hover: '#d4dfcb'
+  navigation: '#2b3327'
   navigation-text: '#e2ece7'
-  library-navigation: '#263a30'
-  control: '#1d2123'
-  control-border: '#3c4643'
-  control-hover: '#232827'
-  pressed: '#3c5147'
+  library-navigation: '#2b3327'
+  control: '#212420'
+  control-border: '#687161'
+  control-hover: '#2b3029'
+  pressed: '#374231'
   selected: '#2e4237'
-  field: '#161a1c'
-  field-border: '#46504f'
+  field: '#171a17'
+  field-border: '#6d7567'
   switch-border: '#75847d'
   tag: '#2d4036'
-  preview: '#232827'
+  preview: '#2b3029'
   availability-background: '#352c23'
   availability-text: '#ead3b8'
-  sidebar-version: '#a9b3b2'
+  sidebar-version: '#a9afa4'
   error-border: '#826052'
   error-background: '#30231e'
   error-text: '#f2c5b4'
@@ -49,9 +50,10 @@ typography:
 rounded:
   small: '4px'
   photo-container: '5px'
-  control: '8px'
-  action: '8px'
-  navigation: '8px'
+  control: '6px'
+  action: '6px'
+  navigation: '6px'
+  timeline-year: '14px'
   container: '8px'
   switch: '12px'
 spacing:
@@ -173,7 +175,7 @@ Warm white carries primary content; muted grey carries provenance, counts, paths
 
 ## Typography
 
-All interface text uses the system UI stack in the frontmatter; there is no downloaded or separate display font. The empty-state headline is balanced and centred. It reads “Your library is waiting”, beneath the owner-supplied 302×215 photo illustration. A muted supporting paragraph explains folder selection and that originals stay in place. The illustration scales down to fit narrow containers. The wordmark is 18px/600 with −0.01em tracking, its descriptor 11px/400 with ordinary tracking and 16px line height. At widths ≤850px the wordmark becomes 16px while the descriptor remains 11px.
+All interface text uses the system UI stack in the frontmatter; there is no downloaded or separate display font. The empty-state headline is balanced and centred. It reads “Your library is waiting”, beneath the owner-supplied 302×215 photo illustration. A muted supporting paragraph explains folder selection and that originals stay in place. The illustration scales down to fit narrow containers. The wordmark is 19px/600 with −0.01em tracking, its descriptor 11px/400 with ordinary tracking and 16px line height. At widths ≤850px the wordmark becomes 16px while the descriptor remains 11px.
 
 The shell toolbar uses the title role. The working-photo toolbar has a compact 18px title, hidden at widths ≤760px to give filename search room. Inspector and Jobs headings use the panel-title role; the Filters dialog uses the filter-title role. Folder and asset headings are compact (13px/550); shared buttons and fields use 13px text; dense photo filenames and scan status retain their compact roles. The primary folder action remains 13px/600. Settings uses a standalone 24px heading, 16px section headings and 14px folder names, with shared 13px controls and help text beneath them. Its heading carries the surface without an eyebrow or duplicated toolbar title. Paths use 13px/1.6, favorite labels 10px, and timeline month/year bubbles and the muted sidebar version 12px (11px when collapsed). Text list headers and cells use 12px text, with muted headers and an accent active sort. Timeline omits filename captions at rest; a small SVG favorite badge can overlay the image. Uniform grid retains filenames, and Text list presents file data. Date headings use 13px/550 with a quiet 11px shown-count; sparse heading labels truncate within the images they describe. Timeline year photo counts belong in accessible button labels rather than visible text.
 
@@ -181,7 +183,7 @@ Metadata labels are quieter than their values. Keep recorded dates and their sou
 
 ## Layout
 
-The native window defaults to 1180 × 780 and has a 660 × 560 minimum. The shell fills the viewport without scrolling the document. A 228px identity rail borders a flexible main column. The main pane scrolls independently; inside the rail, only the primary navigation region scrolls when space is constrained. Identity and the collapse control stay at the top, while a non-shrinking workspace-actions footer stays at the bottom. A thin divider and 16px top padding separate that footer from primary navigation. Settings sits above the runtime version; Jobs belongs in each screen’s header. The toolbar uses a 64px minimum height with 12px 24px padding; Photos retains its compact header and existing narrow-window behavior. At widths ≤850px the rail is 184px. Expanded and collapsed navigation retain the same footer anchoring at the native minimum.
+The native window defaults to 1180 × 780 and has a 660 × 560 minimum. The shell fills the viewport without scrolling the document. A 240px identity rail borders a flexible main column. The main pane scrolls independently; inside the rail, only the primary navigation region scrolls when space is constrained. Identity and the collapse control stay at the top, while a non-shrinking workspace-actions footer stays at the bottom. A thin divider and 16px top padding separate that footer from primary navigation. Settings sits above the runtime version; Jobs belongs in each screen’s header. The toolbar uses a 64px minimum height with 12px 24px padding; Photos retains its compact header and existing narrow-window behavior. At widths ≤850px the rail is 184px. Expanded and collapsed navigation retain the same footer anchoring at the native minimum.
 
 **First run and root setup.** The workspace is at most 920px wide, including padding, and centres the welcome region below the toolbar. The welcome is at most 570px wide; a 40px folder outline precedes its headline with 24px separation. The primary action sits 28px below. Selecting a folder replaces the entire welcome and chooser with the selected-folder form; Cancel returns to the chooser. The form, Advanced accordion and saved-root settings expand to their natural height without internal scrollbars. The main column scrolls vertically to keep all content and actions reachable. The two-column field grid uses 16px row and column gaps. Paths wrap anywhere while preserving whitespace.
 
@@ -189,7 +191,7 @@ Hidden-file and hidden-folder switch rows sit side by side with a 16px gap, stac
 
 Minimum size and Maximum size retain that two-column Advanced grid. Each field places its label 8px above a row containing a flexible amount input and a 72px native unit select, separated by 8px. The amount input can shrink within its grid cell; inline errors expand the field vertically. At the ≤600px fallback, the fields follow the existing single-column form layout.
 
-**Settings.** A standalone page scrolls inside the main pane while the identity rail remains separate. Settings explicitly gives that pane vertical auto overflow, including after a library is registered; opening folder setup keeps the setup pane’s scrolling behavior. Its content is at most 1040px wide including 32px 36px 48px padding; the heading has 24px separation below it. Library locations, Preview cache, Scan settings, Browsing defaults and New folder defaults use 24px vertical padding and thin bottom dividers, with no enclosing cards or shadows. Indexed-folder rows have a flexible information column and an action column, separated by 16px; the root label, wrapping native display path, availability, indexed count and mode stay together. Add photo folder sits beside the section heading. At widths ≤760px, page padding becomes 20px 16px 32px, folder actions move beneath the folder information and the section-heading row can wrap. Scan settings sits between Library locations and Browsing defaults. Its labelled library selector is at most 420px wide; the selected path and shared setup fields sit directly in the section without selected-folder card framing. The inline form expands naturally through Advanced and its own scan actions, with the main pane owning scrolling. Browser controls wrap and keep their shared pressed states. New folder defaults reuses the naturally expanding Advanced form, tag editors and size grid; the main pane scrolls through the bottom Save defaults and Discard changes actions rather than adding an inner scroll region.
+**Settings.** A standalone page scrolls inside the main pane while the identity rail remains separate. Settings explicitly gives that pane vertical auto overflow, including after a library is registered; opening folder setup keeps the setup pane’s scrolling behavior. Its content is at most 1040px wide including 40px 40px 56px padding; the heading has 24px separation below it. Library locations, Preview cache, Scan settings, Browsing defaults and New folder defaults use 32px vertical padding and thin bottom dividers, with no enclosing cards or shadows. Indexed-folder rows have a flexible information column and an action column, separated by 16px; the root label, wrapping native display path, availability, indexed count and mode stay together. Add photo folder sits beside the section heading. At widths ≤760px, page padding becomes 20px 16px 32px, folder actions move beneath the folder information and the section-heading row can wrap. Scan settings sits between Library locations and Browsing defaults. Its labelled library selector is at most 420px wide; the selected path and shared setup fields sit directly in the section without selected-folder card framing. The inline form expands naturally through Advanced and its own scan actions, with the main pane owning scrolling. Browser controls wrap and keep their shared pressed states. New folder defaults reuses the naturally expanding Advanced form, tag editors and size grid; the main pane scrolls through the bottom Save defaults and Discard changes actions rather than adding an inner scroll region.
 
 **Working library.** The separate identity rail can collapse to a 72px icon column, retaining the owner mark, navigation semantics and version. The working-photo toolbar stays above the internal collection scroll region, with a compact title, fixed filename search, Filter button and Jobs icon. It uses a 64px minimum height and 12px 24px padding. Photos has no Add folder action; indexed-folder setup remains in Settings. The canvas begins below the toolbar without resting query, count, view-control or filter-chip rows, or a pagination footer. Contextual batch actions appear only when a selection exists. Opening Scan settings from Photos navigates to Settings and focuses the inline group for that root, within the naturally scrolling main pane.
 
@@ -217,7 +219,7 @@ At the supplied 660 × 560 minimum, controls wrap and the collection keeps its o
 
 The workspace stays flat at rest. Tonal surfaces and 1px dividers provide hierarchy; selected assets use an inset accent outline. Viewer and Compare use an opaque sidebar-toned surface that gives the photographs protected focus. The right-side Filters dialog uses a surface fill and left divider with a translucent black backdrop; it adds no shadow.
 
-Keyboard focus uses a 2px accent outline, offset 5px on buttons and links and 2px on fields, summaries and the collection viewport. Gallery photo buttons use an inset −3px offset so their focus remains visible within image tiles; timeline year buttons use −2px. Switches retain the field focus outline. A tag editor outlines its whole field when focus is within; its draft input suppresses a second outline, while chip removal buttons have an inset focus outline (−2px offset). Focus is distinct from selected and pressed states. Retain purposeful scan/preparation, viewer and loading feedback, honoring Reduced Motion and occluded-window behavior. Shared buttons use 140ms neutral color feedback; confirmed favorite feedback uses 180ms ease-out and a restrained 4% press, without overshoot. There are no decorative interface gradients. Fixture image content does not define a decorative UI treatment.
+Keyboard focus uses a 2px accent outline, offset 5px on buttons and links and 2px on fields, summaries and the collection viewport. Gallery photo buttons use an inset −3px offset so their focus remains visible within image tiles; timeline year buttons use −2px. Switches retain the field focus outline. A tag editor outlines its whole field when focus is within; its draft input suppresses a second outline, while chip removal buttons have an inset focus outline (−2px offset). Focus is distinct from selected and pressed states. Retain purposeful scan/preparation, viewer and loading feedback, honoring Reduced Motion and occluded-window behavior. Shared buttons use 140ms neutral color feedback; confirmed favorite feedback uses the owner-requested 800ms heart/ring/paired-particle sequence, settling into a rose fill; Reduced Motion retains the saved fill without movement. There are no decorative interface gradients. Fixture image content does not define a decorative UI treatment.
 
 ## Shapes
 
@@ -332,8 +334,54 @@ Catalog organization retains its title, Close and section shortcuts above an ind
 
 Caption/review drafts remain in memory across browsing within the current catalog; display the unsaved state and the requirement to save before app closure/catalog switching. Preserve explicit saving, optimistic versions and backend conflict handling. The no-location map state presents the matching photographs and count without an empty geographic canvas. See docs/INTERFACE_POLISH.md for behavior and docs/IMPLEMENTATION_LOG.md for actual verification boundaries.
 
+## Quiet photographic studio — 2026-11-05
+
+Owner-selected direction: warm charcoal, warm white system type, restrained sage and precise desktop controls. This supersedes earlier shell sizing and control-radius values where they differ. The unchanged owner logo and the existing contact-sheet geometry remain authoritative.
+
+The expanded rail is 240px, 184px below 850px, and 72px when collapsed. Its 32px top inset and 36px separation before navigation establish breathing room. Collection (Photos, Folders, Albums / Tags, Map), library care (Duplicates, Integrity, Storage, Backup & Sync) and unavailable Utilities form semantic groups separated by 16px spacing and thin rules. No visible category headings compete with navigation. Inactive labels are muted; the current destination has a quiet sage-neutral surface, warm-white label and sage icon. Settings and the runtime version stay anchored below independently scrolling navigation. At narrow widths the unchanged mark renders at 28×30px so its descriptor fits.
+
+Photos uses a 76px toolbar, 16px vertical padding and 24px end padding, with a 32px panel-toggle target. Filename search is capped at 360px and has a decorative 16px search glyph. Filter retains an outlined control and its active count; Jobs, Catalog and Saved plans are quieter secondary tools. At widths up to 760px, Catalog and Saved plans retain their accessible names and native tooltips while showing their 16px outline icons without visible text. Search, Filter, Jobs and both secondary tools stay reachable in one row at 660×560. Collection inset is 24px; date geometry and 4px image gutters remain unchanged.
+
+Controls use 6px corners, 13px/500 text, 36px standard fields and existing 44px primary actions. Button boundaries use #687161, field boundaries #6d7567, against the registered neutral surfaces. Keyboard focus remains sage. `color-scheme: dark`, themed text selection/caret and thin palette-coloured native scrollbars complete the browser-owned surfaces. Tabular numerals apply to data/path/status roles, leaving ordinary prose proportional. No new decorative animation is introduced; existing reduced-motion feedback remains.
+
+First-run onboarding uses the already approved product tagline “A home for the moments you keep.” as a balanced 420px headline above plain folder/preservation guidance. The chooser remains separate from explicit Save & Start scanning.
+
+Settings retains its section order and flat divided layout, with 32px section separation and 40px desktop insets; narrow insets remain 20px/16px. Filter headers and persistent actions use the toolbar surface. The theme registers the pinned Chakra Field slot recipe alongside its custom recipes so required-field typing survives CLI type generation.
+
+Visual evidence and limitations: docs/INTERFACE_POLISH.md and docs/IMPLEMENTATION_LOG.md. Browser fixtures and system wallpaper thumbnails stay in ignored .context files; they are not shipped assets or native integration evidence.
+
+## Reference-inspired date rail — 2026-11-05
+
+The owner supplied alumbo/react-timeline-vertical-navigation as the scrollbar reference. Adopt the quiet dotted chronology, readable year buttons and floating date label within the existing studio palette. This supersedes the earlier 72px/56px rail and tiny grip: reserve 88px normally, 80px up to 760px, with a 28px hit lane and a 14×28px sage grip. Year labels use 12px native type, 28px targets and a small selected-year pill. At most 80 dots denote actual filtered month positions, with explicit Undated handling.
+
+Hover reveals a candidate marker and a warm-sage date bubble without moving the actual-position grip. The bubble has a small geometric pointer, 12px/550 type and a 28px height; its centre shares the slider's 14px end insets. Preview output is distinct from the currently visible date. Dragging, keyboard focus and gallery scrolling also reveal the label. Preserve native vertical-range semantics, visible focus, reduced motion, outside-pointer release, indexed seeking, exact endpoints and wheel behavior. Escape/focus loss cancel pending gestures. Details and reference revision pins: docs/TIMELINE_NAVIGATION.md.
+
+## Illustrated duplicate choices — 2026-11-05
+
+Duplicates uses three illustrated radio cards for exact contents, property candidates and bounded static PNG8 pixels. The owner explicitly requested illustrated cards. Ivory paper-photo, property-tag and pixel-tile artwork adds warmth within the charcoal/sage studio palette. Selected cards use the existing navigation surface, sage border and filled indicator; keyboard focus remains separate. Three columns collapse into illustrated rows below a 620px container width. File scope and property-rule combination use compact cards; content algorithms live in an Advanced disclosure. Labels, candidate/manual-review limits and the explicit Start action remain authoritative. The 640×427 transparent assets are bundled decorative images, not catalog media. See docs/DUPLICATE_MATCH_CARDS.md.
+
+## Reference-aligned timeline — owner correction, 2026-11-05
+
+The owner's explicit request for the reference overrides the previous sage grip/pill interpretation on this surface. Match the source's compact dark year labels, 4px dots at 12px intervals between years, 40×1px blue selected line, 72×2px blue preview underline and 24px dark date label with its bottom on the underline. Use 24px end insets and a reserved 56px inner lane, with the app's system font. Reveal on hover/focus/scroll, delaying idle fade three seconds; reduce motion when requested. Positions are photo ordinals; pressing and dragging navigate live without unmounting the rail. Other studio surfaces and photo geometry remain unchanged. See docs/TIMELINE_NAVIGATION.md and ADR-0090 for bounded native adaptation and edge cases.
+
+### Bottom error notification — 2026-11-05
+
+Global request/connection errors use one bottom-centred toast, 16px from the
+window edge and at most 34rem wide. Use the studio panel, control border, warm
+foreground and rose warning icon, with the existing panel/control radii. The
+complete backend message wraps and can be selected; long details scroll within
+40vh. Show Request failed, a labelled Dismiss error control and the existing
+Reconnect action when the desktop connection is unavailable. Errors persist
+until dismissed or explicitly cleared, with no attention animation or automatic
+retry. Repeated polling of the same error keeps the same notification; a new
+error replaces it. The portal adds no layout height and does not move focus.
+Escape dismisses when the notification has focus. Contextual field validation,
+job outcomes and blocking recovery states remain at their existing decision
+points. The library load-failure state retains its heading/Retry library action;
+its detailed error appears once in the toast.
+
 ## Utilities refinement — 2026-11-05
 
 The owner replaces secondary action outlines with flat neutral fills while preserving visible keyboard focus and selected states. Utilities is a navigation group for Duplicates, Integrity, Storage and Backup & Sync; Map stays with library browsing. Jobs moves into the persistent sidebar footer immediately above Settings, retaining its nonmodal disclosure and active-job badge. This supersedes earlier header-Jobs instructions.
 
-The main Photos/Tags/Map search anchors offline city/country suggestions alongside filename/date entry. An explicit place choice becomes a visible clearable filter; no separate Places action remains. Duplicates uses a queue/inspector composition, restrained metric dividers, actual cached preview comparison and a right-edge rules drawer. Integrity uses health-specific findings; Storage retains capacity, folder treemap and size observations. Preserve the graphite/system-type/sea-green identity and 65% dark dialog backdrop. Missing scores/recovery/ranking signals remain textual unavailable states, and original-file actions stay gated. Source and evidence boundaries: docs/UTILITIES_UI.md and the dated implementation log.
+The main Photos/Tags/Map search anchors offline city/country suggestions alongside filename/date entry. An explicit place choice becomes a visible clearable filter; no separate Places action remains. Duplicates uses a queue/inspector composition, restrained metric dividers, actual cached preview comparison and a right-edge rules drawer. Integrity uses health-specific findings; Storage retains capacity, folder treemap and size observations. Preserve the current warm-charcoal/system-type/sage studio identity and 65% dark dialog backdrop. Missing scores/recovery/ranking signals remain textual unavailable states, and original-file actions stay gated. Source and evidence boundaries: docs/UTILITIES_UI.md and the dated implementation log.

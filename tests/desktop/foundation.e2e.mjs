@@ -12,6 +12,19 @@ async function native(request) {
     request,
   );
 }
+async function visibleGalleryYear(year) {
+  return browser.execute((year) => {
+    const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
+    return [...document.querySelectorAll('.gallery .asset')].some((asset) => {
+      const bounds = asset.getBoundingClientRect();
+      return (
+        asset.dataset.date?.startsWith(year) &&
+        bounds.bottom > viewport.top + 1 &&
+        bounds.top < viewport.bottom - 1
+      );
+    });
+  }, year);
+}
 async function reviewBackupComparison(evidence, existingPicker) {
   const incompleteFixture = process.platform === 'darwin';
   const expectedState = incompleteFixture ? 'incomplete' : 'needs_review';
@@ -1735,7 +1748,7 @@ async function assertPhotoScanningArt() {
   });
   assert.deepEqual(palettes, {
     light: { accent: 'rgb(55, 120, 89)', frame: 'rgb(255, 255, 255)' },
-    dark: { accent: 'rgb(182, 214, 200)', frame: 'rgb(29, 33, 35)' },
+    dark: { accent: 'rgb(193, 208, 181)', frame: 'rgb(33, 36, 32)' },
   });
 }
 async function assertFormControlsAligned(selector) {
@@ -1999,7 +2012,7 @@ describe('native read-only library', () => {
       false,
     );
     assert.equal(status.data.originalMutationsEnabled, false);
-    assert.equal(await $('h2').getText(), 'Start by selecting your Photo library folder.');
+    assert.equal(await $('h2').getText(), 'A home for the moments you keep.');
     assert.equal(await $('.empty-library-art').isExisting(), false);
     for (const [command, request] of [
       ['foundation_request', { kind: 'pick_directory', path: '/not-authorised' }],
@@ -3863,21 +3876,28 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           expectedDate,
         ),
       );
-      assert.equal(
-        await browser.execute(() => {
-          const year = document
-            .querySelector('.date-rail [aria-current="date"]')
-            .getBoundingClientRect();
-          const bubble = document.querySelector('.timeline-current').getBoundingClientRect();
-          return (
-            bubble.right <= year.left ||
-            bubble.left >= year.right ||
-            bubble.bottom <= year.top ||
-            bubble.top >= year.bottom
-          );
-        }),
-        true,
-      );
+      const timelineGeometry = await browser.execute(() => {
+        const slider = document.querySelector('.date-scrubber');
+        const bounds = slider.getBoundingClientRect();
+        const bubble = document.querySelector('.timeline-current').getBoundingClientRect();
+        const thumb = document.querySelector('.date-scrubber-track i').getBoundingClientRect();
+        const rail = document.querySelector('.date-rail').getBoundingClientRect();
+        const expected = bounds.top + (Number(slider.value) / Number(slider.max)) * bounds.height;
+        return {
+          vertical: slider.getAttribute('aria-orientation') === 'vertical',
+          hitWidth: bounds.width,
+          markerCount: document.querySelectorAll('.timeline-tick').length,
+          aligned:
+            Math.abs(bubble.bottom - expected) <= 1 &&
+            Math.abs((thumb.top + thumb.bottom) / 2 - expected) <= 1,
+          contained: thumb.top >= rail.top && thumb.bottom <= rail.bottom,
+        };
+      });
+      assert.equal(timelineGeometry.vertical, true);
+      assert.ok(timelineGeometry.hitWidth >= 24);
+      assert.ok(timelineGeometry.markerCount >= 0 && timelineGeometry.markerCount <= 80);
+      assert.equal(timelineGeometry.aligned, true);
+      assert.equal(timelineGeometry.contained, true);
       const sticky = await browser.execute(() => {
         const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
         const heading = [...document.querySelectorAll('.date-heading')].find((element) => {
@@ -4035,26 +4055,17 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         newest.year,
       ),
     );
-    const monthIndex = yearBuckets
-      .flatMap((bucket) => bucket.months)
-      .findIndex((month) => month.period.startsWith(oldest.year));
-    await browser.execute((index) => {
-      const slider = document.querySelector('input[aria-label="Jump to year or month"]');
-      slider.focus();
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(
-        slider,
-        String(index),
-      );
-      slider.dispatchEvent(new Event('input', { bubbles: true }));
-      slider.dispatchEvent(new KeyboardEvent('keyup', { key: 'ArrowDown', bubbles: true }));
-      slider.blur();
-    }, monthIndex);
-    await browser.waitUntil(async () =>
-      browser.execute(
-        (year) => document.querySelector('.gallery .asset')?.dataset.date?.startsWith(year),
-        oldest.year,
-      ),
-    );
+    // Main's reference timeline addresses photo ordinals, including within loaded pages.
+    const oldestIndex = yearBuckets
+      .slice(
+        0,
+        yearBuckets.findIndex((bucket) => bucket.year === oldest.year),
+      )
+      .reduce((sum, bucket) => sum + bucket.count, 0);
+    await browser.execute(() => document.querySelector('.date-scrubber').focus());
+    await browser.keys('Home');
+    for (let index = 0; index < oldestIndex; index++) await browser.keys('ArrowDown');
+    await browser.waitUntil(() => visibleGalleryYear(oldest.year));
     await $(`button[aria-label="Jump to ${newest.year}, ${newest.count} photos"]`).click();
     await browser.waitUntil(async () =>
       browser.execute(
@@ -4211,10 +4222,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       },
     ]);
     await browser.releaseActions();
-    await browser.waitUntil(async () =>
-      browser.execute(() =>
-        document.querySelector('.gallery .asset')?.dataset.date?.startsWith('1964'),
-      ),
+    await browser.waitUntil(
+      async () =>
+        (await visibleGalleryYear('1964')) &&
+        browser.execute(() => {
+          const slider = document.querySelector('.date-scrubber');
+          return Number(slider.value) === Number(slider.max);
+        }),
     );
     // A programmatic year click leaves the scrubber focused, just like wheel
     // browsing after using the handle. Focus must not pin an obsolete draft.
@@ -4260,8 +4274,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               Boolean(header) &&
               toggleRect.top >= header.top &&
               toggleRect.bottom <= header.bottom &&
-              toggleRect.left >= sidebar.right &&
-              toggleRect.left <= sidebar.right + 8,
+              Math.abs(toggleRect.left - sidebar.right - 16) <= 1,
+            toolbarActionsFit: [...document.querySelectorAll('.photo-toolbar > button')].every(
+              (button) => {
+                const bounds = button.getBoundingClientRect();
+                return bounds.left >= sidebar.right && bounds.right <= innerWidth;
+              },
+            ),
             toggleBeforeTitle: toggle.nextElementSibling?.tagName === 'H1',
             inside: footer.top >= sidebar.top && footer.bottom <= sidebar.bottom + 1,
             jobsAboveSettings:
@@ -4279,6 +4298,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         });
         assert.equal(layout.toggleInHeader, true);
         assert.equal(layout.toggleAtTopEdge, true);
+        assert.equal(layout.toolbarActionsFit, true);
         assert.equal(layout.toggleBeforeTitle, true);
         assert.equal(layout.inside, true);
         assert.equal(layout.jobsAboveSettings, true);
@@ -5573,15 +5593,22 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       ),
     );
     assert.equal((await $$('.asset-viewport img')).length, 0);
-    // The synthetic records share one exact timestamp. The timeline must still
-    // move with the viewport and drag before release, without a second scrollbar.
+    // The synthetic records share one exact timestamp. Record the actual query
+    // so live dragging can be checked against its native ordinal result.
+    await browser.execute(() => {
+      window.__streamTimelineQuery = null;
+      window.addEventListener('stillharbour:test-library-request', (event) => {
+        if (event.detail.kind === 'query' && event.detail.query.name === 'Synthetic')
+          window.__streamTimelineQuery = event.detail.query;
+      });
+    });
     await openFilters();
     await changeSizeUnit('Sort', 'capture');
     await $('button=Apply filters').click();
     await browser.waitUntil(async () =>
       browser.execute(() => {
         const slider = document.querySelector('.date-scrubber');
-        return slider && !slider.disabled && slider.max === '1';
+        return slider && !slider.disabled && slider.max === '959';
       }),
     );
     await browser.execute(() => {
@@ -5621,12 +5648,36 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     ]);
     await browser.waitUntil(async () =>
       browser.execute(() => {
-        const viewport = document.querySelector('.asset-viewport');
+        const slider = document.querySelector('.date-scrubber');
         return (
-          viewport.scrollTop > viewport.clientHeight &&
-          Number(document.querySelector('.date-scrubber').value) > 0.5
+          Number(slider.value) / Number(slider.max) > 0.5 && Boolean(window.__streamTimelineQuery)
         );
       }),
+    );
+    const liveTarget = await browser.execute(() => ({
+      query: window.__streamTimelineQuery,
+      index: Number(document.querySelector('.date-scrubber').value),
+    }));
+    const expectedTarget = (
+      await native({
+        kind: 'seek_index',
+        query: liveTarget.query,
+        index: liveTarget.index,
+        limit: 1,
+      })
+    ).data.rows[0][0];
+    // Check the target before releasing. An in-window jump need not replace the
+    // retained pages or put the target at the first overscan DOM position.
+    await browser.waitUntil(async () =>
+      browser.execute((id) => {
+        const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
+        const asset = [...document.querySelectorAll('.list .asset')].find(
+          (asset) => asset.dataset.assetId === id,
+        );
+        if (!asset) return false;
+        const bounds = asset.getBoundingClientRect();
+        return bounds.bottom > viewport.top + 1 && bounds.top < viewport.bottom - 1;
+      }, expectedTarget),
     );
     await browser.performActions([
       {

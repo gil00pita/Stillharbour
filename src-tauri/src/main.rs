@@ -6,6 +6,7 @@ compile_error!("desktop-test instrumentation must never be compiled into a relea
 #[cfg(feature = "desktop-test")]
 mod backup_fixture;
 mod catalog_admission;
+mod catalog_startup;
 #[cfg(feature = "desktop-test")]
 mod catalog_test_session;
 mod native_credentials;
@@ -1285,6 +1286,11 @@ async fn library_request(
             LibraryRequest::ApplyMaintenance { plan_id } => {
                 LibraryResponse::MaintenanceDone(library.apply_maintenance(plan_id)?)
             }
+            LibraryRequest::SeekIndex {
+                query,
+                index,
+                limit,
+            } => LibraryResponse::Page(library.seek_index(query, index, limit)?.into()),
             LibraryRequest::SeekAsset {
                 query,
                 asset_id,
@@ -2757,7 +2763,15 @@ fn main() {
                 stillharbour_core::catalog_restore::activation::ActivationStore::open(&data)
                     .map_err(startup_error)?,
             );
-            let catalog_selection = Arc::new(activation.startup_selection().map_err(startup_error)?);
+            let catalog_selection = Arc::new(catalog_startup::select(
+                || activation.startup_selection(),
+                |message| app.dialog().message(format!(
+                    "{message}\n\nAuthorize allows one macOS permission request for this catalog's existing Keychain record. Choose Always Allow in macOS if you trust this build. No backup password is needed and no catalog or credential will be reset."
+                )).title("Stillharbour — allow catalog access")
+                    .buttons(tauri_plugin_dialog::MessageDialogButtons::OkCancelCustom("Authorize".into(), "Quit".into()))
+                    .blocking_show(),
+                || activation.authorize_startup_access(),
+            ).map_err(startup_error)?);
             catalog_selection.revalidate().map_err(startup_error)?;
             let catalog = Arc::new(if catalog_selection.creation_allowed {
                 Catalog::open_bound_seed(catalog_selection.path.clone(), catalog_selection.identity.clone(), catalog_selection.volume.clone())

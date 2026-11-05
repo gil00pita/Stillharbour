@@ -54,6 +54,15 @@ export function PlaceSearch({
     >
       <Popover.Anchor asChild>
         <Box className="fixed-search unified-search">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+            <path
+              d="m16 16 4.5 4.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
           <Field.Root>
             <Field.Label className="screen-reader-status">
               Search filenames, dates or places

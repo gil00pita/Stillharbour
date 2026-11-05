@@ -1,4 +1,6 @@
 import { Button, Input, Select } from '../components/ui/controls';
+import { DuplicateMatchOptions } from '../components/DuplicateMatchOptions';
+import { InspectionChoiceCards } from '../components/InspectionChoiceCards';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   HealthMode,
@@ -19,6 +21,18 @@ import { displayBytes } from './format';
 import './inspection.css';
 
 export type InspectionSection = 'Duplicates' | 'Integrity' | 'Storage';
+const fileScopeChoices = [
+  {
+    value: 'indexed_media_companions',
+    label: 'Photos & companions',
+    description: 'Indexed photos, videos and matching companion files.',
+  },
+  {
+    value: 'all_eligible_files',
+    label: 'All eligible files',
+    description: 'Every eligible file within the exclusions below.',
+  },
+] as const;
 const initialRules: PropertyRules = {
   logic: 'all',
   filename: true,
@@ -290,14 +304,24 @@ export function InspectionScreen({
                 ? 'Health check settings'
                 : 'Storage measurement settings'}
           </summary>
-          <fieldset disabled={busy || running} className="inspection-controls">
-            <legend>
+          <fieldset
+            disabled={busy || running}
+            className={`inspection-controls ${section === 'Duplicates' ? 'duplicate-controls' : ''}`}
+          >
+            <legend className={section === 'Duplicates' ? 'screen-reader-status' : undefined}>
               {section === 'Duplicates'
                 ? 'Find duplicate clusters'
                 : section === 'Integrity'
                   ? 'Check file health'
                   : 'Measure storage usage'}
             </legend>
+            {section === 'Duplicates' && (
+              <DuplicateMatchOptions
+                options={options}
+                onChange={setOptions}
+                disabled={busy || running}
+              />
+            )}
             <div className="inspection-roots">
               {status.roots.map((root) => (
                 <label key={root.id}>
@@ -317,18 +341,28 @@ export function InspectionScreen({
                 </label>
               ))}
             </div>
-            <label>
-              File scope
-              <Select
+            {section === 'Duplicates' ? (
+              <InspectionChoiceCards
+                label="File scope"
                 value={scope}
-                onChange={(event) => setScope(event.target.value as typeof scope)}
-              >
-                <option value="indexed_media_companions">
-                  Indexed photos, videos and matching companion files
-                </option>
-                <option value="all_eligible_files">All files within the exclusions below</option>
-              </Select>
-            </label>
+                choices={fileScopeChoices}
+                disabled={busy || running}
+                onChange={setScope}
+              />
+            ) : (
+              <label>
+                File scope
+                <Select
+                  value={scope}
+                  onChange={(event) => setScope(event.target.value as typeof scope)}
+                >
+                  <option value="indexed_media_companions">
+                    Indexed photos, videos and matching companion files
+                  </option>
+                  <option value="all_eligible_files">All files within the exclusions below</option>
+                </Select>
+              </label>
+            )}
             <p>
               Your hidden-file, hidden-folder, filename-pattern and size exclusions still apply.
               Gallery file-type and date filters do not limit this inspection. Links, special files
@@ -336,60 +370,19 @@ export function InspectionScreen({
             </p>
             {section === 'Duplicates' && (
               <>
-                <label>
-                  Match mode
-                  <Select
-                    value={options.mode}
-                    onChange={(event) =>
-                      setOptions({
-                        ...options,
-                        mode: event.target.value as DuplicateOptions['mode'],
-                      })
-                    }
-                  >
-                    <option value="exact_content">Identical file contents</option>
-                    <option value="properties">Matching file properties · candidates only</option>
-                    <option value="normalized_pixels">Static PNG8 pixels · manual review</option>
-                  </Select>
-                </label>
-                <label>
-                  Content algorithm
-                  <Select
-                    value={options.algorithm}
-                    onChange={(event) =>
-                      setOptions({
-                        ...options,
-                        algorithm: event.target.value as DuplicateOptions['algorithm'],
-                      })
-                    }
-                  >
-                    <option value="blake3">BLAKE3</option>
-                    <option value="sha256">SHA-256</option>
-                    <option value="sha1">SHA-1 · compatibility only</option>
-                    <option value="md5">MD5 · compatibility only</option>
-                    <option value="direct_bytes">Direct bytes · no full-file hash</option>
-                  </Select>
-                </label>
                 <p>
                   Exact matches are confirmed by comparing every byte. Matching names, sizes or
                   other properties only identify candidates; they never authorize quarantine.
                 </p>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={options.excludeHardlinkedObjects}
-                    onChange={(event) =>
-                      setOptions({ ...options, excludeHardlinkedObjects: event.target.checked })
-                    }
-                  />
-                  Exclude hard-linked objects from this search
-                </label>
-                {options.mode === 'properties' && (
-                  <PropertyControls
-                    rules={options.rules}
-                    onChange={(rules) => setOptions({ ...options, rules })}
-                  />
-                )}
+                <div>
+                  {options.mode === 'properties' && (
+                    <PropertyControls
+                      rules={options.rules}
+                      disabled={busy || running}
+                      onChange={(rules) => setOptions({ ...options, rules })}
+                    />
+                  )}
+                </div>
               </>
             )}
             {unavailable && (
@@ -599,25 +592,33 @@ export function InspectionScreen({
 function PropertyControls({
   rules,
   onChange,
+  disabled,
 }: {
   rules: PropertyRules;
   onChange: (rules: PropertyRules) => void;
+  disabled: boolean;
 }) {
   return (
     <fieldset>
       <legend>Advanced candidate rules</legend>
-      <label>
-        Combination
-        <Select
-          value={rules.logic}
-          onChange={(event) =>
-            onChange({ ...rules, logic: event.target.value as PropertyRules['logic'] })
-          }
-        >
-          <option value="all">All selected criteria (AND)</option>
-          <option value="any">Any selected criterion (OR) · candidates only</option>
-        </Select>
-      </label>
+      <InspectionChoiceCards
+        label="Combination"
+        value={rules.logic}
+        choices={[
+          {
+            value: 'all',
+            label: 'All selected criteria',
+            description: 'Every selected property must match (AND).',
+          },
+          {
+            value: 'any',
+            label: 'Any selected criterion',
+            description: 'One selected property may match (OR). Candidates only.',
+          },
+        ]}
+        disabled={disabled}
+        onChange={(logic) => onChange({ ...rules, logic })}
+      />
       <div className="inspection-rule-options">
         {(
           ['filename', 'extension', 'size', 'modified', 'created', 'readonly', 'content'] as const

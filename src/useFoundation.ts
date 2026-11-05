@@ -19,6 +19,11 @@ export function useFoundation() {
   const [attempt, setAttempt] = useState(0);
   const [notice, setNotice] = useState('');
   const showError = useCallback((error: unknown) => setError(errorMessage(error)), []);
+  const reconnect = useCallback(() => {
+    setError(null);
+    setLoading(true);
+    setAttempt((value) => value + 1);
+  }, []);
   const refresh = useCallback(
     async () => setStatus(await libraryData({ kind: 'status' }, 'status')),
     [],
@@ -132,10 +137,6 @@ export function useFoundation() {
     chooseFolder,
     save,
     rescan,
-    reconnect: () => {
-      setError(null);
-      setLoading(true);
-      setAttempt((value) => value + 1);
-    },
+    reconnect,
   };
 }

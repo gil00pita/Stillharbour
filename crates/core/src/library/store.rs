@@ -849,7 +849,8 @@ pub fn query(
         let more=assets.len()>limit as usize;assets.truncate(limit as usize);
         let next=if more {assets.last().map(|last|serde_json::to_string(&Cursor{query:hash,key:asset_sort_key(last, &query.sort),id:last.id.clone()})).transpose().map_err(|e|invalid("Could not encode cursor.").caused_by(e))?}else{None};
         let revision:String=db.query_row("SELECT CAST(revision AS TEXT) FROM library_state WHERE singleton=1",[],|r|r.get(0))?;
-        Ok(AssetPage{assets,next_cursor:next,total,revision})
+        let start_index = page_start_index(db, &query, assets.first())?;
+        Ok(AssetPage{assets,next_cursor:next,total,revision,start_index})
     })
 }
 fn query_hash(query: &AssetQuery) -> Result<String> {
@@ -1017,9 +1018,72 @@ pub fn seek_asset(
         if before { assets.reverse(); }
         let next_cursor = if more || before { assets.last().map(|asset| serde_json::to_string(&Cursor { query: hash, key:asset_sort_key(asset,&query.sort),id:asset.id.clone() })).transpose().map_err(|e| invalid("Could not encode cursor.").caused_by(e))? } else { None };
         let revision = db.query_row("SELECT CAST(revision AS TEXT) FROM library_state WHERE singleton=1",[],|r|r.get(0))?;
-        Ok(AssetPage { assets, total, next_cursor, revision })
+        let start_index = page_start_index(db, &query, assets.first())?;
+        Ok(AssetPage { assets, total, next_cursor, revision, start_index })
     })
 }
+
+// Ordinal metadata lets the bounded renderer follow the same photo-index scale
+// as the reference navigator, including duplicate dates and partial months.
+fn page_start_index(
+    db: &Connection,
+    query: &AssetQuery,
+    first: Option<&AssetSummary>,
+) -> Result<Option<u32>> {
+    if !matches!(query.sort.as_str(), "capture" | "added") {
+        return Ok(None);
+    }
+    let Some(first) = first else {
+        return Ok(Some(0));
+    };
+    let (where_sql, mut values) = query_where(query)?;
+    let (column, _, _) = sort_order(&query.sort);
+    values.extend([
+        Value::Text(asset_sort_key(first, &query.sort)),
+        Value::Text(first.id.clone()),
+    ]);
+    Ok(Some(db.query_row(
+        &format!(
+            "SELECT count(*) FROM {} WHERE {where_sql} AND ({column},id)>(?,?)",
+            ordered_source(query)
+        ),
+        params_from_iter(values),
+        |row| row.get(0),
+    )?))
+}
+
+/// Seek directly to one ordinal in the current validated chronological query.
+/// Only a stable ID and one bounded page leave SQLite; originals are never opened.
+pub fn seek_index(
+    catalog: &Catalog,
+    query: AssetQuery,
+    index: u32,
+    limit: u32,
+) -> Result<AssetPage> {
+    if !matches!(query.sort.as_str(), "capture" | "added") || !(1..=240).contains(&limit) {
+        return Err(invalid(
+            "Photo-position navigation requires a chronological sort and a page size from 1 to 240.",
+        ));
+    }
+    let (where_sql, values) = query_where(&query)?;
+    let source = ordered_source(&query);
+    let (column, direction, _) = sort_order(&query.sort);
+    let id = catalog.call(move |db| {
+        let count: u32 = db.query_row(&format!("SELECT count(*) FROM {source} WHERE {where_sql}"), params_from_iter(values.iter()), |row| row.get(0))?;
+        if count == 0 { return Ok(None); }
+        let mut values = values;
+        values.push(Value::Integer(index.min(count - 1).into()));
+        Ok(Some(db.query_row(&format!("SELECT id FROM {source} WHERE {where_sql} ORDER BY {column} {direction},id {direction} LIMIT 1 OFFSET ?"), params_from_iter(values), |row| row.get::<_, String>(0))?))
+    })?;
+    match id {
+        Some(id) => seek_asset(catalog, query, id, AssetSeekPosition::At, limit),
+        None => self::query(catalog, query, None, limit),
+    }
+}
+
+#[cfg(test)]
+#[path = "timeline_tests.rs"]
+mod timeline_tests;
 
 fn sort_order(sort: &str) -> (&'static str, &'static str, &'static str) {
     match sort {

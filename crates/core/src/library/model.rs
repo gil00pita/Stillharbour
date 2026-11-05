@@ -311,6 +311,9 @@ pub struct AssetNeighbors {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetPage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub start_index: Option<u32>,
     pub assets: Vec<AssetSummary>,
     pub next_cursor: Option<String>,
     pub total: u32,
@@ -386,6 +389,9 @@ impl From<AssetSummary> for PackedAsset {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PackedAssetPage {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub start_index: Option<u32>,
     pub format: u8,
     pub rows: Vec<PackedAsset>,
     pub next_cursor: Option<String>,
@@ -395,6 +401,7 @@ pub struct PackedAssetPage {
 impl From<AssetPage> for PackedAssetPage {
     fn from(page: AssetPage) -> Self {
         Self {
+            start_index: page.start_index,
             format: 1,
             rows: page.assets.into_iter().map(Into::into).collect(),
             next_cursor: page.next_cursor,
@@ -862,6 +869,11 @@ pub enum LibraryRequest {
     },
     ApplyMaintenance {
         plan_id: String,
+    },
+    SeekIndex {
+        query: AssetQuery,
+        index: u32,
+        limit: u32,
     },
     SeekAsset {
         query: AssetQuery,

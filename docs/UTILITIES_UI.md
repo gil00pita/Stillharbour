@@ -14,7 +14,7 @@ Photos, Albums / Tags and Map use one search field for filenames, calendar days 
 - Integrity presents presence, content-check and baseline states. Needs attention includes unavailable entries, decoder warnings, read changes and changed baselines. A changed checksum is not proven damage; no repair or baseline reset is offered.
 - Storage retains volume capacity, recursive folder totals, treemap navigation, logical/allocated size accounting and largest-file observations. It no longer repeats health and checksum columns.
 
-Inspection setup remains an expandable section. Existing start/cancel, retained-job selection, issue paging, coverage and native root checks remain connected. All observations are historical until rechecked. Search uses file names and paths available in the current findings page; groups without loaded names can still be found by their ID or evidence label. Group paging retires the previous page's selection.
+Inspection setup remains an expandable section. The illustrated matching, file-scope and property-combination cards from main are retained inside it, with advanced algorithm choices and the existing safety labels. The unified search keeps main's search glyph and named Catalog/Saved plans icon controls. Existing start/cancel, retained-job selection, issue paging, coverage and native root checks remain connected. All observations are historical until rechecked. Search uses file names and paths available in the current findings page; groups without loaded names can still be found by their ID or evidence label. Group paging retires the previous page's selection.
 
 ## Comparison and keeper review
 

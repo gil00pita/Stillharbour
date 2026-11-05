@@ -43,7 +43,10 @@ describe('native library onboarding', () => {
   it('shows a native failure and retries without presenting a working library', async () => {
     vi.mocked(getStatus).mockRejectedValueOnce(new Error('Desktop connection unavailable.'));
     render(<App />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Desktop connection unavailable.');
+    const toast = await screen.findByRole('alert');
+    expect(toast).toHaveTextContent('Desktop connection unavailable.');
+    expect(toast).toHaveAttribute('data-placement', 'bottom');
+    expect(document.querySelector('.global-error')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Choose a folder' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }));
     await ready();
@@ -58,9 +61,7 @@ describe('native library onboarding', () => {
       .mockResolvedValueOnce(null);
     render(<App />);
     await ready();
-    expect(
-      screen.getByRole('heading', { name: 'Start by selecting your Photo library folder.' }),
-    ).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'A home for the moments you keep.' })).toBeVisible();
     expect(document.querySelector('.folder-mark')).toBeVisible();
     expect(document.querySelector('.empty-library-art')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Choose a folder' }));
@@ -72,7 +73,7 @@ describe('native library onboarding', () => {
     expect(library).not.toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'Choose a folder' })).not.toBeInTheDocument();
     expect(
-      screen.queryByRole('heading', { name: 'Start by selecting your Photo library folder.' }),
+      screen.queryByRole('heading', { name: 'A home for the moments you keep.' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Local by design.')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Application version')).toHaveTextContent('Version 0.1.0');

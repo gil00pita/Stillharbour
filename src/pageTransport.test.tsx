@@ -31,3 +31,11 @@ describe('native page wire format', () => {
     );
   });
 });
+
+it('preserves optional native photo ranks and rejects malformed ranks', () => {
+  expect(unpackPage({ ...fixture.packed, startIndex: 481 }).startIndex).toBe(481);
+  for (const startIndex of [-1, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 0x100000000])
+    expect(() => unpackPage({ ...fixture.packed, startIndex })).toThrow(
+      'Unsupported catalog page position',
+    );
+});

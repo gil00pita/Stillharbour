@@ -237,7 +237,12 @@ it('places X on the right and the catalog-backed animated heart before Info in t
     'a',
   );
   expect(heart).toHaveClass('is-animating');
-  fireEvent.animationEnd(heart.querySelector('span')!);
+  const completion = new Event('AnimationEvent' in window ? 'animationend' : 'webkitAnimationEnd', {
+    bubbles: true,
+  });
+  Object.defineProperty(completion, 'animationName', { value: 't-like-pop' });
+  fireEvent(heart.querySelector('.t-like-heart')!, completion);
+  expect(heart).not.toHaveClass('is-animating');
   fireEvent.click(heart);
   await waitFor(() => expect(heart).toHaveAttribute('aria-pressed', 'false'));
 });

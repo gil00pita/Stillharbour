@@ -3,7 +3,12 @@ import { libraryData } from '../ipc';
 export const FEED_PAGE_SIZE = 240;
 export const FEED_WINDOW_PAGES = 3;
 export type FeedDirection = 'replace' | 'refresh' | 'before' | 'after';
-export function firstRequest(query: AssetQuery, period: string | null): LibraryRequest {
+export function firstRequest(
+  query: AssetQuery,
+  period: string | null,
+  index: number | null = null,
+): LibraryRequest {
+  if (index !== null) return { kind: 'seek_index', query, index, limit: FEED_PAGE_SIZE };
   return period
     ? { kind: 'seek_date', query, period, limit: FEED_PAGE_SIZE }
     : { kind: 'query', query, cursor: null, limit: FEED_PAGE_SIZE };
@@ -30,6 +35,7 @@ export function mergeFeed(pages: AssetPage[]): AssetPage | null {
   const seen = new Set<string>();
   return {
     ...last,
+    ...(pages[0]?.startIndex === undefined ? {} : { startIndex: pages[0].startIndex }),
     assets: pages
       .flatMap((page) => page.assets)
       .filter((asset) => {

@@ -17,6 +17,7 @@ import { BackupScreen } from './backup/BackupScreen';
 import { useCatalogSwitchState } from './backup/catalogSwitchState';
 import { CatalogSwitchStopped } from './backup/CatalogSwitchStopped';
 import { NotesDraftContext, type NotesDraft } from './metadata/notesDrafts';
+import { ErrorToast } from './components/ErrorToast';
 
 type AppSection = Section | 'Settings' | InspectionSection | 'Backup & Sync' | 'Map';
 type LibraryLaunch = { query: AssetQuery; selectedId: string | null; generation: number };
@@ -87,11 +88,10 @@ function ConnectedApplication() {
             onChoose={() => void chooseFolder()}
           />
         )}
-        <ConnectionNotice
+        <ErrorToast
           error={error}
-          canReconnect={!foundation}
           onDismiss={() => setError(null)}
-          onReconnect={reconnect}
+          onReconnect={!foundation ? reconnect : undefined}
         />
         <NotesDraftScope key={foundation?.catalogId ?? 'connecting'}>
           <WorkspaceContent
@@ -144,8 +144,10 @@ function NavigationToggle({ collapsed, onToggle }: { collapsed: boolean; onToggl
       onClick={onToggle}
     >
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.5" />
+        <path d="M9 4v16" stroke="currentColor" strokeWidth="1.5" />
         <path
-          d={collapsed ? 'm9 6 6 6-6 6' : 'm15 6-6 6 6 6'}
+          d={collapsed ? 'm13 9 3 3-3 3' : 'm16 9-3 3 3 3'}
           stroke="currentColor"
           strokeWidth="1.5"
         />
@@ -201,42 +203,46 @@ function Sidebar({
       <nav aria-label="Main navigation">
         {hasLibrary ? (
           <>
-            {(['Photos', 'Folders', 'Tags'] as const).map((item) => (
+            <div className="nav-group" role="group" aria-label="Collection">
+              {(['Photos', 'Folders', 'Tags'] as const).map((item) => (
+                <Button
+                  key={item}
+                  aria-label={item === 'Tags' ? 'Albums / Tags' : item}
+                  title={collapsed ? (item === 'Tags' ? 'Albums / Tags' : item) : undefined}
+                  aria-current={section === item ? 'page' : undefined}
+                  onClick={() => {
+                    onNavigate(item);
+                  }}
+                >
+                  <NavigationIcon section={item} />
+                  <span className="nav-label">{item === 'Tags' ? 'Albums / Tags' : item}</span>
+                </Button>
+              ))}
               <Button
-                key={item}
-                aria-label={item === 'Tags' ? 'Albums / Tags' : item}
-                title={collapsed ? (item === 'Tags' ? 'Albums / Tags' : item) : undefined}
-                aria-current={section === item ? 'page' : undefined}
-                onClick={() => {
-                  onNavigate(item);
-                }}
+                aria-label="Map"
+                title={collapsed ? 'Map' : undefined}
+                aria-current={section === 'Map' ? 'page' : undefined}
+                onClick={() => onNavigate('Map')}
               >
-                <NavigationIcon section={item} />
-                <span className="nav-label">{item === 'Tags' ? 'Albums / Tags' : item}</span>
+                <NavigationIcon section="Map" />
+                <span className="nav-label">Map</span>
               </Button>
-            ))}
-            <Button
-              aria-label="Map"
-              title={collapsed ? 'Map' : undefined}
-              aria-current={section === 'Map' ? 'page' : undefined}
-              onClick={() => onNavigate('Map')}
-            >
-              <NavigationIcon section="Map" />
-              <span className="nav-label">Map</span>
-            </Button>
-            <div className="nav-group-label">Utilities</div>
-            {(['Duplicates', 'Integrity', 'Storage', 'Backup & Sync'] as const).map((item) => (
-              <Button
-                key={item}
-                aria-label={item}
-                title={collapsed ? item : undefined}
-                aria-current={section === item ? 'page' : undefined}
-                onClick={() => onNavigate(item)}
-              >
-                <NavigationIcon section={item} />
-                <span className="nav-label">{item}</span>
-              </Button>
-            ))}
+            </div>
+            <div className="nav-group" role="group" aria-label="Utilities">
+              <div className="nav-group-label">Utilities</div>
+              {(['Duplicates', 'Integrity', 'Storage', 'Backup & Sync'] as const).map((item) => (
+                <Button
+                  key={item}
+                  aria-label={item}
+                  title={collapsed ? item : undefined}
+                  aria-current={section === item ? 'page' : undefined}
+                  onClick={() => onNavigate(item)}
+                >
+                  <NavigationIcon section={item} />
+                  <span className="nav-label">{item}</span>
+                </Button>
+              ))}
+            </div>
           </>
         ) : (
           <Button
@@ -303,38 +309,15 @@ function LibraryWelcome({
         </svg>
       </div>
       <h2 id="welcome-title">
-        {hasLibrary
-          ? 'Add another library folder.'
-          : 'Start by selecting your Photo library folder.'}
+        {hasLibrary ? 'Add another library folder.' : 'A home for the moments you keep.'}
       </h2>
+      <p className="welcome-description">
+        Choose your photo library folder. Your originals stay in place.
+      </p>
       <Button className="primary" onClick={onChoose} disabled={disabled}>
         {busy ? 'Please wait…' : 'Choose a folder'}
       </Button>
     </section>
-  );
-}
-
-function ConnectionNotice({
-  error,
-  canReconnect,
-  onDismiss,
-  onReconnect,
-}: {
-  error: string | null;
-  canReconnect: boolean;
-  onDismiss: () => void;
-  onReconnect: () => void;
-}) {
-  if (!error) return null;
-  return (
-    <div className="error global-error" role="alert">
-      <p>{error}</p>
-      {canReconnect ? (
-        <Button onClick={onReconnect}>Reconnect</Button>
-      ) : (
-        <Button onClick={onDismiss}>Dismiss</Button>
-      )}
-    </div>
   );
 }
 

@@ -82,13 +82,25 @@ it('reports the first actually visible row rather than an overscan row', async (
   const callbacks = props();
   render(<AssetBrowser {...callbacks} />);
   act(() => events.onChange?.(engine));
-  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('2026-03-01', false, 0);
+  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
+    '2026-03-01',
+    false,
+    0,
+    0,
+    assets[0]!.id,
+  );
   engine.scrollOffset = 200;
   engine.isScrolling = true;
   act(() => events.onChange?.(engine));
   const visibleDate = photoRows(assets, 700, 'gallery')[1]!.assets[0]!.date;
   expect(visibleDate).not.toBe(assets[0]!.date);
-  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(visibleDate, true, expect.any(Number));
+  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
+    visibleDate,
+    true,
+    expect.any(Number),
+    expect.any(Number),
+    expect.any(String),
+  );
   await waitFor(() => expect(libraryData).toHaveBeenCalled());
 });
 it('retains selection controls in Grid and makes no nonempty thumbnail batch in Text list', async () => {
@@ -279,7 +291,13 @@ it.each(['capture', 'added', 'undated'] as const)(
     const maximum = rows.reduce((sum, row) => sum + row.height + 4, 0) - 200;
     engine.scrollOffset = maximum / 2;
     act(() => events.onChange?.(engine));
-    expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(date, false, 0.5);
+    expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
+      date,
+      false,
+      0.5,
+      expect.any(Number),
+      expect.any(String),
+    );
     expect(handle.current!.scrollToPeriod(period, 0.75)).toBe(true);
     expect(engine.scrollToOffset).toHaveBeenLastCalledWith(maximum * 0.75);
     expect(handle.current!.scrollToPeriod('1964-07', 0.5)).toBe(false);
@@ -385,7 +403,13 @@ it.each(['capture', 'added', 'undated'] as const)(
       Object.defineProperty(viewport, 'clientHeight', { value: 200 });
       engine.scrollOffset = 11 * 58 - 200;
       act(() => events.onChange?.(engine));
-      expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(tailDate, false, 1);
+      expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
+        tailDate,
+        false,
+        1,
+        expect.any(Number),
+        expect.any(String),
+      );
       // A retained page boundary is not the end of the matching catalog.
       rerender(
         <AssetBrowser
@@ -397,7 +421,13 @@ it.each(['capture', 'added', 'undated'] as const)(
         />,
       );
       act(() => events.onChange?.(engine));
-      expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('2026-03-01', false, 0.9999);
+      expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
+        '2026-03-01',
+        false,
+        0.9999,
+        expect.any(Number),
+        expect.any(String),
+      );
     } finally {
       items.mockRestore();
     }
@@ -413,8 +443,20 @@ it('pins a non-scrollable tail seek to the end, but leaves an entirely fitting c
   Object.defineProperty(container.querySelector('.asset-viewport'), 'clientHeight', { value: 500 });
   engine.scrollOffset = 0;
   act(() => events.onChange?.(engine));
-  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('1964-07-01', false, 1);
+  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
+    '1964-07-01',
+    false,
+    1,
+    expect.any(Number),
+    expect.any(String),
+  );
   rerender(<AssetBrowser {...callbacks} assets={photos} mode="list" />);
   act(() => events.onChange?.(engine));
-  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith('2026-03-01', false, 0);
+  expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
+    '2026-03-01',
+    false,
+    0,
+    expect.any(Number),
+    expect.any(String),
+  );
 });

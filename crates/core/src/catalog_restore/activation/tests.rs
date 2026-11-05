@@ -19,6 +19,61 @@ struct Fixture {
     nonce: String,
 }
 struct OwnedAuthority(String);
+#[test]
+#[cfg(unix)]
+fn closing_activation_releases_lock_while_an_unrelated_child_is_pre_exec() {
+    use std::io::{Read, Write};
+    use std::os::{
+        fd::AsRawFd,
+        unix::{net::UnixStream, process::CommandExt},
+    };
+    let owned = tempfile::tempdir().unwrap();
+    let path = owned.path().canonicalize().unwrap();
+    let store = ActivationStore::open(&path).unwrap();
+    assert!(
+        matches!(ActivationStore::open(&path), Err(error) if error.code == ErrorCode::CatalogInUse)
+    );
+    let (mut ready_reader, ready_writer) = UnixStream::pair().unwrap();
+    let (mut release_writer, release_reader) = UnixStream::pair().unwrap();
+    ready_reader
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    release_reader
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .unwrap();
+    let (ready_fd, release_fd) = (ready_writer.as_raw_fd(), release_reader.as_raw_fd());
+    let mut command = Command::new(std::env::current_exe().unwrap());
+    command
+        .arg("--list")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    // SAFETY: only async-signal-safe I/O runs between fork and exec. The
+    // parent holds both socket owners; the child read has a bounded timeout.
+    unsafe {
+        command.pre_exec(move || {
+            let mut byte = 1u8;
+            if libc::write(ready_fd, std::ptr::from_ref(&byte).cast(), 1) != 1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if libc::read(release_fd, std::ptr::from_mut(&mut byte).cast(), 1) != 1 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let child = std::thread::spawn(move || command.spawn().unwrap().wait().unwrap());
+    ready_reader.read_exact(&mut [0]).unwrap();
+    drop(store);
+    let reopened = ActivationStore::open(&path);
+    release_writer.write_all(&[1]).unwrap();
+    assert!(child.join().unwrap().success());
+    let reopened =
+        reopened.expect("A closed activation store retained its lock in the pre-exec child");
+    assert!(
+        matches!(ActivationStore::open(&path), Err(error) if error.code == ErrorCode::CatalogInUse)
+    );
+    drop(reopened);
+}
 impl Drop for OwnedAuthority {
     fn drop(&mut self) {
         let result = authority::delete_owned_fixture(&self.0);
