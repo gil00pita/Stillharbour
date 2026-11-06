@@ -12,18 +12,18 @@
 .inspection-content > * {
   max-width: 1440px;
 }
-.inspection-content h2:not(:where(.duplicate-studio *)) {
+.inspection-content h2:not(:where(.duplicate-studio *, .storage-explorer *)) {
   font-size: 18px;
   margin: 24px 0 12px;
 }
-.inspection-content h3:not(:where(.duplicate-studio *)) {
+.inspection-content h3:not(:where(.duplicate-studio *, .storage-explorer *)) {
   font-size: 16px;
 }
-.inspection-content p:not(:where(.duplicate-studio *)) {
+.inspection-content p:not(:where(.duplicate-studio *, .storage-explorer *)) {
   color: var(--muted);
 }
 .inspection-content
-  label:not(:where(.duplicate-studio *)):not(.inspection-choice-card):not(
+  label:not(:where(.duplicate-studio *, .storage-explorer *)):not(.inspection-choice-card):not(
     .inspection-choice-label
   ) {
   display: flex;
@@ -33,7 +33,8 @@
   margin: 12px 0;
   font-size: 13px;
 }
-.inspection-content label:not(:where(.duplicate-studio *)):has(> input[type='checkbox']) {
+.inspection-content
+  label:not(:where(.duplicate-studio *, .storage-explorer *)):has(> input[type='checkbox']) {
   flex-direction: row;
   align-items: center;
 }
@@ -45,8 +46,10 @@
   font-size: 13px;
 }
 .inspection-content
-  input:not([type='checkbox']):not([type='radio']):not(:where(.duplicate-studio *)),
-.inspection-content select:not(:where(.duplicate-studio *)) {
+  input:not([type='checkbox']):not([type='radio']):not(
+    :where(.duplicate-studio *, .storage-explorer *)
+  ),
+.inspection-content select:not(:where(.duplicate-studio *, .storage-explorer *)) {
   padding: 7px 10px;
   max-width: 100%;
   color: inherit;

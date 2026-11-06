@@ -1,9 +1,10 @@
-import { fireEvent, render, screen, waitFor } from '../test/render';
+import { fireEvent, render, screen, waitFor, within } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { InspectionScreen } from './InspectionScreen';
 import { libraryData } from '../ipc';
 import type { InspectionJob, LibraryStatus } from '../bindings';
 import { fixturePreferences } from '../library/__tests__/fixtures';
+import { storageFiles, storageSummary } from '../components/StorageExplorer/fixtures';
 vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
   libraryData: vi.fn(),
@@ -43,6 +44,12 @@ const job: InspectionJob = {
   message: 'Reading generated scope',
 };
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
   vi.mocked(libraryData)
     .mockReset()
     .mockImplementation(async (request) => {
@@ -68,6 +75,7 @@ it('starts a native job with selected IDs and explicit scope, then waits for nat
   await waitFor(() =>
     expect(libraryData).toHaveBeenCalledWith({ kind: 'inspection_jobs' }, 'inspection_jobs'),
   );
+  fireEvent.click(screen.getByRole('button', { name: 'Storage measurement' }));
   fireEvent.click(screen.getByRole('button', { name: 'Start storage inspection' }));
   await screen.findByText('Reading generated scope');
   expect(libraryData).toHaveBeenCalledWith(
@@ -103,8 +111,64 @@ it('blocks an offline root and renders native failures without fake results', as
     ...status,
     roots: status.roots.map((root) => ({ ...root, availability: 'offline' })),
   });
+  fireEvent.click(screen.getByRole('button', { name: 'Storage measurement' }));
   expect(screen.getByRole('button', { name: 'Start storage inspection' })).toBeDisabled();
   expect(await screen.findByRole('alert')).toHaveTextContent('Catalog unavailable');
+});
+
+it('starts Storage results at the filters and keeps retained controls, issues and coverage in the header dialog', async () => {
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_jobs')
+      return [{ ...job, state: 'completed', message: 'Retained generated measurement' }];
+    if (request.kind === 'inspection_report')
+      return {
+        jobId: job.id,
+        storage: storageSummary,
+        volumes: [],
+        coverage: {
+          enumerationComplete: false,
+          excludedEntries: 1,
+          inaccessibleEntries: 2,
+          incompleteDirectories: 3,
+        },
+        exactOrCandidateGroups: 0,
+        aliasGroups: 0,
+        comparedPairs: '0',
+        unknownPairs: '0',
+        id3Applicability: '',
+      };
+    if (request.kind === 'inspection_findings')
+      return { jobId: job.id, rows: storageFiles.filter((file) => !file.assetId), next: null };
+    if (request.kind === 'inspection_issues') return { jobId: job.id, rows: [], next: null };
+    throw new Error('Unexpected request');
+  });
+  const { container } = setup();
+  await screen.findByRole('region', { name: 'Storage filters' });
+  expect(container.querySelector('.inspection-content')?.firstElementChild).toHaveClass(
+    'storage-explorer',
+  );
+  expect(screen.queryByText('Storage measurement settings')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Retained inspection')).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'Inspection job' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Inventory:/)).not.toBeInTheDocument();
+  const opener = screen.getByRole('button', { name: 'Storage measurement' });
+  fireEvent.click(opener);
+  const dialog = screen.getByRole('dialog', { name: 'Storage measurement' });
+  expect(within(dialog).getByText('Storage measurement settings')).toBeVisible();
+  expect(within(dialog).getByLabelText('Retained inspection')).toBeVisible();
+  expect(within(dialog).getByText('Retained generated measurement')).toBeVisible();
+  expect(within(dialog).getByText(/Inventory:/)).toHaveTextContent('3 incomplete directories');
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Review retained inspection issues' }),
+  );
+  await within(dialog).findByText('No retained issues for this report.');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
+  fireEvent.click(opener);
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
 });
 
 it('uses illustrated radio choices without starting an inspection until explicit approval', async () => {

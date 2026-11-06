@@ -240,6 +240,7 @@ async function reviewReadOnlyInspections(evidence) {
     ['Integrity', 'Start quick header check'],
   ]) {
     await $(`button[aria-label="${section}"]`).click();
+    if (section === 'Storage') await $('button[aria-label="Storage measurement"]').click();
     if (!(await $('.inspection-controls').isDisplayed()))
       await $('.inspection-setup > summary').click();
     await $('.inspection-controls').waitForDisplayed();
@@ -256,6 +257,11 @@ async function reviewReadOnlyInspections(evidence) {
       { timeout: 45000, interval: 200, timeoutMsg: `${section} native inspection did not finish` },
     );
     assert.ok(['completed', 'partial'].includes(job.state), job.message);
+    if (section === 'Storage') {
+      await $('.storage-explorer').waitForExist();
+      await $('dialog[aria-label="Storage measurement"]').$('button=Close').click();
+      await $('.storage-toolbar').$('button=List').click();
+    }
     await $(
       section === 'Duplicates'
         ? '.duplicate-totals'
@@ -268,6 +274,7 @@ async function reviewReadOnlyInspections(evidence) {
     assert.ok(bytes.every((value, index) => index === 0 || value <= bytes[index - 1]));
     assert.equal(report.storage.quarantineFreedBytes, '0');
     assert.equal(report.storage.reclaimablePhysicalBytes, null);
+    if (section === 'Storage') await $('button[aria-label="Storage measurement"]').click();
     await browser.waitUntil(async () =>
       browser.execute(
         () =>
@@ -280,6 +287,8 @@ async function reviewReadOnlyInspections(evidence) {
     await browser.saveScreenshot(
       `.context/screenshots/m3-${section.toLowerCase()}-${process.platform}.png`,
     );
+    if (section === 'Storage')
+      await $('dialog[aria-label="Storage measurement"]').$('button=Close').click();
     let displayedRows = [];
     if (section === 'Duplicates') {
       const groups = (await native({ kind: 'inspection_groups', job_id: job.id, after: null }))
@@ -328,11 +337,11 @@ async function reviewReadOnlyInspections(evidence) {
         (section) =>
           [...document.querySelectorAll('section[aria-label="Inspected files"] tbody tr')].map(
             (row) => ({
-              name: row.querySelector('th > span, th > bdi').textContent,
+              name: row.querySelector('th > span, th > bdi, th > button').textContent,
               ...(section === 'Storage'
-                ? { bytes: row.children[1].textContent.replace(/\D/g, '') }
+                ? { bytes: row.children[1].getAttribute('data-bytes') }
                 : {}),
-              content: row.children[section === 'Storage' ? 4 : 2].textContent,
+              content: section === 'Storage' ? '' : row.children[2].textContent,
             }),
           ),
         section,
@@ -352,7 +361,9 @@ async function reviewReadOnlyInspections(evidence) {
             row.content.includes(files.rows[index].content.replaceAll('_', ' ')),
           ),
         );
-      await $('section[aria-label="Inspected files"] h2').scrollIntoView({ block: 'start' });
+      await $(
+        'section[aria-label="Inspected files"] h2, section[aria-label="Inspected files"] h3',
+      ).scrollIntoView({ block: 'start' });
       await browser.saveScreenshot(
         `.context/screenshots/m3-${section.toLowerCase()}-results-${process.platform}.png`,
       );
@@ -360,8 +371,10 @@ async function reviewReadOnlyInspections(evidence) {
     let folderEvidence = null;
     if (section === 'Storage') {
       await $('.inspection-storage').scrollIntoView({ block: 'start' });
+      await $('summary=Complete retained folder totals').click();
+      await $('.inspection-storage p[data-bytes]').waitForExist();
       assert.equal(
-        (await $('.inspection-metrics > div:first-child dd').getText()).replace(/\D/g, ''),
+        await $('.inspection-storage p[data-bytes]').getAttribute('data-bytes'),
         report.storage.total.logicalBytes,
       );
       const scope = (
@@ -387,13 +400,17 @@ async function reviewReadOnlyInspections(evidence) {
         })
       ).data;
       await browser.waitUntil(async () =>
-        (await $('.inspection-storage table caption').getText()).includes(folder.parent.name),
+        (await $('.inspection-storage .inspection-table-wrap table caption').getText()).includes(
+          folder.parent.name,
+        ),
       );
       const shown = await browser.execute(() => {
-        const row = document.querySelector('.inspection-storage table tbody tr');
+        const row = document.querySelector(
+          '.inspection-storage .inspection-table-wrap table tbody tr',
+        );
         return {
           files: row.children[1].textContent.replace(/\D/g, ''),
-          bytes: row.children[2].textContent.replace(/\D/g, ''),
+          bytes: row.children[2].getAttribute('data-bytes'),
         };
       });
       assert.deepEqual(shown, {

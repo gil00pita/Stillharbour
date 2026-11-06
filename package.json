@@ -9,8 +9,8 @@
   "packageManager": "npm@11.16.0",
   "scripts": {
     "dev": "vite",
-    "build": "npm run theme:types && tsc -b && vite build",
-    "typecheck": "npm run theme:types && tsc -b --pretty false",
+    "build": "tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -40,8 +40,7 @@
     "perf:catalog": "python3 scripts/performance/run.py",
     "perf:p1": "python3 scripts/performance/run.py --phase p1",
     "perf:desktop": "wdio run wdio.performance.conf.mjs",
-    "desktop:test:metadata": "node scripts/map-desktop-test.mjs --metadata",
-    "theme:types": "chakra typegen ./src/theme/system.ts"
+    "desktop:test:metadata": "node scripts/map-desktop-test.mjs --metadata"
   },
   "dependencies": {
     "@chakra-ui/react": "3.37.0",
@@ -59,7 +58,6 @@
     "@puppeteer/browsers": "3.2.6"
   },
   "devDependencies": {
-    "@chakra-ui/cli": "3.29.0",
     "@eslint/js": "10.0.1",
     "@tauri-apps/cli": "2.12.4",
     "@testing-library/jest-dom": "7.0.1",
