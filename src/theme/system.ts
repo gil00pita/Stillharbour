@@ -9,6 +9,8 @@ import { fieldRecipe } from './recipes';
 import { placeSearchRecipe } from '../components/PlaceSearch/PlaceSearch.slot-recipe';
 import { inspectionChoiceCardsRecipe } from '../components/InspectionChoiceCards/InspectionChoiceCards.slot-recipe';
 import { errorToastRecipe } from '../components/ErrorToast/ErrorToast.slot-recipe';
+import { storageExplorerRecipe } from '../components/StorageExplorer/StorageExplorer.recipe';
+import { inspectionDialogRecipe } from '../components/InspectionDialog/InspectionDialog.recipe';
 
 const focus = { outline: '2px solid', outlineColor: 'brand.focusRing', outlineOffset: '2px' };
 
@@ -105,6 +107,8 @@ export const system = createSystem(
         toast: errorToastRecipe,
       },
       recipes: {
+        storageExplorer: storageExplorerRecipe,
+        inspectionDialog: inspectionDialogRecipe,
         button: defineRecipe({
           className: 'chakra-button',
           base: {
