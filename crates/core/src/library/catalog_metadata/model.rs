@@ -76,6 +76,14 @@ pub struct TagHistoryEntry {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CatalogMetadataRequest {
+    Albums {
+        search: String,
+        offset: u32,
+    },
+    CreateAlbum {
+        name: String,
+        asset_ids: Vec<String>,
+    },
     ExportHistory {},
     TagEditPreview {
         from: String,
@@ -140,6 +148,7 @@ pub enum CatalogMetadataRequest {
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "data", rename_all = "snake_case")]
 pub enum CatalogMetadataReply {
+    Albums(AlbumPage),
     ExportHistory(Vec<super::super::metadata_export::model::MetadataExportRecord>),
     TagEditReview(TagEditReview),
     TagHistory(Vec<TagHistoryEntry>),
@@ -150,4 +159,23 @@ pub enum CatalogMetadataReply {
     Membership(CollectionMembership),
     TagCategories(Vec<TagCategory>),
     TagCategory(TagCategory),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumSummary {
+    pub id: String,
+    pub name: String,
+    pub from_tags: bool,
+    pub version: u32,
+    pub photo_count: u32,
+    pub query: AssetQuery,
+    pub covers: Vec<super::super::model::AssetSummary>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct AlbumPage {
+    pub items: Vec<AlbumSummary>,
+    pub total: u32,
+    pub next_offset: Option<u32>,
 }

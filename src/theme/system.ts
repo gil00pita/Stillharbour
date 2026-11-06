@@ -1,3 +1,6 @@
+import { albumsPageRecipe } from '../components/AlbumsPage/AlbumsPage.recipe';
+import { albumEditorRecipe } from '../components/AlbumEditor/AlbumEditor.recipe';
+import { photoAlbumActionsRecipe } from '../components/PhotoAlbumActions/PhotoAlbumActions.recipe';
 import {
   createSystem,
   defaultBaseConfig,
@@ -107,6 +110,9 @@ export const system = createSystem(
         toast: errorToastRecipe,
       },
       recipes: {
+        albumsPage: albumsPageRecipe,
+        albumEditor: albumEditorRecipe,
+        photoAlbumActions: photoAlbumActionsRecipe,
         storageExplorer: storageExplorerRecipe,
         inspectionDialog: inspectionDialogRecipe,
         button: defineRecipe({

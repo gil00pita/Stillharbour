@@ -1,5 +1,6 @@
 //! Read-only EXIF parsing inside the bounded, supervised stdin worker.
 use super::*;
+mod keywords;
 use exif::{In, Tag, Value};
 use serde_json::{Map, Value as Json};
 
@@ -76,13 +77,20 @@ fn extract(bytes: &[u8]) -> Result<Json> {
     value.insert("ImageHeight".into(), height.into());
     value.insert(
         "StillharbourMetadataPolicy".into(),
-        "windows-exif-v2".into(),
+        "windows-exif-v3".into(),
     );
     let exif = match exif::Reader::new().read_from_container(&mut Cursor::new(bytes)) {
         Ok(exif) => Some(exif),
         Err(exif::Error::NotFound(_)) => None,
         Err(_) => return Err(invalid()),
     };
+    let keywords = keywords::extract(bytes, exif.as_ref())?;
+    if !keywords.is_empty() {
+        value.insert(
+            "Keywords".into(),
+            serde_json::to_value(keywords).map_err(|_| invalid())?,
+        );
+    }
     if let Some(exif) = exif {
         for (key, tag) in [
             ("Make", Tag::Make),
@@ -140,6 +148,15 @@ pub(super) fn worker() -> Result<()> {
 #[cfg(all(test, feature = "fixture-probes"))]
 mod tests {
     use super::*;
+    #[test]
+    fn tagged_generated_jpegs_expose_multiple_keywords_without_source_changes() {
+        let fixture = crate::library_fixture::LibraryFixture::generate_tagged().unwrap();
+        let count = fixture.verify_unchanged().unwrap();
+        let raw = extract(&std::fs::read(fixture.path().join("Coast/Generated-00.jpg")).unwrap())
+            .unwrap();
+        assert_eq!(raw[0]["Keywords"], serde_json::json!(["Coast", "Outdoors"]));
+        assert_eq!(fixture.verify_unchanged().unwrap(), count);
+    }
     #[test]
     fn source_geometry_and_capture_offset_are_observations_not_double_rotation() {
         let fixture = crate::library_fixture::LibraryFixture::generate().unwrap();

@@ -93,3 +93,9 @@ and press Escape. Reconnect remains available for an unavailable desktop
 connection. A failed library read keeps **Retry library** in the workspace.
 Notifications never retry an operation automatically. Form validation and
 blocking recovery/job outcomes remain beside their related controls.
+
+## Albums / Tags
+
+Open Albums / Tags to browse all your collections or search by album name. From tags marks albums gathered automatically from photo tags during scanning. A photo can belong to several albums; creating an album never moves or changes it.
+
+Choose New album, enter a unique name, select photos from the searchable library, then Create album. You may also create an empty album. Open a custom album and choose Add photos to add up to 500 photos per save. Right-click a photo on Photos, or use its labelled options button, then Add to album to choose an existing custom album or create one with that photo selected. Albums and memberships are saved in your catalog; the catalog does not contain the original photos.

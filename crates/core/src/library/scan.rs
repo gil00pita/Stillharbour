@@ -116,6 +116,18 @@ impl ScanContext {
             let legacy_metadata = cfg!(windows)
                 && store::legacy_windows_metadata(&self.catalog, id.clone(), revision.clone())?;
             if current.metadata_state == "ready" && !legacy_metadata {
+                let cached_id = id.clone();
+                self.catalog.call(move |db| {
+                    let tx = db.transaction()?;
+                    if super::catalog_metadata::import_scanned_keywords(&tx, &cached_id)? {
+                        tx.execute(
+                            "UPDATE library_state SET revision=revision+1 WHERE singleton=1",
+                            [],
+                        )?;
+                    }
+                    tx.commit()?;
+                    Ok(())
+                })?;
                 if let Some(reason) = self.filter.file_reason(
                     &entry.relative,
                     false,

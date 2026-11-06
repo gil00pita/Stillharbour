@@ -1,3 +1,4 @@
+import { PhotoAlbumButton, usePhotoAlbumMenu } from '../components/PhotoAlbumActions';
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import type { AssetSummary } from '../bindings';
 import { displayDate, fileSize } from './model';
@@ -156,8 +157,10 @@ export function TextListRow({
   onOpen: (id: string, opener: HTMLButtonElement) => void;
   onNavigate: (event: KeyboardEvent<HTMLElement>) => void;
 }) {
+  const contextMenu = usePhotoAlbumMenu(asset);
   return (
     <div
+      onContextMenu={contextMenu}
       role="row"
       className={`asset text-list-row ${selected ? 'is-selected' : ''}`}
       data-asset-id={asset.id}
@@ -176,7 +179,8 @@ export function TextListRow({
           onKeyDown={onNavigate}
         />
       </span>
-      <span role="cell">
+      <span role="cell" className="text-list-name">
+        <PhotoAlbumButton asset={asset} />
         <button
           className="asset-open"
           aria-label={`Open ${asset.name}`}

@@ -37,6 +37,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         TagEditReview::decl(&config),
         TagHistoryEntry::decl(&config),
         AssetNotes::decl(&config),
+        AlbumSummary::decl(&config),
+        AlbumPage::decl(&config),
         CollectionKind::decl(&config),
         CatalogCollection::decl(&config),
         CollectionMembership::decl(&config),

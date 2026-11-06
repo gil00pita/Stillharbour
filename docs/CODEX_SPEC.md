@@ -1014,3 +1014,7 @@ auto-retry, auto-dismiss critical details or convert a failed library read into
 an empty success. Keep contextual validation and explicit blocking recovery/job
 states in place. No native authentication dialog, backend authority or original
 operation changes follow from this presentation change.
+
+### Owner-approved Albums / Tags — 2026-11-06
+
+Implement the unified searchable cover grid in [ALBUMS_TAGS.md](ALBUMS_TAGS.md): exact-tag albums labelled From tags, custom albums, atomic creation with library selection, custom-album additions and per-photo right-click/keyboard/touch menus. Source keyword observations merge during authorized scans while persistent removal overrides and raw provenance remain intact. Persist only catalog organization; keep all originals and sidecars unchanged. This supersedes the earlier manual-import-only keyword behavior without changing schema identities, preservation requirements or release gates.
