@@ -4317,6 +4317,19 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               ),
             ),
             footerTop: footer.top,
+            collapsedItems: document.querySelector('.navigation-collapsed')
+              ? [...document.querySelectorAll('.sidebar nav button')].map((button) => {
+                  const icon = button.querySelector('svg').getBoundingClientRect();
+                  const bounds = button.getBoundingClientRect();
+                  const logo = document.querySelector('.brand img').getBoundingClientRect();
+                  return {
+                    label: button.getAttribute('aria-label'),
+                    iconOffset: icon.left + icon.width / 2 - (logo.left + logo.width / 2),
+                    left: bounds.left,
+                    right: bounds.right,
+                  };
+                })
+              : [],
           };
         });
         assert.equal(layout.toggleInMenu, true);
@@ -4327,6 +4340,11 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         assert.equal(layout.jobsAboveSettings, true);
         assert.equal(layout.primaryContainsActions, false);
         assert.ok(layout.footerTop > height / 2);
+        for (const item of layout.collapsedItems) {
+          assert.ok(Math.abs(item.iconOffset) <= 1, `${item.label}: icon centred under logo`);
+          assert.equal(item.left, layout.collapsedItems[0].left, `${item.label}: left edge`);
+          assert.equal(item.right, layout.collapsedItems[0].right, `${item.label}: right edge`);
+        }
         await browser.waitUntil(async () =>
           browser.execute(() => {
             const viewport = document.querySelector('.asset-viewport');

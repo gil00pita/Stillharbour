@@ -2711,9 +2711,9 @@ button.explorer-entry.asset-open:hover:enabled {
   min-height: 0;
   overflow-y: auto;
 }
-.navigation-collapsed .sidebar > nav {
-  margin-inline-end: -10px;
-  padding-inline-end: 10px;
+.navigation-collapsed .sidebar > nav,
+.navigation-collapsed .sidebar-footer {
+  padding-inline: 12px;
 }
 .sidebar-footer {
   flex-shrink: 0;
