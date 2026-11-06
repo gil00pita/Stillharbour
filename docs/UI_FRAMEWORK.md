@@ -2,6 +2,24 @@
 
 The owner requested Chakra UI using [this example repository](https://github.com/gil00pita/ts-eslint-nextjs-boilerplate). [ADR-0083](decisions/ADR-0083-chakra-ui-design-system.md) records the inspected commit and architecture decision. npm stable tags verified on 2026-11-02 resolve to Chakra UI **3.37.0** and Emotion **11.14.0**, both pinned exactly with registry integrity in package-lock.json.
 
+## Automatic theme types — 2026-11-05
+
+`npm run build` and `npm run typecheck` run `npm run theme:types` before TypeScript.
+The local, lockfile-pinned `@chakra-ui/cli` **3.29.0** generates the installed
+Chakra declarations from `src/theme/system.ts`, including custom RadioCard
+presentation variants. No global CLI, transient download or committed generated
+node_modules declarations are required. `npm ci --ignore-scripts` is supported:
+the normal build creates the types after installation.
+
+The renderer remains Chakra **3.37.0** with Emotion **11.14.0**. The CLI is a
+build-only MIT tool; version 3.29.0 declares Zod 4 support and the lock resolves
+patched Zod 4.6.7. The initially tried CLI 3.37.0 required affected Zod 3 and is
+not retained. [Theming/type generation](https://chakra-ui.com/docs/theming/overview)
+and [GHSA-mrhx-c7xc-m3w5](https://github.com/advisories/GHSA-mrhx-c7xc-m3w5)
+explain the generated-type requirement and the dependency constraint. Node 24
+matches CI; newer development Node versions may emit upstream CLI dependency
+engine warnings and are qualified only by the actual checks recorded in the log.
+
 ## Structure
 
 - `src/theme/system.ts`: raw product tokens, semantic colors and button/input/textarea recipes. Uses `defaultBaseConfig` with preflight disabled, the existing dark palette and native system fonts. No remote assets or new theme preference.

@@ -69,3 +69,15 @@ For the owner’s later request, Duplicates replaces match-mode, file-scope and 
 ## Favorite heart animation — owner revision, 2026-11-05
 
 The owner supplied the Prototypr Twitter-heart CSS article and requested that animation on the existing heart. This explicitly supersedes the earlier restrained 180ms favorite press: a bounded 800ms rose heart pop, expanding ring and seven paired particle rays acknowledge a confirmed favorite. Keep existing catalog confirmation, failure behavior, navigation, hidden-window completion, Reduced Motion and 44px target. See [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) for source attribution, choreography and checks.
+
+## Sidebar collapse control — 2026-11-05
+
+The owner requested moving collapse into the navigation menu. The sidebar Workspace actions now contains Jobs, Settings and Collapse navigation, in that order. Expanded navigation shows the panel icon and label; collapsed navigation keeps the same control as an icon with an Expand navigation accessible name and tooltip. The control remains mounted during onboarding and page changes, retaining keyboard focus and the existing temporary override/settings default behavior. Page headers no longer contain it; shared sidebar button sizing and focus styling apply.
+
+## Sidebar scrollbar alignment — 2026-11-05
+
+The navigation scroll area extends through the sidebar’s trailing padding to the vertical divider. Matching internal padding preserves the menu-item alignment and width. Expanded and collapsed navigation use their existing 16px/10px insets; the anchored footer stays in place. Only the scrollbar’s trailing gap changes.
+
+## Version in the app title — 2026-11-05
+
+Display the native-reported application version beside the sidebar’s Stillharbour name (currently Stillharbour 0.1.0), without a Version prefix or a separate footer entry. Keep the descriptor beneath it. Hide the title/version together when navigation is collapsed. This changes presentation only; the displayed version remains the actual application version, not the illustrative 1.0.1.

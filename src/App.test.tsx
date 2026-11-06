@@ -76,7 +76,10 @@ describe('native library onboarding', () => {
       screen.queryByRole('heading', { name: 'A home for the moments you keep.' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText('Local by design.')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Application version')).toHaveTextContent('Version 0.1.0');
+    const version = screen.getByLabelText('Application version');
+    expect(version).toHaveTextContent('0.1.0');
+    expect(version.closest('.brand')).toHaveTextContent('Stillharbour 0.1.0');
+    expect(version.closest('.sidebar-footer')).toBeNull();
     expect(screen.getByText('/fixture/港 photo', { exact: false })).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: 'Save & Start scanning' }));
     await waitFor(() =>
@@ -182,17 +185,15 @@ it('opens Jobs above Settings in the sidebar without changing the current page',
   expect(screen.getByRole('heading', { name: 'Settings' })).toBeVisible();
 });
 
-it('keeps an icon-only collapse control before the current header title and out of the sidebar', async () => {
+it('keeps the navigation toggle in the sidebar menu across collapse and page changes', async () => {
   render(<App />);
   await ready();
   const collapse = screen.getByRole('button', { name: 'Collapse navigation' });
-  expect(collapse.closest('header')).not.toBeNull();
-  expect(collapse.nextElementSibling).toHaveTextContent('Your library');
-  expect(collapse.textContent).toBe('');
+  const menu = screen.getByRole('navigation', { name: 'Workspace actions' });
+  expect(within(menu).getByRole('button', { name: 'Collapse navigation' })).toBe(collapse);
+  expect(collapse.closest('header')).toBeNull();
+  expect(collapse.previousElementSibling).toHaveAccessibleName('Settings');
   expect(collapse).toHaveAttribute('aria-controls', 'app-sidebar');
-  expect(
-    within(screen.getByRole('complementary')).queryByRole('button', { name: /navigation/ }),
-  ).not.toBeInTheDocument();
   fireEvent.click(collapse);
   expect(screen.getByRole('button', { name: 'Expand navigation' })).toHaveAttribute(
     'aria-expanded',
@@ -200,8 +201,9 @@ it('keeps an icon-only collapse control before the current header title and out 
   );
   fireEvent.click(screen.getByRole('button', { name: 'Settings' }));
   const expand = screen.getByRole('button', { name: 'Expand navigation' });
-  expect(expand.closest('header')).not.toBeNull();
-  expect(expand.nextElementSibling).toHaveTextContent('Settings');
+  expect(within(menu).getByRole('button', { name: 'Expand navigation' })).toBe(expand);
+  expect(expand.closest('header')).toBeNull();
+  expect(screen.getByRole('heading', { name: 'Settings' })).toBeVisible();
   fireEvent.click(expand);
   expect(screen.getByRole('button', { name: 'Collapse navigation' })).toHaveAttribute(
     'aria-expanded',

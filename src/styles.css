@@ -208,7 +208,7 @@ input,
 textarea {
   caret-color: var(--accent);
 }
-:where(table, .path, .sidebar-version, .date-rail, .job-progress, .preparation-summary) {
+:where(table, .path, .brand-version, .date-rail, .job-progress, .preparation-summary) {
   font-variant-numeric: tabular-nums;
 }
 body {
@@ -290,11 +290,11 @@ nav svg {
   stroke: currentColor;
   stroke-width: 1.5;
 }
-.sidebar-version {
-  margin: 0;
-  padding: 16px 12px 0;
-  font-size: 12px;
+.brand-version {
+  font-size: 11px;
+  font-weight: 400;
   color: var(--muted);
+  white-space: nowrap;
 }
 
 main {
@@ -553,8 +553,7 @@ h3 {
     border-right: 0;
     border-bottom: 1px solid var(--border);
   }
-  .sidebar nav,
-  .sidebar-version {
+  .sidebar nav {
     display: none;
   }
   .toolbar {
@@ -1505,25 +1504,6 @@ input.switch-control:disabled {
   background: var(--control-hover);
   color: var(--stillharbour-colors-fg, #eeeee8);
 }
-.toolbar:has(> .sidebar-toggle) {
-  padding-inline-start: 16px;
-  gap: 12px;
-}
-:is(.toolbar, .settings-title-row):has(> .sidebar-toggle) > h1 {
-  margin-inline-end: auto;
-}
-:is(.toolbar, .settings-title-row) > button.sidebar-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 32px;
-  width: 32px;
-  height: 32px;
-  min-height: 32px;
-  padding: 0;
-  border-color: transparent;
-  background: transparent;
-}
 .sidebar nav {
   margin-top: 36px;
 }
@@ -1572,11 +1552,6 @@ input.switch-control:disabled {
 .navigation-collapsed .sidebar nav[aria-label] button {
   justify-content: center;
   padding: 10px;
-}
-.navigation-collapsed .sidebar-version {
-  padding: 20px 0 0;
-  text-align: center;
-  font-size: 11px;
 }
 .navigation-collapsed .sidebar .running-dot {
   position: absolute;
@@ -2715,6 +2690,12 @@ button.explorer-entry.asset-open:hover:enabled {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  margin-inline-end: -16px;
+  padding-inline-end: 16px;
+}
+.navigation-collapsed .sidebar > nav {
+  margin-inline-end: -10px;
+  padding-inline-end: 10px;
 }
 .sidebar-footer {
   flex-shrink: 0;
