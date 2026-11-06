@@ -170,9 +170,11 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       assert.equal(await $('.map-filter-trigger').getAttribute('aria-expanded'), 'false');
       const searchGeometry = await browser.execute(() => {
         const input = document.querySelector('.map-search-controls input[type="search"]');
-        const icon = document.querySelector('.map-search-controls .fixed-search > svg');
+        const frame = document.querySelector('.map-search-controls .search-input-frame');
+        const icon = frame.querySelector('svg');
         const filter = document.querySelector('.map-filter-trigger');
-        const field = input.getBoundingClientRect();
+        const field = frame.getBoundingClientRect();
+        const text = input.getBoundingClientRect();
         const glyph = icon.getBoundingClientRect();
         const trigger = filter.getBoundingClientRect();
         return {
@@ -182,13 +184,17 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             glyph.right < field.right &&
             glyph.top > field.top &&
             glyph.bottom < field.bottom,
-          iconAboveInput: Number(getComputedStyle(icon).zIndex) > 0,
+          iconBeforeInput: glyph.right <= text.left,
+          inputReachable:
+            document.elementFromPoint(text.left + text.width / 2, text.top + text.height / 2) ===
+            input,
           filterBesideSearch: trigger.left >= field.right && Math.abs(trigger.top - field.top) < 2,
         };
       });
       assert.deepEqual(searchGeometry, {
         iconInside: true,
-        iconAboveInput: true,
+        iconBeforeInput: true,
+        inputReachable: true,
         filterBesideSearch: true,
       });
       await $('.map-filter-trigger').click();
@@ -214,7 +220,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             .querySelector('[role="dialog"][aria-label="Map filters"]')
             .getBoundingClientRect();
           const input = document
-            .querySelector('.map-search-controls input')
+            .querySelector('.map-search-controls .search-input-frame')
             .getBoundingClientRect();
           const filter = document.querySelector('.map-filter-trigger').getBoundingClientRect();
           return (

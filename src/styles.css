@@ -1987,7 +1987,7 @@ SOFTWARE.
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   width: max-content;
   max-width: 100%;

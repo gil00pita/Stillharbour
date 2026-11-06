@@ -32,10 +32,9 @@ describe('Storage explorer · generated native observations', () => {
     assert.equal(
       await browser.execute(
         () =>
-          document
-            .querySelector('.inspection-content')
-            ?.firstElementChild?.classList.contains('storage-explorer') &&
-          !document.querySelector('.inspection-setup, .inspection-job, .inspection-coverage'),
+          Boolean(
+            document.querySelector('.inspection-page > .inspection-content > .storage-explorer'),
+          ) && !document.querySelector('.inspection-setup, .inspection-job, .inspection-coverage'),
       ),
       true,
     );
