@@ -367,7 +367,8 @@ it('starts Storage results at the filters and keeps retained controls, issues an
   });
   const { container } = setup();
   await screen.findByRole('region', { name: 'Storage filters' });
-  expect(container.querySelector('.inspection-content .storage-explorer')).toBeInTheDocument();
+  expect(container.querySelector('.inspection-content > .storage-explorer')).toBeInTheDocument();
+  expect(screen.getByText(/Showing scan from/)).toHaveTextContent('completed');
   expect(container.querySelector('.app-page-header')).not.toHaveTextContent(
     'Retained generated measurement',
   );

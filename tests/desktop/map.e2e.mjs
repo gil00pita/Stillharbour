@@ -169,26 +169,34 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       );
       assert.equal(await $('.map-filter-trigger').getAttribute('aria-expanded'), 'false');
       const searchGeometry = await browser.execute(() => {
-        const input = document.querySelector('.map-search-controls input[type="search"]');
-        const icon = document.querySelector('.map-search-controls .fixed-search > svg');
+        const frame = document.querySelector('.map-search-controls .search-input-frame');
+        const input = frame?.querySelector('input[type="search"]');
+        const icon = frame?.querySelector(':scope > svg');
         const filter = document.querySelector('.map-filter-trigger');
-        const field = input.getBoundingClientRect();
+        if (!frame || !input || !icon || !filter)
+          throw new Error('Map search frame, input, magnifier or Filters control is missing');
+        const field = frame.getBoundingClientRect();
+        const text = input.getBoundingClientRect();
         const glyph = icon.getBoundingClientRect();
         const trigger = filter.getBoundingClientRect();
         return {
+          inputInside: text.left >= field.left && text.right <= field.right,
           iconInside:
             glyph.width > 0 &&
             glyph.left > field.left &&
             glyph.right < field.right &&
             glyph.top > field.top &&
             glyph.bottom < field.bottom,
-          iconAboveInput: Number(getComputedStyle(icon).zIndex) > 0,
+          iconUnobstructed: icon.contains(
+            document.elementFromPoint(glyph.left + glyph.width / 2, glyph.top + glyph.height / 2),
+          ),
           filterBesideSearch: trigger.left >= field.right && Math.abs(trigger.top - field.top) < 2,
         };
       });
       assert.deepEqual(searchGeometry, {
+        inputInside: true,
         iconInside: true,
-        iconAboveInput: true,
+        iconUnobstructed: true,
         filterBesideSearch: true,
       });
       await $('.map-filter-trigger').click();
