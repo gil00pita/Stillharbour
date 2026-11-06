@@ -1,4 +1,5 @@
 //! Catalog-only organization. Nothing here opens media, sidecars or helpers.
+mod albums;
 pub mod model;
 mod tags;
 use super::{
@@ -10,6 +11,7 @@ use crate::{
     catalog::Catalog,
     domain::{AppError, ErrorCode, Result},
 };
+pub(super) use albums::import_scanned_keywords;
 use model::*;
 use rusqlite::{Connection, OptionalExtension, params, params_from_iter, types::Value};
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -94,6 +96,8 @@ fn bump(db: &Connection) -> Result<()> {
 pub fn request(catalog: &Catalog, request: CatalogMetadataRequest) -> Result<CatalogMetadataReply> {
     use CatalogMetadataRequest::*;
     catalog.call(move |db| match request {
+        Albums { search, offset } => Ok(CatalogMetadataReply::Albums(albums::list(db, search, offset)?)),
+        CreateAlbum { name, asset_ids } => Ok(CatalogMetadataReply::Collection(albums::create(db, name, asset_ids)?)),
         ExportHistory {} => {
             let rows=db.prepare("SELECT e.export_id,e.phase,(SELECT count(*) FROM catalog_export_journal f WHERE f.export_id=e.export_id AND f.phase='file_verified'),e.created_at FROM catalog_export_journal e WHERE e.sequence=(SELECT max(last.sequence) FROM catalog_export_journal last WHERE last.export_id=e.export_id) ORDER BY e.sequence DESC LIMIT 20")?.query_map([],|r|Ok(super::metadata_export::model::MetadataExportRecord{id:r.get(0)?,last_phase:r.get(1)?,files_verified:r.get(2)?,updated_at:r.get(3)?}))?.collect::<rusqlite::Result<Vec<_>>>()?;
             Ok(CatalogMetadataReply::ExportHistory(rows))
@@ -358,18 +362,21 @@ fn create_collection(
     name: String,
     query: Option<AssetQuery>,
 ) -> Result<CatalogCollection> {
+    let tx = db.transaction()?;
+    let result = create_collection_in(&tx, kind, name, query)?;
+    tx.commit()?;
+    Ok(result)
+}
+fn create_collection_in(
+    tx: &Connection,
+    kind: CollectionKind,
+    name: String,
+    query: Option<AssetQuery>,
+) -> Result<CatalogCollection> {
     let name = label(&name)?;
     let raw = validated_query(kind, query)?;
-    let tx = db.transaction()?;
-    if tx
-        .prepare("SELECT 1 FROM catalog_collections WHERE kind=? AND name=?")?
-        .exists(params![kind.text(), name])?
-    {
-        return Err(AppError::new(
-            ErrorCode::Conflict,
-            "A collection with this exact name already exists, including archived entries.",
-        ));
-    }
+    albums::check_name(tx, kind, &name, None)?;
+
     if tx.query_row("SELECT count(*) FROM catalog_collections", [], |r| {
         r.get::<_, i64>(0)
     })? >= MAX_COLLECTIONS as i64
@@ -383,10 +390,8 @@ fn create_collection(
         "INSERT INTO catalog_collections(id,version,kind,name,query_json) VALUES(?,1,?,?,?)",
         params![id, kind.text(), name, raw],
     )?;
-    bump(&tx)?;
-    let result = collection(&tx, &id)?;
-    tx.commit()?;
-    Ok(result)
+    bump(tx)?;
+    collection(tx, &id)
 }
 fn update_collection(
     db: &mut Connection,
@@ -398,6 +403,7 @@ fn update_collection(
     let name = label(&name)?;
     let tx = db.transaction()?;
     let current = collection(&tx, id)?;
+    albums::check_name(&tx, current.kind, &name, Some(id))?;
     if current.version != expected {
         return Err(conflict());
     }
@@ -628,3 +634,6 @@ pub(super) fn query_filter(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod album_tests;

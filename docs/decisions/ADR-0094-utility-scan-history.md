@@ -1,4 +1,4 @@
-# ADR-0093: Utility setup, background reconciliation and report history
+# ADR-0094: Utility setup, background reconciliation and report history
 
 Date: 2026-11-05. Status: accepted for the owner-requested utility lifecycle.
 

@@ -1530,6 +1530,7 @@ fn test_library_fixture(
     verify: bool,
     native_formats: Option<bool>,
     geographic: Option<bool>,
+    tagged: Option<bool>,
 ) -> Result<serde_json::Value> {
     if window.label() != "main" {
         return Err(AppError::new(
@@ -1554,7 +1555,15 @@ fn test_library_fixture(
             "A generated fixture already exists.",
         ));
     }
-    let generated = if geographic.unwrap_or(false) {
+    let generated = if tagged.unwrap_or(false) {
+        if geographic.unwrap_or(false) || native_formats.unwrap_or(false) {
+            return Err(AppError::new(
+                ErrorCode::InvalidInput,
+                "Choose one generated fixture kind.",
+            ));
+        }
+        stillharbour_core::library_fixture::LibraryFixture::generate_tagged()?
+    } else if geographic.unwrap_or(false) {
         if native_formats.unwrap_or(false) {
             return Err(AppError::new(
                 ErrorCode::InvalidInput,

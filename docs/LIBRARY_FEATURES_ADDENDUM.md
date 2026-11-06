@@ -211,3 +211,7 @@ Use structured errors with preserved underlying cause, affected item IDs, safe h
 Implement parser/resource-limit tests, archive and catalog fuzz fixtures, native permission/placeholder cases, interrupted save/import recovery, deterministic recipe tests, and round-trip catalog recovery. Use generated/disposable data, not a real cloud/photo account, without precise authorization. Keep provider adapters unavailable until authentication, policy and real platform capability gates pass; a mock importer is not a shipped importer.
 
 All requirements here are specifications. No application build, provider authorization, native import, database migration, media export, mobile test or safety test has been performed by producing this package.
+
+### Owner-approved tag album slice — 2026-11-06
+
+[Albums / Tags](ALBUMS_TAGS.md) adds a unified cover grid, name search, custom creation/picking, and per-photo Add to album menus. Authorized scans merge bounded embedded keyword observations into catalog tags while preserving raw provenance, removal overrides and history. Exact tag labels define automatic album membership; custom memberships remain independent, unique catalog references. New custom names reject trimmed/case duplicates and existing tag names. This does not authorize rewriting originals/sidecars or complete the wider N2 catalog/native gates.

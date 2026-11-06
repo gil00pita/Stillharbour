@@ -1,3 +1,4 @@
+import { PhotoAlbumButton, usePhotoAlbumMenu } from '../components/PhotoAlbumActions';
 import { CachedPreviewImage } from './CachedPreviewImage';
 import { useState, type KeyboardEvent } from 'react';
 import type { AssetSummary, ThumbnailResult } from '../bindings';
@@ -52,9 +53,11 @@ function ImageTile({
   onNavigate,
   onRetry,
 }: Omit<AssetTileProps, 'mode'> & { mode: Exclude<ViewMode, 'list'> }) {
+  const contextMenu = usePhotoAlbumMenu(asset);
   const [imageFailure, setImageFailure] = useState(false);
   return (
     <article
+      onContextMenu={contextMenu}
       data-asset-id={asset.id}
       data-date={asset.date}
       className={`asset ${selected ? 'is-selected' : ''}`}
@@ -103,6 +106,7 @@ function ImageTile({
           </span>
         )}
       </button>
+      <PhotoAlbumButton asset={asset} />
       {imageFailure && onRetry && (
         <button
           className="asset-preview-retry"

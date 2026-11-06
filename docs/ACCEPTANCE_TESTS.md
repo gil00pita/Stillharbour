@@ -876,3 +876,16 @@ See [Utilities UI](UTILITIES_UI.md) for current capability limitations and verif
 Latest Storage reference follow-up (2026-11-05): filters and chips precede the overview; controls read Search, File type, Camera, Age · last modified, Minimum size, Reset. Include 5 GB and 10 GB minimum options. Existing invariance, native authority, scope disclosure, read-only and responsive criteria remain unchanged.
 
 Storage workspace cleanup (2026-11-05): normal retained results begin at the file filters, with no introductory paragraph, inline setup/history/job card, issues button or coverage paragraph above them. The utility lifecycle adds inline welcome/setup only before a first result and keeps subsequent version/background status and history selection in the header. Header measurement controls still expose native root/scope/start/cancel/issues/coverage in a dialog; dated versions use the adjacent history icon; Close/Escape restore opener focus. Offline-root guards, errors, active cancellation and incomplete-coverage context remain available; Duplicates/Integrity keep their inline forms. Generated native checks verify the clear canvas, dialog controls, keyboard dismissal, unchanged originals and narrow layout.
+
+## Albums / Tags extension — 2026-11-06
+
+These extend the existing album/tag criteria; they do not replace preservation gates.
+
+- Scan generated JPEGs with shared and distinct embedded tags. Show one exact-tag album per label, correct distinct counts, a From tags label and photos belonging to multiple albums. Repeating scans must preserve removed-tag overrides and unchanged original/sidecar bytes.
+- Show custom and automatic cover tiles in one searchable grid without type filters. Verify empty/no-match/error/retry states and narrow layout. Open a tile through the existing photo browser.
+- Create an empty or populated custom album using New album and the searchable library picker. Save initial memberships atomically. Reject trimmed/case duplicate names, existing tag names, invalid IDs and repeated IDs without creating a partial album. Reopen the catalog with memberships retained.
+- Add photos to a custom album without replacing prior members. Repeated additions remain unique; stale versions fail visibly.
+- Use both right-click and each photo's accessible menu button to Add to album. Choose an active custom album or create a new album with the photo selected; verify keyboard dismissal/focus return and touch-equivalent activation.
+- Run bounded hostile/oversized keyword parser cases; no external entities, source writes or partial tag import. Record platform-specific native evidence and explicit unsupported encodings.
+
+[ALBUMS_TAGS.md](ALBUMS_TAGS.md) owns the current limits and generated native smoke command.

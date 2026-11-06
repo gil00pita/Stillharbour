@@ -36,3 +36,26 @@ it('leaves Escape consumed by a child control to that control', () => {
   expect(close).not.toHaveBeenCalled();
   expect(screen.getByRole('dialog')).toBeInTheDocument();
 });
+
+it('keeps a busy dialog open for both Escape and native cancel, then permits dismissal', () => {
+  const close = vi.fn();
+  const { rerender } = render(
+    <InspectionDialog title="Saving album" busy onClose={close}>
+      <button>Photo picker</button>
+    </InspectionDialog>,
+  );
+  const dialog = screen.getByRole('dialog');
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Photo picker' }), { key: 'Escape' });
+  fireEvent(dialog, new Event('cancel', { cancelable: true }));
+  expect(close).not.toHaveBeenCalled();
+  expect(dialog).toHaveAttribute('open');
+  expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+
+  rerender(
+    <InspectionDialog title="Saving album" onClose={close}>
+      <button>Photo picker</button>
+    </InspectionDialog>,
+  );
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Photo picker' }), { key: 'Escape' });
+  expect(close).toHaveBeenCalledOnce();
+});

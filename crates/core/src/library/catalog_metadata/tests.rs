@@ -1,7 +1,7 @@
 use super::super::model::ScanFilter;
 use super::*;
 
-fn fixture() -> (tempfile::TempDir, Catalog, Vec<String>) {
+pub(super) fn fixture() -> (tempfile::TempDir, Catalog, Vec<String>) {
     let temp = tempfile::tempdir().unwrap();
     let catalog = Catalog::open(temp.path().join("Catalog.stillharbour")).unwrap();
     let ids = (0..3)
@@ -45,7 +45,7 @@ fn read_notes(catalog: &Catalog, id: &str) -> AssetNotes {
         _ => panic!("notes response"),
     }
 }
-fn selection(ids: &[String]) -> AssetSelection {
+pub(super) fn selection(ids: &[String]) -> AssetSelection {
     AssetSelection::Ids { ids: ids.to_vec() }
 }
 fn category(catalog: &Catalog, label: &str, parent: Option<String>) -> TagCategory {

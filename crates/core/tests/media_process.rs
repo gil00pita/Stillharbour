@@ -115,7 +115,7 @@ async fn stdin_metadata_worker_reads_generated_bytes_and_rejects_path_arguments(
     let data: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(data[0]["ImageWidth"], 64);
     assert_eq!(data[0]["ImageHeight"], 32);
-    assert_eq!(data[0]["StillharbourMetadataPolicy"], "windows-exif-v2");
+    assert_eq!(data[0]["StillharbourMetadataPolicy"], "windows-exif-v3");
     assert!(data[0].get("GPSLatitude").is_none());
     let rejected = invoke(&original, true).await;
     assert_eq!(rejected.status.code(), Some(1));
@@ -132,5 +132,16 @@ async fn stdin_metadata_worker_reads_generated_bytes_and_rejects_path_arguments(
         assert_eq!(data[0]["GPSLatitude"], 5.0);
         assert!((data[0]["GPSLongitude"].as_f64().unwrap() + 179.75).abs() < 0.00001);
         assert_eq!(fixture.verify_unchanged().unwrap(), 9);
+        let tagged = stillharbour_core::library_fixture::LibraryFixture::generate_tagged().unwrap();
+        let count = tagged.verify_unchanged().unwrap();
+        let bytes = std::fs::read(tagged.path().join("Coast/Generated-00.jpg")).unwrap();
+        let output = invoke(&bytes, false).await;
+        assert!(output.status.success());
+        let data: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        assert_eq!(
+            data[0]["Keywords"],
+            serde_json::json!(["Coast", "Outdoors"])
+        );
+        assert_eq!(tagged.verify_unchanged().unwrap(), count);
     }
 }

@@ -1,3 +1,7 @@
+import { metadata } from './metadata/ipc';
+import { AlbumsPage } from './components/AlbumsPage';
+import { AlbumEditor } from './components/AlbumEditor';
+import type { AlbumSummary, CatalogCollection } from './bindings';
 import { Button } from './components/ui/controls';
 import { useState, type ReactNode } from 'react';
 import { useFoundation } from './useFoundation';
@@ -427,6 +431,8 @@ function WorkspaceContent({
   onDefaultsSaved: () => void;
   onSettings: (id: string) => void;
 }) {
+  const [activeAlbum, setActiveAlbum] = useState<AlbumSummary | null>(null);
+  const [addingAlbum, setAddingAlbum] = useState<CatalogCollection | null>(null);
   const preferences = settings.preferences;
   if (!preferences)
     return (
@@ -552,23 +558,79 @@ function WorkspaceContent({
         onRefresh={refresh}
       />
     );
+  if (section === 'Tags' && status && !activeAlbum)
+    return (
+      <AlbumsPage
+        status={status}
+        jobsControl={jobsControl}
+        onOpen={setActiveAlbum}
+        onRefresh={refresh}
+      />
+    );
+  const album = section === 'Tags' ? activeAlbum : null;
   return (
     status && (
-      <LibraryScreen
-        key={libraryLaunch?.generation ?? 'library'}
-        initialQuery={libraryLaunch?.query}
-        initialSelectedId={libraryLaunch?.selectedId ?? null}
-        onReturnToMap={libraryLaunch ? onReturnToMap : undefined}
-        catalogId={foundation?.catalogId ?? null}
-        jobsControl={jobsControl}
-        defaults={preferences}
-        status={status}
-        section={section}
-        onError={showError}
-        onRefresh={refresh}
-        onSettings={onSettings}
-        onRelink={chooseFolder}
-      />
+      <>
+        <LibraryScreen
+          key={album?.id ?? libraryLaunch?.generation ?? 'library'}
+          initialQuery={album?.query ?? libraryLaunch?.query}
+          albumControls={
+            album ? (
+              <div className="album-detail-bar">
+                <Button onClick={() => setActiveAlbum(null)}>← All albums</Button>
+                <div>
+                  <h2>{album.name}</h2>
+                  <span>
+                    {album.fromTags
+                      ? 'From tags · Collected automatically from photo tags'
+                      : 'Custom album'}
+                  </span>
+                </div>
+                {!album.fromTags && (
+                  <Button
+                    onClick={() => {
+                      void metadata({ kind: 'collections' }, 'collections')
+                        .then((items) => {
+                          const current = items.find((c) => c.id === album.id && !c.archived);
+                          if (current) setAddingAlbum(current);
+                          else
+                            showError(
+                              new Error('This album is no longer available. Return to all albums.'),
+                            );
+                        })
+                        .catch(showError);
+                    }}
+                  >
+                    Add photos
+                  </Button>
+                )}
+              </div>
+            ) : undefined
+          }
+          initialSelectedId={libraryLaunch?.selectedId ?? null}
+          onReturnToMap={libraryLaunch ? onReturnToMap : undefined}
+          catalogId={foundation?.catalogId ?? null}
+          jobsControl={jobsControl}
+          defaults={preferences}
+          status={status}
+          section={section}
+          onError={showError}
+          onRefresh={refresh}
+          onSettings={onSettings}
+          onRelink={chooseFolder}
+        />
+        {addingAlbum && album && (
+          <AlbumEditor
+            status={status}
+            album={addingAlbum}
+            onClose={() => setAddingAlbum(null)}
+            onSaved={() => {
+              setAddingAlbum(null);
+              void refresh();
+            }}
+          />
+        )}
+      </>
     )
   );
 }
