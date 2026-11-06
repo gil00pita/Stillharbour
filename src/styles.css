@@ -3346,7 +3346,7 @@ button.explorer-entry.asset-open:hover:enabled {
 .viewer-favorite.without-motion .t-like-ring,
 .viewer-favorite.without-motion .t-like-spark::before,
 .viewer-favorite.without-motion .t-like-spark::after {
-  animation: none;
+  animation: none !important;
 }
 .viewer-favorite.without-motion .t-like-heart,
 .viewer-favorite.without-motion .t-like-heart path,

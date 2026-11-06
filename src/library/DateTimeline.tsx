@@ -42,7 +42,11 @@ export function DateTimeline({
   const [editing, setEditing] = useState(false);
   const [focused, setFocused] = useState(false);
   const [hovered, setHovered] = useState<number | null>(null);
-  const [pending, setPending] = useState<{ index: number; pageKey: string } | null>(null);
+  const [pending, setPending] = useState<{
+    index: number;
+    pageKey: string;
+    observedIndex?: number;
+  } | null>(null);
   const dragPointer = useRef<number | null>(null);
   const draftValue = useRef(0);
   const lastEmitted = useRef<number | null>(null);
@@ -62,7 +66,16 @@ export function DateTimeline({
     position: inferred,
   } = timelineScrollState(periods, date, progress);
   const position = Math.max(0, Math.min(maximum, index ?? inferred));
-  const waiting = pending?.pageKey === pageKey;
+  if (
+    pending &&
+    (pending.pageKey !== pageKey ||
+      (pending.observedIndex !== undefined && pending.observedIndex !== position))
+  ) {
+    setPending(null);
+  }
+  const waiting =
+    pending?.pageKey === pageKey &&
+    (pending.observedIndex === undefined || pending.observedIndex === position);
   const value = dragging || editing ? Math.min(draft, maximum) : waiting ? pending.index : position;
   const labelIndex = hovered ?? value;
   const label = periodLabel(timelineTarget(periods, labelIndex).period);
@@ -87,8 +100,10 @@ export function DateTimeline({
     if (lastEmitted.current === target.index && dragPointer.current !== null) return;
     lastEmitted.current = target.index;
     if (onIndex) {
-      if (!onIndex(target.index)) setPending({ index: target.index, pageKey });
-      else setPending(null);
+      const loaded = onIndex(target.index);
+      // A loaded photo can share the current gallery row. Preserve its requested
+      // ordinal across key releases until the visible row or page changes.
+      setPending({ index: target.index, pageKey, ...(loaded ? { observedIndex: position } : {}) });
     } else if (
       target.period &&
       !(target.period === currentPeriod && onPosition?.(target.period, target.progress))
@@ -184,6 +199,7 @@ export function DateTimeline({
         onBlur={() => {
           setFocused(false);
           stopGesture();
+          setPending((current) => (current?.observedIndex === undefined ? current : null));
         }}
         onPointerDown={(event) => {
           if (event.button > 0 || dragPointer.current !== null) return;

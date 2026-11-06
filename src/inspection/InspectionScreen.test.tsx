@@ -389,6 +389,12 @@ it('starts Storage results at the filters and keeps retained controls, issues an
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(opener).toHaveFocus();
   fireEvent.click(opener);
+  fireEvent.keyDown(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }), {
+    key: 'Escape',
+  });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
+  fireEvent.click(opener);
   fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(opener).toHaveFocus();

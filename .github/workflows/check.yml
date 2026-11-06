@@ -73,6 +73,7 @@ jobs:
             .context/wdio-catalog-restart
             .context/wdio
             .context/gallery/**/warm-scroll.json
+            .context/gallery/**/timeline-top-failure.json
             .context/gallery/**/preparation-pause.json
             .context/gallery/**/job-pause.json
             .context/gallery/**/manifest-*.json

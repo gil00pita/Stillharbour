@@ -18,7 +18,7 @@ async function visibleGalleryYear(year) {
     return [...document.querySelectorAll('.gallery .asset')].some((asset) => {
       const bounds = asset.getBoundingClientRect();
       return (
-        asset.dataset.date?.startsWith(year) &&
+        (year === 'Undated' ? !asset.dataset.date : asset.dataset.date?.startsWith(year)) &&
         bounds.bottom > viewport.top + 1 &&
         bounds.top < viewport.bottom - 1
       );
@@ -139,6 +139,29 @@ async function reviewBackupComparison(evidence, existingPicker) {
     await browser.saveScreenshot(`.context/screenshots/m4a-${process.platform}-entry-details.png`);
     await $('button[aria-label="Photos"]').click();
     await $('button[aria-label="Backup & Sync"]').click();
+    // Returning starts a real background comparison. It becomes the next
+    // baseline; a subsequent manual scan must not pretend it never happened.
+    let refreshed;
+    await browser.waitUntil(
+      async () => {
+        refreshed = (await native({ kind: 'backup_comparison_latest' })).data;
+        return (
+          refreshed?.profileId === profile.id &&
+          refreshed.id !== run.id &&
+          refreshed.state !== 'comparing'
+        );
+      },
+      { timeout: 30000, timeoutMsg: 'Saved profile did not reconcile on return' },
+    );
+    assert.equal(refreshed.state, expectedState, refreshed.message);
+    assert.equal(refreshed.sourceRootId, run.sourceRootId);
+    assert.equal(refreshed.datasetDisplayPath, run.datasetDisplayPath);
+    assert.equal(refreshed.baselineId, incompleteFixture ? null : run.id);
+    await browser.waitUntil(async () =>
+      (await $('.backup-workspace').getText()).includes(
+        incompleteFixture ? 'The latest scan is incomplete.' : 'Latest scan finished.',
+      ),
+    );
     await browser.waitUntil(async () =>
       browser.execute(
         (id) =>
@@ -153,18 +176,24 @@ async function reviewBackupComparison(evidence, existingPicker) {
       profile.id,
       'section[aria-label="Saved comparisons"] select',
     );
+    await $('button=Scan settings').click();
+    await $('button=Compare').waitForDisplayed();
     await browser.waitUntil(async () => $('button=Compare').isEnabled());
     await $('button=Compare').click();
     let reopened;
     await browser.waitUntil(async () => {
       reopened = (await native({ kind: 'backup_comparison_latest' })).data;
-      return reopened && reopened.id !== run.id && reopened.state !== 'comparing';
+      return (
+        reopened?.profileId === profile.id &&
+        reopened.id !== refreshed.id &&
+        reopened.state !== 'comparing'
+      );
     });
     assert.equal(reopened.state, expectedState, reopened.message);
     assert.equal(reopened.profileId, profile.id);
     assert.equal(reopened.sourceRootId, run.sourceRootId);
     assert.equal(reopened.datasetDisplayPath, run.datasetDisplayPath);
-    assert.equal(reopened.baselineId, incompleteFixture ? null : run.id);
+    assert.equal(reopened.baselineId, incompleteFixture ? null : refreshed.id);
     await browser.waitUntil(
       async () =>
         (await $('section[aria-label="Comparison review"] h3').getText()) ===
@@ -221,7 +250,17 @@ async function reviewBackupComparison(evidence, existingPicker) {
     }
     await writeFile(
       `${evidence}/m4a-comparison.json`,
-      JSON.stringify({ profile, run, reopened, rebound, reboundRun, page, source, target }),
+      JSON.stringify({
+        profile,
+        run,
+        refreshed,
+        reopened,
+        rebound,
+        reboundRun,
+        page,
+        source,
+        target,
+      }),
     );
   } finally {
     if (!existingPicker) await picker.mockRestore();
@@ -3795,6 +3834,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
 
     assert.ok((await $$('.date-heading')).length > 0);
     assert.equal((await $$('.gallery .asset-name')).length, 0);
+    // The rail fades when idle. Keyboard focus is an intentional reveal action
+    // and stays deterministic even when a runner occludes the native window.
+    await browser.execute(() => document.querySelector('.date-scrubber').focus());
     await $('.date-rail').waitForDisplayed();
     for (const [width, height, size] of [
       [1180, 780, 'desktop'],
@@ -4009,6 +4051,31 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       });
     }
     await browser.setWindowSize(1180, 780);
+    // Restoring the diagnostic scrollport and resizing both reflow virtual
+    // rows and restore their anchor asynchronously. Settle that work before
+    // issuing the independent endpoint scrolls below.
+    let previousGeometry = '';
+    let stableGeometry = 0;
+    await browser.waitUntil(
+      async () => {
+        const geometry = await browser.execute(() => {
+          const viewport = document.querySelector('.asset-viewport');
+          return JSON.stringify({
+            width: viewport.clientWidth,
+            height: viewport.clientHeight,
+            content: viewport.scrollHeight,
+            rows: [...document.querySelectorAll('.asset-row.gallery')].map((row) => [
+              row.style.height,
+              [...row.querySelectorAll('.asset')].map((asset) => asset.style.width),
+            ]),
+          });
+        });
+        stableGeometry = geometry === previousGeometry ? stableGeometry + 1 : 0;
+        previousGeometry = geometry;
+        return stableGeometry >= 2;
+      },
+      { interval: 100, timeout: 3000, timeoutMsg: 'Restored gallery geometry did not settle' },
+    );
     await browser.execute(() => {
       const viewport = document.querySelector('.asset-viewport');
       viewport.scrollTop = viewport.scrollHeight;
@@ -4033,9 +4100,31 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.execute(() => {
       document.querySelector('.asset-viewport').scrollTop = 0;
     });
-    await browser.waitUntil(async () =>
-      browser.execute(() => Number(document.querySelector('.date-scrubber').value) === 0),
-    );
+    let topObservation;
+    try {
+      await browser.waitUntil(
+        async () => {
+          topObservation = await browser.execute(() => {
+            const viewport = document.querySelector('.asset-viewport');
+            const slider = document.querySelector('.date-scrubber');
+            return {
+              scrollTop: viewport.scrollTop,
+              height: viewport.clientHeight,
+              scrollHeight: viewport.scrollHeight,
+              index: Number(slider.value),
+              maximum: Number(slider.max),
+              visibility: document.visibilityState,
+              first: document.querySelector('.asset')?.dataset,
+            };
+          });
+          return topObservation.scrollTop <= 1 && topObservation.index === 0;
+        },
+        { timeoutMsg: 'The timeline did not return to its exact start at the gallery top' },
+      );
+    } catch (error) {
+      await writeFile(`${evidence}/timeline-top-failure.json`, JSON.stringify(topObservation));
+      throw error;
+    }
     const yearBuckets = (
       await native({
         kind: 'date_buckets',
