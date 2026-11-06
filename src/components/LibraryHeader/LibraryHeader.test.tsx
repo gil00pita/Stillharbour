@@ -29,27 +29,36 @@ it('keeps Photos focused on filtering and explicit selection, without Catalog or
   expect(screen.getByRole('searchbox')).toBeDisabled();
 });
 
-it('shows a removable map scope beside search without adding a filename constraint', () => {
-  const clear = vi.fn();
-  const onSearch = vi.fn();
-  render(
-    <LibraryHeader
-      section="Photos"
-      value=""
-      onSearch={onSearch}
-      onPlace={vi.fn()}
-      busy={false}
-      onFilter={vi.fn()}
-      filterOpen={false}
-      activeCount={1}
-      mapScope={{ label: 'Map area', onClear: clear }}
-    />,
-  );
-  const chip = screen.getByRole('button', { name: 'Clear Map area filter' });
-  expect(chip.closest('.unified-search')).toBeInTheDocument();
-  expect(screen.getByRole('searchbox')).toHaveValue('');
-  fireEvent.click(chip);
-  expect(clear).toHaveBeenCalledOnce();
-  expect(screen.getByRole('searchbox')).toHaveFocus();
-  expect(onSearch).not.toHaveBeenCalled();
-});
+it.each(['Map area', 'Selected map location'])(
+  'embeds %s as a tag with a remove control inside search',
+  (label) => {
+    const clear = vi.fn();
+    const onSearch = vi.fn();
+    render(
+      <LibraryHeader
+        section="Photos"
+        value=""
+        onSearch={onSearch}
+        onPlace={vi.fn()}
+        busy={false}
+        onFilter={vi.fn()}
+        filterOpen={false}
+        activeCount={1}
+        mapScope={{ label, onClear: clear }}
+      />,
+    );
+    const chip = screen.getByRole('button', { name: `Clear ${label} filter` });
+    const frame = chip.closest('.search-input-frame');
+    expect(frame).toContainElement(screen.getByRole('searchbox'));
+    expect(chip.closest('.search-scope-tag')).toHaveTextContent(label);
+    expect(chip).not.toHaveTextContent('Clear');
+    expect(chip.querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+    fireEvent.click(screen.getByText(label));
+    expect(clear).not.toHaveBeenCalled();
+    expect(screen.getByRole('searchbox')).toHaveValue('');
+    fireEvent.click(chip);
+    expect(clear).toHaveBeenCalledOnce();
+    expect(screen.getByRole('searchbox')).toHaveFocus();
+    expect(onSearch).not.toHaveBeenCalled();
+  },
+);

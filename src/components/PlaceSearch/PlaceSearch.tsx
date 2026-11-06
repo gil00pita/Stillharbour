@@ -1,4 +1,15 @@
-import { Box, Button, Field, Input, Popover, Portal, Stack, Text } from '@chakra-ui/react';
+import {
+  Box,
+  Button,
+  Field,
+  IconButton,
+  Input,
+  Popover,
+  Portal,
+  Stack,
+  Tag,
+  Text,
+} from '@chakra-ui/react';
 import { useId, useRef, useState } from 'react';
 import type { PlaceSummary } from '../../bindings';
 import { usePlaceLookup } from './use-place-lookup';
@@ -56,69 +67,135 @@ export function PlaceSearch({
     >
       <Popover.Anchor asChild>
         <Box className="fixed-search unified-search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.5" />
-            <path
-              d="m16 16 4.5 4.5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
           <Field.Root>
             <Field.Label className="screen-reader-status">
               Search filenames, dates or places
             </Field.Label>
-            <Input
-              ref={input}
-              type="search"
-              aria-label="Search filenames, dates or places"
-              maxLength={256}
-              value={text}
-              disabled={disabled}
-              placeholder="Search filenames, dates or places…"
-              title="Search a filename, DD-MM-YYYY / YYYY-MM-DD, city or country"
-              aria-expanded={showSuggestions}
-              aria-controls={showSuggestions ? id : undefined}
-              aria-haspopup="dialog"
-              onFocus={() => {
-                if (!suppressFocus.current) setOpen(true);
-              }}
-              onClick={() => setOpen(true)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  setOpen(false);
-                  event.stopPropagation();
-                }
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault();
-                  document.getElementById(id)?.querySelector<HTMLButtonElement>('button')?.focus();
-                }
-              }}
-              onChange={(event) => {
-                setDraft(event.target.value);
-                onSearch?.(event.target.value);
-                setOpen(true);
-              }}
-            />
-          </Field.Root>
-          {filterScope && (
-            <Button
-              type="button"
-              className="place-search-chip"
-              disabled={disabled}
-              onClick={() => {
-                filterScope.onClear();
-                close();
-              }}
-              aria-label={`Clear ${filterScope.label} filter`}
-              title={`${filterScope.label} · Clear map filter`}
+            <Box
+              className="search-input-frame"
+              display="flex"
+              alignItems="center"
+              gap="2"
+              width="full"
+              minW="0"
+              minH="control"
+              px="2"
+              bg="bg.input"
+              border="1px solid {colors.border.control}"
+              borderRadius="control"
             >
-              <Text as="span" minW="0" truncate>
-                {filterScope.label} · Clear
-              </Text>
-            </Button>
-          )}
+              <Box asChild flexShrink="0" color="fg.muted">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+                  <path
+                    d="m16 16 4.5 4.5"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </Box>
+              {filterScope && (
+                <Tag.Root
+                  unstyled
+                  className="search-scope-tag"
+                  display="inline-flex"
+                  alignItems="center"
+                  gap="1"
+                  px="1"
+                  minW="0"
+                  maxW="60%"
+                  flexShrink="1"
+                  borderRadius="control"
+                  bg="brand.selected"
+                  color="fg"
+                  fontSize="xs"
+                  title={filterScope.label}
+                >
+                  <Tag.Label unstyled truncate>
+                    {filterScope.label}
+                  </Tag.Label>
+                  <Tag.EndElement unstyled display="inline-flex" flexShrink="0">
+                    <Tag.CloseTrigger unstyled asChild>
+                      <IconButton
+                        type="button"
+                        disabled={disabled}
+                        aria-label={`Clear ${filterScope.label} filter`}
+                        title={`Remove ${filterScope.label} filter`}
+                        minH="0"
+                        px="0"
+                        py="0"
+                        boxSize="calc({sizes.control} - {spacing.3})"
+                        bg="transparent"
+                        onClick={() => {
+                          filterScope.onClear();
+                          close();
+                        }}
+                      >
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="m4 4 8 8m0-8-8 8"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </IconButton>
+                    </Tag.CloseTrigger>
+                  </Tag.EndElement>
+                </Tag.Root>
+              )}
+              <Input
+                ref={input}
+                className="search-text-input"
+                flex="1"
+                minW="0"
+                minH="0"
+                border="0"
+                borderRadius="0"
+                bg="transparent"
+                px="1"
+                type="search"
+                aria-label="Search filenames, dates or places"
+                maxLength={256}
+                value={text}
+                disabled={disabled}
+                placeholder="Search filenames, dates or places…"
+                title="Search a filename, DD-MM-YYYY / YYYY-MM-DD, city or country"
+                aria-expanded={showSuggestions}
+                aria-controls={showSuggestions ? id : undefined}
+                aria-haspopup="dialog"
+                onFocus={() => {
+                  if (!suppressFocus.current) setOpen(true);
+                }}
+                onClick={() => setOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    setOpen(false);
+                    event.stopPropagation();
+                  }
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    document
+                      .getElementById(id)
+                      ?.querySelector<HTMLButtonElement>('button')
+                      ?.focus();
+                  }
+                }}
+                onChange={(event) => {
+                  setDraft(event.target.value);
+                  onSearch?.(event.target.value);
+                  setOpen(true);
+                }}
+              />
+            </Box>
+          </Field.Root>
           {selectedId && (
             <Button
               type="button"

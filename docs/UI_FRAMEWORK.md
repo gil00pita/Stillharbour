@@ -90,3 +90,7 @@ do not qualify Windows, manual screen-reader coverage or wider release gates.
 ### Photo context-menu anchor repair — 2026-11-06
 
 The pinned menu implementation does not apply the supplied root `anchorPoint` to its ordinary positioning effect. Use `positioning.getAnchorElement` with a stable virtual element whose rect is the viewport context point, `strategy: fixed` and zero gutter. Keep the virtual element identity stable while the menu is open to avoid observer recursion. A changed context point remounts only the menu root so a second right-click repositions an already-open menu and resets its item highlight. Floating UI retains edge flipping/shifting. Keyboard anchors still derive from the focused photo row; the provider, focus restoration and catalog membership flow are retained. The native smoke must assert actual menu bounds, not just item presence.
+
+### Inline map-scope tag — 2026-11-06
+
+PlaceSearch keeps its Field.Root/label and composes one bordered search frame containing the decorative icon, Chakra v3 Tag.Root/Label/EndElement/CloseTrigger and the borderless text input. The tag label is descriptive; its IconButton × is the named remove action. Preserve input/remove focus rings, disabled state, filename text and focus return when removing the scope. A bounded, truncating tag leaves an editable text area at compact widths; the native smoke checks containment and non-overlap within the same frame. No theme or query-state changes are required.

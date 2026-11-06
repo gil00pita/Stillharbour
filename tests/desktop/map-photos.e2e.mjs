@@ -79,7 +79,23 @@ describe('Map to Photos navigation — generated geographic fixture', () => {
             '.unified-search button[aria-label="Clear Map area filter"]',
           );
           const rect = chip.getBoundingClientRect();
+          const tag = chip.closest('.search-scope-tag');
+          const frame = chip.closest('.search-input-frame');
+          const input = frame?.querySelector('input');
+          if (!tag || !frame || !input) return false;
+          const tagRect = tag.getBoundingClientRect();
+          const frameRect = frame.getBoundingClientRect();
+          const inputRect = input.getBoundingClientRect();
           return (
+            tagRect.left >= frameRect.left &&
+            tagRect.right <= frameRect.right &&
+            tagRect.top >= frameRect.top &&
+            tagRect.bottom <= frameRect.bottom &&
+            inputRect.width > 0 &&
+            inputRect.left >= tagRect.right &&
+            inputRect.right <= frameRect.right &&
+            getComputedStyle(frame).borderTopWidth !== '0px' &&
+            getComputedStyle(input).borderTopWidth === '0px' &&
             rect.width > 0 &&
             rect.right <= innerWidth &&
             chip.contains(

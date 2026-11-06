@@ -395,3 +395,7 @@ The four utility pages are Operate surfaces. First use leads with a short introd
 Use a 64 px top row shared with the sidebar brand on every page. Titles use 18 px/24 px typography; descriptions and status text sit in the body. Keep actions on one line, with labelled icons for compact album actions. Sidebar text and page titles do not select or show native context menus. Preserve visible keyboard focus and normal input editing.
 
 Albums / Tags owns Catalog and Saved plans. Photos keeps search, Filter and Select. Right-click or Shift+F10/the context-menu key opens the Chakra photo menu with Select and Add to album; omit tile dots. Selection mode reveals checkboxes; Done selecting clears and hides them. Browsing clicks open the viewer; selection-mode clicks toggle photos. No original-file behavior changes.
+
+### Inline map scope — 2026-11-06
+
+Render the active map scope inside the search field as a compact tag with a distinct × remove target. The search icon, tag and editable text share one border; the tag label itself does not remove the filter. Truncate long labels while keeping the × and text entry available, and return focus to text entry after removal. Preserve the same map filter membership and independent filename/date/place constraints.
