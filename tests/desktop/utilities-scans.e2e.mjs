@@ -12,6 +12,8 @@ describe('Utility scan lifecycle', () => {
         args,
       );
     const native = async (request) => (await invoke('library_request', { request })).data;
+    // Let real startup status reads finish before installing a picker-only fixture.
+    await $('.welcome button.primary').waitForEnabled({ timeout: 30000 });
     const selection = await invoke('test_library_fixture', { verify: false });
     await browser.execute((selection) => {
       window.__wdio_mocks__ ??= {};
@@ -117,6 +119,18 @@ describe('Utility scan lifecycle', () => {
     await $('input[maxlength="80"]').setValue('Generated utility comparison');
     await $('button=Save comparison profile').waitForEnabled();
     await $('button=Save comparison profile').click();
+    // Saving remounts the workspace. Wait for its selected native profile
+    // before acquiring Compare, rather than retaining the disabled old button.
+    let profile;
+    await browser.waitUntil(async () => {
+      profile = (await native({ kind: 'backup_profiles' })).find(
+        (item) => item.label === 'Generated utility comparison',
+      );
+      return (
+        profile &&
+        (await $('section[aria-label="Saved comparisons"] select').getValue()) === profile.id
+      );
+    });
     await $('button=Compare').waitForEnabled();
     await $('button=Compare').click();
     await browser.waitUntil(
@@ -125,6 +139,7 @@ describe('Utility scan lifecycle', () => {
     );
     await $('.backup-table').waitForDisplayed();
     const saved = (await native({ kind: 'backup_comparison_history' }))[0];
+    assert.equal(saved.profileId, profile.id);
     assert.equal(saved.planDigest, null);
     assert.equal(saved.reviewPlan, null);
     assert.equal(saved.capabilities.executionAvailable, false);

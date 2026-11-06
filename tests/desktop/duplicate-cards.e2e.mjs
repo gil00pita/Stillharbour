@@ -11,6 +11,8 @@ describe('Illustrated duplicate matching cards', () => {
         command,
         args,
       );
+    // Let real startup status reads finish before installing a picker-only fixture.
+    await $('.welcome button.primary').waitForEnabled({ timeout: 30000 });
     const selection = await invoke('test_library_fixture', { verify: false });
     await browser.execute((selection) => {
       window.__wdio_mocks__ ??= {};

@@ -33,6 +33,8 @@ import urllib.request
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_LIMIT = 16 * 1024 * 1024
+# Cold PowerShell module loading and Add-Type compilation precede the SMB port.
+WINDOWS_SMB_STARTUP_SECONDS = 90
 
 
 def redact(text, environment):
@@ -174,14 +176,14 @@ def config_read_control(binaries, protocol, base, environment):
 
 
 @contextlib.contextmanager
-def server(argv, base, environment, listen_port, *, allow_failed_start=False):
+def server(argv, base, environment, listen_port, *, allow_failed_start=False, startup_timeout=20):
     log = open(base / 'server.log', 'ab')
     process = subprocess.Popen([str(a) for a in argv], cwd=base, env=environment,
                                stdin=subprocess.DEVNULL, stdout=log, stderr=log,
                                start_new_session=sys.platform != 'win32',
                                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == 'win32' else 0)
     try:
-        deadline = time.monotonic() + 20
+        deadline = time.monotonic() + startup_timeout
         while True:
             if process.poll() is not None:
                 if allow_failed_start:
@@ -415,7 +417,8 @@ def probe(protocol, binaries, versions, allow_ftp, application_probe=None):
             config.write_text(f'[fixture]\ntype = smb\nhost = 127.0.0.1\nport = {listen_port}\nuser = fixture\ndomain = WORKGROUP\n')
             if sys.platform == 'win32':
                 powershell = Path('C:/Program Files/PowerShell/7/pwsh.exe')
-                manager = server([powershell,'-NoProfile','-NonInteractive','-File',ROOT/'scripts/m4-smb-server.ps1'],base,server_env,listen_port)
+                manager = server([powershell,'-NoProfile','-NonInteractive','-File',ROOT/'scripts/m4-smb-server.ps1'],base,server_env,listen_port,
+                                 startup_timeout=WINDOWS_SMB_STARTUP_SECONDS)
             else:
                 manager = server([sys.executable, Path(__file__).resolve(), '--smb-server'], base, server_env, listen_port)
             repository = 'rclone:fixture:FIXTURE/repository'

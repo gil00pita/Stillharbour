@@ -1,5 +1,6 @@
 # Development-only user-mode server. No system accounts/shares/services.
 $ErrorActionPreference = 'Stop'
+Write-Output 'SMB fixture startup: validating generated scope'
 $fixtureRoot = [System.IO.Path]::GetFullPath($env:STILLHARBOUR_PROTOCOL_SCOPE)
 $fixtureTemp = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
 $fixtureRelative = [System.IO.Path]::GetRelativePath($fixtureTemp, $fixtureRoot)
@@ -31,6 +32,7 @@ foreach ($name in @('SMBLibrary.dll', 'SMBLibrary.Win32.dll')) {
     if ((Get-FileHash -LiteralPath $dllPath -Algorithm SHA256).Hash.ToLowerInvariant() -cne $expectedHashes[$name]) { throw 'SMB fixture DLL failed its pin.' }
     Add-Type -Path $dllPath
 }
+Write-Output 'SMB fixture startup: compiling pinned server adapter'
 $fixtureReferences = @((Join-Path $fixtureDlls 'SMBLibrary.dll'), (Join-Path $fixtureDlls 'SMBLibrary.Win32.dll')) + [System.IO.Directory]::GetFiles((Join-Path $PSHOME 'ref'), '*.dll')
 Add-Type -ReferencedAssemblies $fixtureReferences -TypeDefinition @'
 using System;
@@ -55,7 +57,9 @@ public sealed class StillharbourLoopbackSmb : SMBServer {
 '@
 $fixtureServer = [StillharbourLoopbackSmb]::Create($sharePath, $env:STILLHARBOUR_PROTOCOL_TOKEN)
 try {
+    Write-Output 'SMB fixture startup: binding loopback listener'
     $fixtureServer.StartOwned($fixturePort)
+    Write-Output 'SMB fixture startup: listener ready'
     while ($true) { Start-Sleep -Milliseconds 500 }
 } finally {
     $fixtureServer.Stop()

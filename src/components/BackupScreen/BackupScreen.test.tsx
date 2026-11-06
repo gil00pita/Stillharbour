@@ -168,6 +168,7 @@ it('saves only the native destination selection and requires a fresh profile com
       'saved-comparison',
     ),
   );
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Compare' })).toBeEnabled());
   expect(screen.getByRole('button', { name: 'Choose destination' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Review append plan' })).toBeDisabled();
   expect(
@@ -526,4 +527,42 @@ it('retains saved comparisons after restart without turning their display paths 
         ['backup_compare_start', 'backup_profile_compare'].includes(request.kind),
       ),
   ).toBe(false);
+});
+
+// Saving an immutable profile remounts the form; native callers must reacquire controls.
+it('enables newly mounted comparison controls after an asynchronous profile save', async () => {
+  const fallback = vi.mocked(libraryData).getMockImplementation()!;
+  vi.mocked(libraryData).mockImplementation(async (request, kind) => {
+    if (request.kind === 'backup_profile_compare')
+      return { ...report(), profileId: savedProfile().id };
+    if (request.kind === 'backup_profile_save') {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return savedProfile();
+    }
+    return fallback(request, kind);
+  });
+  open();
+  fireEvent.click(screen.getByRole('button', { name: 'Choose destination' }));
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Compare' })).toBeEnabled());
+  fireEvent.change(screen.getByRole('textbox', { name: 'Comparison profile name' }), {
+    target: { value: 'Pinned destination' },
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Save comparison profile' }));
+  const retired = screen.getByRole('button', { name: 'Compare' });
+  expect(retired).toBeDisabled();
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: 'Saved comparison' })).toHaveValue(
+      savedProfile().id,
+    ),
+  );
+  expect(retired).not.toBeInTheDocument();
+  const current = screen.getByRole('button', { name: 'Compare' });
+  await waitFor(() => expect(current).toBeEnabled());
+  fireEvent.click(current);
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenCalledWith(
+      { kind: 'backup_profile_compare', profile_id: savedProfile().id, mode: 'verified' },
+      'backup_comparison',
+    ),
+  );
 });

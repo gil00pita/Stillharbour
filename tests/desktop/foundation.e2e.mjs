@@ -4898,10 +4898,21 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         ),
       );
       assert.deepEqual(after, before);
+      // Saved plans now belongs to Albums. Closing its dialog leaves that
+      // workspace active; return through the real navigation before filtering.
+      await $('button[aria-label="Photos"]').click();
+      await $('button[aria-controls="library-filter-panel"]').waitForDisplayed();
       await galleryView('Timeline');
     }
   });
   it('saves catalog annotations and shows honest unsupported states', async () => {
+    // Albums navigation unmounts the previous gallery and its selection.
+    // Establish this scenario's two-photo selection in the returned gallery.
+    await enterPhotoSelection();
+    const choices = await $$('.asset-check');
+    assert.ok(choices.length >= 2, 'Generated annotation fixture needs two photos.');
+    await choices[0].click();
+    await choices[1].click();
     await $('button=Compare').waitForEnabled();
     await $('button=Compare').click();
     await $('.comparison-viewer[open]').waitForDisplayed();
@@ -4919,6 +4930,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(async () => (await native({ kind: 'tags' })).data.includes('Reviewed'));
     await browser.saveScreenshot('.context/screenshots/photo-canvas-selection.png');
     await $('button=Clear selection').click();
+    // Clearing the batch leaves explicit selection mode active. Finish it
+    // before clicking a photo to open the viewer.
+    await $('button=Done selecting').click();
     // Inject one transport-error event; the follow-up PNG read is real native
     // owned-cache traffic and must recover without a catalog rescan.
     await browser.execute(() => {
