@@ -1,0 +1,11 @@
+{
+  "id": "nasa-blue-marble",
+  "name": "NASA GIBS Blue Marble",
+  "tileBase": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/",
+  "maxZoom": 8,
+  "tileSize": 256,
+  "attribution": "NASA GIBS · Blue Marble satellite overview",
+  "documentation": "https://nasa-gibs.github.io/gibs-api-docs/",
+  "capabilities": "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/WMTSCapabilities.xml",
+  "reviewedAt": "2026-11-05"
+}

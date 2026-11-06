@@ -1,5 +1,7 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0092](decisions/ADR-0092-nasa-satellite-overview.md) records the owner's explicit choice of optional NASA satellite overview: a fixed GIBS layer/path, limited detail, session-only opt-in, visible attribution, restricted CSP/request coordinates, bounded imagery loading and an offline Map fallback. No API key, photo upload or original-file authority is added.
+
 [ADR-0089](decisions/ADR-0089-offline-place-search.md) records the owner's explicit choice of offline GPS city/country search: bounded disambiguated suggestions, 25 km city areas, source country polygons, versioned place IDs and shared native query membership. Catalog schema/identities, network permissions and production preservation gates remain intact.
 
 [ADR-0088](decisions/ADR-0088-development-dependency-advisory-remediation.md) continues owner-authorized M6 with exact development overrides for glob, minimatch and the nested Puppeteer browser helper. Generated ZIP/cancellation regressions fail before the update and pass afterward; all runtime npm pins remain unchanged. [M6 dependency evidence](M6_DEPENDENCY_HARDENING.md) owns actual advisory and native/build results. Production capability and release gates remain intact.

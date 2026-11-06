@@ -8,9 +8,54 @@ Current evidence, 2026-11-03: Windows Foundation at `a2b3d10` passes the native 
 
 The owner requested continuing M5 on 2026-11-02. [ADR-0081](decisions/ADR-0081-offline-geographic-browsing.md) records the first geographic slice. M4 preservation certification and production mutation restrictions remain unchanged; M5 as a whole is not complete.
 
+## Compact map toolbar — 2026-11-05
+
+The map's folder, From/Through dates and No usable location controls live in a
+**Filters** popover next to the top search input. It starts closed, retains
+applied values across dismissal and reports the active filter count on its
+trigger. Controls apply the same native query scopes as before. Selecting No
+usable location closes the popover and shows that list. Escape and the labelled Close filters action return focus to the trigger.
+Clicking outside also dismisses the popover; the portalled panel stays within
+the narrow desktop viewport.
+
+The existing search magnifier is visible inside the shared search input, above
+its Field/input background, with space reserved for text and no pointer-event
+interception. The map canvas starts immediately beneath the compact toolbar.
+Map/Satellite, thumbnail containment, click-loaded photos and preservation gates
+are unchanged. MapFilters owns the popover and colocated focus/state regression;
+the native map scenario captures expanded/collapsed toolbars at both widths.
+
+## Map and satellite views — 2026-11-05
+
+The owner selects NASA's no-key, online satellite overview. [ADR-0092](decisions/ADR-0092-nasa-satellite-overview.md) records the provider/privacy/cache decision and supersedes earlier network-free-only statements below for this explicit choice. **Map** remains the bundled offline default. **Satellite** adds actual NASA GIBS Blue Marble imagery (limited detail, source zoom 0–8) without recreating the canvas or changing photo scope. Visible attribution, loading/connection states and a retryable return to Map remain available. View choice is session-only; opening Map again starts offline.
+
+The whole-world reset uses a globe icon with accessible name **Whole world** and tooltip **Show whole world**. Map/Satellite choices stay beside it at desktop/minimum widths. Selecting Satellite sends viewed map tile areas to NASA; originals, private filenames, catalog records and credentials are not uploaded. The fixed-path CSP and request transformer reject arbitrary resources. No persistent app imagery cache, prefetch, API key or new dependency is added. Component/provider tests are in Basemap.test.tsx; generated live-provider and failure checks are in tests/desktop/map-satellite.mjs. Actual outcomes belong in IMPLEMENTATION_LOG.md.
+
+## Marker containment and click-to-load browsing — 2026-11-05
+
+Map thumbnails stay inside a clipped image frame within each 48×48 marker; the
+count badge remains outside the image frame. Opening Map, panning and zooming
+load bounded cluster summaries and representative previews only. They do not
+load the photo strip. Click a marker (or explicitly choose **Show photos in
+view**) to request photos. **All photos in view** expands an existing selection.
+Camera changes clear the photo selection and return to the click prompt.
+
+Retain the map canvas and previous markers while a camera query is pending.
+Those markers cannot be selected until their viewport membership is current;
+filter or catalog revision changes hide prior-scope markers. Marker selection
+and filmstrip paging do not refetch clusters. No-location browsing and the
+unavailable-graphics photo-list alternative remain usable. Keep the 256-cluster,
+80-summary paging limits, revision checks and late-response rejection.
+
+Focused component coverage is in `src/map/MapScreen.test.tsx`. The generated
+native map scenario checks actual image containment, canvas identity across
+zooming, an empty strip before clicking and the existing navigation/source
+audits. Native place-search and metadata scenarios explicitly request photos.
+Actual outcomes and platform limitations belong in the implementation log.
+
 ## Implemented scope
 
-The Map sidebar opens an offline world overview with catalog-derived thumbnail clusters, folder/date/filename filters and a paged photo strip. Selecting a cluster restricts the strip to its exact viewport/grid membership. Show in library carries those filters and the representative selection; Return to map retains map context. Photos can use the existing native viewer and catalog annotation commands. Coordinates are read-only observations, with no manual geotagging or embedded metadata write.
+The Map sidebar opens an offline world overview with catalog-derived thumbnail clusters, folder/date/filename filters and a click-loaded paged photo strip. Selecting a cluster restricts the strip to its exact viewport/grid membership. Show in library carries those filters and the representative selection; Return to map retains map context. Photos can use the existing native viewer and catalog annotation commands. Coordinates are read-only observations, with no manual geotagging or embedded metadata write.
 
 “No usable location” includes missing, invalid and unextracted GPS. Both numeric zero coordinates are valid. Offline roots keep retained observations; map presence never proves source accessibility or integrity. Existing scans generally lack GPS because the prior ExifTool allowlist omitted it. Explicitly rescanning a generated/authorized root can acquire GPS; this increment performs no automatic rescan. The legacy Windows basic adapter did not extract GPS; ADR-0087 adds bounded EXIF/GPS in its supervised worker, with legacy observations refreshed on explicit rescan. Fresh native Windows validation remains required.
 
@@ -20,7 +65,7 @@ Backend clusters are bounded to 256, using a world-aligned angular grid with ada
 
 The production data path is bundled Natural Earth 1:110m land, pinned to upstream commit `ca96624a56bd078437bca8184e78163e5039ad19`. [Natural Earth's terms](https://www.naturalearthdata.com/about/terms-of-use/) permit public-domain redistribution and offline use. The original data/license and hashes are in `assets/maps`; no reference screenshot is shipped as map data. Attribution remains visible even though the license does not require credit.
 
-There is no online provider, tile cache, prefetch or runtime data download. World overview geometry is compiled into the lazy basemap module; the MapLibre module worker is bundled locally with one worker. No glyphs, external sprites, style URL or reverse geocoder are configured. The map request transformer rejects resource URLs, and the existing restricted production CSP remains intact. The overview deliberately has no street detail. Adding online detail requires a new reviewed provider decision.
+In the original offline-only increment there was no online provider, tile cache, prefetch or runtime data download; ADR-0092 now permits only the explicitly selected NASA overview. World overview geometry is compiled into the lazy basemap module; the MapLibre module worker is bundled locally with one worker. No glyphs, external sprites, style URL or reverse geocoder are configured. The map request transformer rejects resource URLs, and the existing restricted production CSP remains intact. The overview deliberately has no street detail. Adding online detail requires a new reviewed provider decision.
 
 Native resource-timing observations cover the main WebView, not independently intercepted worker/OS traffic. Do not describe a static source/CSP inspection or browser test as a complete native network trace. Actual native outcomes, screenshots and the precise evidence boundary are recorded below when run.
 
