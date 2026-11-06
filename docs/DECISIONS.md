@@ -361,3 +361,8 @@ The owner continued to M2 and selected organization templates/previews as the pr
 ## Utilities and duplicate-review presentation — 2026-11-05
 
 The owner requests flat secondary actions, unified filename/date/place search, sidebar Jobs above Settings, Utilities grouping and a prototype-inspired duplicate workspace. Reuse the read-only native job/member/keeper APIs and existing preview protocol. Keep Integrity and Storage results specific to their tasks. Missing confidence/audio/lineage/ranking capabilities and original mutations remain visibly gated; a threshold or client preference cannot create safety evidence. No catalog migration, identity change, dependency addition or production permission is needed. [UTILITIES_UI.md](UTILITIES_UI.md) records the implemented boundary and remaining requested capabilities.
+
+
+## Utility scan lifecycle — 2026-11-05
+
+The owner requests welcome/setup on first use, restored results, actual background reconciliation and dated version history for all four utilities. Retain existing inspection workers and native comparison admission. Use separate displayed/running scan state, compare-only baseline refresh and immutable display-only backup reports under the existing history table's dedicated namespace. No schema/identity migration, continuous-watcher claim or new original-file authority. Persistence/authorization bounds and tradeoffs are in [ADR-0092](decisions/ADR-0092-utility-scan-history.md).

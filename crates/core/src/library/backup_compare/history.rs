@@ -81,7 +81,7 @@ pub(super) fn save(
     }
     catalog.call(move |db| {
         let tx=db.transaction()?;
-        let count:u32=tx.query_row("SELECT count(*) FROM backup_comparison_history",[],|r|r.get(0))?;
+        let count:u32=tx.query_row("SELECT count(*) FROM backup_comparison_history WHERE scope!='utility-report-v1'",[],|r|r.get(0))?;
         if count>=32 { return Ok("History storage is full (32 immutable observations); existing history is retained. This comparison was not saved.".into()); }
         tx.execute("INSERT INTO backup_comparison_history(id,scope,record) VALUES(?,?,?)",params![manifest.id,scope,text])?;
         tx.commit()?;

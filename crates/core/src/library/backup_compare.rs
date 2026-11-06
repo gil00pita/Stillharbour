@@ -31,6 +31,7 @@ mod append;
 pub(super) mod history;
 mod inspector;
 pub(super) mod profiles;
+mod reports;
 
 fn same_directory(a: &FileIdentity, b: &FileIdentity) -> bool {
     a.volume == b.volume && a.file == b.file
@@ -362,7 +363,37 @@ fn content_digest(
     Ok(hash.finalize().to_hex().to_string())
 }
 
+fn report_page(
+    id: String,
+    offset: u32,
+    category: Option<ComparisonCategory>,
+    rows: &[ComparisonEntry],
+) -> Result<ComparisonPage> {
+    let start = offset as usize;
+    let matches = |row: &&ComparisonEntry| category.is_none_or(|c| c == row.category);
+    let total = rows.iter().filter(matches).count();
+    if start > total {
+        return Err(unavailable());
+    }
+    let end = (start + 200).min(total);
+    Ok(ComparisonPage {
+        total: Some(total as u32),
+        run_id: id,
+        entries: rows
+            .iter()
+            .filter(matches)
+            .skip(start)
+            .take(200)
+            .cloned()
+            .collect(),
+        next_offset: (end < total).then_some(end as u32),
+    })
+}
+
 impl Library {
+    pub fn backup_comparison_history(&self) -> Result<Vec<ComparisonRun>> {
+        reports::list(&self.catalog)
+    }
     pub fn backup_comparison_latest(&self) -> Result<Option<ComparisonRun>> {
         Ok(self
             .comparisons
@@ -447,10 +478,11 @@ impl Library {
         let spawn = std::thread::Builder::new()
             .name("backup-compare".into())
             .spawn(move || {
-                let _lease = lease;
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     owner.backup_compare_run(&id, source, destination, namespace, mode, &cancel)
                 }));
+                // A terminal state must never outlive the worker's scope lease.
+                drop(lease);
                 if let Ok(mut state) = owner.comparisons.review.lock()
                     && let Some(review) = state.as_mut().filter(|r| r.run.id == id)
                 {
@@ -460,14 +492,24 @@ impl Library {
                             "The comparison worker stopped unexpectedly.",
                         ))
                     });
-                    if let Err(e) = outcome {
-                        review.run.state = if cancel.load(Ordering::Acquire) {
-                            ComparisonState::Canceled
-                        } else {
-                            ComparisonState::Failed
-                        };
-                        review.run.message = e.message;
-                        review.run.plan_digest = None;
+                    match outcome {
+                        Ok(completed) => review.run.state = completed,
+                        Err(e) => {
+                            review.run.state = if cancel.load(Ordering::Acquire) {
+                                ComparisonState::Canceled
+                            } else {
+                                ComparisonState::Failed
+                            };
+                            review.run.message = e.message;
+                            review.run.plan_digest = None;
+                        }
+                    }
+                    match reports::save(&owner.catalog, &review.run, &review.rows) {
+                        Ok(message) => review.run.history_message.push_str(&format!(" {message}")),
+                        Err(error) => review
+                            .run
+                            .history_message
+                            .push_str(&format!(" Scan report was not saved: {}", error.message)),
                     }
                 }
             });
@@ -597,31 +639,14 @@ impl Library {
         offset: u32,
         category: Option<ComparisonCategory>,
     ) -> Result<ComparisonPage> {
+        crate::operations::validate_id(&id)?;
         let state = self.comparisons.review.lock().map_err(|_| unavailable())?;
-        let review = state
-            .as_ref()
-            .filter(|r| r.run.id == id)
-            .ok_or_else(unavailable)?;
-        let start = offset as usize;
-        let matches = |row: &&ComparisonEntry| category.is_none_or(|c| c == row.category);
-        let total = review.rows.iter().filter(matches).count();
-        if start > total {
-            return Err(unavailable());
+        if let Some(review) = state.as_ref().filter(|r| r.run.id == id) {
+            return report_page(id, offset, category, &review.rows);
         }
-        let end = (start + 200).min(total);
-        Ok(ComparisonPage {
-            total: Some(total as u32),
-            run_id: id,
-            entries: review
-                .rows
-                .iter()
-                .filter(matches)
-                .skip(start)
-                .take(200)
-                .cloned()
-                .collect(),
-            next_offset: (end < total).then_some(end as u32),
-        })
+        drop(state);
+        let (_, rows) = reports::load(&self.catalog, &id)?;
+        report_page(id, offset, category, &rows)
     }
     fn backup_compare_run(
         &self,
@@ -631,7 +656,7 @@ impl Library {
         namespace: PathBuf,
         mode: CompareMode,
         cancel: &AtomicBool,
-    ) -> Result<()> {
+    ) -> Result<ComparisonState> {
         let mut src = Inventory::default();
         src.walk(&source, Path::new(""), cancel, 0)?;
         let mut dst = Inventory::default();
@@ -870,7 +895,7 @@ impl Library {
             .chain(comparison_issues)
             .take(MAX_ISSUES)
             .collect();
-        review.run.state = if incomplete {
+        let completed = if incomplete {
             ComparisonState::Incomplete
         } else {
             ComparisonState::NeedsReview
@@ -902,7 +927,7 @@ impl Library {
         review.source = Some(source);
         review.destination = dataset;
         review.append_scope = Some(append_scope);
-        Ok(())
+        Ok(completed)
     }
     fn compare_progress(&self, id: &str, count: u64, entries: u32) -> Result<()> {
         let mut state = self.comparisons.review.lock().map_err(|_| unavailable())?;

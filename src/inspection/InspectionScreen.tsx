@@ -4,6 +4,7 @@ import { InspectionChoiceCards } from '../components/InspectionChoiceCards';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type {
   HealthMode,
+  InspectionInput,
   DuplicateOptions,
   DuplicatePage,
   FindingPage,
@@ -18,6 +19,9 @@ import { DuplicateStudio } from '../components/DuplicateStudio';
 import { IntegrityFindings } from '../components/IntegrityFindings';
 import { InspectionIssues } from './InspectionIssues';
 import { displayBytes } from './format';
+import { UtilityWelcome } from '../components/UtilityWelcome';
+import { UtilityHistory } from '../components/UtilityHistory';
+import { formatScanDate } from '../utils/format-scan-date';
 import './inspection.css';
 
 export type InspectionSection = 'Duplicates' | 'Integrity' | 'Storage';
@@ -83,6 +87,13 @@ export function InspectionScreen({
   const [report, setReport] = useState<InspectionReport | null>(null);
   const [files, setFiles] = useState<FindingPage | null>(null);
   const [groups, setGroups] = useState<DuplicatePage | null>(null);
+  const [viewedJob, setViewedJob] = useState<InspectionJob | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const pinnedHistory = useRef(false);
+  const [historical, setHistorical] = useState(false);
+  const resultEpoch = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const epoch = useRef(0);
@@ -102,30 +113,81 @@ export function InspectionScreen({
           )
         : Promise.resolve(null),
     ]);
-    if (token !== epoch.current) return;
+    if (token !== resultEpoch.current) return;
+    setViewedJob(record);
     setReport(summary);
     setFiles(rows);
     setGroups(matches);
   }, []);
   useEffect(() => {
-    const token = epoch.current;
     let disposed = false;
     void libraryData({ kind: 'inspection_jobs' }, 'inspection_jobs')
       .then(async (jobs) => {
-        if (disposed || token !== epoch.current) return;
+        if (disposed) return;
         const matching = jobs.filter((record) => taskMatches(record, section));
         setHistory(matching);
-        if (matching[0]) {
-          setJob(matching[0]);
-          if (!active(matching[0])) await loadResults(matching[0], token);
+        const latest = matching[0];
+        if (!latest) return;
+        setJob(latest);
+        setRootIds(latest.input.rootIds);
+        setScope(latest.input.scope);
+        if (latest.input.task.kind === 'duplicates') setOptions(latest.input.task.options);
+        if (latest.input.task.kind === 'health')
+          setHealthMode(
+            latest.input.task.mode === 'establish_baseline'
+              ? 'compare_baseline'
+              : latest.input.task.mode,
+          );
+        const retained =
+          matching.find((record) => ['completed', 'partial'].includes(record.state)) ??
+          matching.find((record) => !active(record));
+        if (retained) await loadResults(retained, ++resultEpoch.current);
+        if (disposed || active(latest)) return;
+        if (jobs.some(active)) {
+          setNotice(
+            'Another inspection is running. Saved results remain available; scan again when it finishes.',
+          );
+          return;
+        }
+        if (
+          !latest.input.rootIds.every((id) =>
+            status.roots.some((root) => root.id === id && root.availability === 'online'),
+          )
+        ) {
+          setNotice(
+            'Saved results are available. Reconnect the selected libraries to check for changes.',
+          );
+          return;
+        }
+        // Reconciliation is a new read-only run. Never replay baseline establishment.
+        const input: InspectionInput =
+          latest.input.task.kind === 'health' && latest.input.task.mode === 'establish_baseline'
+            ? { ...latest.input, task: { kind: 'health', mode: 'compare_baseline' } }
+            : latest.input;
+        setNotice('Checking for changes in the background. Your saved results stay available.');
+        const next = await libraryData({ kind: 'inspection_start', input }, 'inspection_job');
+        if (!disposed) {
+          setJob(next);
+          setHistory((previous) =>
+            [next, ...previous.filter((record) => record.id !== next.id)].slice(0, 64),
+          );
         }
       })
       .catch((failure) => {
-        if (!disposed && token === epoch.current) setError(errorMessage(failure));
+        if (!disposed) {
+          setNotice(null);
+          setError(errorMessage(failure));
+        }
+      })
+      .finally(() => {
+        if (!disposed) setLoading(false);
       });
     return () => {
       disposed = true;
+      resultEpoch.current += 1;
     };
+    // Opening a utility restores its scope once; changing draft settings must not restart a scan.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [section, loadResults]);
   useEffect(() => {
     if (!jobId || !running) return;
@@ -142,7 +204,13 @@ export function InspectionScreen({
           [next, ...previous.filter((record) => record.id !== next.id)].slice(0, 64),
         );
         if (!active(next)) {
-          await loadResults(next, token);
+          if (!pinnedHistory.current && ['completed', 'partial'].includes(next.state))
+            await loadResults(next, ++resultEpoch.current);
+          setNotice(
+            next.state === 'completed'
+              ? 'Latest scan finished. Earlier versions remain available in history.'
+              : 'Scan stopped with an incomplete outcome. Review its status and coverage.',
+          );
           return;
         }
       } catch (failure) {
@@ -166,9 +234,9 @@ export function InspectionScreen({
     const token = ++epoch.current;
     setBusy(true);
     setError(null);
-    setReport(null);
-    setFiles(null);
-    setGroups(null);
+    pinnedHistory.current = false;
+    setHistorical(false);
+    setNotice(null);
     try {
       const next = await libraryData(
         {
@@ -188,6 +256,7 @@ export function InspectionScreen({
       );
       if (token === epoch.current) {
         setJob(next);
+        setSetupOpen(false);
         setHistory((previous) => [next, ...previous].slice(0, 64));
       }
     } catch (failure) {
@@ -197,17 +266,17 @@ export function InspectionScreen({
     }
   }
   async function selectJob(record: InspectionJob) {
-    if (record.id === job?.id) return;
-    const token = ++epoch.current;
-    setJob(record);
-    setReport(null);
-    setFiles(null);
-    setGroups(null);
+    if (active(record)) {
+      pinnedHistory.current = false;
+      return;
+    }
+    pinnedHistory.current = true;
+    setHistorical(true);
     setError(null);
     try {
-      if (!active(record)) await loadResults(record, token);
+      await loadResults(record, ++resultEpoch.current);
     } catch (failure) {
-      if (token === epoch.current) setError(errorMessage(failure));
+      setError(errorMessage(failure));
     }
   }
   async function stop() {
@@ -227,29 +296,29 @@ export function InspectionScreen({
     }
   }
   async function nextFiles() {
-    if (!job || !files?.next) return;
-    const token = epoch.current;
+    if (!viewedJob || !files?.next) return;
+    const token = resultEpoch.current;
     try {
       const page = await libraryData(
-        { kind: 'inspection_findings', job_id: job.id, after: files.next },
+        { kind: 'inspection_findings', job_id: viewedJob.id, after: files.next },
         'inspection_findings',
       );
-      if (token === epoch.current) setFiles(page);
+      if (token === resultEpoch.current) setFiles(page);
     } catch (failure) {
-      if (token === epoch.current) setError(errorMessage(failure));
+      if (token === resultEpoch.current) setError(errorMessage(failure));
     }
   }
   async function nextGroups() {
-    if (!job || !groups?.next) return;
-    const token = epoch.current;
+    if (!viewedJob || !groups?.next) return;
+    const token = resultEpoch.current;
     try {
       const page = await libraryData(
-        { kind: 'inspection_groups', job_id: job.id, after: groups.next },
+        { kind: 'inspection_groups', job_id: viewedJob.id, after: groups.next },
         'inspection_groups',
       );
-      if (token === epoch.current) setGroups(page);
+      if (token === resultEpoch.current) setGroups(page);
     } catch (failure) {
-      if (token === epoch.current) setError(errorMessage(failure));
+      if (token === resultEpoch.current) setError(errorMessage(failure));
     }
   }
   const unavailable = rootIds.some(
@@ -271,9 +340,65 @@ export function InspectionScreen({
       <header className="toolbar">
         {navigationControl}
         <h1>{section}</h1>
-        <div className="header-actions">{jobsControl}</div>
+        <div className="header-actions">
+          {history.length > 0 && (
+            <Button disabled={busy || running} onClick={() => setSetupOpen((value) => !value)}>
+              Scan settings
+            </Button>
+          )}
+          <UtilityHistory
+            versions={history.map((record) => ({
+              id: record.id,
+              date: record.startedAt,
+              state: record.state,
+              label:
+                record.input.task.kind === 'duplicates'
+                  ? record.input.task.options.mode.replaceAll('_', ' ')
+                  : record.input.task.kind === 'health'
+                    ? record.input.task.mode.replaceAll('_', ' ')
+                    : 'Storage usage',
+            }))}
+            selectedId={viewedJob?.id}
+            onSelect={(id) => {
+              const record = history.find((item) => item.id === id);
+              if (record) void selectJob(record);
+            }}
+          />
+          {jobsControl}
+        </div>
       </header>
       <div className="inspection-content">
+        {!loading && !history.length && (
+          <UtilityWelcome
+            title={
+              section === 'Duplicates'
+                ? 'Find the duplicates worth reviewing.'
+                : section === 'Integrity'
+                  ? 'Get to know the health of your library.'
+                  : 'See where your storage goes.'
+            }
+            description="Choose your libraries and scan settings below. Your first results will appear here, and each scan keeps its own history. Originals stay unchanged."
+          />
+        )}
+        {loading && <p role="status">Loading saved scans…</p>}
+        {notice && <p role="status">{notice}</p>}
+        {viewedJob && (
+          <p>
+            Showing scan from {formatScanDate(viewedJob.startedAt)} ·{' '}
+            {viewedJob.state.replaceAll('_', ' ')}
+            {historical ? ' · Historical version' : ''}
+            <br />
+            {viewedJob.filesChecked.toLocaleString()} files examined ·{' '}
+            {viewedJob.input.scope.replaceAll('_', ' ')} ·{' '}
+            {viewedJob.input.rootIds
+              .map(
+                (id) =>
+                  status.roots.find((root) => root.id === id)?.label ??
+                  `Previously registered folder ${id.slice(0, 8)}`,
+              )
+              .join(', ')}
+          </p>
+        )}
         <p>
           {section === 'Duplicates'
             ? 'Find identical files or compare file properties. Review the matches while your originals stay unchanged.'
@@ -286,18 +411,23 @@ export function InspectionScreen({
             {error}
           </p>
         )}
-        {section === 'Duplicates' && (
+        {section === 'Duplicates' && viewedJob && (
           <DuplicateStudio
-            key={`${job?.id ?? 'new'}:${groups?.groups[0]?.id ?? 'empty'}`}
-            job={job}
+            key={`${viewedJob.id}:${groups?.groups[0]?.id ?? 'empty'}`}
+            job={viewedJob}
             groups={groups}
             findings={files}
             status={status}
             next={() => void nextGroups()}
           />
         )}
-        <details className="inspection-setup" open={!job}>
-          <summary>
+        <details className="inspection-setup" open={history.length === 0 || setupOpen}>
+          <summary
+            onClick={(event) => {
+              event.preventDefault();
+              setSetupOpen((value) => !value);
+            }}
+          >
             {section === 'Duplicates'
               ? 'Duplicate inspection settings'
               : section === 'Integrity'
@@ -323,6 +453,19 @@ export function InspectionScreen({
               />
             )}
             <div className="inspection-roots">
+              {rootIds
+                .filter((id) => !status.roots.some((root) => root.id === id))
+                .map((id) => (
+                  <label key={id}>
+                    <input
+                      type="checkbox"
+                      checked
+                      onChange={() => setRootIds((ids) => ids.filter((value) => value !== id))}
+                    />
+                    Previously registered folder {id.slice(0, 8)}
+                    <small>Unavailable · exclude from the next scan to continue</small>
+                  </label>
+                ))}
               {status.roots.map((root) => (
                 <label key={root.id}>
                   <input
@@ -431,6 +574,7 @@ export function InspectionScreen({
               <Button
                 className="primary"
                 disabled={
+                  loading ||
                   !rootIds.length ||
                   unavailable ||
                   invalidRules ||
@@ -453,25 +597,6 @@ export function InspectionScreen({
             }
           </fieldset>
         </details>
-        {history.length > 0 && (
-          <label>
-            Retained inspection
-            <Select
-              disabled={busy}
-              value={job?.id ?? ''}
-              onChange={(event) => {
-                const record = history.find((record) => record.id === event.target.value);
-                if (record) void selectJob(record);
-              }}
-            >
-              {history.map((record) => (
-                <option key={record.id} value={record.id}>
-                  {record.startedAt} · {record.state}
-                </option>
-              ))}
-            </Select>
-          </label>
-        )}
         {job && (
           <section className="inspection-job" aria-label="Inspection job">
             <h2>{job.state.replaceAll('_', ' ')}</h2>
@@ -511,7 +636,7 @@ export function InspectionScreen({
         )}
         {report && (
           <>
-            {job && <InspectionIssues key={job.id} jobId={job.id} />}
+            {viewedJob && <InspectionIssues key={viewedJob.id} jobId={viewedJob.id} />}
             {section === 'Duplicates' && (
               <details>
                 <summary>Format applicability</summary>
@@ -566,15 +691,15 @@ export function InspectionScreen({
                 </table>
               </div>
             )}
-            {section === 'Storage' && report.storage && job && (
-              <StorageReview key={job.id} jobId={job.id} summary={report.storage} />
+            {section === 'Storage' && report.storage && viewedJob && (
+              <StorageReview key={viewedJob.id} jobId={viewedJob.id} summary={report.storage} />
             )}
           </>
         )}
         {files && section !== 'Duplicates' && (
           <section aria-label="Inspected files">
             {section === 'Integrity' ? (
-              <IntegrityFindings key={job?.id} rows={files.rows} />
+              <IntegrityFindings key={viewedJob?.id} rows={files.rows} />
             ) : (
               <>
                 <h2>Largest files</h2>

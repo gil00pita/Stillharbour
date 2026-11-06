@@ -39,3 +39,5 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 - [ADR-0078: Generated retained replacement and disposable transport labs](ADR-0078-generated-retained-replacement-and-transport-labs.md).
 
 - [ADR-0088: Remove vulnerable development dependency paths](ADR-0088-development-dependency-advisory-remediation.md).
+
+- [ADR-0092: Utility setup, background reconciliation and report history](ADR-0092-utility-scan-history.md).

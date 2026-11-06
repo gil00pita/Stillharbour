@@ -933,7 +933,7 @@ fn comparison_history_detects_destination_edits_without_reusing_equality_or_reco
         .catalog
         .call(|db| {
             assert_eq!(
-                db.query_row("SELECT count(*) FROM backup_comparison_history", [], |r| {
+                db.query_row("SELECT count(*) FROM backup_comparison_history WHERE scope!='utility-report-v1'", [], |r| {
                     r.get::<_, u32>(0)
                 })?,
                 2
@@ -955,6 +955,107 @@ fn comparison_history_detects_destination_edits_without_reusing_equality_or_reco
         std::fs::read(f.source.join("photo.xmp")).unwrap(),
         b"unique sidecar"
     );
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn saved_reports_survive_new_runs_without_retaining_execution_authority() {
+    let f = Fixture::new();
+    std::fs::write(f.source.join("generated.bin"), b"original").unwrap();
+    let first = f.start(CompareMode::Quick);
+    f.wait(&first.id);
+    let original = f
+        .library
+        .backup_comparison_page(first.id.clone(), 0)
+        .unwrap();
+    let second = f.start(CompareMode::Verified);
+    f.wait(&second.id);
+    let history = f.library.backup_comparison_history().unwrap();
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].id, second.id);
+    assert!(history.iter().all(|run| run.plan_digest.is_none()
+        && run.review_plan.is_none()
+        && !run.capabilities.execution_available));
+    assert!(f.library.backup_comparison(first.id.clone()).is_err());
+    let retained = f
+        .library
+        .backup_comparison_page(first.id.clone(), 0)
+        .unwrap();
+    assert_eq!(retained.entries.len(), original.entries.len());
+    assert_eq!(
+        retained.entries[0].display_path,
+        original.entries[0].display_path
+    );
+    assert!(f.library.backup_compare_cancel(first.id.clone()).is_err());
+    let catalog_path = f._owned.path().join("data/Fixture.stillharbour");
+    let dataset = f.dataset();
+    drop(f.library);
+    // Reopening the database reads only saved observations; it does not reopen the source.
+    let catalog = crate::catalog::Catalog::open(catalog_path).unwrap();
+    assert_eq!(reports::list(&catalog).unwrap().len(), 2);
+    assert_eq!(
+        std::fs::read(f.source.join("generated.bin")).unwrap(),
+        b"original"
+    );
+    assert!(!dataset.exists());
+}
+
+#[test]
+#[cfg(any(windows, target_os = "macos"))]
+fn display_report_limits_and_imported_authority_do_not_affect_byte_observations() {
+    let f = Fixture::new();
+    let run = f.start(CompareMode::Quick);
+    let run = f.wait(&run.id);
+    for _ in 1..32 {
+        let mut version = run.clone();
+        version.id = uuid::Uuid::new_v4().to_string();
+        reports::save(&f.library.catalog, &version, &[]).unwrap();
+    }
+    let mut unsaved = run.clone();
+    unsaved.id = uuid::Uuid::new_v4().to_string();
+    assert!(
+        reports::save(&f.library.catalog, &unsaved, &[])
+            .unwrap()
+            .contains("history is full")
+    );
+    assert_eq!(reports::list(&f.library.catalog).unwrap().len(), 32);
+    assert!(reports::load(&f.library.catalog, &unsaved.id).is_err());
+    // Display reports cannot exhaust the separate byte-observation allowance.
+    assert!(
+        history::save(
+            &f.library.catalog,
+            &uuid::Uuid::new_v4().to_string(),
+            "a".repeat(64),
+            BTreeMap::new()
+        )
+        .unwrap()
+        .contains("Saved complete")
+    );
+    let mut forged = serde_json::json!({ "version": 1, "run": run, "rows": [] });
+    let id = uuid::Uuid::new_v4().to_string();
+    forged["run"]["id"] = id.clone().into();
+    forged["run"]["planDigest"] = "untrusted authority".into();
+    forged["run"]["capabilities"]["executionAvailable"] = true.into();
+    let text = forged.to_string();
+    let key = format!("report:{id}");
+    f.library.catalog.call(move |db| {
+        db.execute("INSERT INTO backup_comparison_history(id,scope,record) VALUES(?,'utility-report-v1',?)", rusqlite::params![key, text])?;
+        Ok(())
+    }).unwrap();
+    let (loaded, _) = reports::load(&f.library.catalog, &id).unwrap();
+    assert!(loaded.plan_digest.is_none());
+    assert!(!loaded.capabilities.execution_available);
+    forged["run"]["catalogId"] = uuid::Uuid::new_v4().to_string().into();
+    let id = uuid::Uuid::new_v4().to_string();
+    forged["run"]["id"] = id.clone().into();
+    let text = forged.to_string();
+    let key = format!("report:{id}");
+    f.library.catalog.call(move |db| {
+        db.execute("INSERT INTO backup_comparison_history(id,scope,record) VALUES(?,'utility-report-v1',?)", rusqlite::params![key, text])?;
+        Ok(())
+    }).unwrap();
+    assert!(reports::load(&f.library.catalog, &id).is_err());
+    assert!(reports::list(&f.library.catalog).is_err());
 }
 
 #[test]

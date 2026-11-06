@@ -786,6 +786,9 @@ async fn library_request(
                     label,
                 )?)
             }
+            LibraryRequest::BackupComparisonHistory {} => {
+                LibraryResponse::BackupComparisonHistory(library.backup_comparison_history()?)
+            }
             LibraryRequest::BackupComparisonLatest {} => {
                 LibraryResponse::BackupComparisonLatest(library.backup_comparison_latest()?)
             }

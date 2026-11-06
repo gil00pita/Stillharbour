@@ -130,6 +130,14 @@ function policy(enabled = true): SnapshotSchedule {
 }
 let handler: (request: SnapshotRequest) => Promise<SnapshotReply>;
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   handler = async (input) => {
     if (input.kind === 'capabilities') return { kind: 'capabilities', data: capabilities };
     if (input.kind === 'profiles') return { kind: 'profiles', data: [profile] };
@@ -211,6 +219,27 @@ beforeEach(() => {
 function open(value = status) {
   return render(<SnapshotWorkflow status={value} onActivityChange={vi.fn()} />);
 }
+
+it('selects earlier snapshot versions from history without starting repository work', async () => {
+  const fallback = handler;
+  handler = async (input) =>
+    input.kind === 'snapshots'
+      ? {
+          kind: 'snapshots',
+          data: [record, { ...record, id: 'snapshot-older', time: '2026-11-01T00:00:00Z' }],
+        }
+      : fallback(input);
+  open();
+  await selectProfile();
+  expect(screen.queryByText('Snapshot snapshot-older')).not.toBeInTheDocument();
+  vi.mocked(libraryData).mockClear();
+  fireEvent.click(screen.getByRole('button', { name: 'Scan history' }));
+  const versions = await screen.findByLabelText('Saved scan versions');
+  fireEvent.click(within(versions).getAllByRole('button')[1]!);
+  expect(await screen.findByText('Snapshot snapshot-older')).toBeVisible();
+  expect(screen.queryByText('Snapshot snapshot-1')).not.toBeInTheDocument();
+  expect(libraryData).not.toHaveBeenCalled();
+});
 async function selectProfile() {
   const select = await screen.findByRole('combobox', { name: 'Snapshot profile' });
   await waitFor(() => expect(select).toBeEnabled());
