@@ -4289,6 +4289,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           const footer = document.querySelector('.sidebar-footer').getBoundingClientRect();
           const jobs = document.querySelector('.sidebar-footer button[aria-label="Jobs"]');
           const settings = document.querySelector('.sidebar-footer button[aria-label="Settings"]');
+          const navigation = document.querySelector('.sidebar > nav');
           const toggle = document.querySelector('button.sidebar-toggle');
           const toggleRect = toggle.getBoundingClientRect();
           return {
@@ -4317,6 +4318,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               ),
             ),
             footerTop: footer.top,
+            navigation: {
+              width: navigation.offsetWidth,
+              height: navigation.offsetHeight,
+              clientWidth: navigation.clientWidth,
+              scrollHeight: navigation.scrollHeight,
+              clientHeight: navigation.clientHeight,
+            },
             collapsedItems: document.querySelector('.navigation-collapsed')
               ? [...document.querySelectorAll('.sidebar nav button')].map((button) => {
                   const icon = button.querySelector('svg').getBoundingClientRect();
@@ -4332,6 +4340,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               : [],
           };
         });
+        const evidence = `.context/screenshots/sidebar-footer-${label}-${collapsed ? 'collapsed' : 'expanded'}`;
+        await writeFile(`${evidence}.json`, JSON.stringify(layout, null, 2));
+        await browser.saveScreenshot(`${evidence}.png`);
         assert.equal(layout.toggleInMenu, true);
         assert.equal(layout.toggleFits, true);
         assert.equal(layout.toolbarActionsFit, true);
@@ -4340,8 +4351,15 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         assert.equal(layout.jobsAboveSettings, true);
         assert.equal(layout.primaryContainsActions, false);
         assert.ok(layout.footerTop > height / 2);
+        if (collapsed && label === 'minimum') {
+          assert.ok(layout.navigation.scrollHeight > layout.navigation.clientHeight);
+          assert.equal(layout.navigation.height, layout.navigation.clientHeight);
+        }
         for (const item of layout.collapsedItems) {
-          assert.ok(Math.abs(item.iconOffset) <= 1, `${item.label}: icon centred under logo`);
+          assert.ok(
+            Math.abs(item.iconOffset) <= 1,
+            `${item.label}: icon centred under logo (${item.iconOffset}px, navigation ${layout.navigation.clientWidth}/${layout.navigation.width}px)`,
+          );
           assert.equal(item.left, layout.collapsedItems[0].left, `${item.label}: left edge`);
           assert.equal(item.right, layout.collapsedItems[0].right, `${item.label}: right edge`);
         }
@@ -4354,9 +4372,6 @@ describeMac('macOS M1 library — generated native fixtures', () => {
               last.getBoundingClientRect().right <= viewport.getBoundingClientRect().right + 1
             );
           }),
-        );
-        await browser.saveScreenshot(
-          `.context/screenshots/sidebar-footer-${label}-${collapsed ? 'collapsed' : 'expanded'}.png`,
         );
       }
     }
@@ -4916,7 +4931,20 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         ),
       );
       assert.deepEqual(after, before);
+      // Saved plans lives in Albums / Tags; returning to Photos mounts a fresh
+      // selection. Restore these stable fixture IDs for the following viewer checks.
+      await $('button[aria-label="Photos"]').click();
+      await $('.asset-viewport').waitForDisplayed();
       await galleryView('Timeline');
+      await enterPhotoSelection();
+      for (const id of ids) {
+        const checkbox = $(`[data-asset-id="${id}"] .asset-check`);
+        await checkbox.waitForExist();
+        if (!(await checkbox.isSelected())) await checkbox.click();
+      }
+      await browser.waitUntil(async () =>
+        (await $('.results-heading p').getText()).includes('2 selected'),
+      );
     }
   });
   it('saves catalog annotations and shows honest unsupported states', async () => {
@@ -4937,6 +4965,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(async () => (await native({ kind: 'tags' })).data.includes('Reviewed'));
     await browser.saveScreenshot('.context/screenshots/photo-canvas-selection.png');
     await $('button=Clear selection').click();
+    await $('button=Done selecting').click();
     // Inject one transport-error event; the follow-up PNG read is real native
     // owned-cache traffic and must recover without a catalog rescan.
     await browser.execute(() => {

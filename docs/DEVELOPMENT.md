@@ -21,9 +21,22 @@ shared hooks use `src/hooks/use-*.ts`. Import components through `@/components/<
 
 Collapsed sidebar alignment: the Foundation desktop smoke checks every navigation
 icon against the logo centre and matches main/footer button edges at 1180×780 and
-660×560. Keep collapsed main/footer horizontal padding equal; do not reintroduce
-the old negative main-navigation margin used for scrollbar compensation. Expanded
-padding remains unchanged. Browser layout fixtures are separate from native evidence.
+660×560, including overflowing navigation at minimum height. Keep collapsed
+main/footer horizontal padding equal and size buttons from the shared rail width
+(excluding its border and padding), rather than the scrollbar-reduced scrollport.
+Native macOS scrollbars can consume 13 px even with `scrollbar-width: thin`;
+overlay-scrollbar browser fixtures alone missed the resulting 6.5 px icon shift.
+The smoke saves geometry JSON and screenshots before asserting alignment so the
+scrollbar width survives failures. Do not reintroduce negative navigation margins.
+Expanded padding remains unchanged. Browser fixtures are separate from native evidence.
+
+The Foundation organization workflow opens Saved plans from Albums / Tags. After
+closing the dialog it must navigate back to Photos before using the Filter panel,
+then reselect its stable fixture IDs for subsequent compare/viewer checks. Section
+navigation mounts a fresh photo selection; closing Saved plans alone does not
+return to Photos. Retain all original-file and destination-neighbor audits.
+After clearing the selection, activate Done selecting before opening a photo;
+clearing selected IDs alone intentionally leaves selection mode active.
 
 Windows desktop regressions (2026-11-06): Map's search glyph now lives inside
 `.search-input-frame`; measure that shared border, the glyph before the input,

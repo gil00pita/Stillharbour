@@ -1555,7 +1555,9 @@ input.switch-control:disabled {
   margin-left: auto;
 }
 .navigation-collapsed.app-shell {
-  grid-template-columns: 72px minmax(0, 1fr);
+  --collapsed-sidebar-width: 72px;
+  --collapsed-navigation-padding: 12px;
+  grid-template-columns: var(--collapsed-sidebar-width) minmax(0, 1fr);
 }
 .navigation-collapsed .sidebar {
   padding: 24px 10px;
@@ -1570,6 +1572,8 @@ input.switch-control:disabled {
   display: none;
 }
 .navigation-collapsed .sidebar nav[aria-label] button {
+  /* Size from the rail (minus its border), so a native scrollbar cannot narrow buttons. */
+  width: calc(var(--collapsed-sidebar-width) - 1px - 2 * var(--collapsed-navigation-padding));
   justify-content: center;
   padding: 10px;
 }
@@ -2713,7 +2717,10 @@ button.explorer-entry.asset-open:hover:enabled {
 }
 .navigation-collapsed .sidebar > nav,
 .navigation-collapsed .sidebar-footer {
-  padding-inline: 12px;
+  padding-inline: var(--collapsed-navigation-padding);
+}
+.navigation-collapsed .sidebar > nav {
+  overflow-x: hidden;
 }
 .sidebar-footer {
   flex-shrink: 0;
