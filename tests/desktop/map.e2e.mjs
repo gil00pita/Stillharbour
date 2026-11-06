@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { browser, $, $$ } from '@wdio/globals';
 import { verifyOfflinePlaceSearch } from './place-search.mjs';
+import { verifyNasaSatellite } from './map-satellite.mjs';
 
 import {
   native,
@@ -127,7 +128,114 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       });
       await $('button[aria-label="Map"]').click();
       await $('.map-marker').waitForDisplayed({ timeout: 30000 });
-      await browser.waitUntil(async () => $('.map-filmstrip li:first-child button').isExisting());
+      await browser.waitUntil(async () => $('.map-marker').isEnabled());
+      assert.equal((await $$('.map-filmstrip li')).length, 0);
+      await browser.execute(() => {
+        window.__mapCanvas = document.querySelector('.map-basemap canvas');
+      });
+      await browser.waitUntil(() =>
+        browser.execute(() =>
+          [...document.querySelectorAll('.map-marker img')].some(
+            (image) => image.complete && image.naturalWidth > 0,
+          ),
+        ),
+      );
+      const markerGeometry = await browser.execute(() =>
+        [...document.querySelectorAll('.map-marker img')].map((image) => {
+          const frame = image.closest('.map-marker-image').getBoundingClientRect();
+          const photo = image.getBoundingClientRect();
+          const button = image.closest('button').getBoundingClientRect();
+          return {
+            width: button.width,
+            height: button.height,
+            contained:
+              photo.left >= frame.left - 0.5 &&
+              photo.right <= frame.right + 0.5 &&
+              photo.top >= frame.top - 0.5 &&
+              photo.bottom <= frame.bottom + 0.5,
+            clipping: getComputedStyle(image.parentElement).overflow,
+          };
+        }),
+      );
+      assert.ok(markerGeometry.length > 0);
+      assert.ok(
+        markerGeometry.every(
+          (marker) =>
+            marker.width === 48 &&
+            marker.height === 48 &&
+            marker.contained &&
+            marker.clipping === 'hidden',
+        ),
+      );
+      assert.equal(await $('.map-filter-trigger').getAttribute('aria-expanded'), 'false');
+      const searchGeometry = await browser.execute(() => {
+        const input = document.querySelector('.map-search-controls input[type="search"]');
+        const icon = document.querySelector('.map-search-controls .fixed-search > svg');
+        const filter = document.querySelector('.map-filter-trigger');
+        const field = input.getBoundingClientRect();
+        const glyph = icon.getBoundingClientRect();
+        const trigger = filter.getBoundingClientRect();
+        return {
+          iconInside:
+            glyph.width > 0 &&
+            glyph.left > field.left &&
+            glyph.right < field.right &&
+            glyph.top > field.top &&
+            glyph.bottom < field.bottom,
+          iconAboveInput: Number(getComputedStyle(icon).zIndex) > 0,
+          filterBesideSearch: trigger.left >= field.right && Math.abs(trigger.top - field.top) < 2,
+        };
+      });
+      assert.deepEqual(searchGeometry, {
+        iconInside: true,
+        iconAboveInput: true,
+        filterBesideSearch: true,
+      });
+      await $('.map-filter-trigger').click();
+      const filtersSelector = '[role="dialog"][aria-label="Map filters"]';
+      await $(filtersSelector).waitForDisplayed();
+      await browser.saveScreenshot(`${directory}/toolbar-filters.png`);
+      await $('button[aria-label="Close filters"]').click();
+      await browser.waitUntil(
+        async () => (await $('.map-filter-trigger').getAttribute('aria-expanded')) === 'false',
+      );
+      assert.equal(
+        await browser.execute(
+          () => document.activeElement === document.querySelector('.map-filter-trigger'),
+        ),
+        true,
+      );
+      await browser.setWindowSize(660, 560);
+      await $('.map-filter-trigger').click();
+      await $(filtersSelector).waitForDisplayed();
+      assert.equal(
+        await browser.execute(() => {
+          const panel = document
+            .querySelector('[role="dialog"][aria-label="Map filters"]')
+            .getBoundingClientRect();
+          const input = document
+            .querySelector('.map-search-controls input')
+            .getBoundingClientRect();
+          const filter = document.querySelector('.map-filter-trigger').getBoundingClientRect();
+          return (
+            panel.left >= 0 &&
+            panel.right <= innerWidth &&
+            panel.top >= 0 &&
+            panel.bottom <= innerHeight &&
+            input.width > 80 &&
+            filter.left >= input.right &&
+            filter.right <= innerWidth
+          );
+        }),
+        true,
+      );
+      await browser.saveScreenshot(`${directory}/toolbar-filters-minimum.png`);
+      await browser.keys('Escape');
+      await browser.waitUntil(
+        async () => (await $('.map-filter-trigger').getAttribute('aria-expanded')) === 'false',
+      );
+      await browser.setWindowSize(1180, 780);
+      await browser.saveScreenshot(`${directory}/toolbar-collapsed.png`);
       assert.equal(await $('.map-basemap canvas').isDisplayed(), true);
       assert.equal(
         await $('.map-attribution').getText(),
@@ -152,19 +260,48 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       await browser.execute(() => document.querySelector('.map-basemap canvas').focus());
       await browser.keys('=');
       await browser.waitUntil(async () => {
-        const count = Number((await $('.map-photo-heading p').getText()).match(/^(\d+)/)?.[1]);
-        return count > 0 && count < 6 && (await $('button[aria-label="Zoom out"]').isEnabled());
+        const total = await browser.execute(() =>
+          [...document.querySelectorAll('.map-marker-count')].reduce(
+            (sum, badge) => sum + Number(badge.textContent),
+            0,
+          ),
+        );
+        return (
+          total > 0 &&
+          total < 6 &&
+          (await $('.map-marker').isEnabled()) &&
+          (await $('button[aria-label="Zoom out"]').isEnabled())
+        );
       });
       const keyboardZoomVerified = true;
-      await $('button=Whole world').click();
+      assert.equal((await $$('.map-filmstrip li')).length, 0);
+      assert.equal(
+        await browser.execute(
+          () => window.__mapCanvas === document.querySelector('.map-basemap canvas'),
+        ),
+        true,
+      );
+      await $('button[aria-label="Whole world"]').click();
       await browser.waitUntil(async () => !(await $('button[aria-label="Zoom out"]').isEnabled()));
       await $('button[aria-label="Zoom in"]').click();
       await browser.waitUntil(async () => {
-        const count = Number((await $('.map-photo-heading p').getText()).match(/^(\d+)/)?.[1]);
-        return count > 0 && count < 6 && (await $('button[aria-label="Zoom out"]').isEnabled());
+        const total = await browser.execute(() =>
+          [...document.querySelectorAll('.map-marker-count')].reduce(
+            (sum, badge) => sum + Number(badge.textContent),
+            0,
+          ),
+        );
+        return (
+          total > 0 &&
+          total < 6 &&
+          (await $('.map-marker').isEnabled()) &&
+          (await $('button[aria-label="Zoom out"]').isEnabled())
+        );
       });
-      await $('button=Whole world').click();
-      await browser.waitUntil(async () => (await $$('.map-marker')).length === 1);
+      await $('button[aria-label="Whole world"]').click();
+      await browser.waitUntil(
+        async () => (await $$('.map-marker')).length === 1 && (await $('.map-marker').isEnabled()),
+      );
       await browser.saveScreenshot(`${directory}/overview.png`);
       await $('.map-marker').click();
       await browser.saveScreenshot(`${directory}/after-marker.png`);
@@ -179,6 +316,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       await $('button=Return to map').click();
       await $('.map-page').waitForDisplayed();
       await $('.map-marker').waitForDisplayed();
+      await $('button[aria-label="Map filters"]').click();
       await $('button=No usable location (2)').waitForDisplayed();
       await $('button=No usable location (2)').click();
       await browser.waitUntil(
@@ -195,6 +333,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       const placeSearch = await verifyOfflinePlaceSearch(directory);
       const metadataEvidence = await reviewCatalogMetadata(directory);
       const exportEvidence = await finishMetadataExports(directory);
+      const satelliteEvidence = await verifyNasaSatellite(directory);
       const audit = await browser.tauri.execute(({ core }) =>
         core.invoke('test_library_fixture', { verify: true }),
       );
@@ -213,7 +352,13 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             zero,
             selectedCount,
             keyboardZoomVerified,
+            searchGeometry,
+            filterDropdownVerified: true,
+            markerGeometry,
+            photosRequireClick: true,
+            canvasRetainedAcrossZoom: true,
             placeSearch,
+            satelliteEvidence,
             metadataEvidence,
             exportEvidence,
             externalResources: external,

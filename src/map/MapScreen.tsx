@@ -1,4 +1,5 @@
-import { Button, Input, Select } from '../components/ui/controls';
+import { Button } from '../components/ui/controls';
+import { MapFilters } from '../components/MapFilters';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
   AssetPage,
@@ -34,36 +35,66 @@ export function MapScreen({
   jobsControl?: ReactNode;
 }) {
   const photoQuery = useMemo(() => mapPhotoQuery(state), [state]);
-  const viewerScope = JSON.stringify([photoQuery, state.zoom]);
+  const viewerScope = JSON.stringify(photoQuery);
+  const mapScope = JSON.stringify([state.query, status.revision]);
+  const mapKey = JSON.stringify([mapScope, state.bounds, state.zoom]);
+  const [mapResponse, setMapResponse] = useState<{
+    key: string;
+    scope: string;
+    view: MapView;
+  } | null>(null);
+  const currentMap = mapResponse?.key === mapKey ? mapResponse.view : null;
+  // Retain markers through camera updates, but never across filter/catalog changes.
+  const visibleMap = mapResponse?.scope === mapScope ? mapResponse.view : null;
+  const [allPhotosScope, setAllPhotosScope] = useState<string | null>(null);
+
   const scope = JSON.stringify([photoQuery, state.zoom, status.revision]);
   const [cursor, setCursor] = useState<{ scope: string; value: string } | null>(null);
   const pageCursor = cursor?.scope === scope ? cursor.value : null;
   const key = JSON.stringify([scope, pageCursor]);
   const [attempt, setAttempt] = useState(0);
-  const [response, setResponse] = useState<{ key: string; view: MapView; page: AssetPage } | null>(
-    null,
-  );
+  const [response, setResponse] = useState<{ key: string; page: AssetPage } | null>(null);
   const [failure, setFailure] = useState<{ key: string; message: string } | null>(null);
   const [mapUnavailable, setMapUnavailable] = useState(false);
+  const photosRequested = Boolean(
+    state.cell || state.unlocated || mapUnavailable || allPhotosScope === viewerScope,
+  );
+  const [mapFailure, setMapFailure] = useState<{ key: string; message: string } | null>(null);
   const [placeView, setPlaceView] = useState<{ bounds: MapBounds; zoom: number } | null>(null);
   const [viewer, setViewer] = useState<{ scope: string; asset: AssetSummary } | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
-    // Filter edits and viewport changes are coalesced before entering IPC.
     const timer = setTimeout(() => {
-      void Promise.all([
-        libraryData(
-          { kind: 'map_view', query: state.query, bounds: state.bounds, zoom: state.zoom },
-          'map_view',
-        ),
-        libraryData({ kind: 'query', query: photoQuery, cursor: pageCursor, limit: 80 }, 'page'),
-      ])
-        .then(([view, page]) => {
-          if (view.revision !== page.revision)
+      void libraryData(
+        { kind: 'map_view', query: state.query, bounds: state.bounds, zoom: state.zoom },
+        'map_view',
+      )
+        .then((view) => {
+          if (active) {
+            setMapResponse({ key: mapKey, scope: mapScope, view });
+            setMapFailure(null);
+          }
+        })
+        .catch((error: unknown) => {
+          if (active) setMapFailure({ key: mapKey, message: errorMessage(error) });
+        });
+    }, 150);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [mapKey, mapScope, attempt, state.query, state.bounds, state.zoom]);
+  useEffect(() => {
+    if (!photosRequested || !currentMap) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      void libraryData({ kind: 'query', query: photoQuery, cursor: pageCursor, limit: 80 }, 'page')
+        .then((page) => {
+          if (currentMap.revision !== page.revision)
             throw new Error('The catalog changed while the map loaded. Retry photos.');
           if (active) {
-            setResponse({ key, view, page });
+            setResponse({ key, page });
             setFailure(null);
           }
         })
@@ -75,20 +106,26 @@ export function MapScreen({
       active = false;
       clearTimeout(timer);
     };
-  }, [key, attempt, state.query, state.bounds, state.zoom, photoQuery, pageCursor]);
-  const current = response?.key === key ? response : null;
-  const error = failure?.key === key ? failure.message : null;
+  }, [key, attempt, photosRequested, currentMap, photoQuery, pageCursor]);
+  const current =
+    photosRequested && response?.key === key && response.page.revision === currentMap?.revision
+      ? response
+      : null;
+  const error =
+    (mapFailure?.key === mapKey ? mapFailure.message : null) ??
+    (photosRequested && failure?.key === key ? failure.message : null);
   const previewFailure = useCallback((error: unknown) => setPreviewError(errorMessage(error)), []);
   const assets = current?.page.assets ?? [];
-  const clusters = current?.view.clusters ?? [];
+  const clusters = visibleMap?.clusters ?? [];
   const keys = [...clusters.map((c) => c.representative), ...assets].map((asset) => ({
     assetId: asset.id,
     revision: asset.revision,
     edge: 256,
   }));
-  const previews = usePreviews(keys, previewFailure, Boolean(current));
+  const previews = usePreviews(keys, previewFailure, Boolean(visibleMap));
   const unavailable = useCallback(() => setMapUnavailable(true), []);
   function filter(patch: Partial<AssetQuery>) {
+    setAllPhotosScope(null);
     onState({ ...state, query: { ...state.query, ...patch }, cell: null, selectedId: null });
   }
   function viewport(bounds: MapBounds, zoom: number) {
@@ -99,6 +136,7 @@ export function MapScreen({
       )
     )
       return;
+    setAllPhotosScope(null);
     onState({ ...state, bounds, zoom, cell: null, selectedId: null, unlocated: false });
   }
   function cluster(value: MapCluster) {
@@ -111,72 +149,45 @@ export function MapScreen({
         <header className="toolbar photo-toolbar">
           {navigationControl}
           <h1>Map</h1>
-          <PlaceSearch
-            value={state.query.name}
-            onSearch={(name) => filter({ name })}
-            selectedId={state.query.placeId}
-            onChange={(place) => {
-              setPlaceView(
-                place ? { bounds: place.bounds, zoom: place.kind === 'city' ? 10 : 3 } : null,
-              );
-              onState({
-                ...state,
-                query: {
-                  ...state.query,
-                  name: place ? '' : state.query.name,
-                  placeId: place?.id ?? null,
-                },
-                bounds: place?.bounds ?? state.bounds,
-                zoom: place ? (place.kind === 'city' ? 10 : 3) : state.zoom,
-                cell: null,
-                selectedId: null,
-                unlocated: false,
-              });
-            }}
-          />
+          <div className="map-search-controls">
+            <PlaceSearch
+              value={state.query.name}
+              onSearch={(name) => filter({ name })}
+              selectedId={state.query.placeId}
+              onChange={(place) => {
+                setAllPhotosScope(null);
+                setPlaceView(
+                  place ? { bounds: place.bounds, zoom: place.kind === 'city' ? 10 : 3 } : null,
+                );
+                onState({
+                  ...state,
+                  query: {
+                    ...state.query,
+                    name: place ? '' : state.query.name,
+                    placeId: place?.id ?? null,
+                  },
+                  bounds: place?.bounds ?? state.bounds,
+                  zoom: place ? (place.kind === 'city' ? 10 : 3) : state.zoom,
+                  cell: null,
+                  selectedId: null,
+                  unlocated: false,
+                });
+              }}
+            />
+            <MapFilters
+              query={state.query}
+              roots={status.roots}
+              unlocated={state.unlocated}
+              unavailable={visibleMap?.unavailable ?? null}
+              onFilter={filter}
+              onLocation={() => {
+                setAllPhotosScope(null);
+                onState({ ...state, unlocated: !state.unlocated, cell: null, selectedId: null });
+              }}
+            />
+          </div>
           {jobsControl}
         </header>
-        <div className="map-filters">
-          <label>
-            Library folder
-            <Select
-              value={state.query.rootId ?? ''}
-              onChange={(e) => filter({ rootId: e.target.value || null })}
-            >
-              <option value="">All folders</option>
-              {status.roots.map((root) => (
-                <option key={root.id} value={root.id}>
-                  {root.label}
-                  {root.availability === 'offline' ? ' · Offline' : ''}
-                </option>
-              ))}
-            </Select>
-          </label>
-          <label>
-            From
-            <Input
-              type="date"
-              value={state.query.fromDate}
-              onChange={(e) => filter({ fromDate: e.target.value })}
-            />
-          </label>
-          <label>
-            Through
-            <Input
-              type="date"
-              value={state.query.throughDate}
-              onChange={(e) => filter({ throughDate: e.target.value })}
-            />
-          </label>
-          <Button
-            aria-pressed={state.unlocated}
-            onClick={() =>
-              onState({ ...state, unlocated: !state.unlocated, cell: null, selectedId: null })
-            }
-          >
-            No usable location{current ? ` (${current.view.unavailable.toLocaleString()})` : ''}
-          </Button>
-        </div>
         {!state.unlocated && (
           <section className="map-geography" aria-label="Geographic overview">
             {mapUnavailable ? (
@@ -197,6 +208,7 @@ export function MapScreen({
                   clusters={state.unlocated ? [] : clusters}
                   previews={previews.results}
                   selectedId={state.selectedId}
+                  updating={!currentMap}
                   onViewport={viewport}
                   onCluster={cluster}
                   onUnavailable={unavailable}
@@ -209,7 +221,7 @@ export function MapScreen({
         <section
           className="map-photos"
           aria-label={state.unlocated ? 'Photos without usable location' : 'Photos in map area'}
-          aria-busy={!current && !error}
+          aria-busy={photosRequested && !current && !error}
         >
           <div className="map-photo-heading">
             <div>
@@ -226,8 +238,10 @@ export function MapScreen({
                   : current
                     ? state.unlocated
                       ? `${current.page.total.toLocaleString()} ${current.page.total === 1 ? 'photo' : 'photos'} without usable location`
-                      : `${current.page.total.toLocaleString()} photos in view · ${current.view.located.toLocaleString()} located in these folders`
-                    : 'Loading photos…'}
+                      : `${current.page.total.toLocaleString()} photos in view · ${(currentMap?.located ?? 0).toLocaleString()} located in these folders`
+                    : photosRequested
+                      ? 'Loading photos…'
+                      : 'Click a photo marker to show photos from that location.'}
               </p>
             </div>
             <Button
@@ -236,8 +250,17 @@ export function MapScreen({
             >
               Show in library
             </Button>
+            {!photosRequested && (
+              <Button onClick={() => setAllPhotosScope(viewerScope)}>Show photos in view</Button>
+            )}
             {state.cell && (
-              <Button onClick={() => onState({ ...state, cell: null, selectedId: null })}>
+              <Button
+                onClick={() => {
+                  const next = { ...state, cell: null, selectedId: null };
+                  setAllPhotosScope(JSON.stringify(mapPhotoQuery(next)));
+                  onState(next);
+                }}
+              >
                 All photos in view
               </Button>
             )}
@@ -307,7 +330,9 @@ export function MapScreen({
           <p className="map-disclosure">
             Locations are last observed catalog metadata. Offline originals remain offline. Missing,
             invalid or unextracted coordinates appear under “No usable location”. The offline
-            overview has no street detail; polar markers are shown at the map edge.
+            overview has no street detail; polar markers are shown at the map edge. Satellite is an
+            online NASA overview with limited detail. Selecting it sends viewed map areas to NASA;
+            your photos are not sent.
           </p>
         </section>
       </div>

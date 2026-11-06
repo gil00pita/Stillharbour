@@ -15,6 +15,8 @@ export async function verifyOfflinePlaceSearch(directory) {
   assert.ok(await $('button*=London, Ontario, Canada').isExisting());
   await browser.saveScreenshot(`${directory}/place-choices.png`);
   await $('button*=London, England, United Kingdom').click();
+  await browser.waitUntil(async () => $('.map-marker').isEnabled());
+  await $('.map-marker').click();
   await browser.waitUntil(
     async () =>
       (await $$('.map-filmstrip li')).length === 1 &&
@@ -98,6 +100,7 @@ export async function verifyOfflinePlaceSearch(directory) {
   await $(trigger).click();
   await $('button=Clear place filter').waitForDisplayed();
   await $('button=Clear place filter').click();
+  await $('button=Show photos in view').click();
   await browser.waitUntil(async () => $('button=Show in library').isEnabled());
   await $('button=Show in library').click();
   await browser.waitUntil(async () => (await $$('.gallery .asset')).length === 1);

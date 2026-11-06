@@ -23,15 +23,17 @@ vi.mock('./Basemap', () => ({
     onCluster,
     onViewport,
     onUnavailable,
+    updating,
   }: {
     clusters: MapCluster[];
+    updating: boolean;
     onCluster: (cluster: MapCluster) => void;
     onViewport: (bounds: typeof WORLD, zoom: number) => void;
     onUnavailable: () => void;
   }) => (
     <div>
       {clusters.map((cluster) => (
-        <button key={cluster.key} onClick={() => onCluster(cluster)}>
+        <button key={cluster.key} disabled={updating} onClick={() => onCluster(cluster)}>
           Choose cluster {cluster.count}
         </button>
       ))}
@@ -143,6 +145,57 @@ beforeEach(() => {
     });
 });
 describe('local map browsing', () => {
+  it('loads photo results only after a marker click and keeps markers during viewport requests', async () => {
+    render(<Harness />);
+    const marker = await screen.findByRole('button', { name: 'Choose cluster 3' });
+    expect(
+      screen.getByText('Click a photo marker to show photos from that location.'),
+    ).toBeVisible();
+    expect(vi.mocked(libraryData).mock.calls.some(([request]) => request.kind === 'query')).toBe(
+      false,
+    );
+    fireEvent.click(marker);
+    await screen.findByRole('button', { name: `Open ${asset.name}` });
+    const mapCalls = vi.mocked(libraryData).mock.calls.filter(([r]) => r.kind === 'map_view');
+    expect(mapCalls).toHaveLength(1);
+    let resolveMap: ((value: MapView) => void) | undefined;
+    vi.mocked(libraryData).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveMap = resolve as (value: MapView) => void;
+        }),
+    );
+    const queryCount = vi.mocked(libraryData).mock.calls.filter(([r]) => r.kind === 'query').length;
+    fireEvent.click(screen.getByRole('button', { name: 'Pan across date line' }));
+    expect(marker).toBeInTheDocument();
+    expect(marker).toBeDisabled();
+    expect(screen.queryByRole('button', { name: `Open ${asset.name}` })).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading photos…')).not.toBeInTheDocument();
+    await waitFor(() => expect(resolveMap).toBeDefined());
+    resolveMap?.(view);
+    await waitFor(() => expect(marker).toBeEnabled());
+    expect(vi.mocked(libraryData).mock.calls.filter(([r]) => r.kind === 'query')).toHaveLength(
+      queryCount,
+    );
+    fireEvent.click(marker);
+    await screen.findByRole('button', { name: `Open ${asset.name}` });
+  });
+  it('lets an explicit selection expand to all photos in view', async () => {
+    render(<Harness />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose cluster 3' }));
+    await screen.findByRole('button', { name: `Open ${asset.name}` });
+    fireEvent.click(screen.getByRole('button', { name: 'All photos in view' }));
+    await waitFor(() =>
+      expect(libraryData).toHaveBeenCalledWith(
+        expect.objectContaining({
+          kind: 'query',
+          query: expect.objectContaining({ mapCell: null, mapBounds: WORLD }),
+        }),
+        'page',
+      ),
+    );
+    expect(await screen.findByRole('button', { name: `Open ${asset.name}` })).toBeVisible();
+  });
   it('chooses an offline place from the main search and carries its identity into Photos', async () => {
     render(<Harness />);
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }), {
@@ -156,6 +209,10 @@ describe('local map browsing', () => {
       },
     );
     fireEvent.click(await screen.findByRole('button', { name: /London, England, United Kingdom/ }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Choose cluster 3' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose cluster 3' }));
     await waitFor(() =>
       expect(libraryData).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -176,10 +233,14 @@ describe('local map browsing', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show in library' }));
     expect(show).toHaveBeenCalledWith(
       expect.objectContaining({ name: '', placeId: londonPlace.id }),
-      null,
+      asset.id,
     );
     fireEvent.focus(screen.getByRole('searchbox', { name: 'Search filenames, dates or places' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Clear place filter' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Choose cluster 3' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose cluster 3' }));
     await waitFor(() =>
       expect(libraryData).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -195,6 +256,10 @@ describe('local map browsing', () => {
     const search = screen.getByRole('searchbox', { name: 'Search filenames, dates or places' });
     expect(search).toHaveAttribute('title', expect.stringContaining('DD-MM-YYYY'));
     fireEvent.change(search, { target: { value: '10-10-2025' } });
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Choose cluster 3' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose cluster 3' }));
     for (const [kind, result] of [
       ['map_view', 'map_view'],
       ['query', 'page'],
@@ -212,6 +277,10 @@ describe('local map browsing', () => {
     fireEvent.change(search, { target: { value: '' } });
     await waitFor(() => expect(search).toHaveValue(''));
     await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Choose cluster 3' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose cluster 3' }));
+    await waitFor(() =>
       expect(libraryData).toHaveBeenLastCalledWith(
         expect.objectContaining({ kind: 'query', query: expect.objectContaining({ name: '' }) }),
         'page',
@@ -220,6 +289,7 @@ describe('local map browsing', () => {
   });
   it('keeps an open viewer through catalog refreshes without losing its filter scope', async () => {
     const { rerender } = render(<Harness />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose cluster 3' }));
     fireEvent.click(await screen.findByRole('button', { name: `Open ${asset.name}` }));
     expect(screen.getByRole('dialog', { name: 'Photo viewer' })).toBeVisible();
     rerender(<Harness revision="2" />);
@@ -241,9 +311,16 @@ describe('local map browsing', () => {
   it('uses native folder and date filters without treating offline originals as missing', async () => {
     render(<Harness />);
     await screen.findByRole('button', { name: 'Choose cluster 3' });
-    fireEvent.change(screen.getByLabelText('Library folder'), { target: { value: 'root' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Map filters' }));
+    await screen.findByRole('dialog', { name: 'Map filters' });
+    fireEvent.change(await screen.findByLabelText('Library folder'), { target: { value: 'root' } });
     fireEvent.change(screen.getByLabelText('From'), { target: { value: '2026-01-01' } });
     fireEvent.change(screen.getByLabelText('Through'), { target: { value: '2026-11-01' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close filters' }));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Choose cluster 3' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose cluster 3' }));
     await waitFor(() =>
       expect(libraryData).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -262,6 +339,8 @@ describe('local map browsing', () => {
   });
   it('lists absent or invalid locations with no zero-coordinate substitution', async () => {
     render(<Harness />);
+    await screen.findByRole('button', { name: 'Choose cluster 3' });
+    fireEvent.click(screen.getByRole('button', { name: 'Map filters' }));
     fireEvent.click(await screen.findByRole('button', { name: 'No usable location (1)' }));
     await waitFor(() =>
       expect(libraryData).toHaveBeenCalledWith(
@@ -293,6 +372,11 @@ describe('local map browsing', () => {
         'map_view',
       ),
     );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Choose cluster 3' })).toBeEnabled(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Choose cluster 3' }));
+    await screen.findByRole('button', { name: `Open ${asset.name}` });
     const queries = vi.mocked(libraryData).mock.calls.filter(([r]) => r.kind === 'query');
     expect(queries.every(([r]) => r.kind === 'query' && r.limit === 80)).toBe(true);
   });
@@ -308,9 +392,37 @@ describe('local map browsing', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Catalog unavailable.');
     expect(screen.getByRole('button', { name: 'Show in library' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Retry photos' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose cluster 3' }));
     await waitFor(() =>
       expect(screen.getByRole('button', { name: 'Show in library' })).toBeEnabled(),
     );
+  });
+  it('keeps markers when a selected photo request fails and rejects late photo results after panning', async () => {
+    render(<Harness />);
+    const marker = await screen.findByRole('button', { name: 'Choose cluster 3' });
+    vi.mocked(libraryData).mockRejectedValueOnce(new Error('Photo page unavailable.'));
+    fireEvent.click(marker);
+    expect(await screen.findByRole('alert')).toHaveTextContent('Photo page unavailable.');
+    expect(marker).toBeEnabled();
+    expect(vi.mocked(libraryData).mock.calls.filter(([r]) => r.kind === 'map_view')).toHaveLength(
+      1,
+    );
+    let resolvePage: ((value: unknown) => void) | undefined;
+    vi.mocked(libraryData)
+      .mockImplementationOnce(async () => view as never)
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolvePage = resolve as (value: unknown) => void;
+          }),
+      );
+    fireEvent.click(screen.getByRole('button', { name: 'Retry photos' }));
+    await waitFor(() => expect(resolvePage).toBeDefined());
+    fireEvent.click(screen.getByRole('button', { name: 'Pan across date line' }));
+    resolvePage?.({ assets: [asset], nextCursor: null, total: 3, revision: '1' });
+    await waitFor(() => expect(marker).toBeEnabled());
+    expect(screen.queryByRole('button', { name: `Open ${asset.name}` })).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
   it('refuses mismatched catalog generations', async () => {
     vi.mocked(libraryData).mockImplementation(async (request) =>
@@ -319,6 +431,7 @@ describe('local map browsing', () => {
         : ({ assets: [asset], nextCursor: null, total: 1, revision: '2' } as never),
     );
     render(<Harness />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Choose cluster 3' }));
     expect(await screen.findByRole('alert')).toHaveTextContent('catalog changed');
     expect(screen.queryByRole('button', { name: `Open ${asset.name}` })).not.toBeInTheDocument();
   });

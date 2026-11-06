@@ -1,5 +1,7 @@
 # Stillharbour - Defaults, owner decisions and feasibility gates
 
+[ADR-0092](decisions/ADR-0092-nasa-satellite-overview.md) records the owner's explicit choice of optional NASA satellite overview: a fixed GIBS layer/path, limited detail, session-only opt-in, visible attribution, restricted CSP/request coordinates, bounded imagery loading and an offline Map fallback. No API key, photo upload or original-file authority is added.
+
 [ADR-0089](decisions/ADR-0089-offline-place-search.md) records the owner's explicit choice of offline GPS city/country search: bounded disambiguated suggestions, 25 km city areas, source country polygons, versioned place IDs and shared native query membership. Catalog schema/identities, network permissions and production preservation gates remain intact.
 
 [ADR-0088](decisions/ADR-0088-development-dependency-advisory-remediation.md) continues owner-authorized M6 with exact development overrides for glob, minimatch and the nested Puppeteer browser helper. Generated ZIP/cancellation regressions fail before the update and pass afterward; all runtime npm pins remain unchanged. [M6 dependency evidence](M6_DEPENDENCY_HARDENING.md) owns actual advisory and native/build results. Production capability and release gates remain intact.
@@ -365,4 +367,4 @@ The owner requests flat secondary actions, unified filename/date/place search, s
 
 ## Utility scan lifecycle — 2026-11-05
 
-The owner requests welcome/setup on first use, restored results, actual background reconciliation and dated version history for all four utilities. Retain existing inspection workers and native comparison admission. Use separate displayed/running scan state, compare-only baseline refresh and immutable display-only backup reports under the existing history table's dedicated namespace. No schema/identity migration, continuous-watcher claim or new original-file authority. Persistence/authorization bounds and tradeoffs are in [ADR-0092](decisions/ADR-0092-utility-scan-history.md).
+The owner requests welcome/setup on first use, restored results, actual background reconciliation and dated version history for all four utilities. Retain existing inspection workers and native comparison admission. Use separate displayed/running scan state, compare-only baseline refresh and immutable display-only backup reports under the existing history table's dedicated namespace. No schema/identity migration, continuous-watcher claim or new original-file authority. Persistence/authorization bounds and tradeoffs are in [ADR-0093](decisions/ADR-0093-utility-scan-history.md).

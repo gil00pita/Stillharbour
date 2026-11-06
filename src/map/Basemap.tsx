@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { IconButton } from '@chakra-ui/react';
 import {
   Map,
   Marker,
   setWorkerCount,
   setWorkerUrl,
+  setMaxParallelImageRequests,
   type GeoJSONSourceSpecification,
 } from 'maplibre-gl';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -14,8 +16,11 @@ import type { MapBounds, MapCluster, ThumbnailResult } from '../bindings';
 import { CachedPreviewImage } from '../library/CachedPreviewImage';
 import { previewKey, previewUrl } from '../library/previews';
 import { normalizeViewport } from './state';
+import { Button } from '../components/ui/controls';
+import { SATELLITE_SOURCE, SATELLITE_CREDIT, SATELLITE_TILES, satelliteRequest } from './satellite';
 
 setWorkerCount(1);
+setMaxParallelImageRequests(4);
 setWorkerUrl(workerUrl);
 const landData = JSON.parse(land) as GeoJSONSourceSpecification['data'];
 
@@ -25,6 +30,7 @@ export default function Basemap({
   clusters,
   previews,
   selectedId,
+  updating,
   onViewport,
   onCluster,
   onUnavailable,
@@ -35,6 +41,7 @@ export default function Basemap({
   clusters: MapCluster[];
   previews: Record<string, ThumbnailResult>;
   selectedId: string | null;
+  updating: boolean;
   onViewport: (bounds: MapBounds, zoom: number) => void;
   onCluster: (cluster: MapCluster) => void;
   onUnavailable: () => void;
@@ -42,6 +49,10 @@ export default function Basemap({
 }) {
   const container = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<Map | null>(null);
+  const [view, setView] = useState<'map' | 'satellite'>('map');
+  const [satelliteFailed, setSatelliteFailed] = useState(false);
+  const [satelliteLoaded, setSatelliteLoaded] = useState(false);
+  const satelliteEnabled = useRef(false);
   const callbacks = useRef({ onViewport, onUnavailable });
   useEffect(() => {
     callbacks.current = { onViewport, onUnavailable };
@@ -69,15 +80,14 @@ export default function Basemap({
         center: [0, 20],
         zoom: initial.current.zoom,
         maxZoom: 16,
+        maxTileCacheSize: 64,
         renderWorldCopies: false,
         attributionControl: false,
         dragRotate: false,
         pitchWithRotate: false,
         touchPitch: false,
-        // All geometry is bundled inline. No external style, tiles, glyphs or sprites.
-        transformRequest: () => {
-          throw new Error('External map resources are unavailable.');
-        },
+        // Offline geometry is bundled; only explicitly selected NASA tiles may load.
+        transformRequest: (url) => satelliteRequest(url, satelliteEnabled.current),
       });
       instance
         .getCanvas()
@@ -85,7 +95,28 @@ export default function Basemap({
           'aria-label',
           'Photo map. Use arrow keys to pan, plus and minus to zoom. Photos are also listed below.',
         );
-      instance.on('error', () => callbacks.current.onUnavailable());
+      instance.on('error', (event) => {
+        if ('sourceId' in event && event.sourceId === SATELLITE_SOURCE) {
+          if (!satelliteEnabled.current) return;
+          satelliteEnabled.current = false;
+          removeSatellite(instance);
+          setSatelliteFailed(true);
+          setView('map');
+        } else callbacks.current.onUnavailable();
+      });
+      instance.on('sourcedataloading', (event) => {
+        if (satelliteEnabled.current && event.sourceId === SATELLITE_SOURCE)
+          setSatelliteLoaded(false);
+      });
+      instance.on('sourcedata', (event) => {
+        if (
+          satelliteEnabled.current &&
+          event.sourceId === SATELLITE_SOURCE &&
+          event.isSourceLoaded &&
+          (event.sourceDataType === 'idle' || Boolean(event.tile))
+        )
+          setSatelliteLoaded(true);
+      });
       instance.on('moveend', (event) => {
         // Resize/initial fit also emit moveend. They must not revoke a chosen
         // cluster or the no-location list while the map is mounting again.
@@ -117,6 +148,7 @@ export default function Basemap({
     const observer = new ResizeObserver(() => instance.resize());
     observer.observe(container.current);
     return () => {
+      satelliteEnabled.current = false;
       observer.disconnect();
       instance.remove();
     };
@@ -132,6 +164,30 @@ export default function Basemap({
       { duration: 0, maxZoom: maximumZoom },
     );
   }, [map, placeView]);
+  function changeView(next: 'map' | 'satellite') {
+    if (!map || next === view) return;
+    satelliteEnabled.current = next === 'satellite';
+    setSatelliteFailed(false);
+    setSatelliteLoaded(false);
+    setView(next);
+    try {
+      if (next === 'map') removeSatellite(map);
+      else {
+        map.addSource(SATELLITE_SOURCE, SATELLITE_TILES);
+        map.addLayer({
+          id: SATELLITE_SOURCE,
+          type: 'raster',
+          source: SATELLITE_SOURCE,
+          paint: { 'raster-fade-duration': 0 },
+        });
+      }
+    } catch {
+      satelliteEnabled.current = false;
+      removeSatellite(map);
+      setSatelliteFailed(true);
+      setView('map');
+    }
+  }
   return (
     <div className="map-basemap" ref={container}>
       {map &&
@@ -139,13 +195,42 @@ export default function Basemap({
           <PhotoMarker
             key={cluster.key}
             map={map}
+            disabled={updating}
             cluster={cluster}
             previews={previews}
             selected={selectedId === cluster.representative.id}
             onClick={() => onCluster(cluster)}
           />
         ))}
-      <p className="map-attribution">Made with Natural Earth · Offline world overview</p>
+      <p className="map-attribution">
+        {view === 'satellite'
+          ? SATELLITE_CREDIT
+          : 'Made with Natural Earth · Offline world overview'}
+      </p>
+      {map && (
+        <div className="map-layers" role="group" aria-label="Map view">
+          <Button type="button" aria-pressed={view === 'map'} onClick={() => changeView('map')}>
+            Map
+          </Button>
+          <Button
+            type="button"
+            aria-pressed={view === 'satellite'}
+            title="NASA satellite overview · limited detail · internet required; sends viewed map areas to NASA"
+            onClick={() => changeView('satellite')}
+          >
+            Satellite
+          </Button>
+        </div>
+      )}
+      {(view === 'satellite' || satelliteFailed) && (
+        <p className="map-view-note" role="status">
+          {satelliteFailed
+            ? 'Satellite imagery could not be loaded. Map view is available; check your connection and try Satellite again.'
+            : satelliteLoaded
+              ? 'NASA satellite overview · limited detail · internet required'
+              : 'Loading NASA satellite overview · limited detail · internet required'}
+        </p>
+      )}
       {map && (
         <div className="map-zoom" role="group" aria-label="Map zoom">
           <button
@@ -165,18 +250,36 @@ export default function Basemap({
         </div>
       )}
       {map && (
-        <button
+        <IconButton
           className="map-world"
+          aria-label="Whole world"
+          title="Show whole world"
+          variant="outline"
           onClick={() => {
             map.jumpTo({ center: [0, 20], zoom: 0 });
             onViewport({ west: -180, south: -90, east: 180, north: 90 }, 0);
           }}
         >
-          Whole world
-        </button>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <ellipse cx="12" cy="12" rx="4" ry="9" />
+            <path d="M3 12h18M5 6.5h14M5 17.5h14" />
+          </svg>
+        </IconButton>
       )}
     </div>
   );
+}
+
+function removeSatellite(map: Map) {
+  if (map.getLayer(SATELLITE_SOURCE)) map.removeLayer(SATELLITE_SOURCE);
+  if (map.getSource(SATELLITE_SOURCE)) map.removeSource(SATELLITE_SOURCE);
 }
 
 function PhotoMarker({
@@ -184,12 +287,14 @@ function PhotoMarker({
   cluster,
   previews,
   selected,
+  disabled,
   onClick,
 }: {
   map: Map;
   cluster: MapCluster;
   previews: Record<string, ThumbnailResult>;
   selected: boolean;
+  disabled: boolean;
   onClick: () => void;
 }) {
   const [element] = useState(() => document.createElement('div'));
@@ -211,6 +316,7 @@ function PhotoMarker({
     <button
       className={`map-marker${selected ? ' selected' : ''}`}
       aria-pressed={selected}
+      disabled={disabled}
       onPointerDown={(event) => event.stopPropagation()}
       onClick={(event) => {
         event.stopPropagation();
@@ -218,11 +324,13 @@ function PhotoMarker({
       }}
       aria-label={`${cluster.count} ${cluster.count === 1 ? 'photo' : 'photos'} in this area; sample location ${cluster.latitude.toFixed(3)}, ${cluster.longitude.toFixed(3)}`}
     >
-      {edge ? (
-        <CachedPreviewImage src={previewUrl(asset, edge)} alt="" />
-      ) : (
-        <span aria-hidden="true">◇</span>
-      )}
+      <span className="map-marker-image">
+        {edge ? (
+          <CachedPreviewImage src={previewUrl(asset, edge)} alt="" />
+        ) : (
+          <span aria-hidden="true">◇</span>
+        )}
+      </span>
       <span className="map-marker-count">{cluster.count}</span>
     </button>,
     element,

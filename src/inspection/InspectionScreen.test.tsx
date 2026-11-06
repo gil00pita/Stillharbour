@@ -4,6 +4,7 @@ import { InspectionScreen } from './InspectionScreen';
 import { libraryData } from '../ipc';
 import type { InspectionJob, InspectionReport, LibraryStatus } from '../bindings';
 import { fixturePreferences } from '../library/__tests__/fixtures';
+import { storageFiles, storageSummary } from '../components/StorageExplorer/fixtures';
 vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
   libraryData: vi.fn(),
@@ -43,6 +44,12 @@ const job: InspectionJob = {
   message: 'Reading generated scope',
 };
 beforeEach(() => {
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+  };
   vi.stubGlobal(
     'ResizeObserver',
     class {
@@ -242,7 +249,7 @@ it('keeps saved results visible during actual reconciliation and lets history st
   setup();
   expect(await screen.findByText(/Showing scan from/)).toHaveTextContent('completed');
   expect(await screen.findByText(/Checking for changes in the background/)).toBeVisible();
-  expect(screen.getByRole('region', { name: 'Inspected files' })).toBeVisible();
+  expect(screen.getByText(/Showing scan from/)).toBeVisible();
   expect(libraryData).toHaveBeenCalledWith(
     { kind: 'inspection_start', input: saved.input },
     'inspection_job',
@@ -318,7 +325,7 @@ it('requires explicitly removing a previously registered missing root from the n
   expect(
     vi.mocked(libraryData).mock.calls.some(([request]) => request.kind === 'inspection_start'),
   ).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'Scan settings' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Storage measurement' }));
   expect(screen.getByRole('button', { name: 'Start storage inspection' })).toBeDisabled();
   fireEvent.click(screen.getByRole('checkbox', { name: /Previously registered folder/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Start storage inspection' }));
@@ -328,4 +335,61 @@ it('requires explicitly removing a previously registered missing root from the n
       'inspection_job',
     ),
   );
+});
+
+it('starts Storage results at the filters and keeps retained controls, issues and coverage in the header dialog', async () => {
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_jobs')
+      return [{ ...job, state: 'completed', message: 'Retained generated measurement' }];
+    if (request.kind === 'inspection_start' || request.kind === 'inspection_job')
+      return { ...job, id: 'refresh' };
+    if (request.kind === 'inspection_report')
+      return {
+        jobId: job.id,
+        storage: storageSummary,
+        volumes: [],
+        coverage: {
+          enumerationComplete: false,
+          excludedEntries: 1,
+          inaccessibleEntries: 2,
+          incompleteDirectories: 3,
+        },
+        exactOrCandidateGroups: 0,
+        aliasGroups: 0,
+        comparedPairs: '0',
+        unknownPairs: '0',
+        id3Applicability: '',
+      };
+    if (request.kind === 'inspection_findings')
+      return { jobId: job.id, rows: storageFiles.filter((file) => !file.assetId), next: null };
+    if (request.kind === 'inspection_issues') return { jobId: job.id, rows: [], next: null };
+    throw new Error('Unexpected request');
+  });
+  const { container } = setup();
+  await screen.findByRole('region', { name: 'Storage filters' });
+  expect(container.querySelector('.inspection-content')?.firstElementChild).toHaveClass(
+    'storage-explorer',
+  );
+  expect(screen.queryByText('Storage measurement settings')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Retained inspection')).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'Inspection job' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Inventory:/)).not.toBeInTheDocument();
+  const opener = screen.getByRole('button', { name: 'Storage measurement' });
+  fireEvent.click(opener);
+  const dialog = screen.getByRole('dialog', { name: 'Storage measurement' });
+  expect(within(dialog).getByText('Storage measurement settings')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Scan history' })).toBeInTheDocument();
+  expect(within(dialog).getByText('Reading generated scope')).toBeVisible();
+  expect(within(dialog).getByText(/Inventory:/)).toHaveTextContent('3 incomplete directories');
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Review retained inspection issues' }),
+  );
+  await within(dialog).findByText('No retained issues for this report.');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
+  fireEvent.click(opener);
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
 });

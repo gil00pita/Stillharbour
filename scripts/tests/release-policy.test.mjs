@@ -3,6 +3,8 @@ import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { assertMapNetworkPolicy } from '../map-network-policy.mjs';
 import {
   assertProductionFrontend,
   assertProductionGraph,
@@ -85,4 +87,31 @@ test('graph validation fails closed on missing inventories, duplicate enabled en
     /Unreviewed production features/,
   );
   assert.throws(() => assertProductionGraph(graph() + 'tauri-plugin-wdio v1.5.1'), /Test server/);
+});
+
+test('map CSP permits only the compiled NASA imagery path, retaining all other restrictions', () => {
+  const {
+    app: { security },
+  } = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
+  assert.doesNotThrow(() => assertMapNetworkPolicy(security));
+  for (const directive of ['img-src', 'connect-src', 'script-src', 'default-src']) {
+    assert.throws(() =>
+      assertMapNetworkPolicy({
+        ...security,
+        csp: security.csp.replace(directive, `${directive} https:`),
+      }),
+    );
+  }
+  assert.throws(() =>
+    assertMapNetworkPolicy({
+      ...security,
+      csp: security.csp.replace('gibs.earthdata.nasa.gov', 'example.org'),
+    }),
+  );
+  assert.throws(() =>
+    assertMapNetworkPolicy({
+      ...security,
+      devCsp: security.devCsp.replace('gibs.earthdata.nasa.gov', 'example.org'),
+    }),
+  );
 });

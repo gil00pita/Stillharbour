@@ -44,6 +44,7 @@ describe('M5 generated native metadata export', () => {
       // Establish a bounded map query using its photo-list alternative. This
       // metadata case deliberately asserts no GPU/animation-frame capability.
       await $('button[aria-label="Map"]').click();
+      await $('button=Show photos in view').click();
       await browser.waitUntil(async () =>
         (await $('.map-photo-heading p').getText()).startsWith('6 photos'),
       );

@@ -2,6 +2,25 @@
 
 The owner requested Chakra UI using [this example repository](https://github.com/gil00pita/ts-eslint-nextjs-boilerplate). [ADR-0083](decisions/ADR-0083-chakra-ui-design-system.md) records the inspected commit and architecture decision. npm stable tags verified on 2026-11-02 resolve to Chakra UI **3.37.0** and Emotion **11.14.0**, both pinned exactly with registry integrity in package-lock.json.
 
+## Clean-install custom recipes — 2026-11-06
+
+Current main consumes InspectionChoiceCards' colocated recipe with
+`useSlotRecipe({ recipe })` and applies the typed slot styles directly. Custom
+presentation variants therefore compile with the published Chakra declarations.
+The Storage components follow the same direct `useRecipe` pattern. No CLI
+dependency, generated node_modules declarations or automatic type-generation
+step is required by `npm run build` or `npm run typecheck`.
+
+The earlier integration added an automatic CLI to repair the missing custom
+variant declaration. Main's direct recipe fix supersedes that workaround, so
+the extra dev dependency and build hooks are removed rather than retaining two
+solutions. Runtime Chakra **3.37.0** and Emotion **11.14.0** stay unchanged.
+Validate a fresh `npm ci --ignore-scripts`, direct strict TypeScript with stock
+declarations and the ordinary build. Historical CLI/advisory experiments remain
+in IMPLEMENTATION_LOG.md; they are not current build prerequisites. Follow the
+owner's separate theme-type generation guidance when editing the theme, rather
+than using casts around missing component props.
+
 ## Structure
 
 - `src/theme/system.ts`: raw product tokens, semantic colors and button/input/textarea recipes. Uses `defaultBaseConfig` with preflight disabled, the existing dark palette and native system fonts. No remote assets or new theme preference.
