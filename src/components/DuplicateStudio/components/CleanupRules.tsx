@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Field } from '@chakra-ui/react';
 import type { DuplicateGroup } from '../../../bindings';
-import { Button, Input, Select } from '../../ui/controls';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { NativeSelect } from '@/components/NativeSelect';
 import { keeperRules, type KeeperRule, type CleanupPolicy } from '../model';
 import { ReviewDialog } from './ReviewDialog';
 
@@ -23,7 +25,7 @@ export function CleanupRules({
       <p>Preview a keeper policy. These session choices never approve file removal.</p>
       <Field.Root>
         <Field.Label>Retain this version</Field.Label>
-        <Select
+        <NativeSelect
           value={rule}
           onChange={(event) => {
             onPolicy({ ...policy, rule: event.target.value as KeeperRule });
@@ -36,7 +38,7 @@ export function CleanupRules({
               {item.unavailable ? ' · unavailable' : ''}
             </option>
           ))}
-        </Select>
+        </NativeSelect>
         <Field.HelperText>
           Resolution, RAW and size suggestions are available inside each complete member page. Ties
           keep multiple.

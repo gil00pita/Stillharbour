@@ -48,13 +48,14 @@ describe('M5 generated native metadata export', () => {
       await browser.waitUntil(async () =>
         (await $('.map-photo-heading p').getText()).startsWith('6 photos'),
       );
-      await browser.waitUntil(async () => $('button=Show in library').isEnabled());
-      await $('button=Show in library').click();
+      await browser.waitUntil(async () => $('button=Show in photos').isEnabled());
+      await $('button=Show in photos').click();
+      await $('button=Select').click();
       await browser.waitUntil(async () =>
         $('.asset-check[aria-label="Select South.jpg"]').isExisting(),
       );
       // Selection setup dispatches the real React input event. The occluded
-      // gallery intentionally hides unchecked controls until pointer/focus.
+      // gallery exposes checkboxes only after explicit selection mode.
       await browser.execute(() =>
         document.querySelector('.asset-check[aria-label="Select South.jpg"]').click(),
       );

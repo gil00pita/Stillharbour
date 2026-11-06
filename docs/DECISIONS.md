@@ -368,3 +368,8 @@ The owner requests flat secondary actions, unified filename/date/place search, s
 ## Utility scan lifecycle — 2026-11-05
 
 The owner requests welcome/setup on first use, restored results, actual background reconciliation and dated version history for all four utilities. Retain existing inspection workers and native comparison admission. Use separate displayed/running scan state, compare-only baseline refresh and immutable display-only backup reports under the existing history table's dedicated namespace. No schema/identity migration, continuous-watcher claim or new original-file authority. Persistence/authorization bounds and tradeoffs are in [ADR-0094](decisions/ADR-0094-utility-scan-history.md).
+
+
+## Jobs page — owner revision, 2026-11-06
+
+The owner requests a full Jobs page instead of a popover. Retain the existing sidebar entry and count, native controls and status poll. Keep the prior workspace mounted, hidden and inert while Jobs fills main; Back restores it and opener focus. Normal sidebar navigation exits Jobs. No schema, dependency, native permission, approval or production-mutation change. See CODEX_SPEC and ACCEPTANCE_TESTS for the replacement navigation contract.

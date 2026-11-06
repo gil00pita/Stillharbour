@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { InspectionFinding } from '../../bindings';
-import { Button } from '../ui/controls';
+import { Button } from '@/components/Button';
 
 function needsAttention(row: InspectionFinding) {
   return (

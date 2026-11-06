@@ -1,18 +1,18 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '../../test/render';
 import type { LibraryStatus } from '../../bindings';
-import { AlbumEditor } from './AlbumEditor';
+import { AlbumEditor } from '@/components/AlbumEditor';
 import { metadata } from '../../metadata/ipc';
 import { fixtureAsset } from '../../library/__tests__/fixtures';
 vi.mock('../../metadata/ipc', () => ({ metadata: vi.fn() }));
-vi.mock('../../library/useAssetFeed', () => ({
+vi.mock('@/hooks/use-asset-feed', () => ({
   useAssetFeed: () => ({
     page: { assets: [fixtureAsset('a'), fixtureAsset('b')] },
     key: 'fixture',
     busy: false,
   }),
 }));
-vi.mock('../../library/AssetBrowser', () => ({
+vi.mock('@/components/AssetBrowser', () => ({
   AssetBrowser: ({
     onSelect,
     selected,

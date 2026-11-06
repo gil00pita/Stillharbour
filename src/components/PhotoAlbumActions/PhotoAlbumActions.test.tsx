@@ -1,11 +1,17 @@
+import { useState } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '../../test/render';
 import type { LibraryStatus } from '../../bindings';
-import { PhotoAlbumActions, PhotoAlbumButton, usePhotoAlbumMenu } from './index';
+import {
+  PhotoAlbumActions,
+  usePhotoAlbumMenu,
+  usePhotoAlbumKeys,
+} from '@/components/PhotoAlbumActions';
+import { AssetTile } from '@/components/AssetTile';
 import { fixtureAsset } from '../../library/__tests__/fixtures';
 import { metadata } from '../../metadata/ipc';
 vi.mock('../../metadata/ipc', () => ({ metadata: vi.fn() }));
-vi.mock('../AlbumEditor', () => ({
+vi.mock('@/components/AlbumEditor', () => ({
   AlbumEditor: ({ initialIds }: { initialIds: string[] }) => (
     <div role="dialog">Preselected {initialIds.join(',')}</div>
   ),
@@ -21,10 +27,11 @@ const status: LibraryStatus = {
 };
 function Photo() {
   const context = usePhotoAlbumMenu(asset);
+  const keys = usePhotoAlbumKeys(asset);
   return (
-    <article onContextMenu={context}>
+    <article onContextMenu={context} onKeyDown={keys}>
       <span>Photo area</span>
-      <PhotoAlbumButton asset={asset} />
+      <button className="asset-open">Open photo</button>
     </article>
   );
 }
@@ -58,14 +65,14 @@ beforeEach(() => {
   );
   Element.prototype.scrollIntoView = vi.fn();
 });
-it('uses the accessible menu button to add a photo to an existing custom album', async () => {
+it('uses the context menu to add a photo to an existing custom album without a dots button', async () => {
   const changed = vi.fn(async () => {});
   render(
     <PhotoAlbumActions status={status} onChanged={changed}>
       <Photo />
     </PhotoAlbumActions>,
   );
-  fireEvent.click(screen.getByRole('button', { name: `Options for ${asset.name}` }));
+  fireEvent.contextMenu(screen.getByText('Photo area'), { clientX: 100, clientY: 150 });
   const item = await screen.findByRole('menuitem', { name: 'Add to album' });
   await waitFor(() => expect(screen.getByRole('menu', { name: 'Photo options' })).toHaveFocus());
   fireEvent.pointerDown(item);
@@ -105,18 +112,94 @@ it('restores focus on Escape and supports keyboard menu selection', async () => 
       <Photo />
     </PhotoAlbumActions>,
   );
-  const button = screen.getByRole('button', { name: `Options for ${asset.name}` });
+  const button = screen.getByRole('button', { name: 'Open photo' });
   button.focus();
-  fireEvent.click(button);
+  fireEvent.keyDown(button, { key: 'F10', shiftKey: true });
   const menu = await screen.findByRole('menu', { name: 'Photo options' });
   await waitFor(() => expect(menu).toHaveFocus());
   fireEvent.keyDown(menu, { key: 'Escape' });
   await waitFor(() => expect(button).toHaveFocus());
-  fireEvent.click(button);
+  fireEvent.keyDown(button, { key: 'F10', shiftKey: true });
   const again = await screen.findByRole('menu', { name: 'Photo options' });
   await waitFor(() => expect(again).toHaveFocus());
   fireEvent.keyDown(again, { key: 'ArrowDown' });
   await waitFor(() => expect(screen.getByRole('menuitem')).toHaveAttribute('data-highlighted'));
   fireEvent.keyDown(again, { key: 'Enter' });
   expect(await screen.findByRole('dialog', { name: 'Add to album' })).toBeVisible();
+});
+
+function SelectablePhoto() {
+  const [active, setActive] = useState(false);
+  const [selected, setSelected] = useState(false);
+  return (
+    <PhotoAlbumActions
+      status={status}
+      onChanged={vi.fn()}
+      selection={{
+        active,
+        disabled: false,
+        onSelect: () => {
+          setActive(true);
+          setSelected(true);
+        },
+      }}
+    >
+      <button
+        onClick={() => {
+          setActive(false);
+          setSelected(false);
+        }}
+      >
+        Done selecting
+      </button>
+      <AssetTile
+        asset={asset}
+        columns={[]}
+        mode="gallery"
+        width={200}
+        imageHeight={180}
+        selected={selected}
+        selectionActive={selected}
+        frozen={false}
+        offline={false}
+        edge={256}
+        fit="contain"
+        preview={undefined}
+        onSelect={() => setSelected(!selected)}
+        onOpen={vi.fn()}
+        onNavigate={vi.fn()}
+      />
+    </PhotoAlbumActions>
+  );
+}
+it('reveals checkboxes only after Select, selects the context photo, and hides them when finished', async () => {
+  render(<SelectablePhoto />);
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  const photo = screen.getByRole('button', { name: `Open ${asset.name}` });
+  expect(document.querySelector('.photo-album-menu-button')).toBeNull();
+  fireEvent.contextMenu(photo, { clientX: 100, clientY: 150 });
+  const select = await screen.findByRole('menuitem', { name: 'Select' });
+  fireEvent.click(select);
+  expect(screen.getByRole('checkbox')).toBeChecked();
+  fireEvent.click(photo);
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
+  fireEvent.click(screen.getByRole('button', { name: 'Done selecting' }));
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+});
+it('disables context selection while a batch action is busy', async () => {
+  const onSelect = vi.fn();
+  render(
+    <PhotoAlbumActions
+      status={status}
+      onChanged={vi.fn()}
+      selection={{ active: false, disabled: true, onSelect }}
+    >
+      <Photo />
+    </PhotoAlbumActions>,
+  );
+  fireEvent.contextMenu(screen.getByText('Photo area'));
+  const select = await screen.findByRole('menuitem', { name: 'Select' });
+  expect(select).toHaveAttribute('aria-disabled', 'true');
+  fireEvent.click(select);
+  expect(onSelect).not.toHaveBeenCalled();
 });

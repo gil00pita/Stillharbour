@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '../../test/render';
 import { libraryData } from '../../ipc';
-import { PlaceSearch } from './PlaceSearch';
+import { PlaceSearch } from '@/components/PlaceSearch';
 import type { PlaceSearchReply, PlaceSummary } from '../../bindings';
 
 vi.mock('../../ipc', async (original) => ({

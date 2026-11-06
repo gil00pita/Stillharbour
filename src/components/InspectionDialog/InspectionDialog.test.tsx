@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '../../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
-import { InspectionDialog } from './InspectionDialog';
+import { InspectionDialog } from '@/components/InspectionDialog';
 
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () {

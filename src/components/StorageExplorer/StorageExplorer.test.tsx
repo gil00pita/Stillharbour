@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '../../test/render';
-import { StorageExplorer } from './StorageExplorer';
+import { StorageExplorer } from '@/components/StorageExplorer';
 import { storageFile, storageFiles, storageRoot, storageSummary } from './fixtures';
 import { libraryData } from '../../ipc';
 import { fixtureAsset } from '../../library/__tests__/fixtures';

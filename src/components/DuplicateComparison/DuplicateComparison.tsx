@@ -1,6 +1,7 @@
 import { useCallback, useId, useState } from 'react';
 import { Field } from '@chakra-ui/react';
-import { Button, Input } from '../ui/controls';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
 import type { AssetSummary } from '../../bindings';
 import { previewEdges, previewKey, previewUrl, usePreviews } from '../../library/previews';
 import { errorMessage } from '../../ipc';

@@ -1,11 +1,20 @@
+import { CatalogActions } from '@/components/CatalogActions';
+import { PageHeader } from '@/components/PageHeader';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Box, Field, useRecipe } from '@chakra-ui/react';
-import type { AlbumPage, AlbumSummary, LibraryStatus, ThumbnailResult } from '../../bindings';
-import { Button, Input } from '../ui/controls';
+import type {
+  AlbumPage,
+  AlbumSummary,
+  AssetQuery,
+  LibraryStatus,
+  ThumbnailResult,
+} from '../../bindings';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
 import { metadata } from '../../metadata/ipc';
 import { errorMessage } from '../../ipc';
-import { AlbumEditor } from '../AlbumEditor';
-import { TileImage } from '../../library/AssetTile';
+import { AlbumEditor } from '@/components/AlbumEditor';
+import { TileImage } from '@/components/AssetTile';
 import { previewKey, usePreviews } from '../../library/previews';
 import { albumsPageRecipe } from './AlbumsPage.recipe';
 
@@ -14,9 +23,11 @@ export function AlbumsPage({
   jobsControl,
   onOpen,
   onRefresh,
+  onBrowse,
 }: {
   status: LibraryStatus;
   jobsControl?: ReactNode;
+  onBrowse: (query: AssetQuery) => void;
   onOpen: (album: AlbumSummary) => void;
   onRefresh: () => Promise<void>;
 }) {
@@ -95,24 +106,28 @@ export function AlbumsPage({
   const styles = useRecipe({ recipe: albumsPageRecipe })();
   return (
     <Box css={styles} className="albums-page">
-      <header className="toolbar">
-        <h1>Albums / Tags</h1>
-        <Field.Root className="album-search">
-          <Field.Label className="screen-reader-status">Search albums</Field.Label>
-          <Input
-            type="search"
-            placeholder="Search albums…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </Field.Root>
-        <div className="header-actions">
-          {jobsControl}
-          <Button className="primary" aria-label="New album" onClick={() => setCreating(true)}>
-            <span aria-hidden="true">+</span> New album
-          </Button>
-        </div>
-      </header>
+      <PageHeader>
+        <header className="toolbar">
+          <h1>Albums / Tags</h1>
+          <Field.Root className="album-search">
+            <Field.Label className="screen-reader-status">Search albums</Field.Label>
+            <Input
+              type="search"
+              placeholder="Search albums…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </Field.Root>
+          <div className="header-actions">
+            {jobsControl}
+            <CatalogActions status={status} onBrowse={onBrowse} onRefresh={onRefresh} />
+            <Button className="primary" aria-label="New album" onClick={() => setCreating(true)}>
+              <span aria-hidden="true">+</span>{' '}
+              <span className="toolbar-action-label">New album</span>
+            </Button>
+          </div>
+        </header>
+      </PageHeader>
       <div className="albums-content">
         <div className="albums-intro">
           <div>

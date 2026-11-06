@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '../../test/render';
-import { DuplicateComparison } from './DuplicateComparison';
+import { DuplicateComparison } from '@/components/DuplicateComparison';
 import { fixtureAsset } from '../../library/__tests__/fixtures';
 import { libraryData } from '../../ipc';
 vi.mock('../../ipc', async (original) => ({

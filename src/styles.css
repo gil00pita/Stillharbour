@@ -1023,7 +1023,7 @@ summary {
 }
 .inspector h2,
 .folder-strip h2,
-.jobs-dropdown h2 {
+.jobs-page h2 {
   font-size: 17px;
   letter-spacing: 0;
 }
@@ -1097,7 +1097,7 @@ summary {
   color: var(--muted);
   line-height: 1.6;
 }
-/* Jobs stay in the header; the portalled disclosure escapes page scrolling. */
+/* Shared action rows; Jobs itself lives on its own page. */
 .header-actions,
 .settings-title-row,
 .job-actions {
@@ -1117,7 +1117,7 @@ summary {
   min-width: var(--control-height);
   min-height: var(--control-height);
 }
-.jobs-trigger[aria-expanded='true'] {
+.jobs-trigger[aria-current='page'] {
   background: var(--pressed);
 }
 .jobs-count {
@@ -1133,34 +1133,54 @@ summary {
   font-weight: 600;
   text-align: center;
 }
-.jobs-dropdown {
-  position: fixed;
-  inset: auto;
-  margin: 0;
-  color: inherit;
-  z-index: 100;
-  width: min(390px, calc(100vw - 32px));
-  padding: 20px;
+.workspace-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.workspace-page[hidden] {
+  display: none;
+}
+.has-library main.jobs-main {
   overflow-y: auto;
-  overscroll-behavior: contain;
-  background: var(--surface);
-  border: 1px solid var(--control-border);
-  border-radius: 8px;
 }
-.jobs-dropdown h2,
-.jobs-dropdown h3 {
+.jobs-page {
+  width: 100%;
+  min-width: 0;
+  padding: 24px;
+}
+.jobs-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.jobs-heading h1 {
+  margin: 0;
+  font-size: 24px;
+}
+@media (max-width: 760px) {
+  .jobs-page {
+    padding: 16px;
+  }
+}
+.jobs-page h2,
+.jobs-page h3 {
   margin: 0;
 }
-.jobs-dropdown h3 {
+.jobs-page h3 {
   font-size: 13px;
   font-weight: 550;
 }
-.jobs-dropdown p,
-.jobs-dropdown h3,
-.jobs-dropdown li {
+.jobs-page p,
+.jobs-page h3,
+.jobs-page li {
   overflow-wrap: anywhere;
 }
-.jobs-dropdown > .help {
+.jobs-page > .help {
   margin: 8px 0 0;
 }
 .job-row {
@@ -3409,22 +3429,6 @@ button.explorer-entry.asset-open:hover:enabled {
   white-space: nowrap;
 }
 
-/* The menu affordance stays visible for keyboard and touch users. */
-.asset .photo-album-menu-button {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 3;
-  min-height: 36px;
-  min-width: 36px;
-  padding: 6px;
-  background: var(--surface);
-}
-.text-list-row .photo-album-menu-button {
-  position: static;
-  display: inline-flex;
-  flex-shrink: 0;
-}
 .text-list-row .text-list-name {
   display: flex;
   align-items: center;
@@ -3455,4 +3459,115 @@ button.explorer-entry.asset-open:hover:enabled {
 .album-detail-bar span {
   font-size: 12px;
   color: var(--muted);
+}
+
+/* Shared desktop chrome: one title-row height, matching the sidebar identity. */
+:root {
+  --app-header-height: var(--stillharbour-sizes-app-header, 64px);
+}
+.sidebar,
+.navigation-collapsed .sidebar {
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.app-page-header.toolbar {
+  height: var(--app-header-height);
+  min-height: var(--app-header-height);
+  max-height: var(--app-header-height);
+  padding: 0 24px;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 12px;
+}
+.app-page-header h1 {
+  display: block;
+  flex-shrink: 0;
+  margin: 0;
+  font-size: var(--stillharbour-font-sizes-lg, 18px);
+  line-height: var(--stillharbour-line-heights-title, 24px);
+  white-space: nowrap;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.app-page-header .primary {
+  margin: 0;
+}
+.app-page-header .header-actions {
+  min-width: 0;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+.app-page-header .fixed-search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.app-page-header .unified-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.app-page-header .unified-search > [data-scope='field'] {
+  flex: 1;
+  min-width: 0;
+}
+.app-page-header .place-search-chip {
+  flex: 0 1 40%;
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.settings-page {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+.settings-heading,
+.jobs-heading {
+  margin: 0;
+}
+.settings-title-row {
+  width: 100%;
+}
+.settings-content {
+  width: min(100%, 1040px);
+  padding: 24px 40px 56px;
+  margin: 0 auto;
+}
+.jobs-page {
+  padding: 0;
+}
+.jobs-content {
+  padding: 24px;
+}
+.photo-selection-mode .asset-check,
+.photo-selection-mode .date-heading input {
+  opacity: 1;
+}
+@media (max-width: 760px) {
+  .app-page-header.toolbar {
+    padding-inline: 16px;
+    gap: 8px;
+  }
+  .app-page-header .toolbar-action-label {
+    display: none;
+  }
+  .app-page-header .toolbar-secondary,
+  .app-page-header [aria-label='New album'] {
+    width: var(--control-height);
+    padding-inline: 0;
+  }
+  .settings-content,
+  .jobs-content {
+    padding-inline: 16px;
+  }
+}
+.brand {
+  height: var(--app-header-height);
+  min-height: var(--app-header-height);
+  max-height: var(--app-header-height);
+  flex-shrink: 0;
+  padding-block: 0;
+  box-sizing: border-box;
 }

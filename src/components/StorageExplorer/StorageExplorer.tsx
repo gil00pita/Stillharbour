@@ -9,8 +9,10 @@ import type {
 } from '../../bindings';
 import { errorMessage, libraryData } from '../../ipc';
 import { displayBytes } from '../../inspection/format';
-import { Button, Input, Select } from '../ui/controls';
-import { StorageReview } from '../../inspection/StorageReview';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { NativeSelect } from '@/components/NativeSelect';
+import { StorageReview } from '@/components/StorageReview';
 import { storageExplorerRecipe } from './StorageExplorer.recipe';
 import { StorageOverview } from './components/StorageOverview';
 import { StorageMap, type FileGroup } from './components/StorageMap';
@@ -238,7 +240,7 @@ export function StorageExplorer({
         </Field.Root>
         <Field.Root>
           <Field.Label>File type</Field.Label>
-          <Select
+          <NativeSelect
             value={filters.category}
             onChange={(event) => update('category', event.target.value)}
           >
@@ -246,11 +248,14 @@ export function StorageExplorer({
             {categories.map((category) => (
               <option key={category}>{category}</option>
             ))}
-          </Select>
+          </NativeSelect>
         </Field.Root>
         <Field.Root>
           <Field.Label>Camera</Field.Label>
-          <Select value={filters.camera} onChange={(event) => update('camera', event.target.value)}>
+          <NativeSelect
+            value={filters.camera}
+            onChange={(event) => update('camera', event.target.value)}
+          >
             <option value="">All cameras</option>
             {['Known camera', 'Unknown camera', 'Not camera media', ...knownCameras].map(
               (camera) => {
@@ -264,20 +269,20 @@ export function StorageExplorer({
                 );
               },
             )}
-          </Select>
+          </NativeSelect>
         </Field.Root>
         <Field.Root>
           <Field.Label>Age · last modified</Field.Label>
-          <Select value={filters.age} onChange={(event) => update('age', event.target.value)}>
+          <NativeSelect value={filters.age} onChange={(event) => update('age', event.target.value)}>
             <option value="">Any modified date</option>
             {Object.keys(ageColors).map((age) => (
               <option key={age}>{age}</option>
             ))}
-          </Select>
+          </NativeSelect>
         </Field.Root>
         <Field.Root>
           <Field.Label>Minimum size</Field.Label>
-          <Select
+          <NativeSelect
             value={filters.minimum}
             onChange={(event) => update('minimum', event.target.value)}
           >
@@ -293,7 +298,7 @@ export function StorageExplorer({
                 {label}
               </option>
             ))}
-          </Select>
+          </NativeSelect>
         </Field.Root>
         <Button onClick={reset}>Reset</Button>
       </section>
@@ -358,15 +363,15 @@ export function StorageExplorer({
         </strong>
         <Field.Root>
           <Field.Label>Colour mode</Field.Label>
-          <Select value={mode} onChange={(event) => setMode(event.target.value)}>
+          <NativeSelect value={mode} onChange={(event) => setMode(event.target.value)}>
             {['File type', 'Age', 'Camera'].map((value) => (
               <option key={value}>{value}</option>
             ))}
-          </Select>
+          </NativeSelect>
         </Field.Root>
         <Field.Root>
           <Field.Label>Group by</Field.Label>
-          <Select
+          <NativeSelect
             value={grouping}
             onChange={(event) => {
               setGrouping(event.target.value);
@@ -377,7 +382,7 @@ export function StorageExplorer({
             {['Folder', 'File type', 'Camera'].map((value) => (
               <option key={value}>{value}</option>
             ))}
-          </Select>
+          </NativeSelect>
         </Field.Root>
         <div>
           {['Map', 'List'].map((value) => (

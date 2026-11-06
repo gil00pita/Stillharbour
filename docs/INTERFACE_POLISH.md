@@ -81,3 +81,11 @@ The navigation scroll area extends through the sidebar’s trailing padding to t
 ## Version in the app title — 2026-11-05
 
 Display the native-reported application version beside the sidebar’s Stillharbour name (currently Stillharbour 0.1.0), without a Version prefix or a separate footer entry. Keep the descriptor beneath it. Hide the title/version together when navigation is collapsed. This changes presentation only; the displayed version remains the actual application version, not the illustrative 1.0.1.
+
+## Jobs page — 2026-11-06
+
+Jobs above Settings now opens a page in the main pane, with a heading and Back action. It keeps the live count, progress, recovery/history and native controls. The previous screen stays mounted but hidden and inert, retaining its draft and selection for Back. Sidebar navigation also leaves Jobs; Escape and outside clicks do not dismiss a page. The page uses the normal main scroller at desktop and minimum widths.
+
+## Header alignment and relocated actions — owner revision, 2026-11-06
+
+All page title rows and the sidebar brand share 64 px height, including compact navigation, with 18 px/24 px title typography. Remove the legacy compact sidebar's 24 px top offset. Keep descriptions and changing status outside the row. Catalog and Saved plans now sit on Albums / Tags; Photos has Filter and Select beside search. Photo context menus replace dots, with checkboxes visible only in explicit selection mode. Suppress native text selection/context menus on sidebar/title chrome while preserving normal input editing and keyboard focus. This supersedes earlier toolbar-placement/hover-selection descriptions.

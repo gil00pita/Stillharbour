@@ -84,9 +84,7 @@ export const albumsPageRecipe = defineRecipe({
     },
     '& .albums-empty p': { color: 'fg.muted' },
     '@media (max-width: 800px)': {
-      '& .toolbar': { flexWrap: 'wrap' },
       '& .albums-content': { padding: '24px 16px' },
-      '& .album-search': { order: 3, flexBasis: '100%', maxWidth: 'none' },
       '& .albums-intro': { alignItems: 'flex-start' },
       '& .albums-intro > div': { minWidth: 0, flex: 1 },
       '& .albums-intro > span': { flexShrink: 0, whiteSpace: 'nowrap' },

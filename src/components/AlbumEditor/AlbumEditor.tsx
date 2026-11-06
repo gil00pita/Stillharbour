@@ -1,13 +1,14 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { Box, Field, useRecipe } from '@chakra-ui/react';
 import type { AssetQuery, CatalogCollection, LibraryStatus } from '../../bindings';
-import { Button, Input } from '../ui/controls';
-import { InspectionDialog } from '../InspectionDialog';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { InspectionDialog } from '@/components/InspectionDialog';
 import { metadata } from '../../metadata/ipc';
 import { errorMessage } from '../../ipc';
 import { defaultQuery } from '../../library/model';
-import { useAssetFeed } from '../../library/useAssetFeed';
-import { AssetBrowser, type PhotoViewportHandle } from '../../library/AssetBrowser';
+import { useAssetFeed } from '@/hooks/use-asset-feed';
+import { AssetBrowser, type PhotoViewportHandle } from '@/components/AssetBrowser';
 import { albumEditorRecipe } from './AlbumEditor.recipe';
 
 export function AlbumEditor({

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Box, useRecipe } from '@chakra-ui/react';
-import { Button } from '../ui/controls';
+import { Button } from '@/components/Button';
 import { inspectionDialogRecipe } from './InspectionDialog.recipe';
 
 export function InspectionDialog({

@@ -1,0 +1,1 @@
+export { CatalogSwitchStopped } from './CatalogSwitchStopped';

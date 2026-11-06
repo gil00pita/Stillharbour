@@ -64,6 +64,8 @@ Use generated, disposable media for development tests. Debug catalogs are isolat
 
 ## Development
 
+See [TypeScript and Chakra conventions](docs/TYPESCRIPT_STRUCTURE.md) for component folders, hooks, imports and theme recipes.
+
 | Command                                 | Purpose                                                                                                              |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `npm run desktop:dev`                   | Start the native application in development mode                                                                     |

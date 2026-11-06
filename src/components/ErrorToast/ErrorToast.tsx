@@ -1,6 +1,6 @@
 import { IconButton, Portal, Stack, Toast, Toaster, createToaster } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
-import { Button } from '../ui/controls';
+import { Button } from '@/components/Button';
 
 type Props = {
   error: string | null;

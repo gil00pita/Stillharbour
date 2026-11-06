@@ -105,22 +105,35 @@ describe('Albums and photo menus · generated library only', () => {
       );
     });
     await browser.saveScreenshot('.context/albums-native/right-click.png');
-    await $('[role="menuitem"]').waitForDisplayed();
-    await $('[role="menuitem"]').click();
+    await $('[role="menuitem"][data-value="add-to-album"]').waitForDisplayed();
+    await $('[role="menuitem"][data-value="add-to-album"]').click();
     await $('dialog[open]').$('button*=Weekends').click();
     const countAfter = (await metadata({ kind: 'collections' })).find(
       (c) => c.id === custom.id,
     ).memberCount;
-    const options = $('.photo-album-menu-button', { strict: false });
-    await options.click();
-    await $('[role="menuitem"]').click();
+    const openContext = async () =>
+      browser.execute(() => {
+        const node = document.querySelector('.asset-open');
+        const rect = node.getBoundingClientRect();
+        node.dispatchEvent(
+          new MouseEvent('contextmenu', {
+            bubbles: true,
+            cancelable: true,
+            clientX: rect.left + 20,
+            clientY: rect.top + 20,
+          }),
+        );
+      });
+    assert.equal(await $('.photo-album-menu-button').isExisting(), false);
+    await openContext();
+    await $('[role="menuitem"][data-value="add-to-album"]').click();
     await $('dialog[open]').$('button*=Weekends').click();
     assert.equal(
       (await metadata({ kind: 'collections' })).find((c) => c.id === custom.id).memberCount,
       countAfter,
     );
-    await options.click();
-    await $('[role="menuitem"]').click();
+    await openContext();
+    await $('[role="menuitem"][data-value="add-to-album"]').click();
     await $('dialog[open]').$('button=+ Create new album').click();
     await $('dialog[open] input[required]').setValue('Little moments');
     assert((await $('dialog[open] footer').getText()).includes('1 photos selected'));

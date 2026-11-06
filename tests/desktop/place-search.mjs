@@ -26,7 +26,7 @@ export async function verifyOfflinePlaceSearch(directory) {
     await native({ kind: 'query', query: { ...query, placeId: cityId }, cursor: null, limit: 80 })
   ).data;
   assert.equal(city.total, 1);
-  await $('button=Show in library').click();
+  await $('button=Show in photos').click();
   await $('button=Return to map').waitForDisplayed();
   await $('button=Clear location filter').click();
   await browser.waitUntil(
@@ -101,10 +101,11 @@ export async function verifyOfflinePlaceSearch(directory) {
   await $('button=Clear place filter').waitForDisplayed();
   await $('button=Clear place filter').click();
   await $('button=Show photos in view').click();
-  await browser.waitUntil(async () => $('button=Show in library').isEnabled());
-  await $('button=Show in library').click();
+  await browser.waitUntil(async () => $('button=Show in photos').isEnabled());
+  await $('button=Show in photos').click();
   await browser.waitUntil(async () => (await $$('.gallery .asset')).length === 1);
   // Restore one explicit selection for the metadata-review scenario.
+  await $('button=Select').click();
   const restoredPhotos = await $$('.asset-check');
   assert.equal(restoredPhotos.length, 1);
   await restoredPhotos[0].waitForEnabled();

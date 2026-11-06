@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Field } from '@chakra-ui/react';
 import type { AssetSummary, DuplicateGroup, FindingPage, LibraryStatus } from '../../../bindings';
 import { errorMessage, libraryData } from '../../../ipc';
-import { Button, Select } from '../../ui/controls';
-import { DuplicateComparison } from '../../DuplicateComparison';
-import { KeeperControls } from '../../../inspection/KeeperControls';
+import { Button } from '@/components/Button';
+import { NativeSelect } from '@/components/NativeSelect';
+import { DuplicateComparison } from '@/components/DuplicateComparison';
+import { KeeperControls } from '@/components/KeeperControls';
 import { displayBytes } from '../../../inspection/format';
 import {
   duplicateBytes,
@@ -152,7 +153,7 @@ export function DuplicateDetail({
                 {['First file', 'Second file'].map((label, index) => (
                   <Field.Root key={label}>
                     <Field.Label>{label}</Field.Label>
-                    <Select
+                    <NativeSelect
                       value={index === 0 ? left : right}
                       onChange={(event) =>
                         index === 0 ? setLeft(event.target.value) : setRight(event.target.value)
@@ -167,7 +168,7 @@ export function DuplicateDetail({
                           {row.name}
                         </option>
                       ))}
-                    </Select>
+                    </NativeSelect>
                   </Field.Root>
                 ))}
               </div>
@@ -241,7 +242,10 @@ export function DuplicateDetail({
             <div className="duplicate-rule-actions">
               <Field.Root>
                 <Field.Label>Keeper suggestion</Field.Label>
-                <Select value={rule} onChange={(event) => onRule(event.target.value as KeeperRule)}>
+                <NativeSelect
+                  value={rule}
+                  onChange={(event) => onRule(event.target.value as KeeperRule)}
+                >
                   {keeperRules.map((item) => (
                     <option
                       key={item.value}
@@ -252,7 +256,7 @@ export function DuplicateDetail({
                       {item.unavailable ? ' · unavailable' : ''}
                     </option>
                   ))}
-                </Select>
+                </NativeSelect>
               </Field.Root>
               <Button
                 disabled={Boolean(page.next) || group.membersTruncated}

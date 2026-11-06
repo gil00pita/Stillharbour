@@ -2,7 +2,7 @@ import { render, screen } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { LibraryRoot, LibraryStatus } from '../bindings';
 import { libraryData } from '../ipc';
-import { LibraryScreen } from './LibraryScreen';
+import { LibraryScreen } from '@/components/LibraryScreen';
 import { fixturePreferences } from './__tests__/fixtures';
 
 vi.mock('../ipc', async (original) => ({

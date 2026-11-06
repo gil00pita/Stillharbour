@@ -312,9 +312,9 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       await browser.waitUntil(
         async () => (await $('.map-photo-heading h2').getText()) === 'Selected location',
       );
-      await browser.waitUntil(async () => $('button=Show in library').isEnabled());
+      await browser.waitUntil(async () => $('button=Show in photos').isEnabled());
       const selectedCount = Number((await $('.map-photo-heading p').getText()).match(/^(\d+)/)[1]);
-      await $('button=Show in library').click();
+      await $('button=Show in photos').click();
       await $('button=Return to map').waitForDisplayed();
       assert.ok(await $('button=Clear location filter').isExisting());
       await $('button=Return to map').click();

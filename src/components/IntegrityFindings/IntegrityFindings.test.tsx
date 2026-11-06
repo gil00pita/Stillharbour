@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { fireEvent, render, screen } from '../../test/render';
-import { IntegrityFindings } from './IntegrityFindings';
+import { IntegrityFindings } from '@/components/IntegrityFindings';
 import { member } from '../DuplicateStudio/fixtures';
 it('separates a changed baseline and offline presence from untested content without claiming damage', () => {
   render(
