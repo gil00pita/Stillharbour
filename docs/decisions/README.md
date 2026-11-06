@@ -40,6 +40,8 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 
 - [ADR-0088: Remove vulnerable development dependency paths](ADR-0088-development-dependency-advisory-remediation.md).
 
+- [ADR-0094: Utility setup, background reconciliation and report history](ADR-0094-utility-scan-history.md).
+
 - [ADR-0092: Optional NASA satellite overview](ADR-0092-nasa-satellite-overview.md).
 
 - [ADR-0093: Tag albums and atomic custom album creation](ADR-0093-tag-albums-and-atomic-creation.md).

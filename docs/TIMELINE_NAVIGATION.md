@@ -16,6 +16,8 @@ Stillharbour now follows this contract over filtered native pages. Month counts 
 - Hover moves only the preview label/underline. Leaving restores the actual selected label. Arrow keys move one photo, Page keys move roughly a tenth of the range, Home/End reach exact endpoints. Accessible year buttons remain keyboard-operable. Wheel forwards to the gallery; Ctrl+wheel retains platform behavior.
 - Hover, focus, dragging and gallery scrolling reveal the rail immediately; active opacity never waits on an occluded WebView animation. After scrolling, a three-second idle delay precedes its fade. Reduced Motion removes the transition. All hidden visuals retain their keyboard semantics and pointer hit area.
 
+Separate arrow presses must also advance through photos that share one loaded gallery row. Keep the requested ordinal while that row's observed first index is unchanged; retire it when the gallery position/page changes or focus leaves. Otherwise keyup can reset the next press to the same row's first photo indefinitely. Page replacement and later scrolling must not reactivate an old requested ordinal.
+
 ## Native boundary and limits
 
 seek_index accepts only the existing validated chronological query plus a u32 ordinal and a page limit from 1 to 240. It returns existing stable-ID summaries and optional startIndex metadata, not arbitrary paths, SQL or a full-library date array. Packed page v1 retains all 27 tuple fields. Renderer retention remains at most three pages/720 summaries. Prefix/ordinal SQL may scan the filtered ordered index; no million-photo timing or P4 acceptance is claimed. No originals, sidecars, database schema, helpers or production mutation gates change.

@@ -22,6 +22,7 @@ import { useCatalogSwitchState } from './backup/catalogSwitchState';
 import { CatalogSwitchStopped } from './backup/CatalogSwitchStopped';
 import { NotesDraftContext, type NotesDraft } from './metadata/notesDrafts';
 import { ErrorToast } from './components/ErrorToast';
+import { Box, Text } from '@chakra-ui/react';
 
 type AppSection = Section | 'Settings' | InspectionSection | 'Backup & Sync' | 'Map';
 type LibraryLaunch = { query: AssetQuery; selectedId: string | null; generation: number };
@@ -197,10 +198,12 @@ function Sidebar({
 }) {
   return (
     <aside id="app-sidebar" className="sidebar" aria-label="Stillharbour">
-      <div className="brand">
+      <Box minHeight="64px" borderBottom="1px solid {colors.border}" className="brand">
         <img src={logo} alt="" width="32" height="34" />
-        <span>
-          Stillharbour
+        <Text as="span" m="0" gap={0} lineHeight={1}>
+          <Text fontSize="sm" m="0" as="span">
+            Stillharbour
+          </Text>
           {version && (
             <>
               {' '}
@@ -209,10 +212,10 @@ function Sidebar({
               </span>
             </>
           )}
-          <small>Photo &amp; Video Library</small>
-        </span>
-      </div>
-      <nav aria-label="Main navigation">
+          <small>Your media library organizer.</small>
+        </Text>
+      </Box>
+      <Box as="nav" aria-label="Main navigation" padding="16px 16px">
         {hasLibrary ? (
           <>
             <div className="nav-group" role="group" aria-label="Collection">
@@ -270,8 +273,8 @@ function Sidebar({
             <span className="nav-label">Library</span>
           </Button>
         )}
-      </nav>
-      <footer className="sidebar-footer">
+      </Box>
+      <Box as="footer" className="sidebar-footer" padding="16px 20px">
         <nav aria-label="Workspace actions">
           {jobsControl}
           {(['Settings'] as const).map((item) => (
@@ -288,7 +291,7 @@ function Sidebar({
           ))}
           <NavigationToggle collapsed={collapsed} onToggle={onToggleNavigation} />
         </nav>
-      </footer>
+      </Box>
     </aside>
   );
 }

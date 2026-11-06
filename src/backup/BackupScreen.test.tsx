@@ -76,6 +76,14 @@ function readOnlySync(request: SyncRequest): SyncReply {
   throw new Error('Unexpected safe-copy request in comparison fixture.');
 }
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   vi.mocked(pickDirectory).mockReset().mockResolvedValue({
     id: 'selection',
     displayPath: '/generated/dest',
@@ -87,7 +95,8 @@ beforeEach(() => {
       if (request.kind === 'backup_snapshots' && request.request.kind === 'profiles')
         return { kind: 'profiles', data: [] };
       if (request.kind === 'backup_sync') return readOnlySync(request.request);
-      if (request.kind === 'backup_profiles') return [];
+      if (request.kind === 'backup_profiles' || request.kind === 'backup_comparison_history')
+        return [];
       if (request.kind === 'backup_comparison_latest') return null;
       if (request.kind === 'backup_comparison_page')
         return {
@@ -286,7 +295,7 @@ it('surfaces picker and comparison failures without reporting success', async ()
 });
 it('reopens and cancels the active backend run without starting another job', async () => {
   vi.mocked(libraryData).mockImplementation(async (request) =>
-    request.kind === 'backup_profiles'
+    ['backup_profiles', 'backup_comparison_history'].includes(request.kind)
       ? []
       : request.kind === 'backup_sync'
         ? readOnlySync(request.request)
@@ -311,7 +320,7 @@ it.each(['identity', 'path', 'availability'])(
   async (changed) => {
     let finish!: (value: ComparisonRun) => void;
     vi.mocked(libraryData).mockImplementation(async (request) =>
-      request.kind === 'backup_profiles'
+      ['backup_profiles', 'backup_comparison_history'].includes(request.kind)
         ? []
         : request.kind === 'backup_sync'
           ? readOnlySync(request.request)
@@ -457,4 +466,64 @@ it('keeps the inspected comparison entry fixed while a durable transfer is activ
   await screen.findByText('Generated transfer in progress.');
   await waitFor(() => expect(entry).toBeDisabled());
   expect(screen.getByRole('region', { name: 'Entry details' })).toBeVisible();
+});
+
+it('shows saved comparison findings while a saved profile really scans in the background', async () => {
+  const profile = savedProfile();
+  const saved = { ...report(), id: 'saved', profileId: profile.id };
+  let finished = false;
+  const fallback = vi.mocked(libraryData).getMockImplementation()!;
+  vi.mocked(libraryData).mockImplementation(async (request, kind) => {
+    if (request.kind === 'backup_profiles') return [profile];
+    if (request.kind === 'backup_comparison_history') return [saved];
+    if (request.kind === 'backup_profile_compare')
+      return { ...report('comparing'), id: 'refresh', profileId: profile.id };
+    if (request.kind === 'backup_comparison')
+      return {
+        ...report(finished ? 'needs_review' : 'comparing'),
+        id: 'refresh',
+        profileId: profile.id,
+      };
+    if (request.kind === 'backup_comparison_page')
+      return { runId: request.run_id, entries: [], total: 0, nextOffset: null };
+    return fallback(request, kind);
+  });
+  open();
+  expect(await screen.findByText(/Checking for changes in the background/)).toBeVisible();
+  expect(screen.getByRole('region', { name: 'Comparison review' })).toBeVisible();
+  expect(libraryData).toHaveBeenCalledWith(
+    { kind: 'backup_profile_compare', profile_id: profile.id, mode: 'verified' },
+    'backup_comparison',
+  );
+  expect(screen.getByRole('button', { name: 'Review append plan' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('button', { name: 'Scan history' }));
+  fireEvent.click(await screen.findByRole('button', { name: /Verified comparison.*needs review/ }));
+  finished = true;
+  expect(
+    await screen.findByText('Latest scan finished. Earlier versions remain available in history.'),
+  ).toBeVisible();
+  expect(screen.getByText(/Showing scan from/)).toHaveTextContent('Historical version');
+  expect(screen.getByRole('button', { name: 'Review append plan' })).toBeDisabled();
+});
+
+it('retains saved comparisons after restart without turning their display paths into execution inputs', async () => {
+  const saved = { ...report(), id: 'saved' };
+  const fallback = vi.mocked(libraryData).getMockImplementation()!;
+  vi.mocked(libraryData).mockImplementation(async (request, kind) => {
+    if (request.kind === 'backup_comparison_history') return [saved];
+    if (request.kind === 'backup_comparison_page')
+      return { runId: request.run_id, entries: [], total: 0, nextOffset: null };
+    return fallback(request, kind);
+  });
+  open();
+  expect(await screen.findByText(/Reconnect the source and choose the destination/)).toBeVisible();
+  expect(screen.getByRole('region', { name: 'Comparison review' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Review append plan' })).toBeDisabled();
+  expect(
+    vi
+      .mocked(libraryData)
+      .mock.calls.some(([request]) =>
+        ['backup_compare_start', 'backup_profile_compare'].includes(request.kind),
+      ),
+  ).toBe(false);
 });

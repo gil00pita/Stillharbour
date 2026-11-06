@@ -1,4 +1,6 @@
 import { Button, Input, Select } from '../components/ui/controls';
+import { UtilityWelcome } from '../components/UtilityWelcome';
+import { UtilityHistory } from '../components/UtilityHistory';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   LibraryStatus,
@@ -135,6 +137,12 @@ export function SnapshotWorkflow({
   });
   return (
     <div className="backup-workspace">
+      {!loading && !profiles.length && (
+        <UtilityWelcome
+          title="Keep earlier versions within reach."
+          description="Create a versioned backup profile to review its scope and destination. Backups and restores always need a separate review and approval."
+        />
+      )}
       <h2>Encrypted versioned backup</h2>
       <p>
         Snapshots retain earlier versions in a restic repository. They need the repository recovery
@@ -303,6 +311,7 @@ function SnapshotProfileWorkspace({
   onRefreshProfiles: () => void;
 }) {
   const [snapshots, setSnapshots] = useState<SnapshotRecord[]>([]);
+  const [versionId, setVersionId] = useState('');
   const [jobs, setJobs] = useState<SnapshotJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkingHistory, setCheckingHistory] = useState(true);
@@ -745,73 +754,100 @@ function SnapshotProfileWorkspace({
           unavailable repository is empty.
         </p>
       )}
-      <h4>Snapshot history</h4>
+      <div className="backup-controls">
+        <h4>Snapshot history</h4>
+        <UtilityHistory
+          versions={snapshots.map((snapshot) => ({
+            id: snapshot.id,
+            date: snapshot.time,
+            label: `${snapshot.files} files · ${snapshot.bytes} content bytes`,
+            state: snapshot.included ? 'included' : 'unverified',
+          }))}
+          selectedId={
+            snapshots.find((snapshot) => snapshot.id === versionId)?.id ?? snapshots[0]?.id
+          }
+          disabled={busy}
+          onSelect={(id) => {
+            setVersionId(id);
+            setSelectedSnapshot(null);
+            setBrowse(null);
+            setReview(null);
+            setApproval(null);
+          }}
+        />
+      </div>
       <ul className="backup-job-list">
-        {snapshots.map((snapshot) => (
-          <li className="backup-job" key={snapshot.id}>
-            <h5>
-              {snapshot.time} · {snapshot.files} files · {snapshot.bytes} content bytes
-            </h5>
-            <p className="backup-path">Snapshot {snapshot.id}</p>
-            <Evidence value={snapshot} />
-            <p>
-              Catalog included: {snapshot.catalogIncluded ? 'Yes' : 'Not established'} · Source
-              retained: {snapshot.sourceRetained ? 'Yes' : 'Not established'}
-            </p>
-            <div className="backup-controls">
-              <Button
-                disabled={busy}
-                aria-pressed={snapshotId === snapshot.id}
-                onClick={() => {
-                  setSelectedSnapshot(snapshot);
-                  setBrowse(null);
-                  setBrowseError(null);
-                  setBrowseOffset(0);
-                  setBrowseLoading(true);
-                  setReview(null);
-                  setApproval(null);
-                }}
-              >
-                Browse snapshot
-              </Button>
-              <Button
-                disabled={busy || Boolean(running)}
-                onClick={() =>
-                  void action(async () => {
-                    const value = await snapshotRequest(
-                      { kind: 'verify', profile_id: profile.id, snapshot_id: snapshot.id },
-                      'job',
-                    );
-                    if (alive.current) saveJob(value);
-                  })
-                }
-              >
-                Read back repository data
-              </Button>
-              <Button
-                disabled={busy || Boolean(running)}
-                onClick={() =>
-                  void action(async () => {
-                    const selection = await pickDirectory();
-                    if (!selection || !alive.current) return;
-                    const value = await snapshotRequest(
-                      {
-                        kind: 'restore_review',
-                        profile_id: profile.id,
-                        snapshot_id: snapshot.id,
-                        selection_id: selection.id,
-                      },
-                      'review',
-                    );
-                    if (alive.current) showReview(value, 'restore', snapshot.rootIds);
-                  })
-                }
-              >
-                Review restore to new output…
-              </Button>
-            </div>
-          </li>
-        ))}
+        {snapshots
+          .filter(
+            (snapshot) =>
+              snapshot.id ===
+              (snapshots.find((value) => value.id === versionId)?.id ?? snapshots[0]?.id),
+          )
+          .map((snapshot) => (
+            <li className="backup-job" key={snapshot.id}>
+              <h5>
+                {snapshot.time} · {snapshot.files} files · {snapshot.bytes} content bytes
+              </h5>
+              <p className="backup-path">Snapshot {snapshot.id}</p>
+              <Evidence value={snapshot} />
+              <p>
+                Catalog included: {snapshot.catalogIncluded ? 'Yes' : 'Not established'} · Source
+                retained: {snapshot.sourceRetained ? 'Yes' : 'Not established'}
+              </p>
+              <div className="backup-controls">
+                <Button
+                  disabled={busy}
+                  aria-pressed={snapshotId === snapshot.id}
+                  onClick={() => {
+                    setSelectedSnapshot(snapshot);
+                    setBrowse(null);
+                    setBrowseError(null);
+                    setBrowseOffset(0);
+                    setBrowseLoading(true);
+                    setReview(null);
+                    setApproval(null);
+                  }}
+                >
+                  Browse snapshot
+                </Button>
+                <Button
+                  disabled={busy || Boolean(running)}
+                  onClick={() =>
+                    void action(async () => {
+                      const value = await snapshotRequest(
+                        { kind: 'verify', profile_id: profile.id, snapshot_id: snapshot.id },
+                        'job',
+                      );
+                      if (alive.current) saveJob(value);
+                    })
+                  }
+                >
+                  Read back repository data
+                </Button>
+                <Button
+                  disabled={busy || Boolean(running)}
+                  onClick={() =>
+                    void action(async () => {
+                      const selection = await pickDirectory();
+                      if (!selection || !alive.current) return;
+                      const value = await snapshotRequest(
+                        {
+                          kind: 'restore_review',
+                          profile_id: profile.id,
+                          snapshot_id: snapshot.id,
+                          selection_id: selection.id,
+                        },
+                        'review',
+                      );
+                      if (alive.current) showReview(value, 'restore', snapshot.rootIds);
+                    })
+                  }
+                >
+                  Review restore to new output…
+                </Button>
+              </div>
+            </li>
+          ))}
       </ul>
       {selectedSnapshot && (
         <section className="backup-entry-details" aria-label="Snapshot browser">

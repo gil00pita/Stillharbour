@@ -127,6 +127,52 @@ it('supports live keyboard navigation, exact endpoints and a visible date label'
   expect(onIndex).toHaveBeenLastCalledWith(0);
   expect(slider).toHaveAttribute('aria-orientation', 'vertical');
 });
+it('advances separate arrow presses when several loaded photos share the first visible row', () => {
+  const { slider, onIndex } = setup(vi.fn().mockReturnValue(true));
+  fireEvent.focus(slider);
+  for (let index = 1; index <= 4; index++) {
+    fireEvent.keyDown(slider, { key: 'ArrowDown' });
+    fireEvent.keyUp(slider, { key: 'ArrowDown' });
+    expect(onIndex).toHaveBeenLastCalledWith(index);
+    expect(slider).toHaveValue(String(index));
+  }
+});
+it('retires a loaded-row keyboard target when the gallery scrolls or focus leaves', () => {
+  const { slider, onIndex, rerender } = setup(vi.fn().mockReturnValue(true));
+  fireEvent.keyDown(slider, { key: 'ArrowDown' });
+  fireEvent.keyUp(slider, { key: 'ArrowDown' });
+  expect(slider).toHaveValue('1');
+  rerender(
+    <DateTimeline
+      buckets={buckets}
+      date="2026-03-01"
+      index={10}
+      pageKey="first"
+      scrolling
+      onYear={vi.fn()}
+      onIndex={onIndex}
+    />,
+  );
+  expect(slider).toHaveValue('10');
+  rerender(
+    <DateTimeline
+      buckets={buckets}
+      date="2026-03-01"
+      index={0}
+      pageKey="first"
+      scrolling
+      onYear={vi.fn()}
+      onIndex={onIndex}
+    />,
+  );
+  expect(slider).toHaveValue('0');
+  fireEvent.keyDown(slider, { key: 'ArrowDown' });
+  fireEvent.keyUp(slider, { key: 'ArrowDown' });
+  expect(onIndex).toHaveBeenLastCalledWith(1);
+  expect(slider).toHaveValue('1');
+  fireEvent.blur(slider);
+  expect(slider).toHaveValue('0');
+});
 it.each(['pointercancel', 'lostpointercapture', 'Escape', 'blur'])(
   'stops %s without applying the subsequent release position',
   (kind) => {

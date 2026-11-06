@@ -50,6 +50,8 @@ describe('Confirmed favorite heart burst', () => {
         const ring = button.querySelector('.t-like-ring');
         const spark = button.querySelector('.t-like-spark');
         window.__heartBursts.push({
+          hidden: document.visibilityState === 'hidden',
+          reduced: matchMedia('(prefers-reduced-motion: reduce)').matches,
           pressed: button.getAttribute('aria-pressed'),
           heart: getComputedStyle(shape).animationName,
           ring: getComputedStyle(ring).animationName,
@@ -60,7 +62,24 @@ describe('Confirmed favorite heart burst', () => {
       });
       window.__heartObserver.observe(button, { attributes: true, attributeFilter: ['class'] });
     });
-    for (let repeat = 0; repeat < 2; repeat++) {
+    for (let repeat = 0; repeat < 3; repeat++) {
+      if (repeat === 2) {
+        // Exercise the suppressed path even on a visible local desktop. CI
+        // runners may already occlude the WebView; its motion policy still holds.
+        await browser.execute(() => {
+          window.__heartVisibility = Object.getOwnPropertyDescriptor(document, 'visibilityState');
+          Object.defineProperty(document, 'visibilityState', {
+            configurable: true,
+            get: () => 'hidden',
+          });
+          document.dispatchEvent(new Event('visibilitychange'));
+        });
+        await browser.waitUntil(() =>
+          browser.execute(() =>
+            document.querySelector('.viewer-favorite').classList.contains('without-motion'),
+          ),
+        );
+      }
       await heart.click();
       await browser.waitUntil(async () => (await heart.getAttribute('aria-pressed')) === 'true');
       assert.equal(
@@ -94,16 +113,22 @@ describe('Confirmed favorite heart burst', () => {
     }
     const bursts = await browser.execute(() => {
       window.__heartObserver.disconnect();
+      if (window.__heartVisibility)
+        Object.defineProperty(document, 'visibilityState', window.__heartVisibility);
+      else delete document.visibilityState;
+      document.dispatchEvent(new Event('visibilitychange'));
       return window.__heartBursts;
     });
-    assert.equal(bursts.length, 2);
-    for (const burst of bursts) {
+    assert.equal(bursts.length, 3);
+    assert.equal(bursts.at(-1).hidden, true);
+    for (const { hidden, reduced, ...burst } of bursts) {
+      const suppressed = hidden || reduced;
       assert.deepEqual(burst, {
         pressed: 'true',
-        heart: 't-like-pop',
-        ring: 't-like-ring',
-        sparks: 't-like-sparks',
-        duration: '0.8s',
+        heart: suppressed ? 'none' : 't-like-pop',
+        ring: suppressed ? 'none' : 't-like-ring',
+        sparks: suppressed ? 'none' : 't-like-sparks',
+        duration: suppressed ? '0s' : '0.8s',
         pairs: 7,
       });
     }

@@ -596,6 +596,7 @@ pub enum LibraryRequest {
         mode: crate::backup::comparison::CompareMode,
     },
     BackupComparisonLatest {},
+    BackupComparisonHistory {},
     BackupCompareStart {
         selection_id: String,
         mode: crate::backup::comparison::CompareMode,
@@ -987,6 +988,7 @@ pub enum LibraryResponse {
     BackupProfiles(Vec<crate::backup::comparison::SyncProfile>),
     BackupProfile(crate::backup::comparison::SyncProfile),
     BackupComparisonLatest(Option<crate::backup::comparison::ComparisonRun>),
+    BackupComparisonHistory(Vec<crate::backup::comparison::ComparisonRun>),
     BackupComparison(crate::backup::comparison::ComparisonRun),
     BackupComparisonPage(crate::backup::comparison::ComparisonPage),
     InspectionIssues(crate::inspection::model::InspectionIssuePage),

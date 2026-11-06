@@ -230,6 +230,10 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
         true,
       );
       await browser.saveScreenshot(`${directory}/toolbar-filters-minimum.png`);
+      // A native select can consume Escape before it reaches the popover.
+      // Test the popover's keyboard dismissal from its ordinary close button.
+      await browser.execute(() => document.querySelector('[aria-label="Close filters"]').focus());
+      assert.equal(await $('button[aria-label="Close filters"]').isFocused(), true);
       await browser.keys('Escape');
       await browser.waitUntil(
         async () => (await $('.map-filter-trigger').getAttribute('aria-expanded')) === 'false',

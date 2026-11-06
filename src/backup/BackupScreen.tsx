@@ -17,6 +17,9 @@ import { SyncWorkflow } from './SyncWorkflow';
 import { SnapshotWorkflow } from './SnapshotWorkflow';
 import { useCatalogSwitchState } from './catalogSwitchState';
 import { CatalogSwitchStopped } from './CatalogSwitchStopped';
+import { UtilityWelcome } from '../components/UtilityWelcome';
+import { UtilityHistory } from '../components/UtilityHistory';
+import { formatScanDate } from '../utils/format-scan-date';
 
 type ComparisonSource = Pick<
   LibraryStatus['roots'][number],
@@ -71,15 +74,25 @@ function BackupScreenContent({
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileRefresh, setProfileRefresh] = useState(0);
   const [controlsBusy, setControlsBusy] = useState(false);
+  const [savedRuns, setSavedRuns] = useState<ComparisonRun[]>([]);
   const [workspace, setWorkspace] = useState<'safe_copy' | 'snapshots'>('safe_copy');
   useEffect(() => {
     let retired = false;
-    void libraryData({ kind: 'backup_profiles' }, 'backup_profiles')
-      .then((value) => {
+    void Promise.all([
+      libraryData({ kind: 'backup_profiles' }, 'backup_profiles'),
+      libraryData({ kind: 'backup_comparison_history' }, 'backup_comparison_history'),
+    ])
+      .then(([value, history]) => {
         if (retired) return;
         if (!Array.isArray(value))
           throw new Error('Comparison profiles could not be read. Retry profiles.');
+        if (!Array.isArray(history))
+          throw new Error('Scan history could not be read. Retry profiles.');
+        setSavedRuns(history);
         setProfiles(value);
+        const latest = history[0];
+        if (latest?.profileId && value.some((item) => item.id === latest.profileId))
+          setSelectedId((current) => current || latest.profileId!);
         setProfileError(null);
       })
       .catch((cause: unknown) => {
@@ -150,8 +163,10 @@ function BackupScreenContent({
         base?.availability,
         registered?.displayPath,
         rebindFrom?.id,
+        savedRuns[0]?.id,
       ])}
       rebindFrom={rebindFrom}
+      savedRuns={savedRuns}
       base={base}
       currentSourcePath={registered?.displayPath ?? base?.displayPath}
       profile={profile}
@@ -234,6 +249,7 @@ function BackupScreenContent({
 
 function BackupWorkspace({
   rebindFrom,
+  savedRuns,
   base,
   currentSourcePath,
   profile,
@@ -243,6 +259,7 @@ function BackupWorkspace({
   navigationControl,
   jobsControl,
 }: {
+  savedRuns: ComparisonRun[];
   rebindFrom: SyncProfile | undefined;
   base: ComparisonSource | undefined;
   currentSourcePath: string | undefined;
@@ -256,6 +273,12 @@ function BackupWorkspace({
   const [destination, setDestination] = useState<DirectorySelection | null>(null);
   const [mode, setMode] = useState<CompareMode>('verified');
   const [run, setRun] = useState<ComparisonRun | null>(null);
+  const [backgroundRun, setBackgroundRun] = useState<ComparisonRun | null>(null);
+  const [history, setHistory] = useState(savedRuns);
+  const [historical, setHistorical] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const pinnedHistory = useRef(false);
   const [page, setPage] = useState<ComparisonPage | null>(null);
   const [offset, setOffset] = useState(0);
   const [category, setCategory] = useState<ComparisonCategory | ''>('');
@@ -275,8 +298,8 @@ function BackupWorkspace({
       generation.current += 1;
     };
   }, []);
-  const running = run?.state === 'comparing';
-  const runId = run?.id;
+  const running = backgroundRun?.state === 'comparing' || run?.state === 'comparing';
+  const runId = backgroundRun?.id ?? run?.id;
   const profileId = profile?.id;
   useEffect(() => {
     onActivityChange(busy || running);
@@ -285,23 +308,87 @@ function BackupWorkspace({
     let retired = false;
     const token = generation.current;
     void libraryData({ kind: 'backup_comparison_latest' }, 'backup_comparison_latest')
-      .then((latest) => {
+      .then(async (latest) => {
+        if (retired || token !== generation.current) return;
+        const matches = (value: ComparisonRun) =>
+          value.sourceRootId === base?.id &&
+          value.sourceDisplayPath === currentSourcePath &&
+          value.profileId === profileId;
+        const saved = savedRuns.find(matches);
+        const current = latest && matches(latest) ? latest : null;
+        if (saved) {
+          setRun(saved);
+          setHistorical(true);
+          setMode(saved.mode);
+        }
+        if (current?.state === 'comparing') {
+          setBackgroundRun(current);
+          return;
+        }
+        const retained = current ?? saved;
+        if (!retained) return;
+        setRun(retained);
+        setHistorical(!current);
+        setMode(retained.mode);
+        if (!profileId || base?.availability !== 'online') {
+          setNotice(
+            'Saved results are available. Reconnect the source and choose the destination to scan for changes.',
+          );
+          return;
+        }
+        const jobs = await libraryData(
+          { kind: 'backup_sync', request: { kind: 'list' } },
+          'backup_sync',
+        );
+        if (retired || token !== generation.current) return;
+        if (jobs.kind !== 'jobs')
+          throw new Error(
+            'Safe-copy activity could not be checked. Scan again after reviewing Jobs.',
+          );
         if (
-          !retired &&
-          token === generation.current &&
-          latest !== null &&
-          latest?.sourceRootId === base?.id &&
-          latest.sourceDisplayPath === currentSourcePath &&
-          latest?.profileId === profileId
-        )
-          setRun(latest);
+          jobs.data.some((job) =>
+            [
+              'queued',
+              'running',
+              'paused',
+              'cancel_requested',
+              'needs_review',
+              'needs_recovery',
+              'failed',
+              'canceled',
+              'completed_partial',
+            ].includes(job.state),
+          )
+        ) {
+          setNotice(
+            'Saved results are available. Review the existing transfer before scanning again.',
+          );
+          return;
+        }
+        const next = await libraryData(
+          { kind: 'backup_profile_compare', profile_id: profileId, mode: retained.mode },
+          'backup_comparison',
+        );
+        if (retired || token !== generation.current) return;
+        if (!matches(next))
+          throw new Error('Comparison identity changed. Review this profile again.');
+        setBackgroundRun(next);
+        setHistorical(true);
+        setNotice(
+          'Checking for changes in the background. Your saved comparison stays available; no files are copied.',
+        );
       })
       .catch((cause: unknown) => {
-        if (!retired && token === generation.current) setError(errorMessage(cause));
+        if (!retired && token === generation.current) {
+          setNotice(null);
+          setError(errorMessage(cause));
+        }
       });
     return () => {
       retired = true;
     };
+    // Draft changes do not restart reconciliation. Scope changes remount this workspace.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [base?.id, currentSourcePath, profileId]);
   useEffect(() => {
     if (!runId || !running) return;
@@ -316,8 +403,27 @@ function BackupWorkspace({
         if (retired) return;
         if (next.id !== runId || next.sourceRootId !== base?.id || next.profileId !== profileId)
           throw new Error('Comparison identity changed. Start a fresh comparison.');
-        setRun(next);
-        if (next.state === 'comparing') timer = setTimeout(() => void poll(), 500);
+        if (next.state === 'comparing') {
+          setBackgroundRun(next);
+          timer = setTimeout(() => void poll(), 500);
+        } else {
+          setBackgroundRun(null);
+          setHistory((previous) =>
+            [next, ...previous.filter((item) => item.id !== next.id)].slice(0, 32),
+          );
+          setNotice(
+            ['failed', 'canceled', 'incomplete'].includes(next.state)
+              ? 'The latest scan is incomplete. Review its outcome in history; previous results remain available.'
+              : 'Latest scan finished. Earlier versions remain available in history.',
+          );
+          if (!pinnedHistory.current && !['failed', 'canceled'].includes(next.state)) {
+            setRun(next);
+            setHistorical(false);
+            setPage(null);
+            setOffset(0);
+            setSelected(null);
+          }
+        }
       } catch (cause) {
         if (!retired) {
           setError(errorMessage(cause));
@@ -333,7 +439,8 @@ function BackupWorkspace({
   }, [runId, running, base?.id, profileId]);
 
   useEffect(() => {
-    if (!run || running || run.state === 'failed' || run.state === 'canceled') return;
+    if (!run || run.state === 'comparing' || run.state === 'failed' || run.state === 'canceled')
+      return;
     let retired = false;
     void libraryData(
       { kind: 'backup_comparison_page', run_id: run.id, offset, ...(category ? { category } : {}) },
@@ -370,6 +477,8 @@ function BackupWorkspace({
   }
   function retire() {
     generation.current += 1;
+    pinnedHistory.current = false;
+    setHistorical(false);
     setRun(null);
     setPage(null);
     setOffset(0);
@@ -382,196 +491,275 @@ function BackupWorkspace({
       <header className="toolbar">
         {navigationControl}
         <h1>Backup &amp; Sync</h1>
-        <div className="header-actions">{jobsControl}</div>
+        <div className="header-actions">
+          {run && (
+            <Button disabled={busy || running} onClick={() => setSetupOpen((value) => !value)}>
+              Scan settings
+            </Button>
+          )}
+          <UtilityHistory
+            versions={history
+              .filter((item) => item.sourceRootId === base?.id && item.profileId === profileId)
+              .map((item) => ({
+                id: item.id,
+                date: item.startedAt,
+                state: item.state,
+                label: `${item.mode === 'verified' ? 'Verified' : 'Quick'} comparison · ${item.entries} entries`,
+              }))}
+            selectedId={run?.id}
+            disabled={transferBusy}
+            onSelect={(id) => {
+              const version = history.find((item) => item.id === id);
+              if (version) {
+                pinnedHistory.current = true;
+                setRun(version);
+                setHistorical(true);
+                setPage(null);
+                setSelected(null);
+                setOffset(0);
+              }
+            }}
+          />
+          {jobsControl}
+        </div>
       </header>
       <div className="backup-workspace">
         {profileControls}
-        {rebindFrom && (
-          <section aria-label="Profile rebinding review">
-            <h2>Review the new source and destination</h2>
-            <p className="backup-path">
-              Previous source: {rebindFrom.sourceLabel} · {rebindFrom.sourceDisplayPath} ·{' '}
-              {rebindFrom.sourceRootId}
-            </p>
-            <p className="backup-path">Previous destination: {rebindFrom.destinationDisplayPath}</p>
-            <p>
-              The cards below show the current base and newly selected destination. The previous
-              profile and historical observations are retained. A fresh comparison is required; no
-              destination content is adopted or removed.
-            </p>
-            <label>
-              <input
-                type="checkbox"
-                checked={rebindReviewed}
-                onChange={(event) => setRebindReviewed(event.target.checked)}
-              />
-              I reviewed the previous and new source/destination bindings
-            </label>
+        {!run && !running && (
+          <UtilityWelcome
+            title="Start with a clearer picture of your backup."
+            description="Choose a destination and comparison type, then scan to see what needs copying. Scanning leaves both folders unchanged. Saved comparisons will appear here next time."
+          />
+        )}
+        {notice && <p role="status">{notice}</p>}
+        {backgroundRun && (
+          <section aria-label="Background comparison">
+            <p role="status">{backgroundRun.message}</p>
+            <progress aria-label="Background comparison in progress" />
           </section>
         )}
-        <h2>Compare before copying</h2>
-        <p>
-          Library → Destination. Comparison leaves both folders unchanged. Review transfer
-          capabilities, proposed actions and any limits below before approving a copy.
-        </p>
-        <div className="backup-scope">
-          <section aria-label="Fixed source library">
-            <h3>Library (source)</h3>
-            <strong>{base?.label ?? 'No base library configured'}</strong>
-            <p className="backup-path">{base?.displayPath}</p>
-            <p>
-              {base?.availability ?? 'unavailable'} · All regular files, including hidden files,
-              sidecars and unknown formats.
-            </p>
-          </section>
-          <section aria-label="Comparison destination">
-            <h3>Destination</h3>
-            <p className="backup-path">
-              {profile?.destinationDisplayPath ??
-                destination?.displayPath ??
-                'Choose a separate folder.'}
-            </p>
-            <Button
-              disabled={busy || running || !base || Boolean(profile)}
-              onClick={() =>
-                void action(async () => {
-                  const token = ++generation.current;
-                  const selected = await pickDirectory();
-                  if (alive.current && token === generation.current && selected) {
-                    retire();
-                    setDestination(selected);
-                    setRebindReviewed(false);
-                  }
-                })
-              }
-            >
-              Choose destination
-            </Button>
-            <p>
-              Only the proposed Stillharbour dataset is compared. Other files in this folder remain
-              outside the scope. Existing data is not adopted by selecting it.
-            </p>
-          </section>
-        </div>
-        {!profile && (
+        {run && (
+          <p>
+            Showing scan from {formatScanDate(run.startedAt)}
+            {historical ? ' · Historical version; scan again before reviewing a transfer.' : ''}
+          </p>
+        )}
+        <details open={!run || setupOpen}>
+          <summary
+            onClick={(event) => {
+              event.preventDefault();
+              setSetupOpen((value) => !value);
+            }}
+          >
+            Comparison settings
+          </summary>
+          {rebindFrom && (
+            <section aria-label="Profile rebinding review">
+              <h2>Review the new source and destination</h2>
+              <p className="backup-path">
+                Previous source: {rebindFrom.sourceLabel} · {rebindFrom.sourceDisplayPath} ·{' '}
+                {rebindFrom.sourceRootId}
+              </p>
+              <p className="backup-path">
+                Previous destination: {rebindFrom.destinationDisplayPath}
+              </p>
+              <p>
+                The cards below show the current base and newly selected destination. The previous
+                profile and historical observations are retained. A fresh comparison is required; no
+                destination content is adopted or removed.
+              </p>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={rebindReviewed}
+                  onChange={(event) => setRebindReviewed(event.target.checked)}
+                />
+                I reviewed the previous and new source/destination bindings
+              </label>
+            </section>
+          )}
+          <h2>Compare before copying</h2>
+          <p>
+            Library → Destination. Comparison leaves both folders unchanged. Review transfer
+            capabilities, proposed actions and any limits below before approving a copy.
+          </p>
+          <div className="backup-scope">
+            <section aria-label="Fixed source library">
+              <h3>Library (source)</h3>
+              <strong>{base?.label ?? 'No base library configured'}</strong>
+              <p className="backup-path">{base?.displayPath}</p>
+              <p>
+                {base?.availability ?? 'unavailable'} · All regular files, including hidden files,
+                sidecars and unknown formats.
+              </p>
+            </section>
+            <section aria-label="Comparison destination">
+              <h3>Destination</h3>
+              <p className="backup-path">
+                {profile?.destinationDisplayPath ??
+                  destination?.displayPath ??
+                  'Choose a separate folder.'}
+              </p>
+              <Button
+                disabled={busy || running || !base || Boolean(profile)}
+                onClick={() =>
+                  void action(async () => {
+                    const token = ++generation.current;
+                    const selected = await pickDirectory();
+                    if (alive.current && token === generation.current && selected) {
+                      retire();
+                      setDestination(selected);
+                      setRebindReviewed(false);
+                    }
+                  })
+                }
+              >
+                Choose destination
+              </Button>
+              <p>
+                Only the proposed Stillharbour dataset is compared. Other files in this folder
+                remain outside the scope. Existing data is not adopted by selecting it.
+              </p>
+            </section>
+          </div>
+          {!profile && (
+            <div className="backup-controls">
+              <label>
+                Comparison profile name{' '}
+                <Input
+                  value={profileLabel}
+                  maxLength={80}
+                  disabled={busy || running}
+                  onChange={(event) => setProfileLabel(event.target.value)}
+                />
+              </label>
+              <Button
+                disabled={
+                  busy ||
+                  running ||
+                  !destination?.identityAvailable ||
+                  !profileLabel.trim() ||
+                  Boolean(rebindFrom && !rebindReviewed) ||
+                  base?.availability !== 'online'
+                }
+                onClick={() =>
+                  void action(async () => {
+                    if (!destination || !base) return;
+                    const token = generation.current;
+                    const value = await libraryData(
+                      rebindFrom
+                        ? {
+                            kind: 'backup_profile_rebind',
+                            prior_id: rebindFrom.id,
+                            selection_id: destination.id,
+                            label: profileLabel,
+                            reviewed: rebindReviewed,
+                          }
+                        : {
+                            kind: 'backup_profile_save',
+                            selection_id: destination.id,
+                            label: profileLabel,
+                          },
+                      'backup_profile',
+                    );
+                    if (!alive.current || token !== generation.current) return;
+                    if (value.sourceRootId !== base.id)
+                      throw new Error(
+                        'The base library changed. Choose the destination and review the new source again.',
+                      );
+                    onProfileSaved(value);
+                  })
+                }
+              >
+                Save comparison profile
+              </Button>
+              <p>
+                Remembers this source and destination for future comparisons. Saving a profile does
+                not approve copying or create destination files.
+              </p>
+            </div>
+          )}
           <div className="backup-controls">
             <label>
-              Comparison profile name{' '}
-              <Input
-                value={profileLabel}
-                maxLength={80}
+              Comparison{' '}
+              <Select
+                value={mode}
                 disabled={busy || running}
-                onChange={(event) => setProfileLabel(event.target.value)}
-              />
+                onChange={(event) => {
+                  retire();
+                  setMode(event.target.value as CompareMode);
+                }}
+              >
+                <option value="verified">Verified (complete bytes)</option>
+                <option value="quick">Quick (content not checked)</option>
+              </Select>
             </label>
             <Button
+              className="primary"
               disabled={
                 busy ||
                 running ||
-                !destination?.identityAvailable ||
-                !profileLabel.trim() ||
-                Boolean(rebindFrom && !rebindReviewed) ||
+                !(profile || destination?.identityAvailable) ||
                 base?.availability !== 'online'
               }
               onClick={() =>
                 void action(async () => {
-                  if (!destination || !base) return;
+                  if ((!destination && !profile) || !base) return;
+                  retire();
                   const token = generation.current;
-                  const value = await libraryData(
-                    rebindFrom
-                      ? {
-                          kind: 'backup_profile_rebind',
-                          prior_id: rebindFrom.id,
-                          selection_id: destination.id,
-                          label: profileLabel,
-                          reviewed: rebindReviewed,
-                        }
-                      : {
-                          kind: 'backup_profile_save',
-                          selection_id: destination.id,
-                          label: profileLabel,
-                        },
-                    'backup_profile',
+                  const result = await libraryData(
+                    profile
+                      ? { kind: 'backup_profile_compare', profile_id: profile.id, mode }
+                      : { kind: 'backup_compare_start', selection_id: destination!.id, mode },
+                    'backup_comparison',
                   );
                   if (!alive.current || token !== generation.current) return;
-                  if (value.sourceRootId !== base.id)
+                  if (result.sourceRootId !== base.id || result.profileId !== profileId)
                     throw new Error(
-                      'The base library changed. Choose the destination and review the new source again.',
+                      'The base library changed. Reopen Backup & Sync and compare again.',
                     );
-                  onProfileSaved(value);
+                  setRun(result);
+                  setBackgroundRun(result);
+                  setSetupOpen(false);
                 })
               }
             >
-              Save comparison profile
+              Compare
             </Button>
-            <p>
-              Remembers this source and destination for future comparisons. Saving a profile does
-              not approve copying or create destination files.
-            </p>
+            {running && (
+              <Button
+                disabled={busy}
+                onClick={() =>
+                  void action(async () => {
+                    const current = backgroundRun ?? run;
+                    if (!current) return;
+                    await libraryData(
+                      { kind: 'backup_compare_cancel', run_id: current.id },
+                      'backup_comparison',
+                    );
+                  })
+                }
+              >
+                Cancel comparison
+              </Button>
+            )}
           </div>
-        )}
-        <div className="backup-controls">
-          <label>
-            Comparison{' '}
-            <Select
-              value={mode}
-              disabled={busy || running}
-              onChange={(event) => {
-                retire();
-                setMode(event.target.value as CompareMode);
-              }}
-            >
-              <option value="verified">Verified (complete bytes)</option>
-              <option value="quick">Quick (content not checked)</option>
-            </Select>
-          </label>
+        </details>
+        {running && run && (
           <Button
-            className="primary"
-            disabled={
-              busy ||
-              running ||
-              !(profile || destination?.identityAvailable) ||
-              base?.availability !== 'online'
-            }
+            disabled={busy}
             onClick={() =>
               void action(async () => {
-                if ((!destination && !profile) || !base) return;
-                retire();
-                const token = generation.current;
-                const result = await libraryData(
-                  profile
-                    ? { kind: 'backup_profile_compare', profile_id: profile.id, mode }
-                    : { kind: 'backup_compare_start', selection_id: destination!.id, mode },
+                await libraryData(
+                  { kind: 'backup_compare_cancel', run_id: backgroundRun?.id ?? run.id },
                   'backup_comparison',
                 );
-                if (!alive.current || token !== generation.current) return;
-                if (result.sourceRootId !== base.id || result.profileId !== profileId)
-                  throw new Error(
-                    'The base library changed. Reopen Backup & Sync and compare again.',
-                  );
-                setRun(result);
               })
             }
           >
-            Compare
+            Stop background scan
           </Button>
-          {running && (
-            <Button
-              disabled={busy}
-              onClick={() =>
-                void action(async () => {
-                  if (!run) return;
-                  await libraryData(
-                    { kind: 'backup_compare_cancel', run_id: run.id },
-                    'backup_comparison',
-                  );
-                })
-              }
-            >
-              Cancel comparison
-            </Button>
-          )}
-        </div>
+        )}
         <p>
           Comparison is not a backup or an approval. Preparation, copying and recovery each require
           a separate action review.
@@ -635,7 +823,7 @@ function BackupWorkspace({
                 </ul>
               </details>
             )}
-            {!running && run.state !== 'failed' && run.state !== 'canceled' && (
+            {run.state !== 'comparing' && run.state !== 'failed' && run.state !== 'canceled' && (
               <label>
                 Finding filter{' '}
                 <Select
@@ -694,11 +882,13 @@ function BackupWorkspace({
                       Observed metadata and comparison evidence only. This review does not establish
                       companion completeness, metadata fidelity or recovery.
                     </p>
-                    <ComparisonPreviews
-                      key={`${run.id}:${selected.id}`}
-                      runId={run.id}
-                      entryId={selected.id}
-                    />
+                    {!historical && !running && (
+                      <ComparisonPreviews
+                        key={`${run.id}:${selected.id}`}
+                        runId={run.id}
+                        entryId={selected.id}
+                      />
+                    )}
                     <Button onClick={() => setSelected(null)}>Close entry details</Button>
                   </section>
                 )}
@@ -733,8 +923,8 @@ function BackupWorkspace({
           </section>
         )}
         <SyncWorkflow
-          key={run?.id ?? 'no-comparison'}
-          run={run}
+          key={historical || running ? 'no-comparison' : (run?.id ?? 'no-comparison')}
+          run={historical || running ? null : run}
           selected={selected}
           onActivityChange={setTransferBusy}
         />

@@ -44,6 +44,14 @@ it('starts hidden, retains active values and dismisses with Escape back to its t
   fireEvent.click(active);
   const date = await screen.findByLabelText('From');
   expect(date).toHaveValue('2026-01-01');
+  // Portalled focus and dismiss listeners are installed after mounting.
+  // Exercise Escape only after the reopened popover has received focus.
+  await waitFor(() =>
+    expect(
+      screen.getByRole('dialog', { name: 'Map filters' }).contains(document.activeElement),
+    ).toBe(true),
+  );
+  act(() => date.focus());
   fireEvent.keyDown(date, { key: 'Escape', code: 'Escape' });
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   await waitFor(() => expect(active).toHaveFocus());

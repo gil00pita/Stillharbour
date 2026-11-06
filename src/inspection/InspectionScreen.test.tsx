@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '../test/render';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { InspectionScreen } from './InspectionScreen';
 import { libraryData } from '../ipc';
-import type { InspectionJob, LibraryStatus } from '../bindings';
+import type { InspectionJob, InspectionReport, LibraryStatus } from '../bindings';
 import { fixturePreferences } from '../library/__tests__/fixtures';
 import { storageFiles, storageSummary } from '../components/StorageExplorer/fixtures';
 vi.mock('../ipc', async (original) => ({
@@ -50,6 +50,14 @@ beforeEach(() => {
   HTMLDialogElement.prototype.close = function () {
     this.open = false;
   };
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
   vi.mocked(libraryData)
     .mockReset()
     .mockImplementation(async (request) => {
@@ -75,7 +83,6 @@ it('starts a native job with selected IDs and explicit scope, then waits for nat
   await waitFor(() =>
     expect(libraryData).toHaveBeenCalledWith({ kind: 'inspection_jobs' }, 'inspection_jobs'),
   );
-  fireEvent.click(screen.getByRole('button', { name: 'Storage measurement' }));
   fireEvent.click(screen.getByRole('button', { name: 'Start storage inspection' }));
   await screen.findByText('Reading generated scope');
   expect(libraryData).toHaveBeenCalledWith(
@@ -99,7 +106,7 @@ it('requires a separate acknowledgement before establishing append-only baseline
   expect(screen.getByRole('button', { name: /Establish/ })).toBeDisabled();
   const acknowledgement = screen.getByRole('checkbox', { name: /baseline/i });
   fireEvent.click(acknowledgement);
-  expect(screen.getByRole('button', { name: /Establish/ })).toBeEnabled();
+  await waitFor(() => expect(screen.getByRole('button', { name: /Establish/ })).toBeEnabled());
   expect(libraryData).not.toHaveBeenCalledWith(
     expect.objectContaining({ kind: 'inspection_start' }),
     expect.anything(),
@@ -111,64 +118,8 @@ it('blocks an offline root and renders native failures without fake results', as
     ...status,
     roots: status.roots.map((root) => ({ ...root, availability: 'offline' })),
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Storage measurement' }));
   expect(screen.getByRole('button', { name: 'Start storage inspection' })).toBeDisabled();
   expect(await screen.findByRole('alert')).toHaveTextContent('Catalog unavailable');
-});
-
-it('starts Storage results at the filters and keeps retained controls, issues and coverage in the header dialog', async () => {
-  vi.mocked(libraryData).mockImplementation(async (request) => {
-    if (request.kind === 'inspection_jobs')
-      return [{ ...job, state: 'completed', message: 'Retained generated measurement' }];
-    if (request.kind === 'inspection_report')
-      return {
-        jobId: job.id,
-        storage: storageSummary,
-        volumes: [],
-        coverage: {
-          enumerationComplete: false,
-          excludedEntries: 1,
-          inaccessibleEntries: 2,
-          incompleteDirectories: 3,
-        },
-        exactOrCandidateGroups: 0,
-        aliasGroups: 0,
-        comparedPairs: '0',
-        unknownPairs: '0',
-        id3Applicability: '',
-      };
-    if (request.kind === 'inspection_findings')
-      return { jobId: job.id, rows: storageFiles.filter((file) => !file.assetId), next: null };
-    if (request.kind === 'inspection_issues') return { jobId: job.id, rows: [], next: null };
-    throw new Error('Unexpected request');
-  });
-  const { container } = setup();
-  await screen.findByRole('region', { name: 'Storage filters' });
-  expect(container.querySelector('.inspection-content')?.firstElementChild).toHaveClass(
-    'storage-explorer',
-  );
-  expect(screen.queryByText('Storage measurement settings')).not.toBeInTheDocument();
-  expect(screen.queryByLabelText('Retained inspection')).not.toBeInTheDocument();
-  expect(screen.queryByRole('region', { name: 'Inspection job' })).not.toBeInTheDocument();
-  expect(screen.queryByText(/Inventory:/)).not.toBeInTheDocument();
-  const opener = screen.getByRole('button', { name: 'Storage measurement' });
-  fireEvent.click(opener);
-  const dialog = screen.getByRole('dialog', { name: 'Storage measurement' });
-  expect(within(dialog).getByText('Storage measurement settings')).toBeVisible();
-  expect(within(dialog).getByLabelText('Retained inspection')).toBeVisible();
-  expect(within(dialog).getByText('Retained generated measurement')).toBeVisible();
-  expect(within(dialog).getByText(/Inventory:/)).toHaveTextContent('3 incomplete directories');
-  fireEvent.click(
-    within(dialog).getByRole('button', { name: 'Review retained inspection issues' }),
-  );
-  await within(dialog).findByText('No retained issues for this report.');
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  expect(opener).toHaveFocus();
-  fireEvent.click(opener);
-  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  expect(opener).toHaveFocus();
 });
 
 it('uses illustrated radio choices without starting an inspection until explicit approval', async () => {
@@ -235,11 +186,216 @@ it('preserves PNG-only manual review and blocks empty property rules with card s
   setup('Duplicates');
   fireEvent.click(screen.getByRole('radio', { name: 'Static PNG8 pixels' }));
   expect(screen.getByText('Manual review only')).toBeVisible();
-  expect(screen.getByRole('button', { name: 'Start duplicate inspection' })).toBeEnabled();
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Start duplicate inspection' })).toBeEnabled(),
+  );
   fireEvent.click(screen.getByRole('radio', { name: 'Matching file properties' }));
   fireEvent.click(await screen.findByRole('checkbox', { name: 'Base filename' }));
   expect(screen.getByRole('button', { name: 'Start duplicate inspection' })).toBeDisabled();
   expect(screen.getByText('Choose at least one property criterion.')).toBeVisible();
   fireEvent.click(screen.getByRole('checkbox', { name: 'Logical size' }));
   expect(screen.getByRole('button', { name: 'Start duplicate inspection' })).toBeEnabled();
+});
+
+it.each(['Duplicates', 'Integrity', 'Storage'] as const)(
+  'opens %s with setup and no empty result workspace or automatic first scan',
+  async (section) => {
+    setup(section);
+    expect(await screen.findByRole('region', { name: 'Scan introduction' })).toBeVisible();
+    expect(screen.queryByRole('region', { name: 'Duplicate groups' })).not.toBeInTheDocument();
+    expect(
+      vi.mocked(libraryData).mock.calls.some(([request]) => request.kind === 'inspection_start'),
+    ).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Scan history' }));
+    expect(await screen.findByText('Your scans will appear here.')).toBeVisible();
+  },
+);
+
+const savedReport = (id: string): InspectionReport => ({
+  jobId: id,
+  volumes: [],
+  coverage: {
+    enumerationComplete: true,
+    excludedEntries: 0,
+    inaccessibleEntries: 0,
+    incompleteDirectories: 0,
+  },
+  exactOrCandidateGroups: 0,
+  aliasGroups: 0,
+  comparedPairs: '0',
+  unknownPairs: '0',
+  storage: null,
+  id3Applicability: 'Not applicable',
+});
+
+it('keeps saved results visible during actual reconciliation and lets history stay selected as the scan completes', async () => {
+  const saved: InspectionJob = {
+    ...job,
+    id: 'saved',
+    state: 'completed',
+    filesChecked: 7,
+    finishedAt: '2026-11-01',
+  };
+  let state: InspectionJob['state'] = 'running';
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_jobs') return [saved];
+    if (request.kind === 'inspection_start') return { ...job, id: 'refresh' };
+    if (request.kind === 'inspection_job') return { ...job, id: 'refresh', state };
+    if (request.kind === 'inspection_report') return savedReport(request.job_id);
+    if (request.kind === 'inspection_findings')
+      return { jobId: request.job_id, rows: [], next: null };
+    throw new Error('Unexpected request');
+  });
+  setup();
+  expect(await screen.findByText(/Showing scan from/)).toHaveTextContent('completed');
+  expect(await screen.findByText(/Checking for changes in the background/)).toBeVisible();
+  expect(screen.getByText(/Showing scan from/)).toBeVisible();
+  expect(libraryData).toHaveBeenCalledWith(
+    { kind: 'inspection_start', input: saved.input },
+    'inspection_job',
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'Scan history' }));
+  const versions = await screen.findByLabelText('Saved scan versions');
+  fireEvent.click(within(versions).getByRole('button', { name: /Storage usage.*completed/ }));
+  state = 'completed';
+  expect(
+    await screen.findByText('Latest scan finished. Earlier versions remain available in history.'),
+  ).toBeVisible();
+  expect(screen.getByText(/Showing scan from/)).toHaveTextContent('Historical version');
+  expect(libraryData).not.toHaveBeenCalledWith(
+    { kind: 'inspection_report', job_id: 'refresh' },
+    'inspection_report',
+  );
+});
+
+it('reconciles baseline establishment as comparison only and retains offline reports without reading originals', async () => {
+  const saved: InspectionJob = {
+    ...job,
+    state: 'completed',
+    input: { ...job.input, task: { kind: 'health', mode: 'establish_baseline' } },
+  };
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_jobs') return [saved];
+    if (request.kind === 'inspection_start') return { ...job, input: request.input };
+    if (request.kind === 'inspection_report') return savedReport(request.job_id);
+    if (request.kind === 'inspection_findings')
+      return { jobId: request.job_id, rows: [], next: null };
+    if (request.kind === 'inspection_job') return job;
+    throw new Error('Unexpected request');
+  });
+  const view = setup('Integrity');
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenCalledWith(
+      {
+        kind: 'inspection_start',
+        input: { ...saved.input, task: { kind: 'health', mode: 'compare_baseline' } },
+      },
+      'inspection_job',
+    ),
+  );
+  view.unmount();
+  vi.mocked(libraryData).mockClear();
+  setup('Integrity', {
+    ...status,
+    roots: status.roots.map((root) => ({ ...root, availability: 'offline' })),
+  });
+  expect(await screen.findByText(/Reconnect the selected libraries/)).toBeVisible();
+  expect(
+    vi.mocked(libraryData).mock.calls.some(([request]) => request.kind === 'inspection_start'),
+  ).toBe(false);
+});
+
+it('requires explicitly removing a previously registered missing root from the next scan scope', async () => {
+  const saved: InspectionJob = {
+    ...job,
+    state: 'completed',
+    input: { ...job.input, rootIds: ['root', 'removed-root'] },
+  };
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_jobs') return [saved];
+    if (request.kind === 'inspection_report') return savedReport(request.job_id);
+    if (request.kind === 'inspection_findings')
+      return { jobId: request.job_id, rows: [], next: null };
+    if (request.kind === 'inspection_start') return { ...job, input: request.input };
+    if (request.kind === 'inspection_job') return job;
+    throw new Error('Unexpected request');
+  });
+  setup();
+  await screen.findByText(/Reconnect the selected libraries/);
+  expect(
+    vi.mocked(libraryData).mock.calls.some(([request]) => request.kind === 'inspection_start'),
+  ).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: 'Storage measurement' }));
+  expect(screen.getByRole('button', { name: 'Start storage inspection' })).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: /Previously registered folder/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Start storage inspection' }));
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenCalledWith(
+      { kind: 'inspection_start', input: job.input },
+      'inspection_job',
+    ),
+  );
+});
+
+it('starts Storage results at the filters and keeps retained controls, issues and coverage in the header dialog', async () => {
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_jobs')
+      return [{ ...job, state: 'completed', message: 'Retained generated measurement' }];
+    if (request.kind === 'inspection_start' || request.kind === 'inspection_job')
+      return { ...job, id: 'refresh' };
+    if (request.kind === 'inspection_report')
+      return {
+        jobId: job.id,
+        storage: storageSummary,
+        volumes: [],
+        coverage: {
+          enumerationComplete: false,
+          excludedEntries: 1,
+          inaccessibleEntries: 2,
+          incompleteDirectories: 3,
+        },
+        exactOrCandidateGroups: 0,
+        aliasGroups: 0,
+        comparedPairs: '0',
+        unknownPairs: '0',
+        id3Applicability: '',
+      };
+    if (request.kind === 'inspection_findings')
+      return { jobId: job.id, rows: storageFiles.filter((file) => !file.assetId), next: null };
+    if (request.kind === 'inspection_issues') return { jobId: job.id, rows: [], next: null };
+    throw new Error('Unexpected request');
+  });
+  const { container } = setup();
+  await screen.findByRole('region', { name: 'Storage filters' });
+  expect(container.querySelector('.inspection-content')?.firstElementChild).toHaveClass(
+    'storage-explorer',
+  );
+  expect(screen.queryByText('Storage measurement settings')).not.toBeInTheDocument();
+  expect(screen.queryByLabelText('Retained inspection')).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'Inspection job' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Inventory:/)).not.toBeInTheDocument();
+  const opener = screen.getByRole('button', { name: 'Storage measurement' });
+  fireEvent.click(opener);
+  const dialog = screen.getByRole('dialog', { name: 'Storage measurement' });
+  expect(within(dialog).getByText('Storage measurement settings')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Scan history' })).toBeInTheDocument();
+  expect(within(dialog).getByText('Reading generated scope')).toBeVisible();
+  expect(within(dialog).getByText(/Inventory:/)).toHaveTextContent('3 incomplete directories');
+  fireEvent.click(
+    within(dialog).getByRole('button', { name: 'Review retained inspection issues' }),
+  );
+  await within(dialog).findByText('No retained issues for this report.');
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
+  fireEvent.click(opener);
+  fireEvent.keyDown(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }), {
+    key: 'Escape',
+  });
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
+  fireEvent.click(opener);
+  fireEvent(screen.getByRole('dialog'), new Event('cancel', { cancelable: true }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(opener).toHaveFocus();
 });

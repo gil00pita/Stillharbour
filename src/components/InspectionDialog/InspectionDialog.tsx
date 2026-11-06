@@ -33,6 +33,13 @@ export function InspectionDialog({
         ref={setElement}
         className="inspection-dialog"
         aria-label={title}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !event.defaultPrevented) {
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+          }
+        }}
         onCancel={(event) => {
           event.preventDefault();
           close();
