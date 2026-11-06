@@ -14,6 +14,7 @@ import type {
 } from '../bindings';
 import { errorMessage, libraryData } from '../ipc';
 import { StorageExplorer } from '../components/StorageExplorer';
+import { InspectionDialog } from '../components/InspectionDialog';
 import { DuplicateStudio } from '../components/DuplicateStudio';
 import { IntegrityFindings } from '../components/IntegrityFindings';
 import { InspectionIssues } from './InspectionIssues';
@@ -85,6 +86,8 @@ export function InspectionScreen({
   const [groups, setGroups] = useState<DuplicatePage | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [storageDetailsOpen, setStorageDetailsOpen] = useState(false);
+  const storageDetailsOpener = useRef<HTMLButtonElement>(null);
   const epoch = useRef(0);
   const running = active(job);
   const jobId = job?.id ?? null;
@@ -266,22 +269,273 @@ export function InspectionScreen({
       options.rules.readonly,
       options.rules.content,
     ].some(Boolean);
+  const inspectionDetails = (
+    <>
+      <details className="inspection-setup" open={!job}>
+        <summary>
+          {section === 'Duplicates'
+            ? 'Duplicate inspection settings'
+            : section === 'Integrity'
+              ? 'Health check settings'
+              : 'Storage measurement settings'}
+        </summary>
+        <fieldset
+          disabled={busy || running}
+          className={`inspection-controls ${section === 'Duplicates' ? 'duplicate-controls' : ''}`}
+        >
+          <legend className={section === 'Duplicates' ? 'screen-reader-status' : undefined}>
+            {section === 'Duplicates'
+              ? 'Find duplicate clusters'
+              : section === 'Integrity'
+                ? 'Check file health'
+                : 'Measure storage usage'}
+          </legend>
+          {section === 'Duplicates' && (
+            <DuplicateMatchOptions
+              options={options}
+              onChange={setOptions}
+              disabled={busy || running}
+            />
+          )}
+          <div className="inspection-roots">
+            {status.roots.map((root) => (
+              <label key={root.id}>
+                <input
+                  type="checkbox"
+                  checked={rootIds.includes(root.id)}
+                  onChange={(event) =>
+                    setRootIds(
+                      event.target.checked
+                        ? [...rootIds, root.id]
+                        : rootIds.filter((id) => id !== root.id),
+                    )
+                  }
+                />
+                {root.label}
+                <small>{root.availability}</small>
+              </label>
+            ))}
+          </div>
+          {section === 'Duplicates' ? (
+            <InspectionChoiceCards
+              label="File scope"
+              value={scope}
+              choices={fileScopeChoices}
+              disabled={busy || running}
+              onChange={setScope}
+            />
+          ) : (
+            <label>
+              File scope
+              <Select
+                value={scope}
+                onChange={(event) => setScope(event.target.value as typeof scope)}
+              >
+                <option value="indexed_media_companions">
+                  Indexed photos, videos and matching companion files
+                </option>
+                <option value="all_eligible_files">All files within the exclusions below</option>
+              </Select>
+            </label>
+          )}
+          <p>
+            Your hidden-file, hidden-folder, filename-pattern and size exclusions still apply.
+            Gallery file-type and date filters do not limit this inspection. Links, special files
+            and cloud placeholders are reported, never followed or downloaded.
+          </p>
+          {section === 'Duplicates' && (
+            <>
+              <p>
+                Exact matches are confirmed by comparing every byte. Matching names, sizes or other
+                properties only identify candidates; they never authorize quarantine.
+              </p>
+              <div>
+                {options.mode === 'properties' && (
+                  <PropertyControls
+                    rules={options.rules}
+                    disabled={busy || running}
+                    onChange={(rules) => setOptions({ ...options, rules })}
+                  />
+                )}
+              </div>
+            </>
+          )}
+          {unavailable && (
+            <p role="status">
+              Reconnect selected unavailable folders before inspecting. Their retained inventory is
+              not an empty folder.
+            </p>
+          )}
+          {invalidRules && <p role="status">Choose at least one property criterion.</p>}
+          {section === 'Integrity' && (
+            <>
+              <label>
+                Integrity mode
+                <Select
+                  aria-label="Integrity mode"
+                  value={healthMode}
+                  onChange={(event) => {
+                    setHealthMode(event.target.value as HealthMode);
+                    setBaselineAcknowledged(false);
+                  }}
+                >
+                  <option value="compare_baseline">Compare with saved checksums</option>
+                  <option value="establish_baseline">Record new checksum baselines</option>
+                  <option value="quick">Quick signature and header check</option>
+                  <option value="deep">Decode supported still images</option>
+                </Select>
+              </label>
+              <p>
+                Checksums read complete file bytes. A mismatch means changed since baseline, not
+                proven damage. Previous baselines remain in history; these checks do not establish
+                backup or original-file recovery.
+              </p>
+              {healthMode === 'establish_baseline' && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={baselineAcknowledged}
+                    onChange={(event) => setBaselineAcknowledged(event.target.checked)}
+                  />
+                  Record newly read baselines and retain every previous baseline.
+                </label>
+              )}
+            </>
+          )}
+          {
+            <Button
+              className="primary"
+              disabled={
+                !rootIds.length ||
+                unavailable ||
+                invalidRules ||
+                (section === 'Integrity' &&
+                  healthMode === 'establish_baseline' &&
+                  !baselineAcknowledged)
+              }
+              onClick={() => void start()}
+            >
+              {section === 'Integrity'
+                ? healthMode === 'establish_baseline'
+                  ? 'Establish checksum baselines'
+                  : healthMode === 'quick'
+                    ? 'Start quick header check'
+                    : healthMode === 'deep'
+                      ? 'Start deep image check'
+                      : 'Start checksum comparison'
+                : `Start ${section === 'Duplicates' ? 'duplicate' : 'storage'} inspection`}
+            </Button>
+          }
+        </fieldset>
+      </details>
+      {history.length > 0 && (
+        <label>
+          Retained inspection
+          <Select
+            disabled={busy}
+            value={job?.id ?? ''}
+            onChange={(event) => {
+              const record = history.find((record) => record.id === event.target.value);
+              if (record) void selectJob(record);
+            }}
+          >
+            {history.map((record) => (
+              <option key={record.id} value={record.id}>
+                {record.startedAt} · {record.state}
+              </option>
+            ))}
+          </Select>
+        </label>
+      )}
+      {job && (
+        <section className="inspection-job" aria-label="Inspection job">
+          <h2>{job.state.replaceAll('_', ' ')}</h2>
+          <p role="status">{job.message}</p>
+          <p>
+            {job.filesObserved.toLocaleString()} observed · {job.filesChecked.toLocaleString()}{' '}
+            examined · {displayBytes(job.bytesRead)} read · {job.issues.toLocaleString()} issues
+          </p>
+          {running && (
+            <>
+              <progress aria-label="Inspection in progress" />
+              <Button
+                disabled={busy || job.state === 'cancel_requested'}
+                onClick={() => void stop()}
+              >
+                Cancel inspection
+              </Button>
+            </>
+          )}
+          {job.limited && (
+            <p>Inspection reached a bound. These results do not cover the whole selected scope.</p>
+          )}
+          <p>
+            Retained scope: {job.input.scope.replaceAll('_', ' ')} ·{' '}
+            {job.input.rootIds
+              .map(
+                (id) =>
+                  status.roots.find((root) => root.id === id)?.label ??
+                  `Previously registered folder ${id.slice(0, 8)}`,
+              )
+              .join(', ')}
+            . Re-run to check current files; retained results grant no mutation approval.
+          </p>
+        </section>
+      )}
+      {report && (
+        <>
+          {job && <InspectionIssues key={job.id} jobId={job.id} />}
+          {section === 'Duplicates' && (
+            <details>
+              <summary>Format applicability</summary>
+              <p>{report.id3Applicability}</p>
+            </details>
+          )}
+          <p className="inspection-coverage">
+            Inventory:{' '}
+            {report.coverage.enumerationComplete
+              ? 'completed for this eligible scope'
+              : 'incomplete'}{' '}
+            · {report.coverage.excludedEntries} excluded entries/scopes ·{' '}
+            {report.coverage.inaccessibleEntries} inaccessible/unsupported entries ·{' '}
+            {report.coverage.incompleteDirectories} incomplete directories.
+          </p>
+        </>
+      )}
+    </>
+  );
   return (
     <div className={`inspection-page inspection-section-${section.toLowerCase()}`}>
       <header className="toolbar">
         {navigationControl}
         <h1>{section}</h1>
-        <div className="header-actions">{jobsControl}</div>
+        <div className="header-actions">
+          {section === 'Storage' && (
+            <Button
+              ref={storageDetailsOpener}
+              aria-label="Storage measurement"
+              aria-haspopup="dialog"
+              onClick={() => setStorageDetailsOpen(true)}
+            >
+              {job ? 'Measurement details' : 'Measure storage'}
+            </Button>
+          )}
+          {section === 'Storage' &&
+            (job?.limited || (report && !report.coverage.enumerationComplete)) && (
+              <small role="status">Incomplete measurement</small>
+            )}
+          {jobsControl}
+        </div>
       </header>
       <div className="inspection-content">
-        <p>
-          {section === 'Duplicates'
-            ? 'Find identical files or compare file properties. Review the matches while your originals stay unchanged.'
-            : section === 'Storage'
-              ? 'See how much space files and folders use in your selected libraries. File size alone does not tell you how much disk space can be freed.'
+        {section !== 'Storage' && (
+          <p>
+            {section === 'Duplicates'
+              ? 'Find identical files or compare file properties. Review the matches while your originals stay unchanged.'
               : 'Check integrity without rewriting or repairing originals.'}
-        </p>
-        {error && (
+          </p>
+        )}
+        {error && (section !== 'Storage' || !storageDetailsOpen) && (
           <p role="alert" className="error">
             {error}
           </p>
@@ -296,238 +550,35 @@ export function InspectionScreen({
             next={() => void nextGroups()}
           />
         )}
-        <details className="inspection-setup" open={!job}>
-          <summary>
-            {section === 'Duplicates'
-              ? 'Duplicate inspection settings'
-              : section === 'Integrity'
-                ? 'Health check settings'
-                : 'Storage measurement settings'}
-          </summary>
-          <fieldset
-            disabled={busy || running}
-            className={`inspection-controls ${section === 'Duplicates' ? 'duplicate-controls' : ''}`}
-          >
-            <legend className={section === 'Duplicates' ? 'screen-reader-status' : undefined}>
-              {section === 'Duplicates'
-                ? 'Find duplicate clusters'
-                : section === 'Integrity'
-                  ? 'Check file health'
-                  : 'Measure storage usage'}
-            </legend>
-            {section === 'Duplicates' && (
-              <DuplicateMatchOptions
-                options={options}
-                onChange={setOptions}
-                disabled={busy || running}
-              />
-            )}
-            <div className="inspection-roots">
-              {status.roots.map((root) => (
-                <label key={root.id}>
-                  <input
-                    type="checkbox"
-                    checked={rootIds.includes(root.id)}
-                    onChange={(event) =>
-                      setRootIds(
-                        event.target.checked
-                          ? [...rootIds, root.id]
-                          : rootIds.filter((id) => id !== root.id),
-                      )
-                    }
-                  />
-                  {root.label}
-                  <small>{root.availability}</small>
-                </label>
-              ))}
-            </div>
-            {section === 'Duplicates' ? (
-              <InspectionChoiceCards
-                label="File scope"
-                value={scope}
-                choices={fileScopeChoices}
-                disabled={busy || running}
-                onChange={setScope}
-              />
-            ) : (
-              <label>
-                File scope
-                <Select
-                  value={scope}
-                  onChange={(event) => setScope(event.target.value as typeof scope)}
-                >
-                  <option value="indexed_media_companions">
-                    Indexed photos, videos and matching companion files
-                  </option>
-                  <option value="all_eligible_files">All files within the exclusions below</option>
-                </Select>
-              </label>
-            )}
-            <p>
-              Your hidden-file, hidden-folder, filename-pattern and size exclusions still apply.
-              Gallery file-type and date filters do not limit this inspection. Links, special files
-              and cloud placeholders are reported, never followed or downloaded.
-            </p>
-            {section === 'Duplicates' && (
-              <>
-                <p>
-                  Exact matches are confirmed by comparing every byte. Matching names, sizes or
-                  other properties only identify candidates; they never authorize quarantine.
-                </p>
-                <div>
-                  {options.mode === 'properties' && (
-                    <PropertyControls
-                      rules={options.rules}
-                      disabled={busy || running}
-                      onChange={(rules) => setOptions({ ...options, rules })}
-                    />
-                  )}
-                </div>
-              </>
-            )}
-            {unavailable && (
-              <p role="status">
-                Reconnect selected unavailable folders before inspecting. Their retained inventory
-                is not an empty folder.
-              </p>
-            )}
-            {invalidRules && <p role="status">Choose at least one property criterion.</p>}
-            {section === 'Integrity' && (
-              <>
-                <label>
-                  Integrity mode
-                  <Select
-                    aria-label="Integrity mode"
-                    value={healthMode}
-                    onChange={(event) => {
-                      setHealthMode(event.target.value as HealthMode);
-                      setBaselineAcknowledged(false);
-                    }}
-                  >
-                    <option value="compare_baseline">Compare with saved checksums</option>
-                    <option value="establish_baseline">Record new checksum baselines</option>
-                    <option value="quick">Quick signature and header check</option>
-                    <option value="deep">Decode supported still images</option>
-                  </Select>
-                </label>
-                <p>
-                  Checksums read complete file bytes. A mismatch means changed since baseline, not
-                  proven damage. Previous baselines remain in history; these checks do not establish
-                  backup or original-file recovery.
-                </p>
-                {healthMode === 'establish_baseline' && (
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={baselineAcknowledged}
-                      onChange={(event) => setBaselineAcknowledged(event.target.checked)}
-                    />
-                    Record newly read baselines and retain every previous baseline.
-                  </label>
-                )}
-              </>
-            )}
-            {
-              <Button
-                className="primary"
-                disabled={
-                  !rootIds.length ||
-                  unavailable ||
-                  invalidRules ||
-                  (section === 'Integrity' &&
-                    healthMode === 'establish_baseline' &&
-                    !baselineAcknowledged)
-                }
-                onClick={() => void start()}
-              >
-                {section === 'Integrity'
-                  ? healthMode === 'establish_baseline'
-                    ? 'Establish checksum baselines'
-                    : healthMode === 'quick'
-                      ? 'Start quick header check'
-                      : healthMode === 'deep'
-                        ? 'Start deep image check'
-                        : 'Start checksum comparison'
-                  : `Start ${section === 'Duplicates' ? 'duplicate' : 'storage'} inspection`}
-              </Button>
-            }
-          </fieldset>
-        </details>
-        {history.length > 0 && (
-          <label>
-            Retained inspection
-            <Select
-              disabled={busy}
-              value={job?.id ?? ''}
-              onChange={(event) => {
-                const record = history.find((record) => record.id === event.target.value);
-                if (record) void selectJob(record);
-              }}
-            >
-              {history.map((record) => (
-                <option key={record.id} value={record.id}>
-                  {record.startedAt} · {record.state}
-                </option>
-              ))}
-            </Select>
-          </label>
-        )}
-        {job && (
-          <section className="inspection-job" aria-label="Inspection job">
-            <h2>{job.state.replaceAll('_', ' ')}</h2>
-            <p role="status">{job.message}</p>
-            <p>
-              {job.filesObserved.toLocaleString()} observed · {job.filesChecked.toLocaleString()}{' '}
-              examined · {displayBytes(job.bytesRead)} read · {job.issues.toLocaleString()} issues
-            </p>
-            {running && (
-              <>
-                <progress aria-label="Inspection in progress" />
-                <Button
-                  disabled={busy || job.state === 'cancel_requested'}
-                  onClick={() => void stop()}
-                >
-                  Cancel inspection
-                </Button>
-              </>
-            )}
-            {job.limited && (
-              <p>
-                Inspection reached a bound. These results do not cover the whole selected scope.
-              </p>
-            )}
-            <p>
-              Retained scope: {job.input.scope.replaceAll('_', ' ')} ·{' '}
-              {job.input.rootIds
-                .map(
-                  (id) =>
-                    status.roots.find((root) => root.id === id)?.label ??
-                    `Previously registered folder ${id.slice(0, 8)}`,
-                )
-                .join(', ')}
-              . Re-run to check current files; retained results grant no mutation approval.
-            </p>
-          </section>
-        )}
-        {report && (
+        {section === 'Storage' ? (
           <>
-            {job && <InspectionIssues key={job.id} jobId={job.id} />}
-            {section === 'Duplicates' && (
-              <details>
-                <summary>Format applicability</summary>
-                <p>{report.id3Applicability}</p>
-              </details>
+            {storageDetailsOpen && (
+              <InspectionDialog
+                title="Storage measurement"
+                onClose={() => {
+                  setStorageDetailsOpen(false);
+                  storageDetailsOpener.current?.focus();
+                }}
+              >
+                {error && (
+                  <p role="alert" className="error">
+                    {error}
+                  </p>
+                )}
+                {inspectionDetails}
+              </InspectionDialog>
             )}
-            <p className="inspection-coverage">
-              Inventory:{' '}
-              {report.coverage.enumerationComplete
-                ? 'completed for this eligible scope'
-                : 'incomplete'}{' '}
-              · {report.coverage.excludedEntries} excluded entries/scopes ·{' '}
-              {report.coverage.inaccessibleEntries} inaccessible/unsupported entries ·{' '}
-              {report.coverage.incompleteDirectories} incomplete directories.
-            </p>
-            {section === 'Storage' && report.storage && job && files && (
+            {!job && !error && (
+              <p role="status">Choose Measure storage to explore your selected libraries.</p>
+            )}
+            {job && !report && !error && (
+              <p role="status">
+                {running
+                  ? 'Measuring storage… Open Measurement details for progress or cancellation.'
+                  : 'No storage observations available. Open Measurement details to review or rerun.'}
+              </p>
+            )}
+            {report?.storage && job && files && (
               <StorageExplorer
                 key={job.id}
                 jobId={job.id}
@@ -538,6 +589,8 @@ export function InspectionScreen({
               />
             )}
           </>
+        ) : (
+          inspectionDetails
         )}
         {files && section === 'Integrity' && (
           <section aria-label="Inspected files">

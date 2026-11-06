@@ -23,8 +23,22 @@ describe('Storage explorer · generated native observations', () => {
     await $('button=Save & Start scanning').click();
     await $('.asset-open', { strict: false }).waitForDisplayed({ timeout: 45000 });
     await $('button[aria-label="Storage"]').click();
+    await $('button[aria-label="Storage measurement"]').click();
+    await $('dialog[aria-label="Storage measurement"]').waitForDisplayed();
     await $('button=Start storage inspection').click();
-    await $('.storage-explorer').waitForDisplayed({ timeout: 45000 });
+    await $('.storage-explorer').waitForExist({ timeout: 45000 });
+    await $('dialog[aria-label="Storage measurement"]').$('button=Close').click();
+    assert.equal(await $('button[aria-label="Storage measurement"]').isFocused(), true);
+    assert.equal(
+      await browser.execute(
+        () =>
+          document
+            .querySelector('.inspection-content')
+            ?.firstElementChild?.classList.contains('storage-explorer') &&
+          !document.querySelector('.inspection-setup, .inspection-job, .inspection-coverage'),
+      ),
+      true,
+    );
     const jobs = await invoke('library_request', { request: { kind: 'inspection_jobs' } });
     const job = jobs.data.find((job) => job.input.task.kind === 'storage');
     assert(['completed', 'partial'].includes(job.state), job.message);
@@ -93,6 +107,11 @@ describe('Storage explorer · generated native observations', () => {
       await browser.saveScreenshot(`.context/storage-native/storage-${width}.png`);
     }
     await browser.setWindowSize(1180, 780);
+    await $('button[aria-label="Storage measurement"]').click();
+    await $('dialog[aria-label="Storage measurement"] .inspection-job').waitForDisplayed();
+    await browser.keys('Escape');
+    await $('dialog[aria-label="Storage measurement"]').waitForExist({ reverse: true });
+    assert.equal(await $('button[aria-label="Storage measurement"]').isFocused(), true);
     await $('.storage-toolbar').$('button=Map').click();
     await $('summary=Complete retained folder totals').click();
     await $('.inspection-map').waitForDisplayed();

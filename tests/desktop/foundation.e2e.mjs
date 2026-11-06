@@ -240,6 +240,7 @@ async function reviewReadOnlyInspections(evidence) {
     ['Integrity', 'Start quick header check'],
   ]) {
     await $(`button[aria-label="${section}"]`).click();
+    if (section === 'Storage') await $('button[aria-label="Storage measurement"]').click();
     if (!(await $('.inspection-controls').isDisplayed()))
       await $('.inspection-setup > summary').click();
     await $('.inspection-controls').waitForDisplayed();
@@ -257,7 +258,8 @@ async function reviewReadOnlyInspections(evidence) {
     );
     assert.ok(['completed', 'partial'].includes(job.state), job.message);
     if (section === 'Storage') {
-      await $('.storage-explorer').waitForDisplayed();
+      await $('.storage-explorer').waitForExist();
+      await $('dialog[aria-label="Storage measurement"]').$('button=Close').click();
       await $('.storage-toolbar').$('button=List').click();
     }
     await $(
@@ -272,6 +274,7 @@ async function reviewReadOnlyInspections(evidence) {
     assert.ok(bytes.every((value, index) => index === 0 || value <= bytes[index - 1]));
     assert.equal(report.storage.quarantineFreedBytes, '0');
     assert.equal(report.storage.reclaimablePhysicalBytes, null);
+    if (section === 'Storage') await $('button[aria-label="Storage measurement"]').click();
     await browser.waitUntil(async () =>
       browser.execute(
         () =>
@@ -284,6 +287,8 @@ async function reviewReadOnlyInspections(evidence) {
     await browser.saveScreenshot(
       `.context/screenshots/m3-${section.toLowerCase()}-${process.platform}.png`,
     );
+    if (section === 'Storage')
+      await $('dialog[aria-label="Storage measurement"]').$('button=Close').click();
     let displayedRows = [];
     if (section === 'Duplicates') {
       const groups = (await native({ kind: 'inspection_groups', job_id: job.id, after: null }))
