@@ -7,10 +7,14 @@ export function InspectionDialog({
   title,
   children,
   onClose,
+  footer,
+  busy = false,
 }: {
   title: string;
   children: ReactNode;
   onClose: () => void;
+  footer?: ReactNode;
+  busy?: boolean;
 }) {
   const [element, setElement] = useState<HTMLDialogElement | null>(null);
   const styles = useRecipe({ recipe: inspectionDialogRecipe })();
@@ -19,6 +23,7 @@ export function InspectionDialog({
     return () => element?.close();
   }, [element]);
   function close() {
+    if (busy) return;
     element?.close();
     onClose();
   }
@@ -35,9 +40,12 @@ export function InspectionDialog({
       >
         <header>
           <h2>{title}</h2>
-          <Button onClick={close}>Close</Button>
+          <Button disabled={busy} onClick={close}>
+            Close
+          </Button>
         </header>
         <div className="inspection-content">{children}</div>
+        {footer && <footer className="inspection-dialog-footer">{footer}</footer>}
       </dialog>
     </Box>
   );

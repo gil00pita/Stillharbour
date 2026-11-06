@@ -199,6 +199,32 @@ impl LibraryFixture {
             baseline,
         })
     }
+    /// Separate generated keyword fixture; never changes a caller-provided path.
+    pub fn generate_tagged() -> Result<Self> {
+        let mut fixture = Self::generate()?;
+        for (name, labels) in [
+            (
+                "Coast/Generated-00.jpg",
+                "<rdf:li>Coast</rdf:li><rdf:li>Outdoors</rdf:li>",
+            ),
+            ("Coast/Generated-06.jpg", "<rdf:li>Outdoors</rdf:li>"),
+        ] {
+            let path = fixture.path().join(name);
+            let original = std::fs::read(&path)?;
+            let xml = format!(
+                r#"<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"><rdf:Description xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:subject><rdf:Bag>{labels}</rdf:Bag></dc:subject></rdf:Description></rdf:RDF></x:xmpmeta>"#
+            );
+            let mut packet = b"http://ns.adobe.com/xap/1.0/\0".to_vec();
+            packet.extend(xml.as_bytes());
+            let mut tagged = vec![0xff, 0xd8, 0xff, 0xe1];
+            tagged.extend(((packet.len() + 2) as u16).to_be_bytes());
+            tagged.extend(packet);
+            tagged.extend(&original[2..]);
+            std::fs::write(path, tagged)?;
+        }
+        fixture.baseline = manifest(fixture.path())?;
+        Ok(fixture)
+    }
     pub fn generate() -> Result<Self> {
         Self::generate_in(None)
     }

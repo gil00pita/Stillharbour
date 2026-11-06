@@ -550,7 +550,7 @@ pub struct Metadata {
 pub fn legacy_windows_metadata(catalog: &Catalog, id: String, revision: String) -> Result<bool> {
     catalog.call(move |db| {
         Ok(db.query_row(
-            "SELECT coalesce(CASE WHEN length(CAST(raw_metadata AS BLOB))<=1048576 THEN CASE WHEN json_valid(raw_metadata) THEN json_extract(raw_metadata,'$[0].StillharbourMetadataPolicy') END END='windows-basic-v1',0) FROM assets WHERE id=? AND revision=?",
+            "SELECT coalesce(CASE WHEN length(CAST(raw_metadata AS BLOB))<=1048576 THEN CASE WHEN json_valid(raw_metadata) THEN json_extract(raw_metadata,'$[0].StillharbourMetadataPolicy') END END IN ('windows-basic-v1','windows-exif-v2'),0) FROM assets WHERE id=? AND revision=?",
             params![id, revision], |r| r.get(0),
         )?)
     })
@@ -564,10 +564,14 @@ pub fn metadata(
     excluded: bool,
 ) -> Result<()> {
     catalog.call(move|db|{
+    let tx=db.transaction()?;
     if let Some(m)=value {
-        db.execute("UPDATE assets SET date=coalesce(?1,date),date_source=CASE WHEN ?1 IS NULL THEN date_source ELSE ?2 END,raw_date=?3,offset=?4,width=?5,height=?6,camera=?7,detected_format=coalesce(?8,detected_format),raw_metadata=?9,metadata_state='ready',metadata_error=?10,presence=CASE WHEN ?11 THEN 'excluded' ELSE presence END,content_digest=?14 WHERE id=?12 AND revision=?13",params![m.date,m.source,m.raw_date,m.offset,m.width,m.height,m.camera,m.format,m.raw,error,excluded,id,revision,m.digest])?;
-    } else {db.execute("UPDATE assets SET metadata_state='unavailable',metadata_error=?,presence=CASE WHEN ? THEN 'excluded' ELSE presence END WHERE id=? AND revision=?",params![error,excluded,id,revision])?;}
-    bump(db)
+        tx.execute("UPDATE assets SET date=coalesce(?1,date),date_source=CASE WHEN ?1 IS NULL THEN date_source ELSE ?2 END,raw_date=?3,offset=?4,width=?5,height=?6,camera=?7,detected_format=coalesce(?8,detected_format),raw_metadata=?9,metadata_state='ready',metadata_error=?10,presence=CASE WHEN ?11 THEN 'excluded' ELSE presence END,content_digest=?14 WHERE id=?12 AND revision=?13",params![m.date,m.source,m.raw_date,m.offset,m.width,m.height,m.camera,m.format,m.raw,error,excluded,id,revision,m.digest])?;
+    } else {tx.execute("UPDATE assets SET metadata_state='unavailable',metadata_error=?,presence=CASE WHEN ? THEN 'excluded' ELSE presence END WHERE id=? AND revision=?",params![error,excluded,id,revision])?;}
+    if tx.prepare("SELECT 1 FROM assets WHERE id=? AND revision=? AND metadata_state='ready'")?.exists(params![id,revision])? { super::catalog_metadata::import_scanned_keywords(&tx, &id)?; }
+    bump(&tx)?;
+    tx.commit()?;
+    Ok(())
 })
 }
 
@@ -1702,6 +1706,10 @@ mod preview_policy_tests {
             ),
             (
                 r#"[{"StillharbourMetadataPolicy":"windows-exif-v2"}]"#,
+                true,
+            ),
+            (
+                r#"[{"StillharbourMetadataPolicy":"windows-exif-v3"}]"#,
                 false,
             ),
             ("not JSON", false),

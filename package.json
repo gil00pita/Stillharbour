@@ -40,7 +40,8 @@
     "perf:catalog": "python3 scripts/performance/run.py",
     "perf:p1": "python3 scripts/performance/run.py --phase p1",
     "perf:desktop": "wdio run wdio.performance.conf.mjs",
-    "desktop:test:metadata": "node scripts/map-desktop-test.mjs --metadata"
+    "desktop:test:metadata": "node scripts/map-desktop-test.mjs --metadata",
+    "desktop:test:albums": "node scripts/albums-desktop-test.mjs"
   },
   "dependencies": {
     "@chakra-ui/react": "3.37.0",

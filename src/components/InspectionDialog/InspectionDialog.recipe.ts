@@ -23,5 +23,16 @@ export const inspectionDialogRecipe = defineRecipe({
     },
     '& > header h2': { fontSize: '18px', margin: 0 },
     '& .inspection-content': { paddingTop: 0 },
+    '& > .inspection-dialog-footer': {
+      flexShrink: 0,
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      flexWrap: 'wrap',
+      padding: '16px 24px',
+      borderTop: '1px solid {colors.border}',
+      background: 'bg.panel',
+    },
+    '& > .inspection-dialog-footer > span': { marginRight: 'auto', color: 'fg.muted' },
   },
 });

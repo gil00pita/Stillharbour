@@ -80,3 +80,7 @@ Catalog-only transactions such as saving a tag do not need a full filesystem-ope
 Catalog import is not SQL script execution or permission import. Disable privileged custom SQL functions, unapproved ATTACH operations, extension loading and automatic jobs. Use restricted read validation before approved migrations. No schema-triggered filesystem access.
 
 Clock times preserve uncertainty; stable sequence is not evidence of capture order. Catalog restore/import invalidates prior approvals, mutable queued jobs and stale current-availability claims. A checksum match of a restored database is not proof that referenced media still exists.
+
+## Implemented album projection — 2026-11-06
+
+[ADR-0093](decisions/ADR-0093-tag-albums-and-atomic-creation.md) reuses catalog collections/members, asset tags, raw source observations and tag override/history tables. No schema migration. AlbumPage returns at most 48 summaries and two bounded cover summaries each; CreateAlbum transactionally validates/saves a name and up to 500 distinct existing media IDs. Subsequent additions retain version checking and the membership primary key. Tag albums project exact catalog tag labels into existing AssetQuery filters. Source keyword import on fresh/cached scans respects tombstones and never writes sources.

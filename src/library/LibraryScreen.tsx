@@ -1,3 +1,4 @@
+import { PhotoAlbumActions } from '../components/PhotoAlbumActions';
 import { Button } from '../components/ui/controls';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { AssetSummary, AssetQuery, LibraryStatus } from '../bindings';
@@ -21,6 +22,7 @@ import { type ViewMode, type Section } from './model';
 
 export type { Section } from './model';
 export function LibraryScreen({
+  albumControls,
   initialQuery,
   initialSelectedId,
   onReturnToMap,
@@ -35,6 +37,7 @@ export function LibraryScreen({
   onSettings,
   onRelink,
 }: {
+  albumControls?: ReactNode;
   initialQuery?: AssetQuery | undefined;
   initialSelectedId?: string | null | undefined;
   onReturnToMap?: (() => void) | undefined;
@@ -115,163 +118,166 @@ export function LibraryScreen({
     />
   );
   return (
-    <div className="library-page">
-      <div
-        className="library-underlay"
-        inert={Boolean(viewerInitial)}
-        aria-hidden={Boolean(viewerInitial)}
-      >
-        {header}
-        {query.albumId && (
-          <div className="catalog-collection-scope">
-            <span>Virtual album filter active</span>
-            <Button onClick={() => filter({ albumId: null })}>Clear album filter</Button>
-          </div>
-        )}
-        {(query.mapBounds || query.mapCell || query.location) && (
-          <div className="map-filters">
-            <span>
-              {query.location === 'unavailable'
-                ? 'Photos with no usable location'
-                : 'Photos from the selected map area'}
-            </span>
-            {onReturnToMap && <Button onClick={onReturnToMap}>Return to map</Button>}
-            <Button onClick={() => filter({ mapBounds: null, mapCell: null, location: null })}>
-              Clear location filter
-            </Button>
-          </div>
-        )}
-        <div className="library-content">
-          <PreparationBanner status={status} rootId={query.rootId} onRefresh={onRefresh} />
-          <div className="library-content-body">
-            {selectionCount > 0 && (
-              <BatchToolbar
-                loading={loading}
-                total={page?.total ?? 0}
-                count={selectionCount}
-                busy={batchBusy}
-                frozen={frozen}
-                canCompare={!frozen && selected.size >= 2 && selected.size <= 4}
-                onCompare={() => void openComparison()}
-                onOrganization={() => setOrganizationIds([...selected])}
-                onAlbum={() => setCatalogOpen(true)}
-                onTags={c.addTags}
-                onFreeze={() => void c.freeze()}
-                onFavorite={() =>
-                  void c.annotate({ favorite: true, rating: null, tags: null }).catch(onError)
-                }
-                onClear={c.clear}
-              />
-            )}
-            {mode === 'list' && (
-              <TextListControls
-                columns={columns}
-                onColumns={setColumns}
-                sort={query.sort}
-                onSort={(sort) => filter({ sort })}
-                busy={loading || batchBusy}
-              />
-            )}
-            {queryError ? (
-              <QueryFailure loading={loading} onRetry={c.retry} />
-            ) : (
-              <PhotoCollection
-                columns={columns}
-                display={display}
-                viewportHandle={viewportHandle}
-                controller={c}
-                status={status}
-                mode={mode}
-                viewerOpen={Boolean(
-                  viewerInitial ||
-                  comparison ||
-                  filterOpen ||
-                  organizationIds ||
-                  plansOpen ||
-                  catalogOpen,
-                )}
-                onOpen={(id, opener) => {
-                  const asset = page?.assets.find((asset) => asset.id === id);
-                  if (asset && !loading) {
-                    returnPosition.current = opener.closest('.asset-viewport')?.scrollTop ?? 0;
-                    returnFocus.current = opener;
-                    setOrigin(photoOrigin(opener));
-                    setViewerInitial(asset);
+    <PhotoAlbumActions status={status} onChanged={onRefresh}>
+      <div className="library-page">
+        <div
+          className="library-underlay"
+          inert={Boolean(viewerInitial)}
+          aria-hidden={Boolean(viewerInitial)}
+        >
+          {header}
+          {albumControls}
+          {!albumControls && query.albumId && (
+            <div className="catalog-collection-scope">
+              <span>Virtual album filter active</span>
+              <Button onClick={() => filter({ albumId: null })}>Clear album filter</Button>
+            </div>
+          )}
+          {(query.mapBounds || query.mapCell || query.location) && (
+            <div className="map-filters">
+              <span>
+                {query.location === 'unavailable'
+                  ? 'Photos with no usable location'
+                  : 'Photos from the selected map area'}
+              </span>
+              {onReturnToMap && <Button onClick={onReturnToMap}>Return to map</Button>}
+              <Button onClick={() => filter({ mapBounds: null, mapCell: null, location: null })}>
+                Clear location filter
+              </Button>
+            </div>
+          )}
+          <div className="library-content">
+            <PreparationBanner status={status} rootId={query.rootId} onRefresh={onRefresh} />
+            <div className="library-content-body">
+              {selectionCount > 0 && (
+                <BatchToolbar
+                  loading={loading}
+                  total={page?.total ?? 0}
+                  count={selectionCount}
+                  busy={batchBusy}
+                  frozen={frozen}
+                  canCompare={!frozen && selected.size >= 2 && selected.size <= 4}
+                  onCompare={() => void openComparison()}
+                  onOrganization={() => setOrganizationIds([...selected])}
+                  onAlbum={() => setCatalogOpen(true)}
+                  onTags={c.addTags}
+                  onFreeze={() => void c.freeze()}
+                  onFavorite={() =>
+                    void c.annotate({ favorite: true, rating: null, tags: null }).catch(onError)
                   }
-                }}
-              />
-            )}
-            <p className="screen-reader-status" role="status">
-              {notice}
-            </p>
+                  onClear={c.clear}
+                />
+              )}
+              {mode === 'list' && (
+                <TextListControls
+                  columns={columns}
+                  onColumns={setColumns}
+                  sort={query.sort}
+                  onSort={(sort) => filter({ sort })}
+                  busy={loading || batchBusy}
+                />
+              )}
+              {queryError ? (
+                <QueryFailure loading={loading} onRetry={c.retry} />
+              ) : (
+                <PhotoCollection
+                  columns={columns}
+                  display={display}
+                  viewportHandle={viewportHandle}
+                  controller={c}
+                  status={status}
+                  mode={mode}
+                  viewerOpen={Boolean(
+                    viewerInitial ||
+                    comparison ||
+                    filterOpen ||
+                    organizationIds ||
+                    plansOpen ||
+                    catalogOpen,
+                  )}
+                  onOpen={(id, opener) => {
+                    const asset = page?.assets.find((asset) => asset.id === id);
+                    if (asset && !loading) {
+                      returnPosition.current = opener.closest('.asset-viewport')?.scrollTop ?? 0;
+                      returnFocus.current = opener;
+                      setOrigin(photoOrigin(opener));
+                      setViewerInitial(asset);
+                    }
+                  }}
+                />
+              )}
+              <p className="screen-reader-status" role="status">
+                {notice}
+              </p>
+            </div>
           </div>
         </div>
+        {catalogOpen && (
+          <CatalogOrganizer
+            roots={status.roots}
+            query={query}
+            selection={c.selection.scope}
+            selectionCount={selectionCount}
+            onBrowse={filter}
+            onChanged={onRefresh}
+            onClose={() => setCatalogOpen(false)}
+          />
+        )}
+        {filterOpen && (
+          <FilterPanel
+            controller={c}
+            status={status}
+            section={section}
+            mode={mode}
+            display={display}
+            onClose={() => setFilterOpen(false)}
+            onSettings={onSettings}
+            onRelink={onRelink}
+            onApply={(draft, nextMode, nextDisplay) => {
+              viewportHandle.current?.remember();
+              if (JSON.stringify(draft) !== JSON.stringify(query)) filter(draft);
+              setMode(nextMode);
+              setDisplay(nextDisplay);
+            }}
+          />
+        )}
+        {viewerInitial && (
+          <PhotoViewer
+            key={viewerInitial.id}
+            initial={viewerInitial}
+            origin={origin}
+            pageAssets={page?.assets ?? []}
+            query={query}
+            status={status}
+            onAnnotate={c.annotate}
+            onError={onError}
+            onClose={() => {
+              setViewerInitial(null);
+              restoreAssetFocus(viewerInitial.id, returnFocus.current, returnPosition.current);
+            }}
+          />
+        )}
+        {comparison && (
+          <ComparisonViewer
+            assets={comparison}
+            status={status}
+            onError={onError}
+            onClose={() => setComparison(null)}
+          />
+        )}
+        {organizationIds && (
+          <OrganizationPreview
+            catalogId={catalogId}
+            preferredImportRoot={status.importDestination ?? null}
+            assetIds={organizationIds}
+            revision={status.revision}
+            roots={status.roots}
+            onClose={() => setOrganizationIds(null)}
+          />
+        )}
+        {plansOpen && <SavedOrganizationPlans onClose={() => setPlansOpen(false)} />}
       </div>
-      {catalogOpen && (
-        <CatalogOrganizer
-          roots={status.roots}
-          query={query}
-          selection={c.selection.scope}
-          selectionCount={selectionCount}
-          onBrowse={filter}
-          onChanged={onRefresh}
-          onClose={() => setCatalogOpen(false)}
-        />
-      )}
-      {filterOpen && (
-        <FilterPanel
-          controller={c}
-          status={status}
-          section={section}
-          mode={mode}
-          display={display}
-          onClose={() => setFilterOpen(false)}
-          onSettings={onSettings}
-          onRelink={onRelink}
-          onApply={(draft, nextMode, nextDisplay) => {
-            viewportHandle.current?.remember();
-            if (JSON.stringify(draft) !== JSON.stringify(query)) filter(draft);
-            setMode(nextMode);
-            setDisplay(nextDisplay);
-          }}
-        />
-      )}
-      {viewerInitial && (
-        <PhotoViewer
-          key={viewerInitial.id}
-          initial={viewerInitial}
-          origin={origin}
-          pageAssets={page?.assets ?? []}
-          query={query}
-          status={status}
-          onAnnotate={c.annotate}
-          onError={onError}
-          onClose={() => {
-            setViewerInitial(null);
-            restoreAssetFocus(viewerInitial.id, returnFocus.current, returnPosition.current);
-          }}
-        />
-      )}
-      {comparison && (
-        <ComparisonViewer
-          assets={comparison}
-          status={status}
-          onError={onError}
-          onClose={() => setComparison(null)}
-        />
-      )}
-      {organizationIds && (
-        <OrganizationPreview
-          catalogId={catalogId}
-          preferredImportRoot={status.importDestination ?? null}
-          assetIds={organizationIds}
-          revision={status.revision}
-          roots={status.roots}
-          onClose={() => setOrganizationIds(null)}
-        />
-      )}
-      {plansOpen && <SavedOrganizationPlans onClose={() => setPlansOpen(false)} />}
-    </div>
+    </PhotoAlbumActions>
   );
 }
 
