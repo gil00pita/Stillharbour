@@ -1,7 +1,8 @@
 import { useRef, useState, type MouseEvent } from 'react';
 import { Box, Field, useRecipe } from '@chakra-ui/react';
 import type { DuplicatePage, FindingPage, InspectionJob, LibraryStatus } from '../../bindings';
-import { Button, Input } from '../ui/controls';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
 import { displayBytes } from '../../inspection/format';
 import { evidenceLabels, initialCleanupPolicy } from './model';
 import { DuplicateDetail } from './components/DuplicateDetail';

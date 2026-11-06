@@ -1,7 +1,9 @@
 import { Field, Popover, Portal, Stack } from '@chakra-ui/react';
 import { useState } from 'react';
 import type { AssetQuery, LibraryStatus } from '../../bindings';
-import { Button, Input, Select } from '../ui/controls';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { NativeSelect } from '@/components/NativeSelect';
 
 export function MapFilters({
   query,
@@ -59,7 +61,7 @@ export function MapFilters({
                 <Popover.Title>Map filters</Popover.Title>
                 <Field.Root>
                   <Field.Label>Library folder</Field.Label>
-                  <Select
+                  <NativeSelect
                     value={query.rootId ?? ''}
                     onChange={(event) => onFilter({ rootId: event.target.value || null })}
                   >
@@ -70,7 +72,7 @@ export function MapFilters({
                         {root.availability === 'offline' ? ' · Offline' : ''}
                       </option>
                     ))}
-                  </Select>
+                  </NativeSelect>
                 </Field.Root>
                 <Field.Root>
                   <Field.Label>From</Field.Label>

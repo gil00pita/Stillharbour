@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Button } from '../../ui/controls';
+import { Button } from '@/components/Button';
 
 export function ReviewDialog({
   title,

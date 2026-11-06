@@ -1,41 +1,21 @@
-import { AlbumActions, usePhotoAlbumMenu, type OpenMenu } from './context';
-import { useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Box, IconButton, Menu, Portal, useRecipe } from '@chakra-ui/react';
+import { AlbumActions, type OpenMenu, type PhotoSelection } from './context';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Box, Menu, Portal, useRecipe } from '@chakra-ui/react';
 import type { AssetSummary, CatalogCollection, LibraryStatus } from '../../bindings';
 import { metadata } from '../../metadata/ipc';
 import { errorMessage } from '../../ipc';
-import { InspectionDialog } from '../InspectionDialog';
-import { AlbumEditor } from '../AlbumEditor';
-import { Button } from '../ui/controls';
+import { InspectionDialog } from '@/components/InspectionDialog';
+import { AlbumEditor } from '@/components/AlbumEditor';
+import { Button } from '@/components/Button';
 import { photoAlbumActionsRecipe } from './PhotoAlbumActions.recipe';
 
-export function PhotoAlbumButton({ asset }: { asset: AssetSummary }) {
-  const open = usePhotoAlbumMenu(asset);
-  const state = useContext(AlbumActions);
-  if (!open) return null;
-  return (
-    <IconButton
-      type="button"
-      className="photo-album-menu-button"
-      aria-label={`Options for ${asset.name}`}
-      aria-haspopup="menu"
-      aria-expanded={state?.activeId === asset.id}
-      onClick={open}
-      variant="outline"
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <circle cx="5" cy="12" r="1.5" />
-        <circle cx="12" cy="12" r="1.5" />
-        <circle cx="19" cy="12" r="1.5" />
-      </svg>
-    </IconButton>
-  );
-}
 export function PhotoAlbumActions({
   status,
   children,
   onChanged,
+  selection,
 }: {
+  selection?: PhotoSelection;
   status: LibraryStatus;
   children: ReactNode;
   onChanged: () => Promise<void>;
@@ -52,30 +32,41 @@ export function PhotoAlbumActions({
   const show = useCallback<OpenMenu>((asset, event) => {
     opener.current = event.currentTarget.matches('button')
       ? event.currentTarget
-      : event.currentTarget.querySelector<HTMLElement>('.photo-album-menu-button');
+      : event.currentTarget.querySelector<HTMLElement>('.asset-open');
     const rect = event.currentTarget.getBoundingClientRect();
     setAnchor(
-      event.type === 'contextmenu'
+      event.type === 'contextmenu' && 'clientX' in event
         ? { x: event.clientX, y: event.clientY }
         : { x: rect.left, y: rect.bottom },
     );
     setTarget(asset);
     setOpen(true);
   }, []);
+  // Floating UI observes the anchor by identity, so keep it stable for each context point.
+  const virtualAnchor = useMemo(
+    () => ({ getBoundingClientRect: () => new DOMRect(anchor.x, anchor.y, 0, 0) }),
+    [anchor],
+  );
   const styles = useRecipe({ recipe: photoAlbumActionsRecipe })();
   return (
-    <AlbumActions.Provider value={{ show, activeId: open ? (target?.id ?? null) : null }}>
+    <AlbumActions.Provider value={{ show, selection }}>
       {children}
       <span className="screen-reader-status" role="status">
         {notice}
       </span>
       <Menu.Root
+        key={`${anchor.x}:${anchor.y}`}
         open={open}
         onOpenChange={(e) => {
           setOpen(e.open);
           if (!e.open) restore();
         }}
-        anchorPoint={anchor}
+        positioning={{
+          strategy: 'fixed',
+          placement: 'bottom-start',
+          gutter: 0,
+          getAnchorElement: () => virtualAnchor,
+        }}
       >
         <Portal>
           <Menu.Positioner>
@@ -89,6 +80,22 @@ export function PhotoAlbumActions({
               minW="64"
               zIndex="popover"
             >
+              {selection && (
+                <Menu.Item
+                  value="select-photo"
+                  disabled={selection.disabled}
+                  cursor="pointer"
+                  p="3"
+                  _highlighted={{ bg: 'bg.hover' }}
+                  onClick={() => {
+                    if (!target || selection.disabled) return;
+                    selection.onSelect(target);
+                    setOpen(false);
+                  }}
+                >
+                  Select
+                </Menu.Item>
+              )}
               <Menu.Item
                 value="add-to-album"
                 cursor="pointer"

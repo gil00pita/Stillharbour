@@ -2,8 +2,8 @@ import { fixturePreferences } from './__tests__/fixtures';
 import { fireEvent, render, screen, waitFor } from '../test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { libraryData } from '../ipc';
-import { Inspector } from './Inspector';
-import { LibraryScreen } from './LibraryScreen';
+import { Inspector } from '@/components/Inspector';
+import { LibraryScreen } from '@/components/LibraryScreen';
 vi.mock('../ipc', async (original) => ({
   ...(await original<typeof import('../ipc')>()),
   libraryData: vi.fn(),

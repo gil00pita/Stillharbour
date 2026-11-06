@@ -1,0 +1,23 @@
+export const colors = {
+  harbour: {
+    canvas: { value: '#191b19' },
+    sidebar: { value: '#131612' },
+    toolbar: { value: '#1c1f1b' },
+    navigation: { value: '#2b3327' },
+    panel: { value: '#212420' },
+    input: { value: '#171a17' },
+    ink: { value: '#eeeee8' },
+    muted: { value: '#a9afa4' },
+    secondary: { value: '#c8ccc2' },
+    border: { value: '#323830' },
+    controlBorder: { value: '#6d7567' },
+    buttonBorder: { value: '#687161' },
+    hover: { value: '#2b3029' },
+    accent: { value: '#c1d0b5' },
+    accentHover: { value: '#d4dfcb' },
+    onAccent: { value: '#202a1b' },
+    selected: { value: '#374231' },
+    danger: { value: '#f2c5b4' },
+    dangerBg: { value: '#30231e' },
+  },
+};

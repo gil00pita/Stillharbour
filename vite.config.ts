@@ -1,12 +1,15 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig(({ mode }) => ({
   resolve: {
-    alias:
-      mode === 'desktop-test' && process.env.STILLHARBOUR_REACT_PROFILE === '1'
+    alias: {
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      ...(mode === 'desktop-test' && process.env.STILLHARBOUR_REACT_PROFILE === '1'
         ? { 'react-dom/client': 'react-dom/profiling' }
-        : {},
+        : {}),
+    },
   },
   plugins: [react()],
   server: {

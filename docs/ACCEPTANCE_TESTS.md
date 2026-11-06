@@ -348,13 +348,13 @@ This replaces the earlier gapless/no-checkbox requirements; their historical evi
 - Native pages return at most240 entries, directories first and stable native-byte keyset order, with counts and Previous/Next items. No full-tree renderer list, raw SQL/path execution or live directory enumeration is added. Reject cross-folder/root/search cursors, invalid IDs and out-of-range limits. Distinct native path bytes retain distinct IDs even with identical lossy labels; this is not proof the host filesystem supports creating those names.
 - Native exact-directory media queries exclude nested files and bypass whole-root inventory count shortcuts. Existing recursive folder filters remain compatible. Other Photos/Settings/removal workflows retain their preservation gates. Generated source manifests, catalog UUID/schema/root IDs stay unchanged through browsing. Windows, physical gestures, screen-reader/deep-path/large-folder performance need their own evidence.
 
-### Header Jobs dropdown and sidebar Settings — owner revision, 2026-10-28
+### Jobs page and sidebar Settings — owner revision, 2026-11-06
 
-- Jobs has no dedicated route or sidebar entry. Every screen header (onboarding, Photos/Tags, Folders and Settings) offers an icon button named Jobs with expanded state, an active-count badge and accessible count description. Settings stays in the sidebar footer above the version in expanded/collapsed layouts.
-- Click or keyboard activation opens a nonmodal dropdown with all running/cancel-requested scans from native status. Preserve current gallery query, selection, mode and scroll position. Status continues to poll; completion removes the active badge and retains the outcome in collapsed Recent jobs. Connecting and No running jobs are distinct states.
-- Reuse the truthful indeterminate progress/counts and explicit terminal outcomes. Cancel uses only the backend-issued job ID, disables while stopping, refreshes native status and exposes failure rather than claiming success. Issue details load only on request, escape untrusted text, ignore stale results after closure, and remain recoverable after a failed request.
-- Opening focuses the dropdown. Escape or Close dismisses and returns focus to Jobs; outside pointer or focus dismisses without stealing focus. No modal backdrop or focus trap blocks the underlying workspace. The overlay escapes page clipping and remains within the viewport, including after resize, with its own bounded scroll area.
-- Native checks at1180×780 and660×560 cover expanded/collapsed navigation, running/recent jobs, keyboard dismissal, reachable controls and unchanged generated originals. Settings/footer remains anchored while main content scrolls. No schema/IPC/scanner or original-file-write feature is introduced.
+- The Jobs entry above Settings opens a dedicated main-pane page with a focused heading, an active-count badge and accessible count description. Jobs alone is marked current while open. This supersedes the earlier header/dropdown requirement.
+- Show all native running/cancel-requested scans and other existing job kinds. Preserve the previous screen's query, selection, draft and scroll position while it stays mounted, hidden and inert. Status continues to poll; completion clears the active badge and retains outcomes under collapsed Recent jobs. Connecting and No running jobs remain distinct.
+- Reuse truthful indeterminate progress/counts and explicit terminal outcomes. Cancel uses only the backend-issued job ID, disables while stopping, refreshes native status and exposes failures. Issue details remain lazy, safely rendered and guarded against late responses after navigation.
+- Back returns to the previous screen and restores Jobs button focus. Sidebar navigation also leaves Jobs. Escape/outside interaction does not dismiss a page, and there is no portal, popup positioning, backdrop or focus trap.
+- Native checks at 1180×780 and 660×560 cover expanded/collapsed navigation, running/recent jobs, return paths, reachable controls and unchanged generated originals. Settings/footer stays anchored while main scrolls. No schema/IPC/scanner or original-file-write feature is introduced.
 
 ### P1 performance regression gate — 2026-10-28
 
@@ -652,7 +652,7 @@ The owner authorized M5 development after the readiness review; this does not ce
 | M5-G03 | Identical and dispersed dense locations never exceed 256 clusters; count sums retain all matching points. | Generated 4,000-point core fixture; this is bounded correctness, not a throughput benchmark. |
 | M5-G04 | Metadata invalidation and catalog deletion reconcile derived locations; read-only map queries do not rewrite raw observations or originals. | Trigger/read-only core fixtures plus native independent generated-file audit. |
 | M5-G05 | Known schema-13/14/15 bound startup validates the exact compiled historical layout before current schema-16 migration, preserves UUID/root/annotation/raw data, retains an independently openable prior catalog and rejects unfamiliar schemas/name collisions. | New migration tests and extended existing actual child-exit matrix; no Keychain reset or schema bypass. |
-| M5-G06 | Folder/date/viewport/cell filters and representative selection survive Show in library and Return to map; stale responses/errors never appear as another scope's success. | Component cases plus native UI checks; map strip uses 80-row keyset pages. |
+| M5-G06 | Folder/date/viewport/cell filters and representative selection survive Show in photos and Return to map; stale responses/errors never appear as another scope's success. | Component cases plus native UI checks; map strip uses 80-row keyset pages. |
 | M5-G07 | Offline geometry/attribution and locally bundled worker function under the restricted CSP, without public tile or geocoder requests. | Native screenshots and main-WebView resource timing; worker/OS network interception and clean targets remain qualified. |
 | M5-G08 | Keyboard map controls and the photo-list alternative remain reachable at minimum size; graphics failure keeps the list usable. | Component fallback plus native size evidence; full AC-079 screen-reader/manual review remains open. |
 
@@ -844,7 +844,7 @@ Other rejected requests retain the brief-wait/retry advice.
 
 These presentation checks supplement existing M3/M6 gates; they do not pass production duplicate removal.
 
-- Secondary actions have flat fills, with visible keyboard focus and pressed states. Utilities contains exactly Duplicates, Integrity, Storage and Backup & Sync. Jobs opens from above Settings in the sidebar footer, at desktop/minimum widths and with collapsed navigation, without changing the current page.
+- Secondary actions have flat fills, with visible keyboard focus and pressed states. Utilities contains exactly Duplicates, Integrity, Storage and Backup & Sync. Jobs opens a dedicated page from above Settings in the sidebar footer, at desktop/minimum widths and with collapsed navigation. It fills main, focuses its heading and marks Jobs current. Back restores the retained previous screen/draft/selection and opener focus; ordinary sidebar navigation also leaves Jobs. Escape/outside interaction does not dismiss it.
 - Photos/Tags/Map have one filename/date/place search and no Places button. Typing, explicit city/country choice, same-name disambiguation, clearing, lookup failure/retry, keyboard focus and Escape work. Selecting a place clears the lookup term; filename/date typing can subsequently narrow its GPS scope.
 - Duplicate clusters expose retained evidence and file/candidate counts. Search/filter and shown-group selection have explicit page scope. Exact matches remain separate from normalized/property candidates and linked objects; Can automate reports the closed recovery gate.
 - Selecting a cluster loads native members. Two indexed media files support side by side, range-controlled overlay and rendered-preview heatmap, including unavailable/retry states. Labels disclose the 512 px limit and absence of original equality/cleanup authority.
@@ -886,7 +886,38 @@ These extend the existing album/tag criteria; they do not replace preservation g
 - Show custom and automatic cover tiles in one searchable grid without type filters. Verify empty/no-match/error/retry states and narrow layout. Open a tile through the existing photo browser.
 - Create an empty or populated custom album using New album and the searchable library picker. Save initial memberships atomically. Reject trimmed/case duplicate names, existing tag names, invalid IDs and repeated IDs without creating a partial album. Reopen the catalog with memberships retained.
 - Add photos to a custom album without replacing prior members. Repeated additions remain unique; stale versions fail visibly.
-- Use both right-click and each photo's accessible menu button to Add to album. Choose an active custom album or create a new album with the photo selected; verify keyboard dismissal/focus return and touch-equivalent activation.
+- Use right-click and Shift+F10/the context-menu key to Add to album. There is no per-photo dots button. Choose an active custom album or create a new album with the photo selected; verify keyboard dismissal/focus return.
 - Run bounded hostile/oversized keyword parser cases; no external entities, source writes or partial tag import. Record platform-specific native evidence and explicit unsupported encodings.
 
 [ALBUMS_TAGS.md](ALBUMS_TAGS.md) owns the current limits and generated native smoke command.
+
+
+### Jobs page — owner revision, 2026-11-06
+
+- Jobs is accessible before library registration and while native status is connecting. It is a named page inside main, never a dialog or portalled popover. The sidebar button retains the truthful running-job count and uses aria-current rather than popup/expanded attributes.
+- Keep all existing scan/thumbnail, copy, organization, inspection, recovery and history controls with their native IDs, explicit errors and safety guards. Opening the page never starts or approves a job. Status changes remain live through the existing poll.
+- The prior screen remains mounted, hidden and inert while Jobs is shown. Back preserves unsaved folder/Settings drafts, query, selection and browsing position, restores main scrolling and focuses the sidebar Jobs button. Switching to another sidebar destination closes the page.
+- At 1180×780 and 660×560 the page fills the available main width, scrolls independently of the anchored sidebar actions, and has no horizontal overflow. Keyboard Escape does not close it; its Back action and sidebar destinations remain operable.
+
+
+### Shared header and photo context actions — 2026-11-06
+
+- Setup, Photos, Albums / Tags, Folders, Map, Duplicates, Integrity, Storage, Backup & Sync, Settings and Jobs have 64 px primary headers aligned with the sidebar brand, using the same title line height. Check expanded and compact navigation at desktop/minimum widths without horizontal overflow.
+- Sidebar and page titles prevent native context menus and text selection. Search/other form inputs retain editing, selection and their native context menu.
+- Catalog and Saved plans are available on Albums / Tags and absent from the Photos header. Existing catalog browse queries open Photos; real plans, errors and approval gates remain intact.
+- Photo/day checkboxes are absent while browsing. Toolbar Select reveals them; context Select reveals them and selects that photo. Subsequent photo clicks toggle selection; Done selecting clears it and hides checkboxes. Preserve selection through display changes/Jobs, busy guards and photo viewer opening when browsing.
+- Right-click opens a single portalled Chakra menu offering Select and Add to album without opening the viewer. Shift+F10/context-menu key provides keyboard access; Escape returns focus. Test real catalog membership and unchanged generated original bytes. Record that native DOM contextmenu dispatch does not prove a physical OS gesture.
+
+
+### Photo menu positioning regression — 2026-11-06
+
+- A photo context menu opens at the viewport click point instead of the window origin. Assert native screen bounds within 8 px of the point, allowing the menu alignment inset and device-pixel rounding.
+- A second context invocation while open moves the menu to the new point; invoking at the bottom-right window edge flips/shifts it fully into the viewport. Returning to the original photo point works without a stale anchor.
+- Preserve Select, Add to album, Escape/focus return and keyboard context access. Native DOM-dispatched events establish menu layout behavior, not a physical secondary-pointer gesture. Use only generated media and verify unchanged sources afterward.
+
+
+### Map → Photos handoff — owner revision, 2026-11-06
+
+- The map action is named Show in photos. Only that action transfers the viewport/cell/no-location scope and representative selection. Direct Map → Photos sidebar navigation is unfiltered, including after an earlier transfer/Return to map and while a transferred Photos view is already active.
+- Transferred Photos views show a removable map-scope chip beside search and the matching removable active filter in Filters. Bounds/cell/location count as one filter; the search input continues to represent filename/date text only. Show an accurate no-location label when appropriate.
+- Clear the map scope from search immediately without clearing filename/date/place constraints; removal in Filters follows draft/Apply/Close behavior. Verify chip visibility/hit testing at desktop and minimum widths, ordinary navigation after repeated transfers, native query results and unchanged generated sources.

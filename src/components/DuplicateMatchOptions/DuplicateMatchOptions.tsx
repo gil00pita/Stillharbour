@@ -1,5 +1,5 @@
 import type { DuplicateOptions } from '../../bindings';
-import { InspectionChoiceCards, type InspectionChoice } from '../InspectionChoiceCards';
+import { InspectionChoiceCards, type InspectionChoice } from '@/components/InspectionChoiceCards';
 import exactContent from '../../../assets/illustrations/duplicates/exact-content.png';
 import properties from '../../../assets/illustrations/duplicates/properties.png';
 import pixels from '../../../assets/illustrations/duplicates/pixels.png';

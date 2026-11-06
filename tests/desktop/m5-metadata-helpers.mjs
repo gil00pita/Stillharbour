@@ -28,7 +28,9 @@ async function catalogMetadata(request) {
   return reply.data;
 }
 export async function reviewCatalogMetadata(directory) {
-  await $('button[aria-label="Photos"]').click();
+  // Retain the explicit map handoff; sidebar Photos intentionally resets it.
+  await $('.photo-toolbar').waitForDisplayed();
+  assert.equal(await $('button[aria-label="Photos"]').getAttribute('aria-current'), 'page');
   await $('button=Add to album').waitForDisplayed();
   await $('button=Add to album').click();
   await $('.catalog-organizer').waitForDisplayed();
@@ -188,7 +190,8 @@ export async function reviewCatalogMetadata(directory) {
     selection: { kind: 'ids', ids: [assetId] },
     patch: { favorite: null, rating: 4, tags: ['Fixture tag'] },
   });
-  await $('button=Catalog').click();
+  await $('button[aria-label="Albums / Tags"]').click();
+  await $('button[aria-label="Catalog"]').click();
   await $('.catalog-organizer').waitForDisplayed();
   await $('button[aria-label="View category Generated parent"]').waitForDisplayed();
   await browser.waitUntil(async () =>
@@ -257,6 +260,7 @@ export async function reviewCatalogMetadata(directory) {
   };
 }
 export async function finishMetadataExports(directory) {
+  if (await $('button=Select').isExisting()) await $('button=Select').click();
   await browser.waitUntil(async () => $('.asset-check').isExisting());
   await browser.execute(() => {
     const checkbox = document.querySelector('.asset-check');
@@ -273,7 +277,7 @@ export async function finishMetadataExports(directory) {
     };
   }, output);
   try {
-    await $('button=Catalog').click();
+    await $('button=Add to album').click();
     await $('.catalog-organizer').waitForDisplayed();
     await $('summary=Rename, merge, remove & undo tags').click();
     await $('section[aria-label="Tag changes"]').waitForDisplayed();

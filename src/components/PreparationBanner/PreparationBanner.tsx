@@ -1,0 +1,164 @@
+import { Button } from '@/components/Button';
+import { useState } from 'react';
+import type { LibraryRoot, LibraryStatus, ScanJob } from '../../bindings';
+import { errorMessage, library } from '../../ipc';
+import { ScanJobProgress } from '@/components/ScanJobProgress';
+import { thumbnailProgress } from '../../library/jobProgress';
+
+const activeStates = new Set([
+  'queued',
+  'running',
+  'cancel_requested',
+  'paused',
+  'pause_requested',
+]);
+
+export function PreparationBanner({
+  status,
+  rootId,
+  onRefresh,
+}: {
+  status: LibraryStatus;
+  rootId: string | null;
+  onRefresh: () => Promise<void>;
+}) {
+  const roots = status.roots.filter(
+    (root) =>
+      (!rootId || root.id === rootId) &&
+      (root.preparingPreviews ||
+        status.jobs.some((job) => job.rootId === root.id && activeStates.has(job.state))),
+  );
+  const jobs = status.jobs.filter(
+    (job) => roots.some((root) => root.id === job.rootId) && activeStates.has(job.state),
+  );
+  const job =
+    jobs.find((job) => job.kind !== 'thumbnails') ??
+    jobs.find((job) => job.state === 'running') ??
+    jobs[0];
+  const root = roots.find((root) => root.id === job?.rootId) ?? roots[0];
+  if (!root) return null;
+  return (
+    <PreparationStatus
+      key={`${root.id}:${job?.id ?? 'paused'}`}
+      root={root}
+      job={job}
+      otherRoots={roots.length - 1}
+      pausedMessage={
+        status.jobs.find(
+          (item) =>
+            item.rootId === root.id && item.kind === 'thumbnails' && !activeStates.has(item.state),
+        )?.message
+      }
+      onRefresh={onRefresh}
+    />
+  );
+}
+
+function PreparationStatus({
+  root,
+  job,
+  otherRoots,
+  pausedMessage,
+  onRefresh,
+}: {
+  root: LibraryRoot;
+  job: ScanJob | undefined;
+  otherRoots: number;
+  pausedMessage: string | undefined;
+  onRefresh: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const thumbnails = job?.kind === 'thumbnails' ? thumbnailProgress(job) : null;
+  const stopping = job?.state === 'cancel_requested';
+  async function act(pause = false) {
+    setBusy(true);
+    setError('');
+    try {
+      await library(
+        job
+          ? {
+              kind:
+                job.state === 'paused'
+                  ? 'resume'
+                  : pause || job.kind === 'thumbnails'
+                    ? 'pause'
+                    : 'cancel',
+              job_id: job.id,
+            }
+          : { kind: 'generate_thumbnails', root_id: root.id },
+      );
+      try {
+        await onRefresh();
+      } catch (failure) {
+        setError(`Request accepted. Could not refresh progress: ${errorMessage(failure)}`);
+      }
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <section
+      className="preparation-banner"
+      aria-label="Library preparation"
+      title={`${root.label}${otherRoots > 0 ? ` · ${otherRoots} more folders in Jobs` : ''}`}
+    >
+      <div className="preparation-row">
+        <span className="preparation-summary">
+          {job?.state === 'paused'
+            ? 'Preparation paused'
+            : !job
+              ? 'Preview preparation paused'
+              : thumbnails
+                ? `${thumbnails.processed.toLocaleString()} previews processed`
+                : `${job.discovered.toLocaleString()} files scanned`}
+        </span>
+        {job ? <ScanJobProgress job={job} label={root.label} compact /> : <span />}
+        <div className="preparation-actions">
+          {job && job.kind !== 'thumbnails' && job.state !== 'paused' && (
+            <Button
+              disabled={busy || stopping || job.state === 'pause_requested'}
+              onClick={() => void act(true)}
+            >
+              {job.state === 'pause_requested' ? 'Pausing…' : 'Pause scan'}
+            </Button>
+          )}
+          <Button
+            disabled={busy || stopping || job?.state === 'pause_requested'}
+            onClick={() => void act()}
+          >
+            {busy
+              ? 'Updating…'
+              : job?.state === 'paused'
+                ? 'Resume job'
+                : job?.state === 'pause_requested'
+                  ? 'Pausing…'
+                  : stopping
+                    ? 'Stopping…'
+                    : !job
+                      ? 'Resume previews'
+                      : job.kind === 'thumbnails'
+                        ? 'Pause previews'
+                        : 'Stop scan'}
+          </Button>
+        </div>
+      </div>
+      {thumbnails && thumbnails.processed > 0 && thumbnails.percentage !== undefined && (
+        <p className="preparation-detail">
+          {thumbnails.percentage}% complete
+          {job?.message.includes('remaining') ? ` · ${job.message}` : ''}
+        </p>
+      )}
+      {job && job.errors > 0 && (
+        <p className="preparation-detail">
+          {job.errors.toLocaleString()} {thumbnails ? 'previews unavailable' : 'scan issues'} ·
+          Details in Jobs
+        </p>
+      )}
+      {!job && pausedMessage && <p className="preparation-detail">{pausedMessage}</p>}
+      {error && <p role="alert">{error}</p>}
+    </section>
+  );
+}

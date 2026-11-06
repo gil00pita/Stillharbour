@@ -2,11 +2,13 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '../../test/render';
 import type { AlbumPage, LibraryStatus } from '../../bindings';
 import { defaultQuery } from '../../library/model';
-import { AlbumsPage } from './AlbumsPage';
+import { AlbumsPage } from '@/components/AlbumsPage';
 import { metadata } from '../../metadata/ipc';
 vi.mock('../../metadata/ipc', () => ({ metadata: vi.fn() }));
 vi.mock('../../library/previews', () => ({ usePreviews: () => ({ results: {} }) }));
-vi.mock('../AlbumEditor', () => ({ AlbumEditor: () => <div role="dialog">Create an album</div> }));
+vi.mock('@/components/AlbumEditor', () => ({
+  AlbumEditor: () => <div role="dialog">Create an album</div>,
+}));
 const status: LibraryStatus = {
   roots: [],
   jobs: [],
@@ -51,8 +53,10 @@ beforeEach(() => {
 });
 it('shows custom and tag albums together, opens albums and offers creation without filter buttons', async () => {
   const onOpen = vi.fn();
-  render(<AlbumsPage status={status} onOpen={onOpen} onRefresh={vi.fn()} />);
+  render(<AlbumsPage onBrowse={vi.fn()} status={status} onOpen={onOpen} onRefresh={vi.fn()} />);
   expect(await screen.findByText('From tags')).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Catalog' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'Saved plans' })).toBeVisible();
   expect(screen.getByRole('button', { name: 'Weekends, 0 photos' })).toBeVisible();
   expect(
     screen.queryByRole('button', { name: /all albums|custom albums|tag albums/i }),
@@ -63,7 +67,7 @@ it('shows custom and tag albums together, opens albums and offers creation witho
   expect(screen.getByRole('dialog')).toBeVisible();
 });
 it('searches album names and gives a useful empty state', async () => {
-  render(<AlbumsPage status={status} onOpen={vi.fn()} onRefresh={vi.fn()} />);
+  render(<AlbumsPage onBrowse={vi.fn()} status={status} onOpen={vi.fn()} onRefresh={vi.fn()} />);
   await screen.findByText('From tags');
   vi.mocked(metadata).mockResolvedValue({ items: [], total: 0, nextOffset: null });
   fireEvent.change(screen.getByRole('searchbox', { name: 'Search albums' }), {
@@ -77,7 +81,7 @@ it('searches album names and gives a useful empty state', async () => {
 });
 it('exposes loading failures with a working retry', async () => {
   vi.mocked(metadata).mockRejectedValueOnce(new Error('Catalog unavailable'));
-  render(<AlbumsPage status={status} onOpen={vi.fn()} onRefresh={vi.fn()} />);
+  render(<AlbumsPage onBrowse={vi.fn()} status={status} onOpen={vi.fn()} onRefresh={vi.fn()} />);
   expect(await screen.findByRole('alert')).toHaveTextContent('Catalog unavailable');
   fireEvent.click(screen.getByText('Retry albums'));
   await waitFor(() => expect(screen.getByText('From tags')).toBeVisible());

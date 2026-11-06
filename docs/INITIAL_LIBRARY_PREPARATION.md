@@ -31,7 +31,7 @@ At initial-job completion, check current eligible rows atomically with the termi
 ```sh
 node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes initial_previews_are_deferred_until_published_and_survive_restart -- --nocapture
 node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --test library_flow first_import_reveals_only_published_previews_and_preserves_sources -- --exact --nocapture
-npm test -- src/library/PreparationBanner.test.tsx src/library/ScanJobProgress.test.tsx src/library/useLibraryController.test.tsx src/library/FilterPanel.test.tsx
+npm test -- src/components/PreparationBanner/PreparationBanner.test.tsx src/components/ScanJobProgress/ScanJobProgress.test.tsx src/hooks/use-library-controller.test.tsx src/components/FilterPanel/FilterPanel.test.tsx
 npm run check
 npm run desktop:test:build
 npm run desktop:test

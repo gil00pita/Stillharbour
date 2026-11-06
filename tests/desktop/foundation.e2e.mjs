@@ -988,7 +988,7 @@ async function verifyAllExistingImport(sourceRootId, destination, evidence, outp
     ).data.plan;
     async function openDraft(targetId = draft.id) {
       await $('button=Close saved plans').click();
-      await $('button=Saved plans').click();
+      await openSavedPlans();
       const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
       const index = plans.findIndex((plan) => plan.id === targetId);
       assert.ok(index >= 0);
@@ -1529,11 +1529,11 @@ async function reviewEquivalentDraft(original, destination, evidence, audit) {
     },
   });
   assert.notEqual(saved.data.plan.id, original.id);
-  for (const selector of ['button[aria-label="Close jobs"]', 'button=Close saved plans']) {
+  for (const selector of ['button[aria-label="Back from Jobs"]', 'button=Close saved plans']) {
     const buttons = await $$(selector);
     if (buttons.length) await buttons[0].click();
   }
-  await $('button=Saved plans').click();
+  await openSavedPlans();
   const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
   const index = plans.findIndex((plan) => plan.id === saved.data.plan.id);
   assert.ok(index >= 0);
@@ -1680,7 +1680,7 @@ async function pauseResumeJob(receipt) {
   );
   const resumed = (await native({ kind: 'job_details', job_id: job.id })).data.job;
   assert.equal(resumed.id, job.id);
-  await $('button[aria-label="Close jobs"]').click();
+  await $('button[aria-label="Back from Jobs"]').click();
   await writeFile(receipt, JSON.stringify({ before: job, paused, resumed }));
 }
 async function reviewRemovalStopsJobs(receipt) {
@@ -1833,6 +1833,7 @@ async function assertFormControlsAligned(selector) {
   );
 }
 async function assertPhotoCheckboxOnTop(id) {
+  await enterPhotoSelection();
   // HTMLElement.click() in the embedded driver bypasses real pointer hit testing.
   const hit = await browser.execute((id) => {
     const checkbox = document.querySelector(`[data-asset-id="${id}"] .asset-check`);
@@ -2574,6 +2575,7 @@ describe('native read-only library', () => {
         await reviewBackupComparison(evidence, picker);
         const tile = (await $$('.asset'))[0];
         await tile.moveTo();
+        await enterPhotoSelection();
         await tile.$('.asset-check').click();
         // Stop new viewport rendition work while reviewing immutable snapshots.
         // Keep the selected asset; stale plans must stay disabled if inputs do
@@ -2766,7 +2768,7 @@ describe('native read-only library', () => {
         assert.equal(plan.data.plan.preview.fingerprint, preview.data.fingerprint);
         await writeFile(`${evidence}/windows-saved-plan.json`, JSON.stringify(plan.data));
         await $('button[aria-label="Close organization preview"]').click();
-        await $('button=Saved plans').click();
+        await openSavedPlans();
         await $('button=Refresh plans').waitForDisplayed();
         await $('.organization-preview li button').click();
         await $('section[aria-label="Saved plan detail"]').waitForDisplayed();
@@ -3020,11 +3022,10 @@ describe('native read-only library', () => {
         await $('button[aria-label="Jobs"]').click();
         await browser.waitUntil(
           async () =>
-            (await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]')).length ===
-            2,
+            (await $$('.jobs-page section[aria-label="Retained copy inspection"]')).length === 2,
         );
         const retainedInspections = await $$(
-          '.jobs-dropdown section[aria-label="Retained copy inspection"]',
+          '.jobs-page section[aria-label="Retained copy inspection"]',
         );
         await retainedInspections[0].$('button').scrollIntoView();
         await retainedInspections[0].$('button').click();
@@ -3051,7 +3052,7 @@ describe('native read-only library', () => {
         await $('h4=Continuation review').waitForDisplayed();
         assert.equal(await $('button=Approve verification and continuation').isEnabled(), false);
         const continuationAck = await $(
-          '.jobs-dropdown section[aria-label="Reviewed copy continuation"] input[type="checkbox"]',
+          '.jobs-page section[aria-label="Reviewed copy continuation"] input[type="checkbox"]',
         );
         await continuationAck.scrollIntoView();
         await continuationAck.click();
@@ -3078,7 +3079,7 @@ describe('native read-only library', () => {
             return (
               continuationJobs.filter((job) => job.state === 'completed_verified').length === 2 &&
               (
-                await $('.jobs-dropdown section[aria-label="Reviewed copy continuation"]').getText()
+                await $('.jobs-page section[aria-label="Reviewed copy continuation"]').getText()
               ).includes('All outputs freshly byte-verified.')
             );
           },
@@ -3104,7 +3105,7 @@ describe('native read-only library', () => {
           JSON.stringify(continuationJobs),
         );
         await browser.saveScreenshot('.context/screenshots/m2-reviewed-continuation.png');
-        await $('button[aria-label="Close jobs"]').click();
+        await $('button[aria-label="Back from Jobs"]').click();
         await reviewEquivalentDraft(plan.data.plan, copySelection, evidence, outputAudit);
       } catch (error) {
         await browser.saveScreenshot('.context/screenshots/windows-library-failure.png');
@@ -3497,13 +3498,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     let observedProgress;
     await browser.waitUntil(
       async () => {
-        const recent = await $('.jobs-dropdown .recent-jobs');
+        const recent = await $('.jobs-page .recent-jobs');
         if ((await recent.isExisting()) && (await recent.getAttribute('open')) === null)
           await recent.$('summary').click();
         // Read one DOM snapshot: the scan may finish between driver requests.
         observedProgress = await browser.execute(() => {
           const bar = document.querySelector(
-            '.jobs-dropdown .job-row[data-job-kind="scan"] .job-progress [role="progressbar"]',
+            '.jobs-page .job-row[data-job-kind="scan"] .job-progress [role="progressbar"]',
           );
           return bar && bar.getBoundingClientRect().height > 0
             ? { value: bar.getAttribute('aria-valuenow'), text: bar.getAttribute('aria-valuetext') }
@@ -3521,18 +3522,34 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       assert.deepEqual(observedProgress, { value: '100', text: 'Scan complete' });
     observations.progressAtOpen = observedProgress;
     assert.equal(
-      await $('.sidebar-footer button[aria-label="Jobs"]').getAttribute('aria-expanded'),
-      'true',
+      await $('.sidebar-footer button[aria-label="Jobs"]').getAttribute('aria-current'),
+      'page',
     );
-    await browser.saveScreenshot('.context/screenshots/jobs-dropdown-after-save-desktop.png');
+    assert.equal(await $('.jobs-page h1').getText(), 'Jobs');
+    assert.equal(await $('button[aria-label="Jobs"]').getAttribute('aria-haspopup'), null);
+    assert.equal(
+      await browser.execute(() => {
+        const page = document.querySelector('.jobs-page');
+        const main = document.querySelector('main');
+        const workspace = document.querySelector('.workspace-page');
+        return (
+          page.closest('main') === main &&
+          !page.closest('dialog') &&
+          workspace.hidden &&
+          workspace.inert
+        );
+      }),
+      true,
+    );
+    await browser.saveScreenshot('.context/screenshots/jobs-page-after-save-desktop.png');
     await browser.setWindowSize(660, 560);
     assert.equal(
       await browser.execute(() => document.documentElement.scrollWidth <= innerWidth),
       true,
     );
-    await browser.saveScreenshot('.context/screenshots/jobs-dropdown-after-save-minimum.png');
+    await browser.saveScreenshot('.context/screenshots/jobs-page-after-save-minimum.png');
     await browser.setWindowSize(1180, 780);
-    await browser.keys('Escape');
+    await $('button[aria-label="Back from Jobs"]').click();
     const scanObservedAt = Date.now();
     let partial = false;
     await browser.waitUntil(
@@ -3711,6 +3728,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       0,
     );
     await browser.saveScreenshot('.context/screenshots/m1-gallery.png');
+    await enterPhotoSelection();
     assert.ok((await $$('.gallery .asset-check')).length > 0);
     const selectedPhoto = await browser.execute(() => {
       const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
@@ -4325,8 +4343,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       }
     }
     await $('button[aria-label="Jobs"]').click();
-    await $('.jobs-dropdown').waitForDisplayed();
-    await browser.keys('Escape');
+    await $('.jobs-page').waitForDisplayed();
+    await $('button[aria-label="Back from Jobs"]').click();
+    await browser.waitUntil(async () => $('button[aria-label="Jobs"]').isFocused());
     assert.equal(await $('button[aria-label="Jobs"]').isFocused(), true);
     await $('button[aria-label="Settings"]').click();
     await $('.settings-page').waitForDisplayed();
@@ -4356,7 +4375,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             : (button.getAttribute('aria-label') ?? button.textContent.trim()),
         ),
       ),
-      ['Filter', 'Catalog', 'Saved plans'],
+      ['Filter', 'Select'],
     );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
@@ -4447,6 +4466,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         .slice(0, 2)
         .map((asset) => asset.dataset.assetId),
     );
+    await enterPhotoSelection();
     await $(`[data-asset-id="${chosen[0]}"] .asset-check`).click();
     await browser.waitUntil(async () =>
       browser.execute(
@@ -4685,7 +4705,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         },
       });
       assert.equal(saved.data.stale, false);
-      await $('button=Saved plans').click();
+      await openSavedPlans();
       await $('.organization-preview li button').waitForDisplayed();
       await $('.organization-preview li button').click();
       await $('section[aria-label="Saved plan detail"]').waitForDisplayed();
@@ -4769,9 +4789,9 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await $('button[aria-label="Jobs"]').click();
       await browser.waitUntil(
         async () =>
-          (await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]')).length === 2,
+          (await $$('.jobs-page section[aria-label="Retained copy inspection"]')).length === 2,
       );
-      const retained = await $$('.jobs-dropdown section[aria-label="Retained copy inspection"]');
+      const retained = await $$('.jobs-page section[aria-label="Retained copy inspection"]');
       await retained[0].$('button').scrollIntoView();
       await retained[0].$('button').click();
       await browser.waitUntil(async () =>
@@ -4784,7 +4804,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       await $('h4=Continuation review').waitForDisplayed();
       assert.equal(await $('button=Approve verification and continuation').isEnabled(), false);
       const resumeAck = await $(
-        '.jobs-dropdown section[aria-label="Reviewed copy continuation"] input[type="checkbox"]',
+        '.jobs-page section[aria-label="Reviewed copy continuation"] input[type="checkbox"]',
       );
       await resumeAck.scrollIntoView();
       await resumeAck.click();
@@ -4802,7 +4822,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
           return (
             continued.filter((job) => job.state === 'completed_verified').length === 2 &&
             (
-              await $('.jobs-dropdown section[aria-label="Reviewed copy continuation"]').getText()
+              await $('.jobs-page section[aria-label="Reviewed copy continuation"]').getText()
             ).includes('All outputs freshly byte-verified.')
           );
         },
@@ -4824,7 +4844,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         JSON.stringify(audit),
       );
       await browser.saveScreenshot('.context/screenshots/macos-m2-reviewed-continuation.png');
-      await $('button[aria-label="Close jobs"]').click();
+      await $('button[aria-label="Back from Jobs"]').click();
       await reviewEquivalentDraft(saved.data.plan, destination, evidence, audit);
     } catch (error) {
       await browser.saveScreenshot('.context/screenshots/macos-m2-workflow-failure.png');
@@ -4843,7 +4863,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       for (const selector of [
         'button=Close companion inventory',
         'button=Close saved plans',
-        'button[aria-label="Close jobs"]',
+        'button[aria-label="Back from Jobs"]',
       ]) {
         const buttons = await $$(selector);
         if (buttons.length) await buttons[0].click();
@@ -5197,9 +5217,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     }
     await (await $('.job-row[data-job-kind="scan"]')).$('button=Details').click();
     await $('.job-details').waitForDisplayed();
-    await browser.saveScreenshot('.context/screenshots/jobs-dropdown-recent-desktop.png');
-    await browser.keys('Escape');
+    await browser.saveScreenshot('.context/screenshots/jobs-page-recent-desktop.png');
+    await $('button[aria-label="Back from Jobs"]').click();
     await $('.asset', { strict: false }).waitForDisplayed();
+    assert.equal(
+      await browser.execute(() => document.querySelector('.asset-viewport').scrollTop),
+      opening.position,
+    );
     await galleryView('Timeline');
     await browser.setWindowSize(660, 560);
     assert.equal(
@@ -6038,7 +6062,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     } catch (error) {
       const focus = await browser.execute(() => ({
         reviewOpen: Boolean(document.querySelector('.maintenance-review')),
-        jobsOpen: Boolean(document.querySelector('.jobs-dropdown')),
+        jobsOpen: Boolean(document.querySelector('.jobs-page')),
         openerFocused:
           document.activeElement?.matches('button[aria-label^="Remove library "]') ?? false,
         focusInReview: Boolean(document.activeElement?.closest('.maintenance-review')),
@@ -6284,7 +6308,7 @@ describe('M2 multiple source libraries — generated native fixtures', () => {
         },
       })
     ).data;
-    await $('button=Saved plans').click();
+    await openSavedPlans();
     const plans = (await native({ kind: 'organization_plans', before: null })).data.plans;
     const index = plans.findIndex((plan) => plan.id === saved.plan.id);
     assert.ok(index >= 0);
@@ -6608,3 +6632,13 @@ describe('M2 multiple source libraries — generated native fixtures', () => {
     }
   });
 });
+
+async function openSavedPlans() {
+  if (!(await $('button[aria-label="Saved plans"]').isExisting())) {
+    await $('button[aria-label="Albums / Tags"]').click();
+  }
+  await $('button[aria-label="Saved plans"]').click();
+}
+async function enterPhotoSelection() {
+  if (await $('button=Select').isExisting()) await $('button=Select').click();
+}

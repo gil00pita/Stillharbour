@@ -1,7 +1,7 @@
 import type { InspectionFinding } from '../../../bindings';
 import { mapTiles } from '../../../inspection/treemap';
 import { displayBytes } from '../../../inspection/format';
-import { Button } from '../../ui/controls';
+import { Button } from '@/components/Button';
 import { colorOf, totalBytes, type CameraRecords } from '../model';
 
 export type FileGroup = {

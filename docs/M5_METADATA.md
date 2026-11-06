@@ -35,7 +35,7 @@ Commands:
 ```sh
 node scripts/cargo.mjs test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow catalog_metadata::
 node scripts/cargo.mjs test --locked -p stillharbour-core --lib catalog::
-npm test -- src/metadata src/library/BatchToolbar.test.tsx
+npm test -- src/metadata src/components/BatchToolbar/BatchToolbar.test.tsx
 npm run desktop:test:map
 ```
 

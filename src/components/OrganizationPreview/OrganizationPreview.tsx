@@ -1,0 +1,249 @@
+import { defaultPreset } from './presets';
+import { OrganizationTemplateFields } from './components/OrganizationTemplateFields';
+import { Field } from '@chakra-ui/react';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import type {
+  OrganizationIssue,
+  OrganizationPreview as Preview,
+  OrganizationTemplate,
+  TemplateRef,
+  ImportDestinationPreference,
+} from '../../bindings';
+import { errorMessage, libraryData } from '../../ipc';
+import { OrganizationCompanions } from '@/components/OrganizationCompanions';
+import {
+  OrganizationDestination,
+  type DestinationRootOption,
+} from '@/components/OrganizationDestination';
+import { OrganizationTemplates } from '@/components/OrganizationTemplates';
+import { OrganizationTrees } from '@/components/OrganizationTrees';
+
+const issueLabels: Record<OrganizationIssue, string> = {
+  missing_capture_date: 'No embedded capture date',
+  missing_value: 'A required token value is missing',
+  invalid_path: 'Name cannot be used under the portable naming policy',
+  source_unavailable: 'Source is not currently recorded as available',
+  non_unicode_path: 'Native name cannot be represented by this template',
+  collision: 'Proposed paths collide',
+  possible_case_collision: 'Proposed paths may collide on a case-insensitive destination',
+};
+
+export function OrganizationPreview({
+  catalogId = null,
+  preferredImportRoot = null,
+  assetIds,
+  revision,
+  roots,
+  onClose,
+}: {
+  catalogId?: string | null;
+  preferredImportRoot?: ImportDestinationPreference | null;
+  assetIds: string[];
+  revision: string;
+  roots: DestinationRootOption[];
+  onClose: () => void;
+}) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const resultsCaption = useRef<HTMLTableCaptionElement>(null);
+  const requestId = useRef(0);
+  const [template, setTemplate] = useState<OrganizationTemplate>({
+    pattern: defaultPreset.pattern,
+    event: '',
+    missingDate: 'undated',
+  });
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [templateReference, setTemplateReference] = useState<TemplateRef | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    if (preview) {
+      resultsCaption.current?.focus({ preventScroll: true });
+      resultsCaption.current?.scrollIntoView({ block: 'start' });
+    }
+  }, [preview]);
+  useEffect(() => {
+    const element = dialog.current;
+    const opener = document.activeElement;
+    if (element && !element.open) element.showModal();
+    return () => {
+      requestId.current += 1;
+      element?.close();
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, []);
+  function update(patch: Partial<OrganizationTemplate>) {
+    setTemplateReference(null);
+    setTemplate((value) => {
+      const next = { ...value, ...patch };
+      if (next.filenameStemCase === 'preserve') delete next.filenameStemCase;
+      return next;
+    });
+    setPreview(null);
+    setError(null);
+  }
+  async function build(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!event.currentTarget.reportValidity()) return;
+    const id = ++requestId.current;
+    setBusy(true);
+    setError(null);
+    setPreview(null);
+    try {
+      const result = await libraryData(
+        { kind: 'organization_preview', asset_ids: assetIds, template },
+        'organization_preview',
+      );
+      if (requestId.current === id) setPreview(result);
+    } catch (error) {
+      if (requestId.current === id) setError(errorMessage(error));
+    } finally {
+      if (requestId.current === id) setBusy(false);
+    }
+  }
+  const rows = preview?.rows.filter((row) =>
+    `${row.sourcePath} ${row.targetRelativePath ?? ''}`
+      .toLocaleLowerCase()
+      .includes(search.toLocaleLowerCase()),
+  );
+  return (
+    <dialog
+      className="organization-preview"
+      ref={dialog}
+      aria-labelledby="organization-title"
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+    >
+      <header className="organization-heading">
+        <div>
+          <h2 id="organization-title">Preview organization</h2>
+          <p className="help">
+            {assetIds.length} explicitly selected photos · Originals stay in place
+          </p>
+        </div>
+        <Button onClick={onClose} aria-label="Close organization preview">
+          Close
+        </Button>
+      </header>
+      <div className="organization-body">
+        <p>Preview folder and filename changes using indexed metadata. Originals stay in place.</p>
+        <form onSubmit={(event) => void build(event)} aria-busy={busy}>
+          <OrganizationTemplateFields busy={busy} template={template} onChange={update} />
+        </form>
+        <OrganizationTemplates
+          template={template}
+          onLoad={(value, reference) => {
+            requestId.current += 1;
+            setBusy(false);
+            setTemplate(value);
+            setTemplateReference(reference);
+            setPreview(null);
+            setError(null);
+          }}
+        />
+        {error && (
+          <p role="alert" className="error">
+            {error}
+          </p>
+        )}
+        {preview && (
+          <section aria-label="Proposed organization">
+            <p role="status">
+              {preview.proposed} proposed · {preview.blocked} blocked ·{' '}
+              {BigInt(preview.selectedBytes).toLocaleString()} selected file bytes
+            </p>
+            <p className="help">
+              Relative paths only. Destination conflicts, native case and Unicode rules, companions,
+              metadata fidelity and free space still need review. Sequence numbers follow library ID
+              and native source path order.
+            </p>
+            <OrganizationDestination
+              catalogId={catalogId}
+              preferredImportRoot={preferredImportRoot}
+              key={preview.fingerprint}
+              preview={preview}
+              revision={revision}
+              templateReference={templateReference}
+              roots={roots}
+            />
+            <Field.Root asChild unstyled>
+              <label>
+                <Field.Label asChild unstyled>
+                  <span>Find a path</span>
+                </Field.Label>
+                <Input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </label>
+            </Field.Root>
+            <OrganizationTrees rows={preview.rows} roots={roots} />
+            <div className="organization-table">
+              <table>
+                <caption ref={resultsCaption} tabIndex={-1}>
+                  Selected photos: current path, proposed relative path and review issues
+                </caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Current path</th>
+                    <th scope="col">Proposed path</th>
+                    <th scope="col">Review</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows?.map((row) => (
+                    <tr key={row.assetId}>
+                      <td>
+                        <bdi>{row.sourcePath}</bdi>
+                        <small title={`Library ID: ${row.rootId}`}>
+                          {roots.find((root) => root.id === row.rootId)?.label ??
+                            'Unlisted library'}
+                        </small>
+                      </td>
+                      <td>
+                        <bdi>{row.targetRelativePath ?? 'No valid target'}</bdi>
+                      </td>
+                      <td>
+                        {row.issues.length
+                          ? row.issues.map((issue) => <p key={issue}>{issueLabels[issue]}</p>)
+                          : 'Destination checks pending'}
+                        {row.usedUndated && <p>Undated fallback; no embedded capture date</p>}
+                        {row.companionCandidates > 0 && (
+                          <p>
+                            {row.companionCandidates} indexed companion candidates; bundle review
+                            required
+                          </p>
+                        )}
+                        <OrganizationCompanions
+                          key={`${preview.fingerprint}:${row.assetId}`}
+                          assetId={row.assetId}
+                          previewRevision={preview.catalogRevision}
+                          revision={revision}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {rows?.length === 0 && <p>No paths match your search.</p>}
+            </div>
+          </section>
+        )}
+      </div>
+      <footer className="organization-footer">
+        <p className="help" id="organization-execution-help">
+          Copying and in-place changes are unavailable until destination planning, verification and
+          recovery checks pass.
+        </p>
+        <Button disabled aria-describedby="organization-execution-help">
+          Create organized copy
+        </Button>
+      </footer>
+    </dialog>
+  );
+}

@@ -10,12 +10,14 @@ export function PlaceSearch({
   value,
   onSearch,
   disabled = false,
+  filterScope,
 }: {
   selectedId?: string | null | undefined;
   onChange: (place: PlaceSummary | null) => void;
   value?: string;
   onSearch?: (text: string) => void;
   disabled?: boolean;
+  filterScope?: { label: string; onClear: () => void } | undefined;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
@@ -100,6 +102,23 @@ export function PlaceSearch({
               }}
             />
           </Field.Root>
+          {filterScope && (
+            <Button
+              type="button"
+              className="place-search-chip"
+              disabled={disabled}
+              onClick={() => {
+                filterScope.onClear();
+                close();
+              }}
+              aria-label={`Clear ${filterScope.label} filter`}
+              title={`${filterScope.label} · Clear map filter`}
+            >
+              <Text as="span" minW="0" truncate>
+                {filterScope.label} · Clear
+              </Text>
+            </Button>
+          )}
           {selectedId && (
             <Button
               type="button"

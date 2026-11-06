@@ -5,7 +5,7 @@ import type {
   StorageSummary,
 } from '../../../bindings';
 import { displayBytes } from '../../../inspection/format';
-import { Button } from '../../ui/controls';
+import { Button } from '@/components/Button';
 import {
   categories,
   categoryColors,

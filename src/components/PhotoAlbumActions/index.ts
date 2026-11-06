@@ -1,2 +1,2 @@
-export { PhotoAlbumActions, PhotoAlbumButton } from './PhotoAlbumActions';
-export { usePhotoAlbumMenu } from './context';
+export { PhotoAlbumActions } from './PhotoAlbumActions';
+export { usePhotoAlbumMenu, usePhotoAlbumKeys, usePhotoSelection } from './context';

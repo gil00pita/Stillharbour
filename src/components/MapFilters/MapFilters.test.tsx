@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '../../test/render';
 import { defaultQuery } from '../../library/model';
-import { MapFilters } from './MapFilters';
+import { MapFilters } from '@/components/MapFilters';
 
 beforeEach(() => {
   vi.stubGlobal(

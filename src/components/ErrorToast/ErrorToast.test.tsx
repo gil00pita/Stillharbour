@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '../../test/render';
 import { afterEach, expect, it, vi } from 'vitest';
-import { ErrorToast } from './ErrorToast';
+import { ErrorToast } from '@/components/ErrorToast';
 
 afterEach(() => vi.useRealTimers());
 

@@ -1,0 +1,1 @@
+export { GeneratedRenameLab } from './GeneratedRenameLab';

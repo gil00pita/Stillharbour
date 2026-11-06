@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '../../test/render';
-import { DuplicateStudio } from './DuplicateStudio';
+import { DuplicateStudio } from '@/components/DuplicateStudio';
 import { libraryData } from '../../ipc';
 import type { InspectionJob, LibraryStatus } from '../../bindings';
 import { group, member } from './fixtures';

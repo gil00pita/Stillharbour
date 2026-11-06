@@ -23,12 +23,20 @@ than using casts around missing component props.
 
 ## Structure
 
-- `src/theme/system.ts`: raw product tokens, semantic colors and button/input/textarea recipes. Uses `defaultBaseConfig` with preflight disabled, the existing dark palette and native system fonts. No remote assets or new theme preference.
-- `src/theme/recipes.ts`: shared field recipe, also used by the styled native select.
-- `src/components/ui/Provider.tsx`: the single production/test styling provider. Mounted outside the app and instrumented-only generated lab in `src/main.tsx`.
-- `src/components/ui/controls.tsx`: standard Button, Input, Select and Textarea. Import these in ordinary product forms to retain native refs/events/validation and shared recipes. Keep explicit type=button on non-submit form actions; an omitted type intentionally keeps existing HTML submit behavior. Numeric size maps to htmlSize.
-- `src/styles.css`: product layout and specialized controls; existing CSS variables resolve to Chakra semantic tokens, with same-value startup fallbacks. Generic field/button rules exclude their Chakra counterparts.
-- `src/test/render.tsx`: Testing Library render with the actual provider, including custom test wrappers and rerenders. Import render/screen/fireEvent from this module in component tests.
+The current layout and form contracts are documented in
+[TYPESCRIPT_STRUCTURE.md](TYPESCRIPT_STRUCTURE.md).
+
+- `src/theme/index.ts`: system composition and recipe registration, with raw
+  colors/fonts and semantic colors in separate modules.
+- `src/components/{Button,Input,NativeSelect,Textarea}/`: named native-contract
+  controls and colocated recipes. NativeSelect composes Chakra v3's Root/Field
+  with `asChild` to preserve one native select.
+- `src/components/ui/Provider.tsx`: the existing production/test provider.
+- `src/components/<Name>/`: application components, explicit barrels, private
+  child components and colocated component tests.
+- `src/hooks/use-*.ts`: shared hooks and their existing tests.
+- `src/styles.css`: established product layouts and specialized native controls.
+- `src/test/render.tsx`: Testing Library render through the actual provider.
 
 The adoption converts 369 ordinary controls in 61 product modules: setup, shared tag/size fields, Settings, library forms/toolbars, catalog metadata, inspection and backup flows. It keeps native dialogs and specialized photographic canvas, virtual-row, map-marker/zoom, checkbox/switch/range controls. Their tested selection, focus and geometry remain in existing adapters. Further adoption should use semantic tokens and verify the affected interaction rather than silently changing its DOM or approval behavior.
 
@@ -60,3 +68,25 @@ Native testing exposed and fixed the legacy unlayered font rule overriding a Cha
 Production main JavaScript is approximately 758 kB (223 kB gzip), with the existing lazy basemap approximately 1.21 MB and worker 519 kB; the large-chunk warning remains. Production npm audit is zero; 33 development advisories remain. No Windows, startup benchmark or whole-process network interception is claimed.
 
 React Doctor reports the same two existing Settings maintainability findings with identical messages/complexity. Its score changes from 67 across 19 changed files before adoption to 62 across 121 afterward; this is not described as a passing or improved score. `.context/chakra-doctor-comparison.json` retains the comparison. No rule suppression, automatic React Doctor installation or unrelated component rewrite is added.
+
+## Component refactor checkpoint — 2026-11-06
+
+[TypeScript conventions](TYPESCRIPT_STRUCTURE.md) now own component folders,
+barrels, hooks, colocated recipes and ordinary Field composition. Clean-install
+strict types, lint, 561 frontend cases, Rust checks and the final thirteen-spec
+macOS desktop run pass. The native run catches a unit-field container regression;
+a normal bounded container fixes it without weakening the existing assertion.
+Production assets are restored and release preflight passes.
+[React Doctor review](REACT_DOCTOR_REVIEW.md) records the 153-to-151 full-scan
+change, the current cleanup false positive and remaining warnings. These checks
+do not qualify Windows, manual screen-reader coverage or wider release gates.
+
+### Shared application header and context actions — 2026-11-06
+
+`PageHeader` composes the existing semantic header through Chakra v3 `Box asChild` and a colocated recipe. The theme's `appHeader` size is shared with the brand; title line height is a token. Settings/Jobs descriptions and Storage status live below the fixed header. `CatalogActions` owns the existing catalog/plans dialogs on Albums / Tags; query callbacks route to Photos. Native context-menu suppression is scoped to the sidebar and header h1, preserving input editing.
+
+`PhotoAlbumActions` retains one controlled portalled `Menu.Root` for virtualized photos, positioned from the context event or keyboard anchor. Its provider exposes explicit selection mode to image/text rows and day headings. There is no menu button per tile. Isolated album pickers retain their own checkbox selection behavior. Busy/frozen selection and versioned membership IPC remain unchanged. `tests/desktop/page-chrome.e2e.mjs` measures native header geometry and exercises menu/selection/relocated dialogs against generated fixtures; the instrumented app must remain isolated from the development catalog.
+
+### Photo context-menu anchor repair — 2026-11-06
+
+The pinned menu implementation does not apply the supplied root `anchorPoint` to its ordinary positioning effect. Use `positioning.getAnchorElement` with a stable virtual element whose rect is the viewport context point, `strategy: fixed` and zero gutter. Keep the virtual element identity stable while the menu is open to avoid observer recursion. A changed context point remounts only the menu root so a second right-click repositions an already-open menu and resets its item highlight. Floating UI retains edge flipping/shifting. Keyboard anchors still derive from the focused photo row; the provider, focus restoration and catalog membership flow are retained. The native smoke must assert actual menu bounds, not just item presence.
