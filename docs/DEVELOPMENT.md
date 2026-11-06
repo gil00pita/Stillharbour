@@ -14,6 +14,41 @@ Generated checks: `node scripts/cargo.mjs test --locked -p stillharbour-core --l
 
 # Development
 
+## Local validation and CI
+
+Owner-approved workflow, 2026-11-06: run focused local checks while developing and require full GitHub CI before merging. This section governs routine validation; older feature notes below retain their commands and historical evidence, but their full-suite sequences are not a requirement after every small edit. Explicit preservation, milestone and release qualifications still apply.
+
+Choose checks for changed behavior and its consumers, not just edited filenames. Run `git diff --check` for every change and check formatting of changed supported files with `npm exec -- prettier --check <changed-files>`.
+
+| Change                                                                                          | Local checks                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Documentation only                                                                              | Changed-file formatting, links/paths/commands and whitespace.                                                                                                                                          |
+| UI/component behavior                                                                           | `npm run typecheck`, `npm run lint`, affected component and consumer tests; run the focused native desktop smoke when native interaction changes.                                                      |
+| Theme, shared components/types, IPC, dependencies or build configuration                        | Broaden coverage to affected consumers; run the frontend build for output changes, IPC drift checks for schema changes and relevant Rust/native checks. Use full checks when impact cannot be bounded. |
+| Rust business logic                                                                             | `node scripts/cargo.mjs fmt --all --check`, Clippy for the affected package/targets/features with `-- -D warnings`, affected Rust tests and callers.                                                   |
+| Copy/delete, backup/restore, catalog migrations, permissions or other safety-sensitive behavior | Relevant preservation and failure/recovery regressions locally, plus affected native integration checks using generated fixtures. Keep both-platform CI and existing enablement gates.                 |
+| Milestone or release qualification                                                              | The complete applicable acceptance and platform gates, including checks absent from routine CI.                                                                                                        |
+
+Examples using existing scripts (replace paths/filters with the affected feature):
+
+```sh
+npm test -- src/components/PlaceSearch src/components/LibraryHeader
+npm run test:watch -- src/components/PlaceSearch
+node scripts/cargo.mjs test --locked -p stillharbour-core --lib library::search::tests
+node scripts/cargo.mjs clippy --locked -p stillharbour-core --lib -- -D warnings
+npm run desktop:test -- --spec tests/desktop/map-photos.e2e.mjs
+```
+
+The native example requires a current instrumented build (`npm run desktop:test:build`) and the documented generated fixtures. Keep native drivers and frontend builds sequential. Use the isolated executable/target workflow below when development is running; restore ordinary production output before production preflight. Browser/component tests do not establish native behavior.
+
+Run focused checks after relevant edits. Reuse a recorded passing result only while its relevant code, dependencies, configuration and build inputs remain unchanged, recording its revision/scope and identifying it as reused evidence. Shared changes broaden the scope; failures require investigation and rerunning affected checks after a fix. An unrelated failure remains reported. Avoid repeating successful unchanged checks merely to finish another small edit.
+
+`npm run check` remains the comprehensive aggregate for CI and broad local validation. It includes formatting, lint, strict types, component tests, release/dependency policy tests, IPC drift, Rust formatting/Clippy/tests and the frontend build. Full desktop and transport checks remain separate. Routine local completion can be reported once applicable focused checks pass, with the remaining CI explicitly pending; it is not merge, milestone or release acceptance.
+
+Before merging, require successful `native (macos-15)`, `native (windows-latest)`, `transports (macos-15)` and `transports (windows-latest)` checks for the current PR revision and an up-to-date base. Foundation checks and M4 disposable transport evidence retain their full macOS/Windows matrices, native recovery/desktop/cross-volume/restore cases and evidence uploads. No path filters or nightly-only substitutions remove this PR coverage. Live enforcement is a GitHub repository ruleset setting, not a consequence of committing a workflow; record its actual verification in the implementation log.
+
+Both workflows scope concurrency by workflow name and PR number: a newer PR run cancels its superseded run. Non-PR events use unique run IDs, so main pushes and manual transport evidence runs do not cancel one another or PR evidence. Existing npm/Rust caches remain enabled. Canceled or pending runs are not passing evidence; wait for the replacement run. See [GitHub concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) and [required status checks](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
+
 Current frontend layout: [TypeScript and Chakra conventions](TYPESCRIPT_STRUCTURE.md).
 The 2026-11-06 refactor moves component tests to their owning component folders;
 shared hooks use `src/hooks/use-*.ts`. Import components through `@/components/<Name>`.
@@ -106,18 +141,18 @@ Advanced scan Minimum size/Maximum size use independent KB/MB/GB selectors (deci
 
 Desktop-test builds expose generated-source and synthetic-catalog fixture commands and a read-only frontend request-observation event, plus the existing picker-presentation registry. The suite bypasses only the OS picker interaction with a server-issued selection for an owned generated folder; saving, scanning, queries, annotations and cached PNG loading use actual Rust IPC/protocols. Normal builds exclude all test routes. Native OS picker automation remains unverified because Accessibility access is unavailable.
 
-| Command                                       | Purpose                                                                                                    |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `npm run check`                               | Formatting, ESLint, strict types, component tests, IPC drift, Rust formatting/clippy/tests, frontend build |
-| `npm run bindings` / `npm run bindings:check` | Generate / verify the Rust-owned IPC schema                                                                |
-| `npm run fixtures:smoke`                      | Owned temporary catalog, volume, publication and interrupted-copy probes (macOS only for publication)      |
-| `npm run media:smoke`                         | Real decoder-child failure/timeout/replacement tests                                                       |
-| `npm run desktop:test:build`                  | Build a debug native app with test-only WebdriverIO instrumentation                                        |
-| `npm run desktop:test`                        | Drive native WebView with owned generated sources; native library IPC                                      |
-| `npm run desktop:build`                       | Build the normal unsigned local macOS app bundle                                                           |
-| `npm run release:check`                       | Check narrow production permissions and default dependency graph                                           |
+| Command                                       | Purpose                                                                                                                                                                  |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run check`                               | Full CI/broad-change aggregate: formatting, ESLint, strict types, component and release/dependency policy tests, IPC drift, Rust formatting/clippy/tests, frontend build |
+| `npm run bindings` / `npm run bindings:check` | Generate / verify the Rust-owned IPC schema                                                                                                                              |
+| `npm run fixtures:smoke`                      | Owned temporary catalog, volume, publication and interrupted-copy probes (macOS only for publication)                                                                    |
+| `npm run media:smoke`                         | Real decoder-child failure/timeout/replacement tests                                                                                                                     |
+| `npm run desktop:test:build`                  | Build a debug native app with test-only WebdriverIO instrumentation                                                                                                      |
+| `npm run desktop:test`                        | Drive native WebView with owned generated sources; native library IPC                                                                                                    |
+| `npm run desktop:build`                       | Build the normal unsigned local macOS app bundle                                                                                                                         |
+| `npm run release:check`                       | Check narrow production permissions and default dependency graph                                                                                                         |
 
-Rust equivalents are `cargo fmt --all --check`, `cargo clippy --workspace --all-targets --features stillharbour-core/fixture-probes -- -D warnings`, and `cargo test --workspace --features stillharbour-core/fixture-probes`. Do not use `--all-features` for a release; it deliberately enables the forbidden test server. `fixture-probes` is enabled only by explicitly instrumented desktop tests, never the normal application.
+`npm run rust:check` defines the full Rust formatting/Clippy/test matrix in `scripts/rust-check.mjs`, including the fixture, copy and backup workflow features. For focused local checks, select the affected package/targets and the same features needed by those tests. Do not use `--all-features` for a release; it deliberately enables the forbidden test server. Fixture features belong only in development probes and instrumented tests, never the normal application.
 
 The helper probe is developer-only and requires explicitly supplied, checksum-reviewed helpers:
 
