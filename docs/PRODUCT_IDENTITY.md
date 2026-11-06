@@ -13,7 +13,7 @@ Use one word, capital S, and the British spelling **harbour**. Use this form for
 | Element | Approved working convention |
 | --- | --- |
 | Product name | Stillharbour |
-| Descriptor | Photo & Video Library |
+| Descriptor | Your media library organizer. |
 | Tagline | A home for the moments you keep. |
 | Technical slug | stillharbour |
 | Catalog filename example | Family.stillharbour |
