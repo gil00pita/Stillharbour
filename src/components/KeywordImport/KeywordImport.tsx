@@ -1,3 +1,4 @@
+import { chakra } from '@chakra-ui/react';
 import { Text } from '@chakra-ui/react';
 import { useState } from 'react';
 import { Button } from '@/components/Button';
@@ -42,12 +43,25 @@ export function KeywordImport({
   return (
     <details>
       <summary>Import observed keywords</summary>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Import the retained source observations into manual tags. Labels you previously removed stay
         suppressed unless you explicitly restore them. No embedded metadata or sidecars are
         rewritten.
       </Text>
-      <label className="check-row">
+      <chakra.label
+        className="check-row"
+        css={{
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: '10px',
+          margin: '12px 0',
+          '& label': { flexDirection: 'row', alignItems: 'center' },
+        }}
+      >
         <input
           type="checkbox"
           checked={restore}
@@ -55,7 +69,7 @@ export function KeywordImport({
           onChange={(event) => setRestore(event.target.checked)}
         />
         Restore previously removed observed labels too
-      </label>
+      </chakra.label>
       <Button disabled={busy} onClick={() => void apply()}>
         Import keywords into catalog
       </Button>

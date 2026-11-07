@@ -510,6 +510,14 @@ function CopyWorkflowSession({
   return (
     <chakra.section
       className="organization-destination"
+      css={{
+        margin: '24px 0',
+        padding: '16px',
+        border: '1px solid {colors.border}',
+        borderRadius: 'var(--control-radius)',
+        '& h3': { marginTop: '0' },
+        '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+      }}
       aria-label="Verified organization copy"
       aria-busy={busy}
     >
@@ -602,7 +610,38 @@ function CopyWorkflowSession({
             bytes. Space is not reserved. The executor also requires application-journal headroom
             before starting.
           </Text>
-          <Box className="organization-table">
+          <Box
+            className="organization-table"
+            css={{
+              overflowX: 'auto',
+              marginTop: '16px',
+              '& table': { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+              '& th': {
+                padding: '12px 16px 12px 0',
+                textAlign: 'left',
+                verticalAlign: 'top',
+                overflowWrap: 'anywhere',
+                borderBottom: '1px solid {colors.border}',
+              },
+              '& td': {
+                padding: '12px 16px 12px 0',
+                textAlign: 'left',
+                verticalAlign: 'top',
+                overflowWrap: 'anywhere',
+                borderBottom: '1px solid {colors.border}',
+              },
+              '& caption': { textAlign: 'left', paddingBottom: '12px', color: '{colors.fg.muted}' },
+              '& small': {
+                display: 'block',
+                color: '{colors.fg.muted}',
+                marginTop: '8px',
+                fontSize: '12px',
+                lineHeight: '16px',
+              },
+              '& bdi': { whiteSpace: 'pre-wrap' },
+              '& p': { margin: '0 0 8px' },
+            }}
+          >
             <Table.Root unstyled>
               <Table.Caption unstyled captionSide="top">
                 Exact output paths, page {page + 1} of {pages}
@@ -697,7 +736,29 @@ function CopyWorkflowSession({
         </Text>
       )}
       {error && (
-        <Text role="alert" className="error">
+        <Text
+          role="alert"
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+        >
           {error}
         </Text>
       )}

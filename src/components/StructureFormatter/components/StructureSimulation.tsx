@@ -4,7 +4,6 @@ import { Button } from '@/components/Button';
 import type { LibraryOrganizationPreview } from '../../../bindings';
 import { errorMessage } from '../../../ipc';
 import { structureDialogStyle } from '../StructureFormatter.recipe';
-import classes from '../StructureFormatter.module.css';
 import { focusRing } from '../../../theme/focus-ring';
 
 export function StructureSimulationDialog({
@@ -69,7 +68,7 @@ export function StructureSimulationDialog({
       <Portal>
         <Dialog.Backdrop />
         <Dialog.Positioner>
-          <Dialog.Content css={structureDialogStyle} className={classes.dialog}>
+          <Dialog.Content css={structureDialogStyle}>
             <Dialog.Header>
               <Dialog.Title>Simulate this plan?</Dialog.Title>
               <Dialog.Description>
@@ -104,6 +103,20 @@ export function StructureSimulationDialog({
               <Button
                 type="button"
                 className="primary"
+                css={{
+                  marginTop: '28px',
+                  border: '0',
+                  background: '{colors.brand.solid}',
+                  color: '{colors.brand.contrast}',
+                  fontWeight: '600',
+                  fontSize: '13px',
+                  lineHeight: '20px',
+                  borderRadius: 'var(--control-radius)',
+                  padding: '12px 24px',
+                  minHeight: '44px',
+                  transition: 'background-color 140ms var(--ui-ease)',
+                  '&:hover:enabled': { background: '{colors.brand.hover}' },
+                }}
                 disabled={busy || stale}
                 onClick={() => void confirm()}
               >
@@ -131,7 +144,7 @@ export function StructureSimulationComplete({
     heading.current?.focus({ preventScroll: true });
   }, []);
   return (
-    <Box className={`structure-completion ${classes.completion}`}>
+    <Box className="structure-completion">
       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.5" />
         <path d="m7 12 3 3 7-7" stroke="currentColor" strokeWidth="1.5" />
@@ -154,7 +167,25 @@ export function StructureSimulationComplete({
         filesystem work or backup operation was performed.
       </Text>
       <Box display="flex" gap="3" flexWrap="wrap">
-        <Button type="button" className="primary" onClick={onEdit}>
+        <Button
+          type="button"
+          className="primary"
+          css={{
+            marginTop: '28px',
+            border: '0',
+            background: '{colors.brand.solid}',
+            color: '{colors.brand.contrast}',
+            fontWeight: '600',
+            fontSize: '13px',
+            lineHeight: '20px',
+            borderRadius: 'var(--control-radius)',
+            padding: '12px 24px',
+            minHeight: '44px',
+            transition: 'background-color 140ms var(--ui-ease)',
+            '&:hover:enabled': { background: '{colors.brand.hover}' },
+          }}
+          onClick={onEdit}
+        >
           Back to editing
         </Button>
         <Button type="button" onClick={onReview}>
@@ -164,7 +195,12 @@ export function StructureSimulationComplete({
           Run restructure
         </Button>
       </Box>
-      <Text id="structure-complete-help" className="help" mt="4">
+      <Text
+        id="structure-complete-help"
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+        mt="4"
+      >
         Actual restructuring remains disabled pending reviewed execution and proven recovery.
       </Text>
     </Box>

@@ -1,8 +1,20 @@
+import { chakra } from '@chakra-ui/react';
 // Geometry from the owner-supplied empty-library.svg; colours follow the app palette.
 export function EmptyLibraryArt() {
   return (
-    <svg
+    <chakra.svg
       className="empty-library-art"
+      css={{
+        '--empty-art-shadow': '{colors.border}',
+        '--empty-art-frame-start': 'color-mix(in srgb, {colors.bg.panel} 50%, {colors.fg.muted})',
+        '--empty-art-frame-end': 'color-mix(in srgb, {colors.bg.panel} 35%, {colors.fg.muted})',
+        '--empty-art-paper-start': 'color-mix(in srgb, {colors.bg.panel} 92%, white)',
+        '--empty-art-paper-end': '{colors.bg.panel}',
+        display: 'block',
+        width: 'min(302px, 100%)',
+        height: 'auto',
+        margin: '0 auto 24px',
+      }}
       aria-hidden="true"
       focusable="false"
       width="302"
@@ -133,6 +145,6 @@ export function EmptyLibraryArt() {
           <rect width="302" height="214.955" fill="white" />
         </clipPath>
       </defs>
-    </svg>
+    </chakra.svg>
   );
 }

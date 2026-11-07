@@ -16,6 +16,21 @@ Generated checks: `node scripts/cargo.mjs test --locked -p stillharbour-core --l
 
 ## Local validation and CI
 
+Neutral Chakra redesign (2026-11-07): [NEUTRAL_UI.md](NEUTRAL_UI.md) owns the new
+palette, bundled Inter, next-themes CSP handling and removal of application CSS
+files. Component styles belong in Chakra props/objects or colocated recipes;
+only native/document defaults and keyframes belong in the theme. Do not remove
+dynamic virtual coordinates or the dependency MapLibre/font-face stylesheets.
+Run pinned Chakra typegen after theme edits. This shared migration needs all
+frontend consumer cases and the generated native suite, including the new
+`tests/desktop/appearance.e2e.mjs`, page-chrome and Foundation's existing geometry,
+focus, selection, form and preservation checks. The appearance fixture's captures
+and source audit live under `.context/redesign-native/`. Copied instrumented
+executables must retain adjacent helper resources; verify the listening PID/path
+before activating or shutting down an isolated test app. A hidden native document
+can suspend Floating UI positioning; keep that diagnostic separate from a style
+regression and do not weaken menu-coordinate assertions.
+
 Owner-approved workflow, 2026-11-06: run focused local checks while developing and require full GitHub CI before merging. This section governs routine validation; older feature notes below retain their commands and historical evidence, but their full-suite sequences are not a requirement after every small edit. Explicit preservation, milestone and release qualifications still apply.
 
 Choose checks for changed behavior and its consumers, not just edited filenames. Run `git diff --check` for every change and check formatting of changed supported files with `npm exec -- prettier --check <changed-files>`.

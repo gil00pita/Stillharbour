@@ -133,20 +133,55 @@ export function StructureExamples({ template }: { template: OrganizationTemplate
               ))}
             </List.Root>
           )}
-          <Text className="help">
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             Four synthetic examples, including one without a capture date. No library files are
             inspected for these examples.
           </Text>
           {rows.some((row) => row.skipReason) && (
-            <Text className="help">The example without a required date is skipped.</Text>
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
+              The example without a required date is skipped.
+            </Text>
           )}
           {rows.some((row) => row.usedUndated) && (
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               The example without a capture date uses Undated and its original filename.
             </Text>
           )}
           {[...new Set(rows.flatMap((row) => row.issues))].map((issue) => (
-            <Text key={issue} className="help">
+            <Text
+              key={issue}
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               {issueLabels[issue]}
             </Text>
           ))}

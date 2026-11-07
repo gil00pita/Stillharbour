@@ -46,7 +46,11 @@ export function MapFilters({
           </svg>
           Filters
           {count > 0 && (
-            <Text as="span" className="filter-count">
+            <Text
+              as="span"
+              className="filter-count"
+              css={{ marginLeft: '8px', color: '{colors.brand.solid}' }}
+            >
               {count}
             </Text>
           )}

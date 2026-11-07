@@ -40,7 +40,8 @@ it('preserves native submission and lossless form values across Chakra controls'
     caption: 'Line one\n<script>data</script>',
   });
   expect(screen.getByLabelText('Name')).toHaveAttribute('size', '24');
-  expect(document.querySelector('script')).toBeNull();
+  // The appearance provider includes inert bootstrap data under the desktop CSP.
+  expect(document.querySelector('script:not([type="application/json"])')).toBeNull();
 });
 
 it('keeps non-submit actions, native refs and disabled approvals intact', () => {

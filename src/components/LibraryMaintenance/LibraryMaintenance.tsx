@@ -63,7 +63,17 @@ export function LibraryMaintenance({
   }
   const removing = target.kind === 'library';
   return (
-    <chakra.section className="maintenance-review" aria-labelledby="maintenance-review-title">
+    <chakra.section
+      className="maintenance-review"
+      css={{
+        margin: '22px 0',
+        padding: '20px',
+        border: '1px solid {colors.border}',
+        '& p': { maxWidth: '72ch', lineHeight: '1.6' },
+        '& .settings-library-actions': { marginTop: '18px' },
+      }}
+      aria-labelledby="maintenance-review-title"
+    >
       <chakra.form
         aria-label="Review library maintenance"
         onSubmit={(event) => void confirm(event)}
@@ -99,17 +109,43 @@ export function LibraryMaintenance({
                 ? 'This forgets the selected folder, its indexed records, catalog favorites, ratings, tags and scan history, and clears its indexed cached previews. You can add the folder again, but its catalog notes will not return. Library change history, including previous paths, remains in this catalog.'
                 : 'Clear indexed cached previews for every library. Originals, library settings and catalog notes stay unchanged. Previews regenerate when accessible photos are viewed; offline photos need their originals reconnected.'}
             </Text>
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               Original photos and sidecars stay unchanged. Only indexed previews are cleared;
               unexpected files are retained.
             </Text>
             {preview?.rootDisplayPath && (
-              <Text className="path">
+              <Text
+                className="path"
+                css={{
+                  fontSize: '13px',
+                  lineHeight: '1.6',
+                  overflowWrap: 'anywhere',
+                  whiteSpace: 'pre-wrap',
+                  margin: '8px 0 0',
+                  color: '{colors.fg.muted}',
+                }}
+              >
                 <bdi>{preview.rootDisplayPath}</bdi>
               </Text>
             )}
             {preview && (
-              <Text className="help">
+              <Text
+                className="help"
+                css={{
+                  fontSize: '13px',
+                  color: '{colors.fg.muted}',
+                  lineHeight: '20px',
+                  margin: '8px 0',
+                }}
+              >
                 <strong>
                   <bdi>{preview.rootLabel ?? 'All libraries'}</bdi>
                 </strong>{' '}
@@ -121,13 +157,38 @@ export function LibraryMaintenance({
           </>
         )}
         {error && (
-          <Text role="alert" className="error">
+          <Text
+            role="alert"
+            className="error"
+            css={{
+              border: '1px solid {colors.border.control}',
+              borderRadius: 'var(--control-radius)',
+              background: '{colors.danger.bg}',
+              color: '{colors.danger.fg}',
+              padding: '16px 20px',
+              margin: '24px 0 0',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              '& p': { margin: '0' },
+              '& button': {
+                marginTop: '12px',
+                border: '1px solid currentColor',
+                background: 'transparent',
+                color: 'inherit',
+                borderRadius: '4px',
+                padding: '7px 12px',
+              },
+            }}
+          >
             {completed
               ? 'The action completed, but refreshing Settings failed. Reopen Settings to refresh.'
               : error}
           </Text>
         )}
-        <Box className="settings-library-actions">
+        <Box
+          className="settings-library-actions"
+          css={{ display: 'flex', flexWrap: 'wrap', alignItems: 'start', gap: '8px' }}
+        >
           <Button type="button" disabled={busy} onClick={onClose}>
             {completed ? 'Done' : 'Cancel'}
           </Button>
@@ -147,6 +208,9 @@ export function LibraryMaintenance({
             <Button
               type="submit"
               className={removing ? 'destructive' : ''}
+              css={{
+                '&.destructive': { 'button&:not(.primary)': { color: '{colors.fg.secondary}' } },
+              }}
               disabled={busy || !preview}
             >
               {busy

@@ -312,7 +312,18 @@ export function ImportPlanReview({
     if (epoch.current === token) setJob(value);
   }
   return (
-    <chakra.section aria-label="Import decisions" className="organization-destination">
+    <chakra.section
+      aria-label="Import decisions"
+      className="organization-destination"
+      css={{
+        margin: '24px 0',
+        padding: '16px',
+        border: '1px solid {colors.border}',
+        borderRadius: 'var(--control-radius)',
+        '& h3': { marginTop: '0' },
+        '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+      }}
+    >
       <Heading as="h4" unstyled>
         Import decisions
       </Heading>

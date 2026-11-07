@@ -1,6 +1,5 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
-import classes from '../StructureFormatter.module.css';
 
 const messages = {
   edit: 'Previewing leaves originals untouched. Actual restructuring remains disabled pending reviewed execution and proven recovery.',
@@ -24,8 +23,12 @@ export function StructureFlowFooter({
 }) {
   if (step === 'complete') return null;
   return (
-    <Box className={`structure-flow-footer ${classes.footer}`}>
-      <Text className="help" id="structure-execution-help">
+    <Box className="structure-flow-footer">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+        id="structure-execution-help"
+      >
         {messages[step]}
       </Text>
       <Flex gap="3" wrap="wrap">
@@ -33,12 +36,50 @@ export function StructureFlowFooter({
           Save preset
         </Button>
         {step === 'edit' && (
-          <Button type="submit" form="structure-rules-form" className="primary" disabled={busy}>
+          <Button
+            type="submit"
+            form="structure-rules-form"
+            className="primary"
+            css={{
+              marginTop: '28px',
+              border: '0',
+              background: '{colors.brand.solid}',
+              color: '{colors.brand.contrast}',
+              fontWeight: '600',
+              fontSize: '13px',
+              lineHeight: '20px',
+              borderRadius: 'var(--control-radius)',
+              padding: '12px 24px',
+              minHeight: '44px',
+              transition: 'background-color 140ms var(--ui-ease)',
+              '&:hover:enabled': { background: '{colors.brand.hover}' },
+            }}
+            disabled={busy}
+          >
             {busy ? 'Building preview…' : 'Preview restructure'}
           </Button>
         )}
         {step === 'review' && (
-          <Button type="button" className="primary" disabled={!canSimulate} onClick={onSimulate}>
+          <Button
+            type="button"
+            className="primary"
+            css={{
+              marginTop: '28px',
+              border: '0',
+              background: '{colors.brand.solid}',
+              color: '{colors.brand.contrast}',
+              fontWeight: '600',
+              fontSize: '13px',
+              lineHeight: '20px',
+              borderRadius: 'var(--control-radius)',
+              padding: '12px 24px',
+              minHeight: '44px',
+              transition: 'background-color 140ms var(--ui-ease)',
+              '&:hover:enabled': { background: '{colors.brand.hover}' },
+            }}
+            disabled={!canSimulate}
+            onClick={onSimulate}
+          >
             Simulate plan
           </Button>
         )}

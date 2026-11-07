@@ -140,7 +140,8 @@ it('bounds examples and rejects malformed retained example text without loading 
   for (let i = 0; i < 4; i++) fireEvent.click(screen.getByRole('button', { name: 'Add example' }));
   expect(screen.getByRole('button', { name: 'Add example' })).toBeDisabled();
   expect(screen.getAllByText(/expected target/)).toHaveLength(4);
-  expect(document.querySelector('script')).toBeNull();
+  // The appearance provider includes inert bootstrap data under the desktop CSP.
+  expect(document.querySelector('script:not([type="application/json"])')).toBeNull();
 });
 
 it('explains an empty sequence without sending a non-finite number through IPC', async () => {

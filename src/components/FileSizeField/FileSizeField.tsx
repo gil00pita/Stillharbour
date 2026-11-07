@@ -1,3 +1,4 @@
+import { chakra } from '@chakra-ui/react';
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
 import { Field, Box } from '@chakra-ui/react';
@@ -60,11 +61,23 @@ export function FileSizeField({
   }
   return (
     <Field.Root asChild unstyled id={id} disabled={disabled} invalid={Boolean(error)}>
-      <div className="file-size-field">
+      <chakra.div
+        className="file-size-field"
+        css={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '0' }}
+      >
         <Field.Label asChild unstyled>
           <label htmlFor={id}>{label}</label>
         </Field.Label>
-        <Box className="file-size-controls">
+        <Box
+          className="file-size-controls"
+          css={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) 72px',
+            gap: '8px',
+            '& input': { minWidth: '0' },
+            '& select': { minWidth: '0' },
+          }}
+        >
           <Input
             id={id}
             name={name}
@@ -98,9 +111,14 @@ export function FileSizeField({
           </Field.Root>
         </Box>
         <Field.ErrorText asChild unstyled>
-          <p className="field-error">{error}</p>
+          <chakra.p
+            className="field-error"
+            css={{ color: '{colors.danger.fg}', fontSize: '12px', lineHeight: '1.6', margin: '0' }}
+          >
+            {error}
+          </chakra.p>
         </Field.ErrorText>
-      </div>
+      </chakra.div>
     </Field.Root>
   );
 }

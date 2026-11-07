@@ -37,8 +37,17 @@ export function QueryFields({
       </Field.Root>
       <SortControl value={query.sort} onChange={(sort) => filter({ sort })} />
 
-      <chakra.section className="panel-criteria">
-        <Box className="form-grid">
+      <chakra.section className="panel-criteria" css={{ display: 'grid', gap: '16px' }}>
+        <Box
+          className="form-grid"
+          css={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '16px',
+            width: '100%',
+            '@media (max-width: 600px)': { gridTemplateColumns: '1fr' },
+          }}
+        >
           <Field.Root asChild unstyled>
             <label>
               <Field.Label asChild unstyled>
@@ -156,37 +165,75 @@ export function QueryFields({
             </label>
           </Field.Root>
         </Box>
-        <label className="check-row">
+        <chakra.label
+          className="check-row"
+          css={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: '10px',
+            margin: '12px 0',
+            '& label': { flexDirection: 'row', alignItems: 'center' },
+          }}
+        >
           <input
             type="checkbox"
             checked={query.favoritesOnly}
             onChange={(event) => filter({ favoritesOnly: event.target.checked })}
           />{' '}
           Favorites only
-        </label>
-        <label className="check-row">
+        </chakra.label>
+        <chakra.label
+          className="check-row"
+          css={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: '10px',
+            margin: '12px 0',
+            '& label': { flexDirection: 'row', alignItems: 'center' },
+          }}
+        >
           <input
             type="checkbox"
             checked={query.tagDescendants ?? false}
             onChange={(event) => filter({ tagDescendants: event.target.checked })}
           />
           Include tag descendants
-        </label>
-        <label className="check-row">
+        </chakra.label>
+        <chakra.label
+          className="check-row"
+          css={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: '10px',
+            margin: '12px 0',
+            '& label': { flexDirection: 'row', alignItems: 'center' },
+          }}
+        >
           <input
             type="checkbox"
             checked={query.includeMissing}
             onChange={(event) => filter({ includeMissing: event.target.checked })}
           />{' '}
           Include missing files
-        </label>
-        <label
+        </chakra.label>
+        <chakra.label
           className="check-row"
+          css={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: '10px',
+            margin: '12px 0',
+            '& label': { flexDirection: 'row', alignItems: 'center' },
+          }}
           title="Visual-similarity analysis is not available yet. No groups are inferred from filenames or cached previews."
         >
           <input type="checkbox" disabled />
           Similar groups · unavailable
-        </label>
+        </chakra.label>
       </chakra.section>
     </Box>
   );
@@ -208,7 +255,21 @@ export function LibraryFacets({
   return (
     <>
       {section === 'Folders' && (
-        <Box className="folder-strip">
+        <Box
+          className="folder-strip"
+          css={{
+            '& h2': { fontSize: '17px', letterSpacing: '0', width: '100%', marginBottom: '4px' },
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px',
+            padding: '16px 0',
+            borderBottom: '1px solid {colors.border}',
+            maxHeight: '160px',
+            overflow: 'auto',
+            '& p': { fontSize: '12px', color: '{colors.fg.muted}' },
+            '& button': { maxWidth: '100%', overflowWrap: 'anywhere' },
+          }}
+        >
           <Heading as="h2" unstyled>
             Folders
           </Heading>
@@ -238,7 +299,21 @@ export function LibraryFacets({
         </Box>
       )}
       {section === 'Tags' && (
-        <Box className="folder-strip">
+        <Box
+          className="folder-strip"
+          css={{
+            '& h2': { fontSize: '17px', letterSpacing: '0', width: '100%', marginBottom: '4px' },
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: '8px',
+            padding: '16px 0',
+            borderBottom: '1px solid {colors.border}',
+            maxHeight: '160px',
+            overflow: 'auto',
+            '& p': { fontSize: '12px', color: '{colors.fg.muted}' },
+            '& button': { maxWidth: '100%', overflowWrap: 'anywhere' },
+          }}
+        >
           <Heading as="h2" unstyled>
             Tags
           </Heading>
@@ -277,7 +352,20 @@ export function RootAvailability({
   return (
     <>
       {root && (
-        <Box className="root-status">
+        <Box
+          className="root-status"
+          css={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-start',
+            gap: '12px',
+            fontSize: '12px',
+            color: '{colors.fg.muted}',
+            marginTop: '14px',
+            flexWrap: 'wrap',
+            '& span': { marginRight: 'auto' },
+          }}
+        >
           <Text as="span">
             <bdi>{root.label}</bdi> · {root.availability.replaceAll('_', ' ')} ·{' '}
             {root.mode === 'referenced' ? 'read only' : 'managed'}
@@ -295,7 +383,16 @@ export function RootAvailability({
       {status.roots.some((root) =>
         ['offline', 'inaccessible', 'needs_relink'].includes(root.availability),
       ) && (
-        <Text className="availability-note">
+        <Text
+          className="availability-note"
+          css={{
+            background: '{colors.bg.subtle}',
+            color: '{colors.fg.secondary}',
+            padding: '12px',
+            fontSize: '12px',
+            lineHeight: '1.5',
+          }}
+        >
           Some originals are unavailable. Catalog details and cached previews remain available.
           Select a library to reconnect it.
         </Text>
@@ -333,7 +430,25 @@ export function ActiveFilters({
     maxBytes: 'Maximum bytes',
   };
   return (
-    <Box className="active-filters" aria-label="Active filters">
+    <Box
+      className="active-filters"
+      css={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '4px',
+        '&:empty': { display: 'none' },
+        '& button': {
+          maxWidth: '200px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontSize: '11px',
+          padding: '3px 7px',
+          minHeight: '28px',
+        },
+      }}
+      aria-label="Active filters"
+    >
       {fields
         .filter((key) => query[key])
         .map((key) => (

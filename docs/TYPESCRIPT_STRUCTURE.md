@@ -47,7 +47,7 @@ It accepts native option children and is distinct from Chakra's collection-based
 Select.
 
 The migrated ordinary labeled controls use Field.Root and Field.Label. Existing
-label layouts use `asChild` and `unstyled` to retain their established CSS and
+label layouts use `asChild` and `unstyled` to retain their Chakra styles and
 native label associations. FileSizeField uses Field.ErrorText for automatically
 associated error feedback and keeps native custom validity. Its unit picker has
 a separate Field context so an amount error does not mark the unit invalid.
@@ -57,7 +57,8 @@ controls retain their native adapters and established geometry.
 ESLint rejects legacy Chakra imports and v2 prop names, Stack `spacing`, and
 imports through `@/components/<Name>/...`. Direct local recipe imports remain
 valid for system registration. New components follow AGENTS.md; existing
-specialized CSS is not evidence that a broad visual redesign has been accepted.
+specialized native geometry remains an explicit part of its owning component.
+The owner-approved neutral redesign is documented in [NEUTRAL_UI.md](NEUTRAL_UI.md).
 
 ## Checks
 
@@ -86,7 +87,7 @@ qualification.
 Applicable elements throughout the component tree now use Chakra Box, Text,
 Heading, Image, Button/IconButton, List and Table compound components; semantic
 sections/forms/fieldsets use the Chakra factory. Use unstyled recipe components
-where established native CSS still owns specialized geometry. Native asChild
+where local Chakra styles own specialized geometry. Native asChild
 children, dialog/details/summary, SVG, bidirectional filenames and checkbox/range
 controls are intentional exceptions. The retained numbered list uses List.Root
 asChild around ol to preserve its native start offset.
@@ -120,8 +121,8 @@ summary, feedback, footer, session preset dialog and simulation confirmation.
 `use-structure-preview.ts` owns generation-fenced native batching, query responses,
 discard and fresh read-only validation. `structure-rules.ts` owns pure filename
 transforms and bounded catalog-scoped session memory. All remain in the component
-folder, with colocated tests, recipes and the local CSS bridge for legacy primary
-button margins. Public consumers use its barrel; StructurePathBuilder also exports
+folder, with colocated tests and recipes. The removed CSS-module bridge's button
+geometry now lives in its existing recipes. Public consumers use its barrel; StructurePathBuilder also exports
 its existing pure path-parts helpers through its barrel.
 
 Register StructureFormatter's recipe and the Chakra v3 Dialog slot recipe in

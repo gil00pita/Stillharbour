@@ -1,5 +1,9 @@
 # Workspace consistency audit
 
+The owner-approved 2026-11-07 [neutral Chakra redesign](NEUTRAL_UI.md) supersedes
+this audit's earlier warm/sage palette and retained-CSS exceptions. Its functional
+workspace and preservation requirements remain; earlier evidence retains its scope.
+
 Owner request, 2026-11-07. Retain the existing dark photographic studio identity;
 improve interaction design, field composition and alignment. The latest owner
 direction supersedes the attachment's preserve-layout instruction. Base includes

@@ -39,7 +39,17 @@ function Evidence({
   >;
 }) {
   return (
-    <dl className="backup-evidence">
+    <chakra.dl
+      className="backup-evidence"
+      css={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        gap: '12px 24px',
+        '& dt': { color: '{colors.fg.muted}' },
+        '& dd': { margin: '2px 0 0', overflowWrap: 'anywhere' },
+        '@media (max-width: 850px)': { gridTemplateColumns: '1fr' },
+      }}
+    >
       <Box>
         <dt>Included in snapshot</dt>
         <dd>{value.included ? 'Recorded' : 'Not established'}</dd>
@@ -56,7 +66,7 @@ function Evidence({
         <dt>Restored and byte-compared</dt>
         <dd>{value.restoredCompared ? 'Recorded' : 'Not established'}</dd>
       </Box>
-    </dl>
+    </chakra.dl>
   );
 }
 
@@ -139,7 +149,31 @@ export function SnapshotWorkflow({
     return [id, root?.displayPath, root?.availability];
   });
   return (
-    <Box className="backup-workspace">
+    <Box
+      className="backup-workspace"
+      css={{
+        padding: '24px',
+        overflow: 'auto',
+        '& > p': { maxWidth: '90ch', color: '{colors.fg.muted}' },
+        '& select': { maxWidth: '100%' },
+        '& input': { maxWidth: '100%' },
+        '& h2': { fontSize: '20px', fontWeight: '500', margin: '24px 0 12px' },
+        flex: '1',
+        minHeight: '0',
+        '& > *': { maxWidth: '1120px' },
+        "& > [aria-label='Saved comparisons']": { maxWidth: '480px', marginBottom: '24px' },
+        "& > [aria-label='Saved comparisons'] label": {
+          display: 'grid',
+          gap: '8px',
+          minWidth: '0',
+          margin: '0',
+        },
+        '& > details > summary': { paddingBlock: '12px', fontWeight: '600', cursor: 'pointer' },
+        '& > details': { borderBlock: '1px solid {colors.border}', paddingBlock: '4px 20px' },
+        '& > h2': { fontSize: '18px', fontWeight: '600' },
+        '@media (max-width: 760px)': { paddingInline: '16px' },
+      }}
+    >
       {!loading && !profiles.length && (
         <UtilityWelcome
           title="Keep earlier versions within reach."
@@ -157,7 +191,17 @@ export function SnapshotWorkflow({
         This is separate from a readable safe copy. Removing a source does not automatically delete
         earlier snapshots.
       </Text>
-      <chakra.section className="backup-recovery" aria-label="Latest retained catalog">
+      <chakra.section
+        className="backup-recovery"
+        css={{
+          borderLeft: '2px solid {colors.border}',
+          padding: '12px 16px',
+          marginBlock: '20px',
+          '& h3': { margin: '0 0 8px', fontSize: '14px', fontWeight: '500' },
+          '& p': { color: '{colors.fg.muted}', fontSize: '13px', maxWidth: '80ch' },
+        }}
+        aria-label="Latest retained catalog"
+      >
         <Heading as="h3" unstyled>
           Catalog saved before the latest switch
         </Heading>
@@ -184,20 +228,94 @@ export function SnapshotWorkflow({
         )}
       </chakra.section>
       {capabilityError && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {capabilityError}
         </Text>
       )}
       {loading && <Text role="status">Loading snapshot profiles…</Text>}
       {error && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {error}
         </Text>
       )}
       {capabilities?.unavailableReason && (
         <Text role="status">{capabilities.unavailableReason}</Text>
       )}
-      <Box className="backup-controls">
+      <Box
+        className="backup-controls"
+        css={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          marginBlock: '16px',
+          '& select': { marginInlineStart: '0' },
+          '& .primary': { marginTop: '0' },
+          '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+          '& > p': {
+            flexBasis: '100%',
+            margin: '0',
+            color: '{colors.fg.muted}',
+            fontSize: '13px',
+            maxWidth: '70ch',
+          },
+          "& label:not(:has(> input[type='checkbox']))": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+          '@media (max-width: 760px)': {
+            "& > [data-scope='field']": { flexBasis: '100%' },
+            '& > label': { flexBasis: '100%' },
+          },
+        }}
+      >
         <Field.Root asChild unstyled>
           <label>
             <Field.Label asChild unstyled>
@@ -292,7 +410,17 @@ export function SnapshotWorkflow({
         />
       )}
       {capabilities && (
-        <chakra.aside className="backup-helper-limits">
+        <chakra.aside
+          className="backup-helper-limits"
+          css={{
+            border: '1px solid {colors.border}',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBlock: '20px',
+            minWidth: '0',
+            color: '{colors.fg.muted}',
+          }}
+        >
           <Heading as="h3" unstyled>
             Transfer and schedule limits
           </Heading>
@@ -541,11 +669,34 @@ function SnapshotProfileWorkspace({
       aria-label="Snapshot profile workspace"
       aria-busy={busy}
       className="backup-operation"
+      css={{
+        marginBlock: '28px',
+        paddingTop: '24px',
+        borderTop: '1px solid {colors.border}',
+        minWidth: '0',
+        '& code': { overflowWrap: 'anywhere' },
+      }}
     >
       <Heading as="h3" unstyled>
         {profile.label}
       </Heading>
-      <Box className="backup-scope">
+      <Box
+        className="backup-scope"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '24px',
+          marginBlock: '24px',
+          '& section': {
+            minWidth: '0',
+            overflowWrap: 'anywhere',
+            border: '1px solid {colors.border}',
+            padding: '20px',
+            borderRadius: '8px',
+          },
+          '@media (max-width: 850px)': { gridTemplateColumns: '1fr' },
+        }}
+      >
         <chakra.section aria-label="Snapshot source roots">
           <Heading as="h4" unstyled>
             Bound source roots
@@ -557,7 +708,12 @@ function SnapshotProfileWorkspace({
                 <List.Item unstyled key={id}>
                   <strong>{root?.label ?? 'Unavailable root'}</strong> · Last observed access:{' '}
                   {root?.availability ?? 'not registered'}
-                  <Text className="backup-path">{root?.displayPath ?? id}</Text>
+                  <Text
+                    className="backup-path"
+                    css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+                  >
+                    {root?.displayPath ?? id}
+                  </Text>
                 </List.Item>
               );
             })}
@@ -571,15 +727,20 @@ function SnapshotProfileWorkspace({
           <Heading as="h4" unstyled>
             Encrypted repository
           </Heading>
-          <Text className="backup-path">{profile.destinationDisplay}</Text>
+          <Text className="backup-path" css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+            {profile.destinationDisplay}
+          </Text>
           <Text>
             {profile.protocol} · {profile.status.replaceAll('_', ' ')}
           </Text>
-          <Text className="backup-path">
+          <Text className="backup-path" css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
             Repository identity: {profile.repositoryId ?? 'Not established yet'}
           </Text>
           {profile.hostFingerprint && (
-            <Text className="backup-path">
+            <Text
+              className="backup-path"
+              css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+            >
               Configured host fingerprint: {profile.hostFingerprint}
             </Text>
           )}
@@ -594,7 +755,37 @@ function SnapshotProfileWorkspace({
           )}
         </chakra.section>
       </Box>
-      <Box className="backup-controls">
+      <Box
+        className="backup-controls"
+        css={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          marginBlock: '16px',
+          '& select': { marginInlineStart: '0' },
+          '& .primary': { marginTop: '0' },
+          '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+          '& > p': {
+            flexBasis: '100%',
+            margin: '0',
+            color: '{colors.fg.muted}',
+            fontSize: '13px',
+            maxWidth: '70ch',
+          },
+          "& label:not(:has(> input[type='checkbox']))": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+          '@media (max-width: 760px)': {
+            "& > [data-scope='field']": { flexBasis: '100%' },
+            '& > label': { flexBasis: '100%' },
+          },
+        }}
+      >
         <Button
           disabled={busy || Boolean(running)}
           onClick={() =>
@@ -668,7 +859,37 @@ function SnapshotProfileWorkspace({
           credentials and repository history remain retained. Enter the existing repository
           password; choosing another password does not recover encrypted data.
         </Text>
-        <Box className="backup-controls">
+        <Box
+          className="backup-controls"
+          css={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            marginBlock: '16px',
+            '& select': { marginInlineStart: '0' },
+            '& .primary': { marginTop: '0' },
+            '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+            '& > p': {
+              flexBasis: '100%',
+              margin: '0',
+              color: '{colors.fg.muted}',
+              fontSize: '13px',
+              maxWidth: '70ch',
+            },
+            "& label:not(:has(> input[type='checkbox']))": {
+              display: 'grid',
+              gap: '8px',
+              minWidth: '0',
+              margin: '0',
+            },
+            "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+            '@media (max-width: 760px)': {
+              "& > [data-scope='field']": { flexBasis: '100%' },
+              '& > label': { flexBasis: '100%' },
+            },
+          }}
+        >
           <Button
             disabled={busy || Boolean(running) || !capabilities?.credentialsAvailable}
             onClick={() => void action(() => unlock('repository'))}
@@ -765,12 +986,56 @@ function SnapshotProfileWorkspace({
         />
       )}
       {error && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {error}
         </Text>
       )}
       {historyError && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {historyError}
         </Text>
       )}
@@ -781,7 +1046,37 @@ function SnapshotProfileWorkspace({
           unavailable repository is empty.
         </Text>
       )}
-      <Box className="backup-controls">
+      <Box
+        className="backup-controls"
+        css={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          marginBlock: '16px',
+          '& select': { marginInlineStart: '0' },
+          '& .primary': { marginTop: '0' },
+          '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+          '& > p': {
+            flexBasis: '100%',
+            margin: '0',
+            color: '{colors.fg.muted}',
+            fontSize: '13px',
+            maxWidth: '70ch',
+          },
+          "& label:not(:has(> input[type='checkbox']))": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+          '@media (max-width: 760px)': {
+            "& > [data-scope='field']": { flexBasis: '100%' },
+            '& > label': { flexBasis: '100%' },
+          },
+        }}
+      >
         <Heading as="h4" unstyled>
           Snapshot history
         </Heading>
@@ -805,7 +1100,11 @@ function SnapshotProfileWorkspace({
           }}
         />
       </Box>
-      <List.Root unstyled className="backup-job-list">
+      <List.Root
+        unstyled
+        className="backup-job-list"
+        css={{ listStyle: 'none', margin: '16px 0', padding: '0', display: 'grid', gap: '16px' }}
+      >
         {snapshots
           .filter(
             (snapshot) =>
@@ -813,17 +1112,70 @@ function SnapshotProfileWorkspace({
               (snapshots.find((value) => value.id === versionId)?.id ?? snapshots[0]?.id),
           )
           .map((snapshot) => (
-            <List.Item unstyled className="backup-job" key={snapshot.id}>
+            <List.Item
+              unstyled
+              className="backup-job"
+              css={{
+                border: '1px solid {colors.border}',
+                padding: '16px',
+                borderRadius: '8px',
+                minWidth: '0',
+                '& h4': { margin: '0 0 12px', fontSize: '1rem' },
+                '& h5': { margin: '0 0 12px', fontSize: '1rem' },
+                '& small': { color: '{colors.fg.muted}' },
+              }}
+              key={snapshot.id}
+            >
               <Heading as="h5" unstyled>
                 {snapshot.time} · {snapshot.files} files · {snapshot.bytes} content bytes
               </Heading>
-              <Text className="backup-path">Snapshot {snapshot.id}</Text>
+              <Text
+                className="backup-path"
+                css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+              >
+                Snapshot {snapshot.id}
+              </Text>
               <Evidence value={snapshot} />
               <Text>
                 Catalog included: {snapshot.catalogIncluded ? 'Yes' : 'Not established'} · Source
                 retained: {snapshot.sourceRetained ? 'Yes' : 'Not established'}
               </Text>
-              <Box className="backup-controls">
+              <Box
+                className="backup-controls"
+                css={{
+                  display: 'flex',
+                  gap: '12px',
+                  alignItems: 'flex-end',
+                  flexWrap: 'wrap',
+                  marginBlock: '16px',
+                  '& select': { marginInlineStart: '0' },
+                  '& .primary': { marginTop: '0' },
+                  '& > label': {
+                    flex: '0 1 360px',
+                    maxWidth: '480px',
+                    fontSize: '13px',
+                    minWidth: '0',
+                  },
+                  '& > p': {
+                    flexBasis: '100%',
+                    margin: '0',
+                    color: '{colors.fg.muted}',
+                    fontSize: '13px',
+                    maxWidth: '70ch',
+                  },
+                  "& label:not(:has(> input[type='checkbox']))": {
+                    display: 'grid',
+                    gap: '8px',
+                    minWidth: '0',
+                    margin: '0',
+                  },
+                  "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+                  '@media (max-width: 760px)': {
+                    "& > [data-scope='field']": { flexBasis: '100%' },
+                    '& > label': { flexBasis: '100%' },
+                  },
+                }}
+              >
                 <Button
                   disabled={busy}
                   aria-pressed={snapshotId === snapshot.id}
@@ -879,7 +1231,17 @@ function SnapshotProfileWorkspace({
           ))}
       </List.Root>
       {selectedSnapshot && (
-        <chakra.section className="backup-entry-details" aria-label="Snapshot browser">
+        <chakra.section
+          className="backup-entry-details"
+          css={{
+            border: '1px solid {colors.border}',
+            padding: '16px',
+            marginBlock: '16px',
+            '& dd': { overflowWrap: 'anywhere' },
+            '& img': { width: '100%', height: 'auto', objectFit: 'contain', maxHeight: '512px' },
+          }}
+          aria-label="Snapshot browser"
+        >
           <Heading as="h4" unstyled>
             Snapshot {selectedSnapshot.time}
           </Heading>
@@ -889,13 +1251,61 @@ function SnapshotProfileWorkspace({
           </Text>
           {browseLoading && <Text role="status">Loading snapshot entries…</Text>}
           {browseError && (
-            <Text className="error" role="alert">
+            <Text
+              className="error"
+              css={{
+                border: '1px solid {colors.border.control}',
+                borderRadius: 'var(--control-radius)',
+                background: '{colors.danger.bg}',
+                color: '{colors.danger.fg}',
+                padding: '16px 20px',
+                margin: '24px 0 0',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                '& p': { margin: '0' },
+                '& button': {
+                  marginTop: '12px',
+                  border: '1px solid currentColor',
+                  background: 'transparent',
+                  color: 'inherit',
+                  borderRadius: '4px',
+                  padding: '7px 12px',
+                },
+              }}
+              role="alert"
+            >
               {browseError}
             </Text>
           )}
           {browse && (
             <>
-              <Box className="backup-table">
+              <Box
+                className="backup-table"
+                css={{
+                  '& td button': {
+                    whiteSpace: 'pre-wrap',
+                    overflowWrap: 'anywhere',
+                    textAlign: 'left',
+                  },
+                  overflow: 'auto',
+                  maxHeight: '60vh',
+                  '& table': { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
+                  '& th': {
+                    padding: '12px',
+                    borderBottom: '1px solid {colors.border}',
+                    verticalAlign: 'top',
+                    position: 'sticky',
+                    top: '0',
+                    background: '{colors.bg.panel}',
+                  },
+                  '& td': {
+                    padding: '12px',
+                    borderBottom: '1px solid {colors.border}',
+                    verticalAlign: 'top',
+                  },
+                  '& td:first-child': { minWidth: '160px', maxWidth: '320px' },
+                }}
+              >
                 <Table.Root unstyled>
                   <Table.Caption unstyled captionSide="top">
                     Stored snapshot entries
@@ -911,12 +1321,20 @@ function SnapshotProfileWorkspace({
                   <Table.Body unstyled>
                     {browse.entries.map((entry) => (
                       <Table.Row unstyled key={entry.id}>
-                        <Table.Cell unstyled className="backup-path">
+                        <Table.Cell
+                          unstyled
+                          className="backup-path"
+                          css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+                        >
                           {entry.displayPath}
                         </Table.Cell>
                         <Table.Cell unstyled>{entry.kind}</Table.Cell>
                         <Table.Cell unstyled>{entry.bytes}</Table.Cell>
-                        <Table.Cell unstyled className="backup-path">
+                        <Table.Cell
+                          unstyled
+                          className="backup-path"
+                          css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+                        >
                           {entry.digest ?? 'Not recorded'}
                         </Table.Cell>
                       </Table.Row>
@@ -924,7 +1342,42 @@ function SnapshotProfileWorkspace({
                   </Table.Body>
                 </Table.Root>
               </Box>
-              <Box className="backup-controls">
+              <Box
+                className="backup-controls"
+                css={{
+                  display: 'flex',
+                  gap: '12px',
+                  alignItems: 'flex-end',
+                  flexWrap: 'wrap',
+                  marginBlock: '16px',
+                  '& select': { marginInlineStart: '0' },
+                  '& .primary': { marginTop: '0' },
+                  '& > label': {
+                    flex: '0 1 360px',
+                    maxWidth: '480px',
+                    fontSize: '13px',
+                    minWidth: '0',
+                  },
+                  '& > p': {
+                    flexBasis: '100%',
+                    margin: '0',
+                    color: '{colors.fg.muted}',
+                    fontSize: '13px',
+                    maxWidth: '70ch',
+                  },
+                  "& label:not(:has(> input[type='checkbox']))": {
+                    display: 'grid',
+                    gap: '8px',
+                    minWidth: '0',
+                    margin: '0',
+                  },
+                  "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+                  '@media (max-width: 760px)': {
+                    "& > [data-scope='field']": { flexBasis: '100%' },
+                    '& > label': { flexBasis: '100%' },
+                  },
+                }}
+              >
                 <Button
                   disabled={browseOffset === 0 || browseLoading}
                   onClick={() => {
@@ -977,9 +1430,26 @@ function SnapshotProfileWorkspace({
       <Heading as="h4" unstyled>
         Snapshot jobs
       </Heading>
-      <List.Root unstyled className="backup-job-list">
+      <List.Root
+        unstyled
+        className="backup-job-list"
+        css={{ listStyle: 'none', margin: '16px 0', padding: '0', display: 'grid', gap: '16px' }}
+      >
         {jobs.map((job) => (
-          <List.Item unstyled key={job.id} className="backup-job">
+          <List.Item
+            unstyled
+            key={job.id}
+            className="backup-job"
+            css={{
+              border: '1px solid {colors.border}',
+              padding: '16px',
+              borderRadius: '8px',
+              minWidth: '0',
+              '& h4': { margin: '0 0 12px', fontSize: '1rem' },
+              '& h5': { margin: '0 0 12px', fontSize: '1rem' },
+              '& small': { color: '{colors.fg.muted}' },
+            }}
+          >
             <Heading as="h5" unstyled>
               {job.action.replaceAll('_', ' ')} · {job.state.replaceAll('_', ' ')}
             </Heading>
@@ -1030,7 +1500,14 @@ function SnapshotProfileWorkspace({
                 ? 'Verified for the recorded scope'
                 : 'Not established'}
             </Text>
-            {job.snapshotId && <Text className="backup-path">Snapshot {job.snapshotId}</Text>}
+            {job.snapshotId && (
+              <Text
+                className="backup-path"
+                css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+              >
+                Snapshot {job.snapshotId}
+              </Text>
+            )}
             {active(job) && (
               <Button
                 disabled={busy || job.state === 'cancel_requested'}
@@ -1122,16 +1599,90 @@ export function SnapshotReviewPanel({
     review.items.length === review.files &&
     (review.action !== 'backup' || review.catalogIncluded);
   return (
-    <chakra.section className="backup-review" aria-label="Snapshot action review">
+    <chakra.section
+      className="backup-review"
+      css={{
+        border: '1px solid {colors.border}',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBlock: '20px',
+        minWidth: '0',
+        background: '{colors.bg.panel}',
+        '& fieldset': {
+          display: 'grid',
+          gap: '16px',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          padding: '16px',
+          marginBlock: '20px',
+        },
+        '& legend': { fontWeight: '600', paddingInline: '6px' },
+        '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+        "& label:has(> input[type='checkbox'])": {
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px',
+        },
+        "& input[type='checkbox']": { flex: '0 0 auto', marginTop: '4px' },
+        "& input:not([type='checkbox'])": {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& textarea': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+          resize: 'vertical',
+          minHeight: '100px',
+        },
+        '& select': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& .backup-form-grid': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+        '& small': { color: '{colors.fg.muted}' },
+        '& .backup-table': { maxHeight: '360px' },
+        '@media (max-width: 850px)': { '& .backup-form-grid': { gridTemplateColumns: '1fr' } },
+      }}
+      aria-label="Snapshot action review"
+    >
       <Heading as="h4" unstyled>
         {review.action === 'backup'
           ? 'Review encrypted snapshot backup'
           : 'Review restore to a new protected output'}
       </Heading>
-      <Text className="backup-path">Target: {review.targetDisplay}</Text>
+      <Text className="backup-path" css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+        Target: {review.targetDisplay}
+      </Text>
       <List.Root unstyled aria-label="Reviewed snapshot source paths">
         {review.sourceDisplayPaths.map((path, index) => (
-          <List.Item unstyled className="backup-path" key={index}>
+          <List.Item
+            unstyled
+            className="backup-path"
+            css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+            key={index}
+          >
             {path}
           </List.Item>
         ))}
@@ -1140,7 +1691,29 @@ export function SnapshotReviewPanel({
         Approve the entire {review.items.length}-entry manifest, including entries on other pages.
         Manifest digest: <code>{review.digest}</code>
       </Text>
-      <Box className="backup-table">
+      <Box
+        className="backup-table"
+        css={{
+          '& td button': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', textAlign: 'left' },
+          overflow: 'auto',
+          maxHeight: '60vh',
+          '& table': { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
+          '& th': {
+            padding: '12px',
+            borderBottom: '1px solid {colors.border}',
+            verticalAlign: 'top',
+            position: 'sticky',
+            top: '0',
+            background: '{colors.bg.panel}',
+          },
+          '& td': {
+            padding: '12px',
+            borderBottom: '1px solid {colors.border}',
+            verticalAlign: 'top',
+          },
+          '& td:first-child': { minWidth: '160px', maxWidth: '320px' },
+        }}
+      >
         <Table.Root unstyled>
           <Table.Caption unstyled captionSide="top">
             Exact reviewed snapshot files
@@ -1155,7 +1728,11 @@ export function SnapshotReviewPanel({
           <Table.Body unstyled>
             {review.items.slice(offset, offset + 200).map((item, index) => (
               <Table.Row unstyled key={`${offset + index}:${item.displayPath}`}>
-                <Table.Cell unstyled className="backup-path">
+                <Table.Cell
+                  unstyled
+                  className="backup-path"
+                  css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+                >
                   {item.displayPath}
                 </Table.Cell>
                 <Table.Cell unstyled>{item.bytes}</Table.Cell>
@@ -1167,7 +1744,37 @@ export function SnapshotReviewPanel({
           </Table.Body>
         </Table.Root>
       </Box>
-      <Box className="backup-controls">
+      <Box
+        className="backup-controls"
+        css={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          marginBlock: '16px',
+          '& select': { marginInlineStart: '0' },
+          '& .primary': { marginTop: '0' },
+          '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+          '& > p': {
+            flexBasis: '100%',
+            margin: '0',
+            color: '{colors.fg.muted}',
+            fontSize: '13px',
+            maxWidth: '70ch',
+          },
+          "& label:not(:has(> input[type='checkbox']))": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+          '@media (max-width: 760px)': {
+            "& > [data-scope='field']": { flexBasis: '100%' },
+            '& > label': { flexBasis: '100%' },
+          },
+        }}
+      >
         <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
           Previous snapshot plan entries
         </Button>
@@ -1227,7 +1834,37 @@ export function SnapshotReviewPanel({
         />
         I reviewed this exact scope, target, listed issues and preservation policy
       </label>
-      <Box className="backup-controls">
+      <Box
+        className="backup-controls"
+        css={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          marginBlock: '16px',
+          '& select': { marginInlineStart: '0' },
+          '& .primary': { marginTop: '0' },
+          '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+          '& > p': {
+            flexBasis: '100%',
+            margin: '0',
+            color: '{colors.fg.muted}',
+            fontSize: '13px',
+            maxWidth: '70ch',
+          },
+          "& label:not(:has(> input[type='checkbox']))": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+          '@media (max-width: 760px)': {
+            "& > [data-scope='field']": { flexBasis: '100%' },
+            '& > label': { flexBasis: '100%' },
+          },
+        }}
+      >
         {!approved ? (
           <Button
             disabled={busy || !review.executionAvailable || !safeScope || !acknowledged}
@@ -1238,6 +1875,20 @@ export function SnapshotReviewPanel({
         ) : (
           <Button
             className="primary"
+            css={{
+              marginTop: '28px',
+              border: '0',
+              background: '{colors.brand.solid}',
+              color: '{colors.brand.contrast}',
+              fontWeight: '600',
+              fontSize: '13px',
+              lineHeight: '20px',
+              borderRadius: 'var(--control-radius)',
+              padding: '12px 24px',
+              minHeight: '44px',
+              transition: 'background-color 140ms var(--ui-ease)',
+              '&:hover:enabled': { background: '{colors.brand.hover}' },
+            }}
             disabled={busy || !review.executionAvailable || !safeScope}
             onClick={onStart}
           >
@@ -1282,7 +1933,74 @@ function SnapshotSchedulePanel({
     review.sourceRetained,
   );
   return (
-    <chakra.section className="backup-review" aria-label="Snapshot schedule">
+    <chakra.section
+      className="backup-review"
+      css={{
+        border: '1px solid {colors.border}',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBlock: '20px',
+        minWidth: '0',
+        background: '{colors.bg.panel}',
+        '& fieldset': {
+          display: 'grid',
+          gap: '16px',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          padding: '16px',
+          marginBlock: '20px',
+        },
+        '& legend': { fontWeight: '600', paddingInline: '6px' },
+        '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+        "& label:has(> input[type='checkbox'])": {
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px',
+        },
+        "& input[type='checkbox']": { flex: '0 0 auto', marginTop: '4px' },
+        "& input:not([type='checkbox'])": {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& textarea': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+          resize: 'vertical',
+          minHeight: '100px',
+        },
+        '& select': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& .backup-form-grid': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+        '& small': { color: '{colors.fg.muted}' },
+        '& .backup-table': { maxHeight: '360px' },
+        '@media (max-width: 850px)': { '& .backup-form-grid': { gridTemplateColumns: '1fr' } },
+      }}
+      aria-label="Snapshot schedule"
+    >
       <Heading as="h4" unstyled>
         Repeat an exact reviewed backup
       </Heading>

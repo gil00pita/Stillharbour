@@ -53,7 +53,8 @@ it('loads only on explicit review, sends an ID, and discloses candidate states w
   expect(screen.getByText('Catalog state: excluded · Library: offline')).toBeVisible();
   expect(screen.getByText(/9,007,199,254,740,993 bytes/)).toBeVisible();
   expect(screen.getByText(/not confirmed bundles/)).toBeVisible();
-  expect(document.querySelector('script')).toBeNull();
+  // The appearance provider includes inert bootstrap data under the desktop CSP.
+  expect(document.querySelector('script:not([type="application/json"])')).toBeNull();
 });
 
 it('shows empty and truncated observations without implying a complete inventory', async () => {

@@ -1,7 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from '@/components/App';
-import './styles.css';
+import '@fontsource-variable/inter/index.css';
 import { Provider } from './components/ui/Provider';
 import { diagnosticValue, installDiagnostics } from './performance';
 

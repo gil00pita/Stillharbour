@@ -124,14 +124,46 @@ export function ExplorerCanvas({
       <Box
         ref={viewport}
         className={`asset-viewport explorer-viewport ${mode}`}
+        css={{
+          overflow: 'auto',
+          flex: '1',
+          minHeight: '0',
+          scrollbarGutter: 'stable',
+          '&.with-timeline': { scrollbarWidth: 'none', scrollbarGutter: 'auto' },
+          '&.with-timeline::-webkit-scrollbar': { display: 'none' },
+          '&:focus': { outline: 'none' },
+          minWidth: '0',
+          '&.details .explorer-entry': {
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: '18px',
+            borderBottomColor: '{colors.border}',
+            borderRadius: '0',
+          },
+          '&.details .explorer-name': { flex: '1' },
+          '&.details .explorer-kind': { width: '40%', textAlign: 'right' },
+        }}
         tabIndex={0}
         aria-label="Indexed folder contents"
       >
-        <Box className="virtual-canvas" style={{ height: virtualizer.getTotalSize() }}>
+        <Box
+          className="virtual-canvas"
+          css={{ width: '100%', position: 'relative' }}
+          style={{ height: virtualizer.getTotalSize() }}
+        >
           {visible.map((row) => (
             <Box
               key={row.key}
               className="explorer-row"
+              css={{
+                position: 'absolute',
+                top: '0',
+                left: '0',
+                width: '100%',
+                display: 'grid',
+                gap: '12px',
+                paddingBottom: '12px',
+              }}
               style={{
                 transform: `translateY(${row.start}px)`,
                 height: row.size,
@@ -143,11 +175,42 @@ export function ExplorerCanvas({
                   key={itemId(entry)}
                   data-asset-id={itemId(entry)}
                   className="explorer-item"
+                  css={{ minWidth: '0', minHeight: '0' }}
                 >
                   <Button
                     unstyled
                     type="submit"
                     className="asset-open explorer-entry"
+                    css={{
+                      border: '0',
+                      background: 'transparent',
+                      padding: '0',
+                      color: 'inherit',
+                      width: '100%',
+                      textAlign: 'left',
+                      fontSize: '12px',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      'button&.asset-open': {
+                        display: 'flex',
+                        flexDirection: 'column',
+                        width: '100%',
+                        height: '100%',
+                        padding: '8px',
+                        gap: '6px',
+                        border: '1px solid transparent',
+                        borderRadius: '4px',
+                        textAlign: 'left',
+                        color: 'inherit',
+                        background: 'transparent',
+                      },
+                      'button&.asset-open:hover:enabled': {
+                        background: '{colors.bg.panel}',
+                        borderColor: '{colors.border}',
+                      },
+                      '& .photo-area': { width: '100%', flexShrink: '0' },
+                    }}
                     aria-label={`${entry.kind === 'file' ? 'Open' : 'Open folder'} ${itemName(entry)}`}
                     title={itemName(entry)}
                     disabled={entry.kind === 'folder' && entry.directory.state === 'blocked'}
@@ -184,14 +247,46 @@ export function ExplorerCanvas({
                           }
                         />
                       ) : (
-                        <Text as="span" className="explorer-glyph">
+                        <Text
+                          as="span"
+                          className="explorer-glyph"
+                          css={{
+                            height: '132px',
+                            width: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '{colors.brand.solid}',
+                          }}
+                        >
                           <FolderGlyph file={entry.kind === 'file'} />
                         </Text>
                       ))}
-                    <Text as="span" className="explorer-name">
+                    <Text
+                      as="span"
+                      className="explorer-name"
+                      css={{
+                        fontSize: '12px',
+                        width: '100%',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       <bdi>{itemName(entry)}</bdi>
                     </Text>
-                    <Text as="span" className="explorer-kind">
+                    <Text
+                      as="span"
+                      className="explorer-kind"
+                      css={{
+                        color: '{colors.fg.muted}',
+                        fontSize: '11px',
+                        width: '100%',
+                        overflow: 'hidden',
+                        whiteSpace: 'nowrap',
+                        textOverflow: 'ellipsis',
+                      }}
+                    >
                       {itemStatus(entry)}
                     </Text>
                   </Button>

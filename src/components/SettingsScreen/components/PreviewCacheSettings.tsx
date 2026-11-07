@@ -12,11 +12,33 @@ export function PreviewCacheSettings({
   onReview: (opener: HTMLButtonElement) => void;
 }) {
   return (
-    <chakra.section className="settings-section" aria-labelledby="preview-cache-title">
+    <chakra.section
+      className="settings-section"
+      css={{
+        padding: '32px 0',
+        borderBottom: '1px solid {colors.border}',
+        '& h2': {
+          fontSize: '16px',
+          fontWeight: '600',
+          letterSpacing: '-0.01em',
+          margin: '0 0 8px',
+        },
+        '& h3': { fontSize: '14px', margin: '0 0 8px' },
+        '& > .help': { maxWidth: '72ch' },
+        '& .view-switch': { margin: '16px 0', flexWrap: 'wrap', gap: '8px' },
+        '& .view-switch > button': { fontSize: '13px !important' },
+        '& .thumbnail-control': { fontSize: '13px' },
+        '& .scan-options': { marginTop: '20px' },
+      }}
+      aria-labelledby="preview-cache-title"
+    >
       <Heading as="h2" unstyled id="preview-cache-title">
         Preview cache
       </Heading>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Clears indexed previews for all libraries. Originals and catalog notes stay unchanged.
       </Text>
       <Button

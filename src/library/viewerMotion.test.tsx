@@ -17,7 +17,7 @@ function scene(reduce = false) {
       disconnect() {}
     },
   );
-  vi.stubGlobal('matchMedia', () => ({ matches: reduce }));
+  vi.stubGlobal('matchMedia', () => ({ matches: reduce, addListener() {}, removeListener() {} }));
   vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(600);
   vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(400);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(

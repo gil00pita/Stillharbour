@@ -153,6 +153,21 @@ export function BundleInventoryReview({
   return (
     <chakra.section
       className="organization-destination bundle-inventory"
+      css={{
+        margin: '24px 0',
+        padding: '16px',
+        border: '1px solid {colors.border}',
+        borderRadius: 'var(--control-radius)',
+        '& h3': { marginTop: '0' },
+        '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+        '& th:first-child': { width: '64px' },
+        '& .bundle-review-ack': {
+          display: 'flex',
+          flexDirection: 'row',
+          alignItems: 'flex-start',
+          marginBlock: '16px',
+        },
+      }}
       aria-label="Complete companion inventory"
       aria-busy={busy}
     >
@@ -178,7 +193,29 @@ export function BundleInventoryReview({
         Close companion inventory
       </Button>
       {error && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {error}
         </Text>
       )}
@@ -217,7 +254,38 @@ export function BundleInventoryReview({
               </List.Root>
             </>
           )}
-          <Box className="organization-table">
+          <Box
+            className="organization-table"
+            css={{
+              overflowX: 'auto',
+              marginTop: '16px',
+              '& table': { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+              '& th': {
+                padding: '12px 16px 12px 0',
+                textAlign: 'left',
+                verticalAlign: 'top',
+                overflowWrap: 'anywhere',
+                borderBottom: '1px solid {colors.border}',
+              },
+              '& td': {
+                padding: '12px 16px 12px 0',
+                textAlign: 'left',
+                verticalAlign: 'top',
+                overflowWrap: 'anywhere',
+                borderBottom: '1px solid {colors.border}',
+              },
+              '& caption': { textAlign: 'left', paddingBottom: '12px', color: '{colors.fg.muted}' },
+              '& small': {
+                display: 'block',
+                color: '{colors.fg.muted}',
+                marginTop: '8px',
+                fontSize: '12px',
+                lineHeight: '16px',
+              },
+              '& bdi': { whiteSpace: 'pre-wrap' },
+              '& p': { margin: '0 0 8px' },
+            }}
+          >
             <Table.Root unstyled>
               <Table.Caption unstyled captionSide="top" ref={caption} tabIndex={-1}>
                 All observed folder entries · page {page + 1} of{' '}

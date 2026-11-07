@@ -168,12 +168,30 @@ export function StructurePathBuilder({
             }}
           />
         </Box>
-        <Field.HelperText className="help">
+        <Field.HelperText
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           Chips run from outermost folder to innermost. Search predefined parts, or type a literal
           folder name. Drag chips to reorder, or click a chip and then its destination. Backspace
           removes the last level.
         </Field.HelperText>
-        <Text id={`${id}-reorder-help`} className="screen-reader-status">
+        <Text
+          id={`${id}-reorder-help`}
+          className="screen-reader-status"
+          css={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            overflow: 'hidden',
+            clipPath: 'inset(50%)',
+          }}
+        >
           Space or Enter picks up a folder level. Arrow keys move its destination; Home and End
           choose the first and last level. Enter places it. Escape cancels.
         </Text>
@@ -181,6 +199,13 @@ export function StructurePathBuilder({
           role="status"
           aria-label="Folder order"
           className="screen-reader-status"
+          css={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            overflow: 'hidden',
+            clipPath: 'inset(50%)',
+          }}
           aria-live="polite"
           aria-atomic="true"
         >
@@ -230,12 +255,24 @@ export function StructurePathBuilder({
         </Box>
       )}
       {open && draft && choices.length === 0 && (
-        <Text className="help" role="status">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+          role="status"
+        >
           No matching folder part. Use a predefined part or a folder name without path separators or
           reserved characters.
         </Text>
       )}
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         {folders.length}/31 folder levels. Filenames keep their original extension.
       </Text>
       <Field.Root unstyled disabled={disabled} display="grid" gap="2" minWidth="0">

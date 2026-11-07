@@ -4,7 +4,7 @@ import { beforeEach, expect, it, vi } from 'vitest';
 import { AssetBrowser, type PhotoViewportHandle } from '@/components/AssetBrowser';
 import { libraryData } from '../../ipc';
 import { fixtureAsset } from '../../library/__tests__/fixtures';
-import { photoRows } from '../../library/model';
+import { PHOTO_GUTTER, photoRows } from '../../library/model';
 type ScrollEvent = {
   scrollOffset: number | null;
   isScrolling: boolean;
@@ -203,7 +203,7 @@ it('coalesces resize bursts into one layout and retains the visible anchor', () 
   expect(engine.measure).toHaveBeenCalledTimes(1);
   // A date boundary keeps this anchor in the second section after resize.
   expect(engine.scrollToOffset).toHaveBeenCalledWith(
-    photoRows(assets, 900, 'gallery')[0]!.height + 4 + 30,
+    photoRows(assets, 900, 'gallery')[0]!.height + PHOTO_GUTTER + 30,
   );
   expect(container.querySelector<HTMLElement>('.asset')!.style.width).toBe(
     `${photoRows(assets, 900, 'gallery')[0]!.widths[0]}px`,
@@ -288,7 +288,7 @@ it.each(['capture', 'added', 'undated'] as const)(
     Object.defineProperty(viewport, 'clientHeight', { value: 200 });
     expect(viewport).toHaveClass('with-timeline');
     const rows = photoRows(dense, 700, 'list', undefined, grouping);
-    const maximum = rows.reduce((sum, row) => sum + row.height + 4, 0) - 200;
+    const maximum = rows.reduce((sum, row) => sum + row.height + PHOTO_GUTTER, 0) - 200;
     engine.scrollOffset = maximum / 2;
     act(() => events.onChange?.(engine));
     expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
@@ -383,8 +383,8 @@ it.each(['capture', 'added', 'undated'] as const)(
     const items = vi.spyOn(engine, 'getVirtualItems').mockReturnValue(
       [7, 8, 9, 10].map((index) => ({
         index,
-        start: index * 58,
-        end: (index + 1) * 58,
+        start: index * (54 + PHOTO_GUTTER),
+        end: (index + 1) * (54 + PHOTO_GUTTER),
         key: String(index),
       })),
     );
@@ -401,7 +401,7 @@ it.each(['capture', 'added', 'undated'] as const)(
       );
       const viewport = container.querySelector('.asset-viewport')!;
       Object.defineProperty(viewport, 'clientHeight', { value: 200 });
-      engine.scrollOffset = 11 * 58 - 200;
+      engine.scrollOffset = 11 * (54 + PHOTO_GUTTER) - 200;
       act(() => events.onChange?.(engine));
       expect(callbacks.onVisibleDate).toHaveBeenLastCalledWith(
         tailDate,

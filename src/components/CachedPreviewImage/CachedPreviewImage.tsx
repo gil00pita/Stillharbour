@@ -1,7 +1,8 @@
 import { Image } from '@chakra-ui/react';
-import { useState, type ComponentProps } from 'react';
+import { useState } from 'react';
+import type { ImageProps } from '@chakra-ui/react';
 
-type Props = Omit<ComponentProps<'img'>, 'src'> & { src: string };
+type Props = Omit<ImageProps, 'src'> & { src: string };
 
 // A WebView transport failure is not a permanent decode failure. Retry the
 // owned-cache URL once, bypassing any cached error; never read an original here.

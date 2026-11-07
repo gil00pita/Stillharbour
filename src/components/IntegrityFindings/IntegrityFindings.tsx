@@ -29,7 +29,19 @@ export function IntegrityFindings({ rows }: { rows: InspectionFinding[] }) {
         Review changed checksums, unreadable files and incomplete checks separately. A checksum
         mismatch means changed since baseline; it does not prove damage.
       </Text>
-      <dl className="inspection-metrics">
+      <chakra.dl
+        className="inspection-metrics"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: '12px',
+          '& > div': { border: '1px solid {colors.border}', padding: '16px', borderRadius: '8px' },
+          '& dt': { color: '{colors.fg.muted}', fontSize: '12px' },
+          '& dd': { margin: '8px 0 0', fontSize: '20px', overflowWrap: 'anywhere' },
+          '& > div:first-child': { gridColumn: '1 / -1', border: '0', paddingInline: '0' },
+          '& > div:first-child dd': { fontSize: '28px' },
+        }}
+      >
         <Box>
           <dt>Files on this page</dt>
           <dd>{rows.length}</dd>
@@ -51,8 +63,13 @@ export function IntegrityFindings({ rows }: { rows: InspectionFinding[] }) {
             }
           </dd>
         </Box>
-      </dl>
-      <Box className="inspection-actions" role="group" aria-label="Health finding filters">
+      </chakra.dl>
+      <Box
+        className="inspection-actions"
+        css={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', alignItems: 'center' }}
+        role="group"
+        aria-label="Health finding filters"
+      >
         <Button aria-pressed={!attention} onClick={() => setAttention(false)}>
           All findings
         </Button>
@@ -60,7 +77,36 @@ export function IntegrityFindings({ rows }: { rows: InspectionFinding[] }) {
           Needs attention
         </Button>
       </Box>
-      <Box className="inspection-table-wrap">
+      <Box
+        className="inspection-table-wrap"
+        css={{
+          width: '100%',
+          overflow: 'auto',
+          margin: '16px 0',
+          '& table': { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
+          '& caption': { textAlign: 'left', marginBottom: '8px' },
+          '& th': {
+            textAlign: 'left',
+            verticalAlign: 'top',
+            padding: '12px',
+            borderBottom: '1px solid {colors.border}',
+            fontWeight: '500',
+          },
+          '& td': {
+            textAlign: 'left',
+            verticalAlign: 'top',
+            padding: '12px',
+            borderBottom: '1px solid {colors.border}',
+          },
+          '& th small': {
+            display: 'block',
+            maxWidth: '32rem',
+            overflowWrap: 'anywhere',
+            fontWeight: '400',
+            color: '{colors.fg.muted}',
+          },
+        }}
+      >
         <Table.Root unstyled>
           <Table.Caption unstyled captionSide="top">
             Retained health observations · current member page

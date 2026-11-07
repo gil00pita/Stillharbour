@@ -1,5 +1,14 @@
 # Using Stillharbour during development
 
+Appearance follows your system by default and responds to OS appearance changes.
+The header's sun/moon button saves an explicit light or dark choice on this device;
+that saved choice takes precedence over the system. At desktop widths, Photos also has a thumbnail-scale slider;
+use Filter → Thumbnail size at narrow widths. Hover or focus a thumbnail to reveal
+its favourite heart. It changes only catalog notes, fills after a confirmed save,
+and shows an error if saving fails. Selection actions float over the lower canvas
+and remain keyboard accessible. The neutral workspace keeps the owner logo and
+your photos as its main sources of colour. See [the UI contract](NEUTRAL_UI.md).
+
 Stillharbour is a local desktop photo organizer. The current build browses folders and stores organization in a local catalog. **Signed distribution and clean-machine release acceptance are pending.** See [release readiness](M6_RELEASE_READINESS.md) and [format support](FORMAT_SUPPORT.md) before relying on a capability. No account or telemetry is enabled.
 
 ## Add and browse folders

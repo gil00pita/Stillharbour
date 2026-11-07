@@ -1,5 +1,12 @@
 # Dependency and helper inventory
 
+2026-11-07 UI additions: `next-themes` **0.4.6** (MIT) supplies local light/dark
+appearance; `@fontsource-variable/inter` **5.2.8** (OFL-1.1) supplies bundled Inter
+Variable font faces. Exact npm integrity pins are in package-lock.json. Font
+files are served from the installed app, without a remote font dependency.
+Their notices ship under `public/licenses/`. No native binary is added. See
+[ADR-0098](decisions/ADR-0098-neutral-chakra-presentation.md) for CSP and composition.
+
 2026-11-05 offline place search: reuse already locked flate2 1.1.10 (MIT OR Apache-2.0) as a direct core dependency with the Rust backend, and enable rusqlite 0.41.0's functions feature. No package versions, registry checksums or native helpers change. [Place-data manifest](../assets/places/manifest.json) pins the compressed GeoNames cities15000 snapshot (34,204 cities) and Natural Earth 10m country geometry (258 countries/territories). [NOTICE](../assets/places/NOTICE.md) retains GeoNames/CC BY 4.0 attribution, public-domain Natural Earth provenance, modifications and coverage limits. These are compiled static data, not a runtime downloader. Source URLs for GeoNames are daily mutable; regeneration requires retained pinned inputs or a reviewed update. See ADR-0089 and actual audit/check outcomes in the implementation log; this inventory is not a completed distribution legal audit.
 
 Recorded 2026-10-27. Exact Rust/JavaScript dependency graphs and registry checksums are in Cargo.lock and package-lock.json. Owned application source is MIT; dependencies retain their own licenses. License metadata collected locally covers 268 resolved macOS Rust packages and 761 npm entries in `.context/evidence/license-inventory.json`. This is not a completed distribution notice/legal audit.

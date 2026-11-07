@@ -128,13 +128,33 @@ export function OrganizationPresets({
             </Box>
           </RadioCard.Root>
           {(!selected || selected.group !== tab) && (
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               Current layout: {selected?.name ?? 'Custom'}. Choose a layout above to replace it.
             </Text>
           )}
         </>
       )}
-      {categoryHelp[tab] && <Text className="help">{categoryHelp[tab]}</Text>}
+      {categoryHelp[tab] && (
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
+          {categoryHelp[tab]}
+        </Text>
+      )}
     </Box>
   );
 }

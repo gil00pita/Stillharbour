@@ -35,12 +35,15 @@ The current layout and form contracts are documented in
 - `src/components/<Name>/`: application components, explicit barrels, private
   child components and colocated component tests.
 - `src/hooks/use-*.ts`: shared hooks and their existing tests.
-- `src/styles.css`: established product layouts and specialized native controls.
+- `src/theme/global-css.ts`: document defaults and native element semantics.
+- Owning component Chakra props/`css` objects: layouts, states and native/photo
+  geometry; colocated recipes carry reusable variants.
+- `src/theme/keyframes.ts`: shared animation definitions.
 - `src/test/render.tsx`: Testing Library render through the actual provider.
 
 The adoption converts 369 ordinary controls in 61 product modules: setup, shared tag/size fields, Settings, library forms/toolbars, catalog metadata, inspection and backup flows. It keeps native dialogs and specialized photographic canvas, virtual-row, map-marker/zoom, checkbox/switch/range controls. Their tested selection, focus and geometry remain in existing adapters. Further adoption should use semantic tokens and verify the affected interaction rather than silently changing its DOM or approval behavior.
 
-The reference's provider/token/recipe separation informs this design. Stillharbour remains a Tauri/React/Vite application. No Next.js, cloud service, extra state library, Storybook, external fonts or next-themes is added.
+The reference's provider/token/recipe separation informs this design. Stillharbour remains a Tauri/React/Vite application. The 2026-11-07 neutral redesign adds locally bundled Inter Variable and next-themes for light/dark appearance; no font/CDN service or Next.js runtime is required. [NEUTRAL_UI.md](NEUTRAL_UI.md) and ADR-0098 describe current ownership, CSP and native checks. Earlier dated evidence below retains its original scope.
 
 ## Checks and limits
 

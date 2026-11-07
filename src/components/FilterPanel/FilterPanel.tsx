@@ -67,10 +67,40 @@ export function FilterPanel({
     }
   }
   return (
-    <dialog
+    <chakra.dialog
       ref={dialog}
       id="library-filter-panel"
       className="filter-panel"
+      css={{
+        position: 'fixed',
+        inset: '0 0 0 auto',
+        margin: '0',
+        width: 'min(380px, 92vw)',
+        height: '100vh',
+        maxHeight: 'none',
+        maxWidth: 'none',
+        padding: '0',
+        border: '0',
+        borderLeft: '1px solid {colors.border}',
+        background: '{colors.bg.panel}',
+        color: 'inherit',
+        '&::backdrop': { background: '#0005' },
+        '& > form': { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '0' },
+        '& .panel-query-fields': {
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr)',
+          gap: '16px',
+        },
+        '& .form-grid': { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '16px' },
+        '& label': { minWidth: '0', maxWidth: '100%' },
+        '& select': { minWidth: '0', maxWidth: '100%' },
+        '& input': { minWidth: '0', maxWidth: '100%' },
+        '& .view-switch': { display: 'flex', flexWrap: 'wrap', gap: '6px' },
+        '& .thumbnail-control': { width: '100%', margin: '8px 0 0' },
+        '& .root-status': { flexWrap: 'wrap' },
+        '& .folder-strip': { flexWrap: 'wrap' },
+        '& .availability-note': { marginTop: '10px' },
+      }}
       aria-labelledby="filter-panel-title"
       onCancel={(event) => {
         event.preventDefault();
@@ -78,7 +108,18 @@ export function FilterPanel({
       }}
     >
       <chakra.form onSubmit={submit} aria-busy={selecting}>
-        <chakra.header className="filter-panel-header">
+        <chakra.header
+          className="filter-panel-header"
+          css={{
+            background: '{colors.bg.toolbar}',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            borderBottom: '1px solid {colors.border}',
+            '& h2': { margin: '0', fontSize: '18px', letterSpacing: '0' },
+          }}
+        >
           <Heading as="h2" unstyled id="filter-panel-title">
             Filters
           </Heading>
@@ -86,8 +127,30 @@ export function FilterPanel({
             Close
           </Button>
         </chakra.header>
-        <chakra.fieldset className="filter-panel-body" disabled={selecting}>
-          <Text className="help">
+        <chakra.fieldset
+          className="filter-panel-body"
+          css={{
+            flex: '1',
+            minHeight: '0',
+            overflowY: 'auto',
+            padding: '16px 20px',
+            '& section': { padding: '16px 0', borderBottom: '1px solid {colors.border}' },
+            '& h3': { fontSize: '13px', margin: '0 0 12px' },
+            minWidth: '0',
+            border: '0',
+            margin: '0',
+          }}
+          disabled={selecting}
+        >
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             {c.page?.total.toLocaleString() ?? '…'} matching photos &amp; videos
           </Text>
           <ActiveFilters
@@ -166,10 +229,32 @@ export function FilterPanel({
           </Button>
           {selectionError && <Text role="alert">{selectionError}</Text>}
           {dirty && (
-            <Text className="help">Apply changes before selecting all matching results.</Text>
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
+              Apply changes before selecting all matching results.
+            </Text>
           )}
         </chakra.fieldset>
-        <chakra.footer className="filter-panel-actions">
+        <chakra.footer
+          className="filter-panel-actions"
+          css={{
+            background: '{colors.bg.toolbar}',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            padding: '16px 20px',
+            borderTop: '1px solid {colors.border}',
+            '& .primary': { marginTop: '0' },
+          }}
+        >
           <Button
             type="button"
             disabled={selecting}
@@ -183,11 +268,29 @@ export function FilterPanel({
           >
             Reset filters
           </Button>
-          <Button type="submit" className="primary" disabled={c.selection.busy || selecting}>
+          <Button
+            type="submit"
+            className="primary"
+            css={{
+              marginTop: '28px',
+              border: '0',
+              background: '{colors.brand.solid}',
+              color: '{colors.brand.contrast}',
+              fontWeight: '600',
+              fontSize: '13px',
+              lineHeight: '20px',
+              borderRadius: 'var(--control-radius)',
+              padding: '12px 24px',
+              minHeight: '44px',
+              transition: 'background-color 140ms var(--ui-ease)',
+              '&:hover:enabled': { background: '{colors.brand.hover}' },
+            }}
+            disabled={c.selection.busy || selecting}
+          >
             Apply filters
           </Button>
         </chakra.footer>
       </chakra.form>
-    </dialog>
+    </chakra.dialog>
   );
 }

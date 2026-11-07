@@ -1836,7 +1836,7 @@ async function assertPhotoScanningArt() {
   assert.equal(art.animation, art.expectedAnimation);
   const palettes = await browser.execute(() => {
     const root = document.documentElement;
-    const previous = root.getAttribute('data-theme');
+    const previous = root.className;
     const image = document.querySelector('.photo-scanning-art');
     const lens = image.querySelector('.photo-scanning-lens');
     const frame = image.querySelector('.photo-scanning-card rect');
@@ -1845,18 +1845,19 @@ async function assertPhotoScanningArt() {
       frame: getComputedStyle(frame).fill,
     });
     try {
-      root.setAttribute('data-theme', 'light');
+      root.classList.remove('dark');
+      root.classList.add('light');
       const light = palette();
-      root.setAttribute('data-theme', 'dark');
+      root.classList.remove('light');
+      root.classList.add('dark');
       return { light, dark: palette() };
     } finally {
-      if (previous === null) root.removeAttribute('data-theme');
-      else root.setAttribute('data-theme', previous);
+      root.className = previous;
     }
   });
   assert.deepEqual(palettes, {
-    light: { accent: 'rgb(55, 120, 89)', frame: 'rgb(255, 255, 255)' },
-    dark: { accent: 'rgb(193, 208, 181)', frame: 'rgb(33, 36, 32)' },
+    light: { accent: 'rgb(32, 35, 43)', frame: 'rgb(241, 242, 245)' },
+    dark: { accent: 'rgb(216, 219, 226)', frame: 'rgb(25, 28, 35)' },
   });
 }
 async function assertFormControlsAligned(selector) {

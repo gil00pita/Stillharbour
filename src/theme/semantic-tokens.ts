@@ -1,34 +1,192 @@
 export const semanticTokens = {
   colors: {
     bg: {
-      DEFAULT: { value: '{colors.harbour.canvas}' },
-      panel: { value: '{colors.harbour.panel}' },
-      sidebar: { value: '{colors.harbour.sidebar}' },
-      toolbar: { value: '{colors.harbour.toolbar}' },
-      navigation: { value: '{colors.harbour.navigation}' },
-      input: { value: '{colors.harbour.input}' },
-      hover: { value: '{colors.harbour.hover}' },
+      DEFAULT: {
+        value: {
+          base: '{colors.neutral.50}',
+          _dark: '{colors.neutral.900}',
+        },
+      },
+      canvas: {
+        value: {
+          base: '{colors.neutral.50}',
+          _dark: '{colors.neutral.900}',
+        },
+      },
+      surface: {
+        value: {
+          base: '{colors.neutral.100}',
+          _dark: '{colors.neutral.850}',
+        },
+      },
+      panel: {
+        value: {
+          base: '{colors.neutral.100}',
+          _dark: '{colors.neutral.850}',
+        },
+      },
+      sidebar: {
+        value: {
+          base: '{colors.neutral.100}',
+          _dark: '{colors.neutral.950}',
+        },
+      },
+      toolbar: {
+        value: {
+          base: '{colors.neutral.50}',
+          _dark: '{colors.neutral.900}',
+        },
+      },
+      navigation: {
+        value: {
+          base: '{colors.neutral.150}',
+          _dark: '{colors.neutral.700}',
+        },
+      },
+      input: {
+        value: {
+          base: '{colors.neutral.50}',
+          _dark: '{colors.neutral.900}',
+        },
+      },
+      hover: {
+        value: {
+          base: '{colors.neutral.150}',
+          _dark: '{colors.neutral.700}',
+        },
+      },
+      subtle: {
+        value: {
+          base: '{colors.neutral.150}',
+          _dark: '{colors.neutral.800}',
+        },
+      },
+      elevated: {
+        value: {
+          base: 'rgba(248, 248, 250, 0.94)',
+          _dark: 'rgba(25, 28, 35, 0.94)',
+        },
+      },
     },
     fg: {
-      DEFAULT: { value: '{colors.harbour.ink}' },
-      muted: { value: '{colors.harbour.muted}' },
-      secondary: { value: '{colors.harbour.secondary}' },
+      DEFAULT: {
+        value: {
+          base: '{colors.neutral.900}',
+          _dark: '{colors.neutral.100}',
+        },
+      },
+      muted: {
+        value: {
+          base: '{colors.neutral.500}',
+          _dark: '{colors.neutral.400}',
+        },
+      },
+      secondary: {
+        value: {
+          base: '{colors.neutral.600}',
+          _dark: '{colors.neutral.300}',
+        },
+      },
     },
     border: {
-      DEFAULT: { value: '{colors.harbour.border}' },
-      control: { value: '{colors.harbour.controlBorder}' },
-      button: { value: '{colors.harbour.buttonBorder}' },
+      DEFAULT: {
+        value: {
+          base: '{colors.neutral.200}',
+          _dark: '{colors.neutral.700}',
+        },
+      },
+      subtle: {
+        value: {
+          base: '{colors.neutral.150}',
+          _dark: '{colors.neutral.800}',
+        },
+      },
+      control: {
+        value: {
+          base: '{colors.neutral.500}',
+          _dark: '{colors.neutral.500}',
+        },
+      },
+      button: {
+        value: {
+          base: '{colors.neutral.300}',
+          _dark: '{colors.neutral.600}',
+        },
+      },
     },
     brand: {
-      solid: { value: '{colors.harbour.accent}' },
-      contrast: { value: '{colors.harbour.onAccent}' },
-      hover: { value: '{colors.harbour.accentHover}' },
-      focusRing: { value: '{colors.harbour.accent}' },
-      selected: { value: '{colors.harbour.selected}' },
+      solid: {
+        value: {
+          base: '{colors.neutral.800}',
+          _dark: '{colors.neutral.200}',
+        },
+      },
+      contrast: {
+        value: {
+          base: '{colors.neutral.50}',
+          _dark: '{colors.neutral.950}',
+        },
+      },
+      hover: {
+        value: {
+          base: '{colors.neutral.700}',
+          _dark: '{colors.neutral.100}',
+        },
+      },
+      focusRing: {
+        value: {
+          base: '{colors.neutral.600}',
+          _dark: '{colors.neutral.300}',
+        },
+      },
+      selected: {
+        value: {
+          base: '{colors.neutral.150}',
+          _dark: '{colors.neutral.700}',
+        },
+      },
+    },
+    text: {
+      primary: {
+        value: {
+          base: '{colors.neutral.900}',
+          _dark: '{colors.neutral.100}',
+        },
+      },
+      muted: {
+        value: {
+          base: '{colors.neutral.500}',
+          _dark: '{colors.neutral.400}',
+        },
+      },
+    },
+    accent: {
+      solid: {
+        value: {
+          base: '{colors.neutral.800}',
+          _dark: '{colors.neutral.200}',
+        },
+      },
+      subtle: {
+        value: {
+          base: '{colors.neutral.150}',
+          _dark: '{colors.neutral.700}',
+        },
+      },
     },
     danger: {
-      fg: { value: '{colors.harbour.danger}' },
-      bg: { value: '{colors.harbour.dangerBg}' },
+      fg: {
+        value: {
+          base: '{colors.neutral.900}',
+          _dark: '{colors.neutral.100}',
+        },
+      },
+      bg: {
+        value: {
+          base: '{colors.neutral.150}',
+          _dark: '{colors.neutral.800}',
+        },
+      },
     },
   },
 };

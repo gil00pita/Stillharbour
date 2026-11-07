@@ -69,11 +69,27 @@ export function StructureRuleEditor({
           }}
         />
         {filenameChoice(template.pattern) === 'custom' && (
-          <Text className="help">
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             Custom filename pattern. Choose an option above to replace it.
           </Text>
         )}
-        <Text className="help">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           Sequence numbers follow the entire library’s stable preview order. The original extension
           stays unchanged.
         </Text>
@@ -91,7 +107,10 @@ export function StructureRuleEditor({
         ]}
         onChange={(missingDate) => onChange({ missingDate })}
       />
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Applies when the rule needs a capture date. Undated uses the original filename; skipped
         items stay in place.
       </Text>
@@ -106,7 +125,10 @@ export function StructureRuleEditor({
         ]}
         onChange={(filenameStemCase) => onChange({ filenameStemCase })}
       />
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Letter case changes the filename stem only, including Undated names.
       </Text>
       <chakra.details className="structure-advanced">

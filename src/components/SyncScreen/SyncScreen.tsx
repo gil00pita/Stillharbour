@@ -15,7 +15,6 @@ import type {
   SyncProfile,
 } from '../../bindings';
 import { errorMessage, libraryData, pickDirectory } from '../../ipc';
-import '../../backup/backup.css';
 import { ComparisonPreviews } from '@/components/ComparisonPreviews';
 import { SyncWorkflow } from '@/components/SyncWorkflow';
 import { useCatalogSwitchState } from '../../backup/catalogSwitchState';
@@ -453,12 +452,29 @@ function BackupWorkspace({
   return (
     <>
       <PageHeader>
-        <chakra.header className="toolbar">
+        <chakra.header
+          className="toolbar"
+          css={{
+            flexShrink: '0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            minHeight: '64px',
+            padding: '12px 24px',
+            borderBottom: '1px solid {colors.border}',
+            background: '{colors.bg.toolbar}',
+            '@media (max-width: 600px)': { minHeight: '64px', padding: '18px 24px' },
+          }}
+        >
           {navigationControl}
           <Heading as="h1" unstyled>
             Sync
           </Heading>
-          <Box className="header-actions">
+          <Box
+            className="header-actions"
+            css={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
             {run && (
               <Button disabled={busy || running} onClick={() => setSetupOpen((value) => !value)}>
                 Scan settings
@@ -491,7 +507,31 @@ function BackupWorkspace({
           </Box>
         </chakra.header>
       </PageHeader>
-      <Box className="backup-workspace">
+      <Box
+        className="backup-workspace"
+        css={{
+          padding: '24px',
+          overflow: 'auto',
+          '& > p': { maxWidth: '90ch', color: '{colors.fg.muted}' },
+          '& select': { maxWidth: '100%' },
+          '& input': { maxWidth: '100%' },
+          '& h2': { fontSize: '20px', fontWeight: '500', margin: '24px 0 12px' },
+          flex: '1',
+          minHeight: '0',
+          '& > *': { maxWidth: '1120px' },
+          "& > [aria-label='Saved comparisons']": { maxWidth: '480px', marginBottom: '24px' },
+          "& > [aria-label='Saved comparisons'] label": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          '& > details > summary': { paddingBlock: '12px', fontWeight: '600', cursor: 'pointer' },
+          '& > details': { borderBlock: '1px solid {colors.border}', paddingBlock: '4px 20px' },
+          '& > h2': { fontSize: '18px', fontWeight: '600' },
+          '@media (max-width: 760px)': { paddingInline: '16px' },
+        }}
+      >
         {!run && !running && (
           <UtilityWelcome
             title="Keep a second folder in step."
@@ -526,11 +566,17 @@ function BackupWorkspace({
               <Heading as="h2" unstyled>
                 Review the new source and destination
               </Heading>
-              <Text className="backup-path">
+              <Text
+                className="backup-path"
+                css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+              >
                 Previous source: {rebindFrom.sourceLabel} · {rebindFrom.sourceDisplayPath} ·{' '}
                 {rebindFrom.sourceRootId}
               </Text>
-              <Text className="backup-path">
+              <Text
+                className="backup-path"
+                css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+              >
                 Previous destination: {rebindFrom.destinationDisplayPath}
               </Text>
               <Text>
@@ -555,13 +601,34 @@ function BackupWorkspace({
             Library → Destination. Comparison leaves both folders unchanged. Review transfer
             capabilities, proposed actions and any limits below before approving a copy.
           </Text>
-          <Box className="backup-scope">
+          <Box
+            className="backup-scope"
+            css={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: '24px',
+              marginBlock: '24px',
+              '& section': {
+                minWidth: '0',
+                overflowWrap: 'anywhere',
+                border: '1px solid {colors.border}',
+                padding: '20px',
+                borderRadius: '8px',
+              },
+              '@media (max-width: 850px)': { gridTemplateColumns: '1fr' },
+            }}
+          >
             <chakra.section aria-label="Fixed source library">
               <Heading as="h3" unstyled>
                 Library (source)
               </Heading>
               <strong>{base?.label ?? 'No base library configured'}</strong>
-              <Text className="backup-path">{base?.displayPath}</Text>
+              <Text
+                className="backup-path"
+                css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+              >
+                {base?.displayPath}
+              </Text>
               <Text>
                 {base?.availability ?? 'unavailable'} · All regular files, including hidden files,
                 sidecars and unknown formats.
@@ -571,7 +638,10 @@ function BackupWorkspace({
               <Heading as="h3" unstyled>
                 Destination
               </Heading>
-              <Text className="backup-path">
+              <Text
+                className="backup-path"
+                css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+              >
                 {profile?.destinationDisplayPath ??
                   destination?.displayPath ??
                   'Choose a separate folder.'}
@@ -599,7 +669,42 @@ function BackupWorkspace({
             </chakra.section>
           </Box>
           {!profile && (
-            <Box className="backup-controls">
+            <Box
+              className="backup-controls"
+              css={{
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'flex-end',
+                flexWrap: 'wrap',
+                marginBlock: '16px',
+                '& select': { marginInlineStart: '0' },
+                '& .primary': { marginTop: '0' },
+                '& > label': {
+                  flex: '0 1 360px',
+                  maxWidth: '480px',
+                  fontSize: '13px',
+                  minWidth: '0',
+                },
+                '& > p': {
+                  flexBasis: '100%',
+                  margin: '0',
+                  color: '{colors.fg.muted}',
+                  fontSize: '13px',
+                  maxWidth: '70ch',
+                },
+                "& label:not(:has(> input[type='checkbox']))": {
+                  display: 'grid',
+                  gap: '8px',
+                  minWidth: '0',
+                  margin: '0',
+                },
+                "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+                '@media (max-width: 760px)': {
+                  "& > [data-scope='field']": { flexBasis: '100%' },
+                  '& > label': { flexBasis: '100%' },
+                },
+              }}
+            >
               <Field.Root asChild unstyled>
                 <label>
                   <Field.Label asChild unstyled>
@@ -659,7 +764,42 @@ function BackupWorkspace({
               </Text>
             </Box>
           )}
-          <Box className="backup-controls">
+          <Box
+            className="backup-controls"
+            css={{
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'flex-end',
+              flexWrap: 'wrap',
+              marginBlock: '16px',
+              '& select': { marginInlineStart: '0' },
+              '& .primary': { marginTop: '0' },
+              '& > label': {
+                flex: '0 1 360px',
+                maxWidth: '480px',
+                fontSize: '13px',
+                minWidth: '0',
+              },
+              '& > p': {
+                flexBasis: '100%',
+                margin: '0',
+                color: '{colors.fg.muted}',
+                fontSize: '13px',
+                maxWidth: '70ch',
+              },
+              "& label:not(:has(> input[type='checkbox']))": {
+                display: 'grid',
+                gap: '8px',
+                minWidth: '0',
+                margin: '0',
+              },
+              "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+              '@media (max-width: 760px)': {
+                "& > [data-scope='field']": { flexBasis: '100%' },
+                '& > label': { flexBasis: '100%' },
+              },
+            }}
+          >
             <Field.Root asChild unstyled>
               <label>
                 <Field.Label asChild unstyled>
@@ -680,6 +820,20 @@ function BackupWorkspace({
             </Field.Root>
             <Button
               className="primary"
+              css={{
+                marginTop: '28px',
+                border: '0',
+                background: '{colors.brand.solid}',
+                color: '{colors.brand.contrast}',
+                fontWeight: '600',
+                fontSize: '13px',
+                lineHeight: '20px',
+                borderRadius: 'var(--control-radius)',
+                padding: '12px 24px',
+                minHeight: '44px',
+                transition: 'background-color 140ms var(--ui-ease)',
+                '&:hover:enabled': { background: '{colors.brand.hover}' },
+              }}
               disabled={
                 busy ||
                 running ||
@@ -758,7 +912,29 @@ function BackupWorkspace({
           </Text>
         )}
         {error && (
-          <Text className="error" role="alert">
+          <Text
+            className="error"
+            css={{
+              border: '1px solid {colors.border.control}',
+              borderRadius: 'var(--control-radius)',
+              background: '{colors.danger.bg}',
+              color: '{colors.danger.fg}',
+              padding: '16px 20px',
+              margin: '24px 0 0',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              '& p': { margin: '0' },
+              '& button': {
+                marginTop: '12px',
+                border: '1px solid currentColor',
+                background: 'transparent',
+                color: 'inherit',
+                borderRadius: '4px',
+                padding: '7px 12px',
+              },
+            }}
+            role="alert"
+          >
             {error}
           </Text>
         )}
@@ -768,7 +944,12 @@ function BackupWorkspace({
               {run.state.replaceAll('_', ' ')}
             </Heading>
             <Text role="status">{run.message}</Text>
-            <Text className="backup-path">Dataset: {run.datasetDisplayPath}</Text>
+            <Text
+              className="backup-path"
+              css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+            >
+              Dataset: {run.datasetDisplayPath}
+            </Text>
             <Text>
               {run.historyMessage} Prior observation:{' '}
               {run.baselineId ?? 'none (initial comparison)'}
@@ -781,7 +962,18 @@ function BackupWorkspace({
               precision; they are separate from capture and birth dates.
             </Text>
             {run.summary && (
-              <List.Root unstyled aria-label="Comparison totals" className="backup-totals">
+              <List.Root
+                unstyled
+                aria-label="Comparison totals"
+                className="backup-totals"
+                css={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: '12px 24px',
+                  padding: '0',
+                  listStyle: 'none',
+                }}
+              >
                 {categories.map((finding) => (
                   <List.Item unstyled key={finding}>
                     {finding.replaceAll('_', ' ')}: {run.summary![summaryKeys[finding]]}
@@ -801,7 +993,11 @@ function BackupWorkspace({
                   {run.issues.map((issue, index) => (
                     <List.Item unstyled key={index}>
                       {issue.side && `${issue.side}: `}
-                      <Text as="span" className="backup-path">
+                      <Text
+                        as="span"
+                        className="backup-path"
+                        css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+                      >
                         {issue.displayPath}
                       </Text>
                       : {issue.message}
@@ -844,8 +1040,28 @@ function BackupWorkspace({
                   onSelect={setSelected}
                 />
                 {selected && (
-                  <chakra.section aria-label="Entry details" className="backup-entry-details">
-                    <Heading as="h4" unstyled className="backup-path">
+                  <chakra.section
+                    aria-label="Entry details"
+                    className="backup-entry-details"
+                    css={{
+                      border: '1px solid {colors.border}',
+                      padding: '16px',
+                      marginBlock: '16px',
+                      '& dd': { overflowWrap: 'anywhere' },
+                      '& img': {
+                        width: '100%',
+                        height: 'auto',
+                        objectFit: 'contain',
+                        maxHeight: '512px',
+                      },
+                    }}
+                  >
+                    <Heading
+                      as="h4"
+                      unstyled
+                      className="backup-path"
+                      css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+                    >
                       {selected.displayPath}
                     </Heading>
                     <Text>
@@ -885,7 +1101,42 @@ function BackupWorkspace({
                     <Button onClick={() => setSelected(null)}>Close entry details</Button>
                   </chakra.section>
                 )}
-                <Box className="backup-controls">
+                <Box
+                  className="backup-controls"
+                  css={{
+                    display: 'flex',
+                    gap: '12px',
+                    alignItems: 'flex-end',
+                    flexWrap: 'wrap',
+                    marginBlock: '16px',
+                    '& select': { marginInlineStart: '0' },
+                    '& .primary': { marginTop: '0' },
+                    '& > label': {
+                      flex: '0 1 360px',
+                      maxWidth: '480px',
+                      fontSize: '13px',
+                      minWidth: '0',
+                    },
+                    '& > p': {
+                      flexBasis: '100%',
+                      margin: '0',
+                      color: '{colors.fg.muted}',
+                      fontSize: '13px',
+                      maxWidth: '70ch',
+                    },
+                    "& label:not(:has(> input[type='checkbox']))": {
+                      display: 'grid',
+                      gap: '8px',
+                      minWidth: '0',
+                      margin: '0',
+                    },
+                    "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+                    '@media (max-width: 760px)': {
+                      "& > [data-scope='field']": { flexBasis: '100%' },
+                      '& > label': { flexBasis: '100%' },
+                    },
+                  }}
+                >
                   <Button
                     disabled={offset === 0}
                     onClick={() => {
@@ -938,7 +1189,29 @@ function ComparisonTable({
   onSelect: (entry: ComparisonEntry) => void;
 }) {
   return (
-    <Box className="backup-table">
+    <Box
+      className="backup-table"
+      css={{
+        '& td button': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', textAlign: 'left' },
+        overflow: 'auto',
+        maxHeight: '60vh',
+        '& table': { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
+        '& th': {
+          padding: '12px',
+          borderBottom: '1px solid {colors.border}',
+          verticalAlign: 'top',
+          position: 'sticky',
+          top: '0',
+          background: '{colors.bg.panel}',
+        },
+        '& td': {
+          padding: '12px',
+          borderBottom: '1px solid {colors.border}',
+          verticalAlign: 'top',
+        },
+        '& td:first-child': { minWidth: '160px', maxWidth: '320px' },
+      }}
+    >
       <Table.Root unstyled>
         <Table.Caption unstyled captionSide="top">
           Comparison findings and proposed actions
@@ -955,7 +1228,11 @@ function ComparisonTable({
         <Table.Body unstyled>
           {entries.map((entry) => (
             <Table.Row unstyled key={entry.id}>
-              <Table.Cell unstyled className="backup-path">
+              <Table.Cell
+                unstyled
+                className="backup-path"
+                css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+              >
                 <Button
                   disabled={disabled}
                   aria-pressed={selectedId === entry.id}

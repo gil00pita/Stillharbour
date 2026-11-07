@@ -1,5 +1,18 @@
 # Stillharbour - Acceptance and failure-injection test backlog
 
+Owner neutral UI revision (2026-11-07): [NEUTRAL_UI.md](NEUTRAL_UI.md) and ADR-0098
+extend the existing UI acceptance. Check light/dark document and portal surfaces,
+readable neutral timeline labels, system appearance on first use and live OS
+changes, saved manual-choice precedence after remount, no executable
+inline appearance bootstrap, header/search containment at desktop/minimum sizes,
+shared 6 px rendered/virtual gutters, anchor-preserving thumbnail scale and
+keyboard-reachable hover actions. A thumbnail favourite must save by stable asset
+ID through the catalog, remain unconfirmed on failure, and leave originals and
+sidecars unchanged. Selection actions wrap inside their bounded floating toolbar;
+existing approvals, disabled controls, focus return and native form tests remain.
+No histogram, unsupported EXIF, smart-album counts or production sample media may
+be fabricated. Generated native scenarios and both-platform CI retain their gates.
+
 Owner offline place-search refinement (2026-11-05, AC-017–020/075): see [PLACE_SEARCH.md](PLACE_SEARCH.md) and ADR-0089. Choose a known city/country from bounded suggestions with disambiguating region/country labels. Cover London UK/Canada, alternate names, case/accents, unknown/oversized/policy-mismatched IDs, exact city radius beyond candidate-box corners, country holes/islands/neighbor exclusions, antimeridian/poles and conservative double-precision bounds. Invalid/missing/unextracted GPS cannot match; numeric zero remains valid and offline observations remain indexed. Existing filters, pages/totals/buckets, viewer neighbors, map clusters and frozen selections must agree. Saved searches retain meaningful place labels/IDs. Test loading, no-match, failure/retry, late responses, explicit choose/clear/cancel, keyboard focus and narrow-width access. Native generated EXIF checks cover city/country lookup and unchanged sources, with no online geocoding or automatic rescan. Data/notice pins and production exclusions must pass; unrun platform/performance/release gates remain open.
 
 M6 started with owner authorization on 2026-11-03. The [release matrix](M6_EVIDENCE_MATRIX.md) retains every original AC and PS scenario, links scoped milestone evidence and lists unresolved release qualifications. The earlier M5 stop instruction below is historical. [Release readiness](M6_RELEASE_READINESS.md) distinguishes current execution from prior CI and unverified signed-package claims.

@@ -1,5 +1,15 @@
 # React Doctor review — 2026-11-06
 
+Neutral redesign follow-up (2026-11-07): the same pinned changed-scope command,
+including untracked files and disabled telemetry/remote scoring, reports **zero
+errors / 35 warnings**. Reports are `.context/react-doctor-final.json` and its log.
+Inline Chakra style objects increase component source length; several existing
+complexity/workflow findings remain, and native label associations still exist
+where the scanner cannot follow `chakra.label` composition. Extract the new
+thumbnail-favourite save state into its private component. No rule suppression
+or numeric health-score claim is added. Full frontend, focused follow-up and
+native evidence retain the distinct scopes recorded in IMPLEMENTATION_LOG.md.
+
 This is a source refactor and diagnostic review, not a declaration that every
 scanner finding is a defect or that all remaining findings are resolved.
 

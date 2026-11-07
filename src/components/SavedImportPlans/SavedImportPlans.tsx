@@ -97,7 +97,18 @@ export function SavedImportPlans({ planId }: { planId: string }) {
     if (epoch.current === token) setOpened({ plan, manifest: source, sourceLabel });
   }
   return (
-    <chakra.section aria-label="Retained imports" className="organization-destination">
+    <chakra.section
+      aria-label="Retained imports"
+      className="organization-destination"
+      css={{
+        margin: '24px 0',
+        padding: '16px',
+        border: '1px solid {colors.border}',
+        borderRadius: 'var(--control-radius)',
+        '& h3': { marginTop: '0' },
+        '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+      }}
+    >
       <Heading as="h4" unstyled>
         Retained imports
       </Heading>

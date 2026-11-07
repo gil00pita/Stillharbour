@@ -80,9 +80,35 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
         Review retained organization plan
       </Button>
       {open && (
-        <dialog
+        <chakra.dialog
           ref={dialog}
           className="organization-preview"
+          css={{
+            width: 'min(1100px, calc(100vw - 48px))',
+            maxHeight: 'calc(100dvh - 48px)',
+            padding: '0',
+            border: '1px solid {colors.border}',
+            borderRadius: '12px',
+            color: 'inherit',
+            background: '{colors.bg.panel}',
+            '&[open]': { display: 'flex', flexDirection: 'column' },
+            '&::backdrop': { background: 'rgb(0 0 0 / 65%)' },
+            '@media (max-width: 760px)': {
+              width: 'calc(100vw - 24px)',
+              maxHeight: 'calc(100dvh - 24px)',
+            },
+            '&.organization-inline': {
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'static',
+              width: '100%',
+              maxHeight: 'none',
+              margin: '0',
+              border: '0',
+              borderRadius: '0',
+              background: 'transparent',
+            },
+          }}
           aria-labelledby="original-history-title"
           onCancel={(event) => {
             event.preventDefault();
@@ -90,7 +116,20 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
             close();
           }}
         >
-          <chakra.header className="organization-heading">
+          <chakra.header
+            className="organization-heading"
+            css={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '24px',
+              padding: '20px 24px',
+              flexShrink: '0',
+              borderBottom: '1px solid {colors.border}',
+              '& h2': { margin: '0', marginBottom: '8px', fontSize: '20px' },
+              '& p': { margin: '0' },
+            }}
+          >
             <Heading as="h2" unstyled id="original-history-title">
               Retained organization plan
             </Heading>
@@ -98,19 +137,69 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
               Close plan history
             </Button>
           </chakra.header>
-          <Box className="organization-body">
+          <Box
+            className="organization-body"
+            css={{
+              padding: '0 24px 24px',
+              overflowY: 'auto',
+              minHeight: '0',
+              '& fieldset': {
+                display: 'grid',
+                gap: '16px',
+                padding: '0',
+                border: '0',
+                margin: '24px 0',
+                minWidth: '0',
+              },
+              '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+              '& input': { width: '100%', minWidth: '0' },
+              '& select': { width: '100%', minWidth: '0' },
+              '& fieldset > button': { justifySelf: 'start' },
+              '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+            }}
+          >
             <Text>
               Saved plan history. Current file locations and contents require a fresh native
               recovery inspection before any action.
             </Text>
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               Opening this review grants no execution approval. Original-file changes remain
               unavailable under the preservation recovery gate.
             </Text>
             {pending && <Text role="status">Loading retained plan…</Text>}
             {error && (
               <>
-                <Text role="alert" className="error">
+                <Text
+                  role="alert"
+                  className="error"
+                  css={{
+                    border: '1px solid {colors.border.control}',
+                    borderRadius: 'var(--control-radius)',
+                    background: '{colors.danger.bg}',
+                    color: '{colors.danger.fg}',
+                    padding: '16px 20px',
+                    margin: '24px 0 0',
+                    fontSize: '13px',
+                    lineHeight: '1.6',
+                    '& p': { margin: '0' },
+                    '& button': {
+                      marginTop: '12px',
+                      border: '1px solid currentColor',
+                      background: 'transparent',
+                      color: 'inherit',
+                      borderRadius: '4px',
+                      padding: '7px 12px',
+                    },
+                  }}
+                >
                   {error}
                 </Text>
                 <Button type="button" onClick={() => void load()}>
@@ -139,7 +228,42 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
                     Reverse of plan <bdi>{history.reverseOf}</bdi>
                   </Text>
                 )}
-                <Box className="organization-table">
+                <Box
+                  className="organization-table"
+                  css={{
+                    overflowX: 'auto',
+                    marginTop: '16px',
+                    '& table': { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+                    '& th': {
+                      padding: '12px 16px 12px 0',
+                      textAlign: 'left',
+                      verticalAlign: 'top',
+                      overflowWrap: 'anywhere',
+                      borderBottom: '1px solid {colors.border}',
+                    },
+                    '& td': {
+                      padding: '12px 16px 12px 0',
+                      textAlign: 'left',
+                      verticalAlign: 'top',
+                      overflowWrap: 'anywhere',
+                      borderBottom: '1px solid {colors.border}',
+                    },
+                    '& caption': {
+                      textAlign: 'left',
+                      paddingBottom: '12px',
+                      color: '{colors.fg.muted}',
+                    },
+                    '& small': {
+                      display: 'block',
+                      color: '{colors.fg.muted}',
+                      marginTop: '8px',
+                      fontSize: '12px',
+                      lineHeight: '16px',
+                    },
+                    '& bdi': { whiteSpace: 'pre-wrap' },
+                    '& p': { margin: '0 0 8px' },
+                  }}
+                >
                   <Table.Root unstyled>
                     <Table.Caption unstyled captionSide="top">
                       Saved paths for this {history.job.kind === 'undo' ? 'undo' : 'rename'} plan
@@ -192,7 +316,7 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
               </>
             )}
           </Box>
-        </dialog>
+        </chakra.dialog>
       )}
     </>
   );

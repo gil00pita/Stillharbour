@@ -46,7 +46,8 @@ it('saves catalog captions and rejection against the loaded version with source 
     ),
   );
   expect(await screen.findByText('Caption and review flag saved in the catalog.')).toBeVisible();
-  expect(document.querySelector('script')).toBeNull();
+  // The appearance provider includes inert bootstrap data under the desktop CSP.
+  expect(document.querySelector('script:not([type="application/json"])')).toBeNull();
   expect(screen.getByText('Embedded keyword')).toBeInTheDocument();
 });
 it('retains a conflicting draft and only reloads after an explicit request', async () => {

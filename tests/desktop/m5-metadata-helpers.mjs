@@ -40,6 +40,7 @@ export async function reviewCatalogMetadata(directory) {
     const input = document.querySelector('.catalog-organizer .chakra-input');
     const select = document.querySelector('.catalog-organizer .chakra-native-select');
     return {
+      dark: document.documentElement.classList.contains('dark'),
       canvas: getComputedStyle(document.documentElement)
         .getPropertyValue('--stillharbour-colors-bg')
         .trim(),
@@ -55,9 +56,9 @@ export async function reviewCatalogMetadata(directory) {
       ),
     };
   });
-  assert.equal(theme.canvas, '#191b19');
+  assert.equal(theme.canvas, theme.dark ? '#121419' : '#f8f8fa');
   assert.equal(theme.button.fontSize, '13px');
-  assert.equal(theme.input.background, 'rgb(23, 26, 23)');
+  assert.equal(theme.input.background, theme.dark ? 'rgb(18, 20, 25)' : 'rgb(248, 248, 250)');
   assert.equal(theme.input.minHeight, '36px');
   assert.equal(theme.selectHasArrow, true);
   const setField = async (label, value) => {

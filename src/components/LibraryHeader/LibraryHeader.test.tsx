@@ -2,6 +2,32 @@ import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '../../test/render';
 import { LibraryHeader } from '@/components/LibraryHeader';
 
+it('changes thumbnail scale without changing search or selection', () => {
+  const onThumbnailSize = vi.fn();
+  const onSearch = vi.fn();
+  const onSelect = vi.fn();
+  render(
+    <LibraryHeader
+      section="Photos"
+      value="Summer"
+      onSearch={onSearch}
+      onPlace={vi.fn()}
+      busy={false}
+      onFilter={vi.fn()}
+      filterOpen={false}
+      activeCount={0}
+      onSelect={onSelect}
+      thumbnailSize="comfortable"
+      onThumbnailSize={onThumbnailSize}
+    />,
+  );
+  fireEvent.change(screen.getByLabelText('Thumbnail scale'), { target: { value: '2' } });
+  expect(onThumbnailSize).toHaveBeenCalledWith('large');
+  expect(screen.getByRole('searchbox')).toHaveValue('Summer');
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(onSearch).not.toHaveBeenCalled();
+});
+
 it('keeps Photos focused on filtering and explicit selection, without Catalog or Saved plans', () => {
   const onSelect = vi.fn();
   const onFilter = vi.fn();

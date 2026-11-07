@@ -52,3 +52,5 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 
 
 - [ADR-0097: Structure review and session presets](ADR-0097-structure-review-and-session-presets.md).
+
+- [ADR-0098: Neutral Chakra presentation and local appearance](ADR-0098-neutral-chakra-presentation.md).

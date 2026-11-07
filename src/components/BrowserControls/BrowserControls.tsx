@@ -1,3 +1,4 @@
+import { chakra } from '@chakra-ui/react';
 import { Field, Box } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -19,7 +20,22 @@ export function BrowserControls({
   onFit: (fit: 'contain' | 'cover') => void;
 }) {
   return (
-    <Box className="view-switch" aria-label="Library view">
+    <Box
+      className="view-switch"
+      css={{
+        display: 'flex',
+        gap: '6px',
+        marginBottom: '12px',
+        flexShrink: '0',
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        '@media (max-width: 760px)': {
+          gap: '4px',
+          '& > button': { padding: '7px 8px !important', fontSize: '11px !important' },
+        },
+      }}
+      aria-label="Library view"
+    >
       {(['gallery', 'grid', 'list'] as const).map((view) => (
         <Button type="button" key={view} aria-pressed={mode === view} onClick={() => onMode(view)}>
           {view === 'gallery' ? 'Timeline' : view === 'grid' ? 'Uniform grid' : 'Text list'}
@@ -27,7 +43,23 @@ export function BrowserControls({
       ))}
       {mode !== 'list' && (
         <Field.Root asChild unstyled>
-          <label className="thumbnail-control">
+          <chakra.label
+            className="thumbnail-control"
+            css={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              fontSize: '12px',
+              gap: '8px',
+              marginLeft: 'auto',
+              '& select': {
+                width: 'auto',
+                maxWidth: '160px',
+                padding: '7px 36px 7px 12px',
+                fontSize: '13px',
+              },
+              '@media (max-width: 760px)': { fontSize: '10px', '& select': { maxWidth: '160px' } },
+            }}
+          >
             <Field.Label asChild unstyled>
               <span>Thumbnail size</span>
             </Field.Label>
@@ -45,12 +77,28 @@ export function BrowserControls({
               <option value="comfortable">Comfortable</option>
               <option value="large">Large</option>
             </NativeSelect>
-          </label>
+          </chakra.label>
         </Field.Root>
       )}
       {mode === 'grid' && (
         <Field.Root asChild unstyled>
-          <label className="thumbnail-control">
+          <chakra.label
+            className="thumbnail-control"
+            css={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              fontSize: '12px',
+              gap: '8px',
+              marginLeft: 'auto',
+              '& select': {
+                width: 'auto',
+                maxWidth: '160px',
+                padding: '7px 36px 7px 12px',
+                fontSize: '13px',
+              },
+              '@media (max-width: 760px)': { fontSize: '10px', '& select': { maxWidth: '160px' } },
+            }}
+          >
             <Field.Label asChild unstyled>
               <span>Image fit</span>
             </Field.Label>
@@ -62,7 +110,7 @@ export function BrowserControls({
               <option value="contain">Fit whole image</option>
               <option value="cover">Crop to fill</option>
             </NativeSelect>
-          </label>
+          </chakra.label>
         </Field.Root>
       )}
     </Box>

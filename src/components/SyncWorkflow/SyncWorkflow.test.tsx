@@ -224,7 +224,8 @@ it('requires exact keep decisions and separately approves preparation and copyin
   expect(
     within(panel).getByRole('button', { name: 'Approve this safe-copy action' }),
   ).toBeDisabled();
-  expect(document.querySelector('script')).toBeNull();
+  // The appearance provider includes inert bootstrap data under the desktop CSP.
+  expect(document.querySelector('script:not([type="application/json"])')).toBeNull();
   acknowledge(panel);
   fireEvent.click(within(panel).getByRole('button', { name: 'Approve this safe-copy action' }));
   const prepare = await within(panel).findByRole('button', {

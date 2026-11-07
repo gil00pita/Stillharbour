@@ -1,8 +1,103 @@
-import { fireEvent, render } from '../../test/render';
+import { act, fireEvent, render, screen, waitFor } from '../../test/render';
 import { expect, it, vi } from 'vitest';
 import type { ThumbnailResult } from '../../bindings';
 import { fixtureAsset } from '../../library/__tests__/fixtures';
-import { TileImage } from '@/components/AssetTile';
+import { AssetTile, TileImage } from '@/components/AssetTile';
+import { PhotoAlbumActions } from '@/components/PhotoAlbumActions';
+
+it('provides hover and keyboard selection in the actual inactive selection context and respects its busy guard', () => {
+  const choose = vi.fn();
+  const onSelect = vi.fn();
+  const asset = fixtureAsset('hover');
+  const status = {
+    roots: [],
+    jobs: [],
+    revision: '0',
+    previewGeneration: '0',
+    metadataAvailable: true,
+    previewAvailable: true,
+  };
+  const tile = (
+    <AssetTile
+      asset={asset}
+      mode="gallery"
+      width={240}
+      imageHeight={160}
+      selected={false}
+      selectionActive={false}
+      frozen={false}
+      offline={false}
+      edge={256}
+      fit="contain"
+      preview={undefined}
+      columns={[]}
+      onSelect={onSelect}
+      onOpen={vi.fn()}
+      onNavigate={vi.fn()}
+    />
+  );
+  const view = render(
+    <PhotoAlbumActions
+      status={status}
+      onChanged={async () => {}}
+      selection={{ active: false, disabled: false, onSelect: choose }}
+    >
+      {tile}
+    </PhotoAlbumActions>,
+  );
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Generated hover.jpg' }));
+  expect(choose).toHaveBeenCalledWith(asset);
+  expect(onSelect).not.toHaveBeenCalled();
+  view.rerender(
+    <PhotoAlbumActions
+      status={status}
+      onChanged={async () => {}}
+      selection={{ active: false, disabled: true, onSelect: choose }}
+    >
+      {tile}
+    </PhotoAlbumActions>,
+  );
+  expect(screen.getByRole('checkbox', { name: 'Select Generated hover.jpg' })).toBeDisabled();
+});
+
+it('saves a thumbnail favorite through its asset ID and reports a failed save without opening the photo', async () => {
+  const onFavorite = vi.fn().mockRejectedValueOnce(new Error('Catalog unavailable'));
+  const onOpen = vi.fn();
+  const props = {
+    asset: fixtureAsset('favorite'),
+    mode: 'gallery' as const,
+    width: 240,
+    imageHeight: 160,
+    selected: false,
+    selectionActive: false,
+    frozen: false,
+    offline: false,
+    edge: 256,
+    fit: 'contain' as const,
+    preview: undefined,
+    columns: [],
+    onSelect: vi.fn(),
+    onOpen,
+    onNavigate: vi.fn(),
+    onFavorite,
+  };
+  const view = render(<AssetTile {...props} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Favorite Generated favorite.jpg' }));
+  expect(onFavorite).toHaveBeenCalledWith('favorite', true);
+  expect(await screen.findByRole('alert')).toHaveTextContent('Favorite couldn’t be saved');
+  expect(onOpen).not.toHaveBeenCalled();
+  expect(screen.getByRole('button', { name: 'Favorite Generated favorite.jpg' })).toHaveAttribute(
+    'aria-pressed',
+    'false',
+  );
+  onFavorite.mockResolvedValueOnce(undefined);
+  await act(async () =>
+    fireEvent.click(screen.getByRole('button', { name: 'Favorite Generated favorite.jpg' })),
+  );
+  await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  view.rerender(<AssetTile {...props} asset={{ ...props.asset, favorite: true }} favoriteBusy />);
+  expect(screen.getByRole('button', { name: 'Unfavorite Generated favorite.jpg' })).toBeDisabled();
+});
 vi.mock('@tauri-apps/api/core', () => ({ convertFileSrc: () => 'thumbnail://localhost/' }));
 const asset = fixtureAsset('generated-photo');
 const result = (edge: number, state: string): ThumbnailResult => ({

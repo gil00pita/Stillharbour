@@ -1,5 +1,12 @@
 # Stillharbour - Codex implementation specification
 
+Owner UI revision (2026-11-07): [Neutral gallery workspace](NEUTRAL_UI.md) and
+ADR-0098 supersede earlier warm/sage presentation guidance. Use local Chakra v3
+styles, semantic light/dark neutrals, self-hosted Inter, 6 px photo gutters,
+appearance and thumbnail-scale controls, and confirmed catalog favourites.
+Keep Tauri, actual metadata and all milestone/preservation gates; the attachment's
+Electron and synthetic production-library examples do not change architecture.
+
 M6 started with owner authorization on 2026-11-03. [Release readiness](M6_RELEASE_READINESS.md) and the [AC/PS evidence matrix](M6_EVIDENCE_MATRIX.md) record the initial hardening pass, current checks and unresolved release gates. Earlier milestone stop instructions are historical. No production execution or support gate is relaxed.
 
 All repository paths in this document are relative to the repository root.

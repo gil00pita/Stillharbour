@@ -158,9 +158,20 @@ describe('Page chrome and explicit photo selection — generated native fixture'
     await $('button=Save & Start scanning').click();
     await $('.asset-open', { strict: false }).waitForDisplayed({ timeout: 45000 });
   });
-  it('uses context actions without dots or browsing checkboxes', async function () {
+  it('reveals hover/focus selection and retains context actions without dots', async function () {
     this.timeout(120000);
-    assert.equal(await $('.asset-check').isExisting(), false);
+    const resting = await browser.execute(() => {
+      const checkbox = document.querySelector('.asset-check');
+      const resting = getComputedStyle(checkbox).opacity;
+      checkbox.closest('.asset').querySelector('.asset-open').focus();
+      return resting;
+    });
+    assert.equal(resting, '0');
+    await browser.waitUntil(() =>
+      browser.execute(
+        () => getComputedStyle(document.querySelector('.asset-check')).opacity === '1',
+      ),
+    );
     assert.equal(await $('.photo-album-menu-button').isExisting(), false);
     assert.equal(await $('button[aria-label="Catalog"]').isExisting(), false);
     assert.equal(await $('button[aria-label="Saved plans"]').isExisting(), false);
@@ -189,7 +200,10 @@ describe('Page chrome and explicit photo selection — generated native fixture'
     await browser.saveScreenshot('.context/chrome-selection/selection.png');
     await browser.setWindowSize(1180, 780);
     await $('button=Done selecting').click();
-    assert.equal(await $('.asset-check').isExisting(), false);
+    assert.equal(
+      await browser.execute(() => getComputedStyle(document.querySelector('.asset-check')).opacity),
+      '0',
+    );
     await $('button=Select').click();
     await $('.asset-check', { strict: false }).waitForExist();
     await $('button=Done selecting').click();

@@ -137,8 +137,34 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
     }
   }
   return (
-    <dialog
+    <chakra.dialog
       className="organization-preview"
+      css={{
+        width: 'min(1100px, calc(100vw - 48px))',
+        maxHeight: 'calc(100dvh - 48px)',
+        padding: '0',
+        border: '1px solid {colors.border}',
+        borderRadius: '12px',
+        color: 'inherit',
+        background: '{colors.bg.panel}',
+        '&[open]': { display: 'flex', flexDirection: 'column' },
+        '&::backdrop': { background: 'rgb(0 0 0 / 65%)' },
+        '@media (max-width: 760px)': {
+          width: 'calc(100vw - 24px)',
+          maxHeight: 'calc(100dvh - 24px)',
+        },
+        '&.organization-inline': {
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'static',
+          width: '100%',
+          maxHeight: 'none',
+          margin: '0',
+          border: '0',
+          borderRadius: '0',
+          background: 'transparent',
+        },
+      }}
       ref={dialog}
       aria-labelledby="saved-plans-title"
       onCancel={(event) => {
@@ -146,13 +172,47 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
         onClose();
       }}
     >
-      <chakra.header className="organization-heading">
+      <chakra.header
+        className="organization-heading"
+        css={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '24px',
+          padding: '20px 24px',
+          flexShrink: '0',
+          borderBottom: '1px solid {colors.border}',
+          '& h2': { margin: '0', marginBottom: '8px', fontSize: '20px' },
+          '& p': { margin: '0' },
+        }}
+      >
         <Heading as="h2" unstyled id="saved-plans-title">
           Saved organization plans
         </Heading>
         <Button onClick={onClose}>Close saved plans</Button>
       </chakra.header>
-      <Box className="organization-body" aria-busy={busy}>
+      <Box
+        className="organization-body"
+        css={{
+          padding: '0 24px 24px',
+          overflowY: 'auto',
+          minHeight: '0',
+          '& fieldset': {
+            display: 'grid',
+            gap: '16px',
+            padding: '0',
+            border: '0',
+            margin: '24px 0',
+            minWidth: '0',
+          },
+          '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+          '& input': { width: '100%', minWidth: '0' },
+          '& select': { width: '100%', minWidth: '0' },
+          '& fieldset > button': { justifySelf: 'start' },
+          '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+        }}
+        aria-busy={busy}
+      >
         <Text>
           Retained drafts preserve their original paths and template versions. Copying remains
           unavailable.
@@ -161,7 +221,29 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
           Refresh plans
         </Button>
         {error && (
-          <Text className="error" role="alert">
+          <Text
+            className="error"
+            css={{
+              border: '1px solid {colors.border.control}',
+              borderRadius: 'var(--control-radius)',
+              background: '{colors.danger.bg}',
+              color: '{colors.danger.fg}',
+              padding: '16px 20px',
+              margin: '24px 0 0',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              '& p': { margin: '0' },
+              '& button': {
+                marginTop: '12px',
+                border: '1px solid currentColor',
+                background: 'transparent',
+                color: 'inherit',
+                borderRadius: '4px',
+                padding: '7px 12px',
+              },
+            }}
+            role="alert"
+          >
             {error}
           </Text>
         )}
@@ -210,7 +292,42 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
             {detail.plan.templateReference && (
               <Text>Template version {detail.plan.templateReference.version}</Text>
             )}
-            <Box className="organization-table">
+            <Box
+              className="organization-table"
+              css={{
+                overflowX: 'auto',
+                marginTop: '16px',
+                '& table': { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+                '& th': {
+                  padding: '12px 16px 12px 0',
+                  textAlign: 'left',
+                  verticalAlign: 'top',
+                  overflowWrap: 'anywhere',
+                  borderBottom: '1px solid {colors.border}',
+                },
+                '& td': {
+                  padding: '12px 16px 12px 0',
+                  textAlign: 'left',
+                  verticalAlign: 'top',
+                  overflowWrap: 'anywhere',
+                  borderBottom: '1px solid {colors.border}',
+                },
+                '& caption': {
+                  textAlign: 'left',
+                  paddingBottom: '12px',
+                  color: '{colors.fg.muted}',
+                },
+                '& small': {
+                  display: 'block',
+                  color: '{colors.fg.muted}',
+                  marginTop: '8px',
+                  fontSize: '12px',
+                  lineHeight: '16px',
+                },
+                '& bdi': { whiteSpace: 'pre-wrap' },
+                '& p': { margin: '0 0 8px' },
+              }}
+            >
               <OrganizationTrees rows={detail.plan.preview.rows} />
               <Table.Root unstyled>
                 <Table.Caption unstyled captionSide="top">
@@ -238,7 +355,15 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                           Review all companion filenames
                         </Button>
                         {companionChoices[row.assetId] && (
-                          <Text className="help">
+                          <Text
+                            className="help"
+                            css={{
+                              fontSize: '13px',
+                              color: '{colors.fg.muted}',
+                              lineHeight: '20px',
+                              margin: '8px 0',
+                            }}
+                          >
                             Chosen review: {companionChoices[row.assetId]?.id}
                           </Text>
                         )}
@@ -276,18 +401,44 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
             )}
             <CopyManifestReview key={detail.plan.id} detail={detail} choices={companionChoices} />
             <SavedImportPlans key={`imports:${detail.plan.id}`} planId={detail.plan.id} />
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               Copying requires fresh companion, destination and capacity checks, separate native
               preparation and explicit approval. Recovery and metadata fidelity limits apply.
             </Text>
-            <Text className="help">Fingerprint: {detail.plan.digest}</Text>
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
+              Fingerprint: {detail.plan.digest}
+            </Text>
             <Button disabled={busy} onClick={() => void exportText('json')}>
               View JSON export
             </Button>
             <Button disabled={busy} onClick={() => void exportText('csv')}>
               View CSV export
             </Button>
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               Save a new review file to a native-selected folder outside your libraries. The
               generated filename is preserved; an existing file is never replaced. Exports contain
               review data, not original photos or execution approval.
@@ -322,6 +473,6 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
           </chakra.section>
         )}
       </Box>
-    </dialog>
+    </chakra.dialog>
   );
 }

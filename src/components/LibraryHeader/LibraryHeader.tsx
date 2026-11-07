@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import type { Section } from '../../library/model';
 import { PlaceSearch } from '@/components/PlaceSearch';
 import type { PlaceSummary } from '../../bindings';
+import { ThumbnailScale } from '@/components/ThumbnailScale';
+import type { GalleryDisplay } from '@/components/FilterPanel';
 export function LibraryHeader({
   jobsControl,
   navigationControl,
@@ -20,6 +22,8 @@ export function LibraryHeader({
   activeCount,
   selecting = false,
   onSelect,
+  thumbnailSize,
+  onThumbnailSize,
 }: {
   jobsControl?: ReactNode;
   navigationControl?: ReactNode;
@@ -35,10 +39,50 @@ export function LibraryHeader({
   activeCount: number;
   selecting?: boolean;
   onSelect?: () => void;
+  thumbnailSize?: GalleryDisplay['size'] | undefined;
+  onThumbnailSize?: (size: GalleryDisplay['size']) => void;
 }) {
   return (
     <PageHeader>
-      <chakra.header className="toolbar photo-toolbar">
+      <chakra.header
+        className="toolbar photo-toolbar"
+        css={{
+          flexShrink: '0',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '16px',
+          minHeight: '64px',
+          padding: '12px 24px',
+          borderBottom: '1px solid {colors.border}',
+          background: '{colors.bg.toolbar}',
+          '@media (max-width: 600px)': { minHeight: '64px', padding: '18px 24px' },
+          '& h1': { flex: '0 0 auto' },
+          '& > .toolbar-secondary': {
+            background: 'transparent',
+            borderColor: 'transparent',
+            color: '{colors.fg.muted}',
+            padding: '7px 12px',
+          },
+          '& .jobs-trigger': {
+            background: 'transparent',
+            borderColor: 'transparent',
+            color: '{colors.fg.muted}',
+          },
+          '& > .toolbar-secondary:hover:enabled': {
+            background: '{colors.bg.hover}',
+            color: 'var(--stillharbour-colors-fg, {colors.fg})',
+          },
+          '& .jobs-trigger:hover:enabled': {
+            background: '{colors.bg.hover}',
+            color: 'var(--stillharbour-colors-fg, {colors.fg})',
+          },
+          '@media (max-width: 760px)': {
+            '& .toolbar-action-label': { display: 'none' },
+            '& > .toolbar-secondary': { width: 'var(--control-height)', padding: '0' },
+          },
+        }}
+      >
         {navigationControl}
         <Heading as="h1" unstyled>
           {section === 'Tags' ? 'Albums / Tags' : section}
@@ -51,7 +95,10 @@ export function LibraryHeader({
           disabled={busy}
           filterScope={mapScope}
         />
-        <Box className="header-actions">
+        {thumbnailSize && onThumbnailSize && (
+          <ThumbnailScale size={thumbnailSize} onChange={onThumbnailSize} />
+        )}
+        <Box className="header-actions" css={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Button
             onClick={onFilter}
             disabled={busy}
@@ -70,7 +117,11 @@ export function LibraryHeader({
             </svg>
             Filter
             {activeCount > 0 && (
-              <Text as="span" className="filter-count">
+              <Text
+                as="span"
+                className="filter-count"
+                css={{ marginLeft: '8px', color: '{colors.brand.solid}' }}
+              >
                 {activeCount}
               </Text>
             )}

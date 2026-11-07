@@ -49,6 +49,8 @@ interface AssetBrowserProps {
   activeId: string | null;
   onSelect: (id: string, range: boolean) => void;
   onInspect: (id: string, opener: HTMLButtonElement) => void;
+  onFavorite?: ((id: string, favorite: boolean) => Promise<void>) | undefined;
+  favoriteBusy?: boolean | undefined;
   onMode?: (mode: ViewMode) => void;
   onError: (error: unknown) => void;
   onVisibleDate: (
@@ -84,6 +86,8 @@ export function AssetBrowser({
   selectionFrozen,
   onSelect,
   onInspect,
+  onFavorite,
+  favoriteBusy,
   onError,
   onVisibleDate,
   pageKey,
@@ -225,6 +229,37 @@ export function AssetBrowser({
       <Box
         key={item.key}
         className={`asset-row ${mode}`}
+        css={{
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          width: '100%',
+          display: 'flex',
+          gap: '6px',
+          '&.gallery': {
+            gap: '6px',
+            '& .asset': { borderRadius: '4px' },
+            '& .photo-area': { borderRadius: '4px' },
+            '& .asset-open:focus-visible': { outlineOffset: '-3px' },
+          },
+          '&.list': {
+            '& .asset': { width: '100%', borderBottom: '1px solid {colors.border}' },
+            '& .text-list-row': { borderRadius: 0, height: '100%' },
+            '& .text-list-row .asset-open': {
+              display: 'block',
+              padding: 0,
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+            },
+            '& .text-list-selection .asset-check': {
+              position: 'static',
+              opacity: 1,
+              display: 'block',
+              margin: '0 auto',
+            },
+          },
+        }}
         style={{
           transform: `translateY(${item.start - base}px)`,
           height: row.height,
@@ -262,6 +297,8 @@ export function AssetBrowser({
             onRetry={previews.retry}
             onSelect={onSelect}
             onOpen={onInspect}
+            onFavorite={onFavorite}
+            favoriteBusy={favoriteBusy}
             onNavigate={navigate}
           />
         ))}
@@ -277,16 +314,47 @@ export function AssetBrowser({
         } as CSSProperties)
       : undefined;
   return (
-    <Box className="browser-frame" style={listStyle}>
+    <Box
+      className="browser-frame"
+      css={{ display: 'flex', flexDirection: 'column', minWidth: '0', minHeight: '0', flex: '1' }}
+      style={listStyle}
+    >
       {previews.error && (
-        <Box className="preview-error" role="status">
+        <Box className="preview-error" css={{ fontSize: '12px', padding: '8px 0' }} role="status">
           Previews couldn’t be loaded. <Button onClick={previews.retry}>Retry previews</Button>
         </Box>
       )}
-      <Box className={`browser-canvas-layout ${timeline ? '' : 'without-timeline'}`}>
+      <Box
+        className={`browser-canvas-layout ${timeline ? '' : 'without-timeline'}`}
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) 96px',
+          gap: '16px',
+          flex: '1',
+          minHeight: '0',
+          '&.without-timeline': { gridTemplateColumns: 'minmax(0, 1fr)' },
+          '@media (max-width: 760px)': { gridTemplateColumns: 'minmax(0, 1fr) 96px', gap: '8px' },
+        }}
+      >
         <BrowserTable mode={mode} columns={columns} sort={sort} onSort={onSort} busy={sortBusy}>
           <Box
             className={`asset-viewport ${mode === 'gallery' ? 'gallery-viewport' : ''} ${timeline ? 'with-timeline' : ''}`}
+            css={{
+              overflow: 'auto',
+              flex: '1',
+              minHeight: '0',
+              scrollbarGutter: 'stable',
+              '&.with-timeline': { scrollbarWidth: 'none', scrollbarGutter: 'auto' },
+              '&.with-timeline::-webkit-scrollbar': { display: 'none' },
+              '&:focus': { outline: 'none' },
+              '&.gallery-viewport': { scrollbarGutter: 'auto' },
+              '&.gallery': {
+                '& .asset': { borderRadius: '0' },
+                '& .photo-area': { borderRadius: '0' },
+                '& .photo-area img': { objectFit: 'contain' },
+                '& .asset-open:focus-visible': { outlineOffset: '-3px' },
+              },
+            }}
             ref={viewport}
             onScroll={() => {
               const element = viewport.current;
@@ -315,7 +383,11 @@ export function AssetBrowser({
             tabIndex={0}
             aria-label={mode === 'list' ? 'Text-only library' : 'Photo library'}
           >
-            <Box className="virtual-canvas" style={{ height }}>
+            <Box
+              className="virtual-canvas"
+              css={{ width: '100%', position: 'relative' }}
+              style={{ height }}
+            >
               {sections.length
                 ? sections.map((section, index) => {
                     const endIndex = sections[index + 1]?.index ?? rows.length;
@@ -326,6 +398,7 @@ export function AssetBrowser({
                     return (
                       <chakra.section
                         className="photo-date-section"
+                        css={{ position: 'absolute', left: '0', width: '100%' }}
                         key={section.key}
                         style={{ top: section.start, height: section.end - section.start }}
                       >
@@ -366,9 +439,62 @@ function BrowserTable({
 }) {
   const list = mode === 'list';
   return (
-    <Box className={`browser-photos ${list ? 'text-list-scroll' : ''}`}>
+    <Box
+      className={`browser-photos ${list ? 'text-list-scroll' : ''}`}
+      css={{
+        '&.list': {
+          '& .asset': { width: '100%', borderBottom: '1px solid {colors.border}' },
+          '& .text-list-row': { borderRadius: '0', height: '100%' },
+          '& .text-list-row .asset-open': {
+            display: 'block',
+            padding: '0',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            textOverflow: 'ellipsis',
+          },
+          '& .text-list-selection .asset-check': {
+            position: 'static',
+            opacity: '1',
+            display: 'block',
+            margin: '0 auto',
+          },
+        },
+        display: 'flex',
+        flexDirection: 'column',
+        minHeight: '0',
+        minWidth: '0',
+        '&.text-list-scroll': { overflowX: 'auto' },
+      }}
+    >
       <Box
         className={list ? 'text-list-table' : 'photo-table'}
+        css={{
+          '&.list': {
+            '& .asset': { width: '100%', borderBottom: '1px solid {colors.border}' },
+            '& .text-list-row': { borderRadius: '0', height: '100%' },
+            '& .text-list-row .asset-open': {
+              display: 'block',
+              padding: '0',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+            },
+            '& .text-list-selection .asset-check': {
+              position: 'static',
+              opacity: '1',
+              display: 'block',
+              margin: '0 auto',
+            },
+          },
+          '&.photo-table': { display: 'flex', flexDirection: 'column', flex: '1', minHeight: '0' },
+          '&.text-list-table': {
+            display: 'flex',
+            flexDirection: 'column',
+            flex: '1',
+            minHeight: '0',
+            minWidth: 'var(--text-list-min-width)',
+          },
+        }}
         role={list ? 'table' : undefined}
         aria-label={list ? 'Library files' : undefined}
       >

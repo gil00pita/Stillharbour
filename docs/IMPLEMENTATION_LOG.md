@@ -4060,3 +4060,134 @@ fresh both-platform CI remain pending. Existing preservation, release and real
 restructure gates remain unchanged. Script lint/syntax, Prettier, Rust formatting
 and whitespace checks pass. Commit/push these fixes to the existing PR branch
 for fresh hosted validation.
+
+## 2026-11-07 — Copy audit branch and redesign the neutral Chakra workspace
+
+**Request/scope:** copy `feat/app-ui-redesign-audit`, then redesign the existing
+app using the attached neutral gallery brief and inline Chakra v3 styles.
+Fast-forward this workspace to `589a531`; verify the named remote head matches.
+Keep `feat/app-ui-redesign-audit-v2` unchanged. Retain the imported Structure
+workflow, separate Backup/Sync pages, native backend and all preservation gates.
+No commit, push or merge of the redesign is requested.
+
+**Changes/decisions:** remove five owned application stylesheets and the
+StructureFormatter module bridge; move layouts, states, responsive/native/photo
+geometry into their owning components' Chakra props/objects and existing recipes.
+Retain native/document defaults and shared keyframes in the theme, dependency
+MapLibre/font CSS, stable diagnostic classes and dynamic virtual coordinates.
+Use cool-neutral semantic light/dark tokens, bundled Inter Variable/tabular
+figures, 8 px control corners and shared 6 px photo gutters. Add a local appearance
+toggle, anchor-preserving thumbnail scale and confirmed catalog thumbnail hearts.
+Hover/focus selection works in the actual inactive selection context; frozen/busy
+guards remain. Failed favourite saves stay visible inside stable thumbnail bounds.
+Selected actions float within the existing workspace. Preserve actual Inspector
+metadata instead of inventing a histogram, EXIF or production sample library.
+Keep next-themes' SSR bootstrap inert under the unchanged desktop script CSP.
+Pin next-themes 0.4.6 and Inter 5.2.8; ship MIT/OFL notices and preserve the timeline
+MIT attribution. ADR-0098, NEUTRAL_UI, specification/acceptance/development/framework/
+user/dependency guidance, PRODUCT, DESIGN and its sidecar describe the result.
+
+**Fresh checks before final layout corrections:** pinned Chakra typegen, strict
+TypeScript and ESLint pass. The full frontend run passes **624 tests / 106 files**;
+all twelve release/dependency policy cases pass. The independent finish reviewer
+finds missing inactive-context checkboxes and an in-flow favourite error; fix both
+with actual-provider and failure regressions. Affected follow-up tests pass. The
+mechanical design detector reports only its font alias `Body` against the old
+DESIGN file; the documented runtime font is Inter. React Doctor's scoped report
+has zero errors; review its remaining warnings separately from a numeric score.
+
+**Native evidence and failures:** use an exclusive hash-recorded instrumented
+executable and port 4477. Copy the existing manifest-pinned helpers into this
+workspace and independently verify both hashes. Initial startup fails because a
+copied binary lacks adjacent helper resources; copy within its target/debug
+directory instead. Scoped native appearance, Albums and file-size field checks
+pass. The final appearance scenario records both modes at 1180×780 and 660×560,
+native favourite persistence, selected-action containment, actual Inspector data
+and **32 unchanged generated source entries**. It explicitly records
+`focusObserved: false`; a background WKWebView cannot certify physical keyboard
+focus/hover. Do not describe that branch as native focus evidence.
+
+The broad nineteen-spec attempt stalls after scoped passes with the embedded
+driver's session-restart `execute.bind` failure and async-scroll timeouts. Retain
+that aborted run. Page chrome preserves its failed menu-coordinate assertion:
+document.hidden is true and Floating UI remains at the origin. AppKit activation
+does not establish a visible/focused document. Single-spec execution avoids the
+restart failure. Header checks reveal real old responsive-padding overrides in
+Sidebar, Settings and Jobs; remove them. Rendered Inspector review reveals the
+heart glyph overflow: Chakra resolves the old SVG height `24` to the 84 px size
+token. A native regression fails with an 84 px glyph and toolbar top −26; use
+explicit 24 px SVG dimensions and prevent Inspector focus from scrolling its
+ancestors. The existing viewer-controls scenario passes before that glyph fix,
+so retain the new glyph-containment check as distinct evidence. Final rerun and
+production-restoration results follow below.
+
+**Limits/gate:** no real user library is scanned or changed. Rust, IPC, schema,
+native authority, helper pins and owner SVG are unchanged by the redesign.
+No fresh full Rust/transport, Windows, full native matrix, installed/signed package,
+screen-reader, recovery or release acceptance is claimed. Both-platform current
+CI and existing milestone/preservation/release gates remain required before merge.
+Keep all failed and passing logs/captures under `.context/redesign-native/`.
+
+**Final corrections/evidence:** the added selected-checkbox assertion reproduces
+a checked, hit-testable control at opacity 0. Remove gallery-ancestor opacity and
+transition ownership; AssetTile now owns hover reveal while selection/focus snap
+visible. The final native appearance run passes its exact opacity-1/hit test,
+six captures, contained action bar, 24×24 glyph, toolbar top 0 and 32-file source
+audit. The independent reviewer scores all three requested fixes resolved with
+a limited **ship** verdict, not whole-surface/native qualification. The separate
+native header matrix passes every destination at both sizes after the padding
+fixes. Final affected tests pass **58 cases / 6 files**, supplementing the earlier
+624-case full run; they are distinct fresh executions. Final ESLint, strict
+types via the instrumented/production builds, production frontend build and
+release preflight pass. Production output is restored and excludes test routes;
+the existing chunk-size advisory remains. React Doctor reports **0 errors / 35
+warnings**, with no remote score or telemetry. Remaining warnings include source
+length from inline styling, existing workflow complexity and associations the
+scanner cannot establish through Chakra/native-label composition; no suppression
+or unrelated workflow change is added. The documenter validates formatting,
+canonical headings, token references, sidecar schema and narrative mapping.
+All changed supported files pass Prettier and `git diff --check`. The exclusive
+final native executable remains SHA-256
+`68a741fdfa21d68bdc8ab5a3ddc444eefc73a20fc96bff947e340fab50348e98`;
+its driver is stopped and the redesign remains uncommitted on the original branch.
+
+## 2026-11-07 — Follow system appearance by default
+
+**Request/scope:** apply the owner's appearance choice from the redesign question.
+Set the existing next-themes provider default to `system`. With no saved choice,
+startup and subsequent OS changes follow the system; explicit saved light/dark
+choices retain precedence and survive remounts. Keep the manual header toggle,
+local preference key, semantic palette, CSP and all native/preservation gates.
+Update the product/design, UI contract, user guide, ADR and acceptance guidance.
+Make the existing native metadata palette assertions accept the resolved light
+or dark theme instead of assuming a dark host.
+
+**Fresh checks:** all 21 affected appearance/header/App tests pass, including both
+initial OS modes, live system changes, manual override and saved-choice remount.
+Strict TypeScript and ESLint pass. The production frontend build passes with the
+existing large-chunk advisory; scoped formatting and whitespace pass.
+Earlier native evidence is for the preceding default, not a fresh OS-theme
+or Windows/native matrix pass. No original-file, catalog or native authority
+changes; both-platform CI and existing release gates remain binding.
+
+## 2026-11-07 — Prepare the complete workspace redesign PR
+
+**Request/scope:** the owner approves the current workspace and requests commit,
+push and a PR from `feat/app-ui-redesign-audit-v2` to `main`. Retain the branch
+name and all approved work. A fresh fetch confirms `origin/main` at `6eadc6a`;
+review the working diff and the inherited audit branch diff. The complete PR
+includes the catalog-backed whole-library structure preview/review/simulation,
+metadata rules, draggable path editing, session presets and protection checks,
+separate Backup/Sync workspaces, neutral Chakra presentation, system appearance,
+native regressions, notices and documentation. Production restructuring remains
+disabled and all preservation/release gates remain binding.
+
+**Preparation/evidence:** use the PR skill's Summary/Evidence/Merge Danger format,
+with a title under 80 characters and fewer than five prose sentences. Reuse the
+dated 624-case frontend run, 58 affected follow-ups, 21 system-appearance cases,
+types/lint/build/preflight and scoped native receipts only within their recorded
+revision/scope; no new full-suite or OS-theme/native pass is claimed. Disclose
+the aborted broad native run, hidden-document menu failure and pending full
+macOS/Windows CI. Fresh Git review, supported-file formatting and whitespace
+checks precede publication. No merge or release qualification is requested;
+record the actual publication result separately.

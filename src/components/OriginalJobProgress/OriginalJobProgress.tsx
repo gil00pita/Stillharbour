@@ -29,7 +29,12 @@ export function OriginalJobProgress({ job }: { job: OriginalOperationJob }) {
       <Text>
         {job.verifiedMoves} / {job.totalMoves} verified moves
       </Text>
-      <Text className="help">{job.message}</Text>
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
+        {job.message}
+      </Text>
     </chakra.section>
   );
 }

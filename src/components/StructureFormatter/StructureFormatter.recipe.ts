@@ -149,13 +149,24 @@ export const structureFormatterRecipe = defineRecipe({
       borderTop: '1px solid',
       borderColor: 'border',
       bg: 'bg.toolbar',
-      '& button': { marginTop: 0, minHeight: 'control', height: 'control', paddingBlock: 0 },
+      '& button.primary, & button': {
+        marginBlock: 0,
+        minHeight: 'control',
+        height: 'control',
+        paddingBlock: 0,
+      },
       '& .help': { flex: '1 1 18rem', minWidth: 0, maxWidth: 'lg', margin: 0 },
     },
     '& .structure-completion': {
       maxWidth: '2xl',
       marginBlock: '8',
       '& > svg': { color: 'brand.solid', marginBottom: '5' },
+      '& button.primary': {
+        marginBlock: 0,
+        minHeight: 'control',
+        height: 'control',
+        paddingBlock: 0,
+      },
     },
   },
 });
@@ -189,6 +200,6 @@ export const structureDialogStyle = defineStyle({
     overflowWrap: 'anywhere',
     '& small': { color: 'fg.muted' },
   },
-  '& button.primary': { marginTop: 0 },
+  '& button.primary': { marginBlock: 0, height: 'control', minHeight: 'control', paddingBlock: 0 },
   _motionReduce: { animation: 'none' },
 });

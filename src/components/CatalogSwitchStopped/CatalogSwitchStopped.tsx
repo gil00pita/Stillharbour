@@ -3,7 +3,21 @@ import type { CatalogSwitchState } from '../../backup/catalogSwitchState';
 
 export function CatalogSwitchStopped({ state }: { state: CatalogSwitchState }) {
   return (
-    <chakra.main className="catalog-switch-stopped" aria-label="Catalog switch session">
+    <chakra.main
+      className="catalog-switch-stopped"
+      css={{
+        maxWidth: '880px',
+        minHeight: '100vh',
+        marginInline: 'auto',
+        padding: '48px 32px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'center',
+        gap: '20px',
+        overflowWrap: 'anywhere',
+      }}
+      aria-label="Catalog switch session"
+    >
       <Heading as="h1" unstyled>
         {state.phase === 'preparing'
           ? 'Preparing the catalog switch'

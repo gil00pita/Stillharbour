@@ -2,6 +2,11 @@
 
 <!-- impeccable:product-schema 1 -->
 
+Current presentation is the neutral workspace revision of 2026-11-07 below. It
+supersedes conflicting visual values in dated notes; their functional history
+and safety gates remain applicable. [DESIGN.md](DESIGN.md) records the implemented
+visual system and [docs/NEUTRAL_UI.md](docs/NEUTRAL_UI.md) its evidence limits.
+
 ## Platform
 
 web
@@ -18,11 +23,11 @@ People organising personal photo and video folders need to browse, understand an
 
 ## Capabilities and constraints
 
-docs/CODEX_SPEC.md and its preservation/library addenda are the normative product record. docs/CODEX_START_PROMPT.md authorises M0 only. The owner subsequently authorised M1: save selected native folders, scan read only, browse a persistent gallery/grid/text list, inspect metadata and save catalog-only favorites, ratings and tags. The initial screen focuses on selecting a photo library folder; developer diagnostics stay out of the interface. Selection remains explicitly unscanned until Save & Start scanning. New folders default to Managed with an optional Read only switch; both modes scan without changing originals. Selected-folder setup replaces the welcome with a naturally expanding form and full-width Advanced accordion, hidden switches and exclusion/extension tags. New folders prefill the 33-photo-extension list; there are no include-pattern or scan-date restrictions. Sidebar footer shows the running app version; browsing can still filter dates. Original-file operations, map and backup remain unavailable. No telemetry, sample library or cloud provider is enabled.
+docs/CODEX_SPEC.md and its preservation/library addenda are the normative product record. docs/CODEX_START_PROMPT.md authorises M0 only. The initial M1 approval authorised: save selected native folders, scan read only, browse a persistent gallery/grid/text list, inspect metadata and save catalog-only favorites, ratings and tags. The initial screen focuses on selecting a photo library folder; developer diagnostics stay out of the interface. Selection remains explicitly unscanned until Save & Start scanning. New folders default to Managed with an optional Read only switch; both modes scan without changing originals. Selected-folder setup replaces the welcome with a naturally expanding form and full-width Advanced accordion, hidden switches and exclusion/extension tags. New folders prefill the 33-photo-extension list; there are no include-pattern or scan-date restrictions. Sidebar footer shows the running app version; browsing can still filter dates. At that initial M1 gate, original-file operations, map and backup were unavailable. Later authorised slices and their gates are recorded in the dated notes and normative docs; this historical summary does not override them. No telemetry, sample library or cloud provider is enabled.
 
 ## Brand commitments
 
-Use Stillharbour, British spelling, the descriptor Photo & Video Library, and the unchanged owner-supplied aperture SVG. Reference screenshots establish a restrained dark desktop workspace, not shippable media. Use system UI typography for native familiarity.
+Use Stillharbour, British spelling, the current descriptor Your media library organizer., and the unchanged owner-supplied aperture SVG. Reference screenshots establish a restrained dark desktop workspace, not shippable media. Use bundled Inter Variable with native system fallbacks and tabular numbers. Keep ordinary chrome, focus and selection cool neutral in both light and dark appearances; the original multicolour mark stays unchanged.
 
 ## Evidence on hand
 
@@ -34,7 +39,7 @@ Keyboard operation, visible focus, semantic controls, textual status and explici
 
 ## Current gallery surface — 2026-10-27
 
-The photo canvas is an Experience surface inside the Operate shell: aspect-preserving justified rows with 4 px gutters and day headings, a fixed filename search, collapsible navigation and a real year/month rail. Hover/focus selection, ordered ranges and catalog-only batch notes support work without covering the images at rest. Timeline, Uniform grid and true Text list share query/selection/anchor. The immersive viewer uses clearly limited cached previews with zoom/pan, navigation, optional filmstrip/Info and scroll/focus return. Compare is visual inspection of 2–4 explicit selections, never proof of duplication. Similarity analysis remains an M3 gate; originals stay read-only. This latest brief supersedes the earlier gapless/no-checkbox gallery request.
+The photo canvas is an Experience surface inside the Operate shell: aspect-preserving justified rows with 6 px gutters (updated by the 2026-11-07 neutral revision) and day headings, a fixed filename search, collapsible navigation and a real year/month rail. Hover/focus selection, ordered ranges and catalog-only batch notes support work without covering the images at rest. Timeline, Uniform grid and true Text list share query/selection/anchor. The immersive viewer uses clearly limited cached previews with zoom/pan, navigation, optional filmstrip/Info and scroll/focus return. Compare is visual inspection of 2–4 explicit selections, never proof of duplication. Similarity analysis remains an M3 gate; originals stay read-only. This latest brief supersedes the earlier gapless/no-checkbox gallery request.
 
 ## Settings surface — 2026-10-28
 
@@ -82,11 +87,11 @@ HEIC viewer fix (2026-10-30): detected HEIC/HEIF still-image originals also open
 
 ## Organization template previews — 2026-10-30
 
-M2 begins with a catalog-only preview from the Photos selection toolbar for 1–240 individually selected photos. Preserve the existing Operate shell, system type, neutral surfaces and protected dialog focus. Editable session presets/custom templates show exact relative proposals, missing-date policy, conflicts and unconfirmed companion candidates. Destination checks, saved/versioned templates, export, approvals and all copying/original operations remain unavailable. See docs/M2_ORGANIZATION_PREVIEWS.md for behavior and gates.
+M2 begins with a catalog-only preview from the Photos selection toolbar for 1–240 individually selected photos. Preserve the existing Operate shell, shared UI type, neutral surfaces and protected dialog focus. Editable session presets/custom templates show exact relative proposals, missing-date policy, conflicts and unconfirmed companion candidates. Destination checks, saved/versioned templates, export, approvals and all copying/original operations remain unavailable. See docs/M2_ORGANIZATION_PREVIEWS.md for behavior and gates.
 
 ## Restrained polish — owner approval, 2026-10-30
 
-Retain Stillharbour's current photo-first brand and layouts while making shared controls, spacing and supporting text consistent. Use neutral secondary actions, 36px standard fields/selects, 44px primary/viewer targets, native system type, readable help text and restrained confirmed-favorite feedback. Library names lead over UUIDs in organization previews; identities remain available for inspection. No backend capability, milestone or original-file permission changes. See docs/INTERFACE_POLISH.md.
+Retain Stillharbour's current photo-first brand and layouts while making shared controls, spacing and supporting text consistent. Use neutral secondary actions, 36px standard fields/selects, 44px primary/viewer targets, shared UI type, readable help text and restrained confirmed-favorite feedback. Library names lead over UUIDs in organization previews; identities remain available for inspection. No backend capability, milestone or original-file permission changes. See docs/INTERFACE_POLISH.md.
 
 ## Utilities and search refinement — 2026-11-05
 
@@ -115,3 +120,31 @@ camera fields have explicit missing/ambiguous states. Trip grouping is omitted;
 Camera → Event conditionally accepts an event name. Existing indexed metadata
 and reader coverage determine which values can be previewed. Execution remains
 gated, and existing saved rules retain their identities and data.
+
+## Neutral gallery workspace — owner revision, 2026-11-07
+
+Refresh the copied audit branch with a cool neutral photo workspace, bundled
+Inter Variable/tabular numbers and a locally saved light/dark toggle, following
+the system appearance by default. Saved manual choices take precedence. Preserve the original multicolour SVG and Tauri/Rust architecture.
+Semantic tokens cover native controls, photographic states and portal surfaces.
+The shared header is 64px; regular controls are 36px with 8px corners, and viewer
+targets remain 44px. Six-pixel gallery gutters replace the earlier four-pixel
+values in rows and virtual extents. Thumbnail scale reuses existing display
+state, preserves the visible anchor and hides below 1024px; Filter keeps the
+same display choices reachable.
+
+Hover/focus exposes separate selection and catalog-favourite controls without
+moving images. A heart fills after catalog confirmation; errors stay visible
+and retryable. Contextual selected actions float within a bounded wrapping,
+scrollable workspace overlay. Inspector shows actual catalog observations;
+there is no invented histogram, EXIF, smart-album count or sample library.
+Navigation, Structure Formater, separate Backup/Sync pages and existing catalog,
+original-viewing and preservation behavior remain within their prior authority.
+
+Component styles live in Chakra props, css objects and colocated recipes. Owned
+application CSS files are removed; dependency MapLibre/font-face styles remain.
+Shared document/native defaults and keyframes stay in the theme. This revises
+presentation only: native Windows, installed-package, restore, independent
+recovery and release gates are unchanged. Actual local outcomes, including
+blocked checks, belong in docs/IMPLEMENTATION_LOG.md; screenshots and frontend
+tests do not establish those gates. See docs/NEUTRAL_UI.md.
