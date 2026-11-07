@@ -1,7 +1,7 @@
 import { act, render, screen } from '../../test/render';
 import { expect, it, vi } from 'vitest';
 import App from '@/components/App';
-import { BackupScreen } from '@/components/BackupScreen';
+import { SyncScreen } from '@/components/SyncScreen';
 import { CatalogSwitchStopped } from '@/components/CatalogSwitchStopped';
 import { catalogSwitchStore, createCatalogSwitchStore } from '../../backup/catalogSwitchState';
 import type { CatalogRestorePrepared, LibraryStatus } from '../../bindings';
@@ -134,13 +134,13 @@ it('unmounts normal app and backup requests before preparation and retains instr
       throw new Error('Unexpected normal request');
     });
     render(<App />);
-    render(<BackupScreen status={status} navigationControl={null} jobsControl={null} />);
+    render(<SyncScreen status={status} navigationControl={null} jobsControl={null} />);
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
     expect(screen.getByRole('button', { name: 'Choose a folder' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Versioned backup' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Compare' })).toBeDisabled();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(1500);
     });
@@ -150,7 +150,7 @@ it('unmounts normal app and backup requests before preparation and retains instr
       ticket = catalogSwitchStore.begin(context);
     });
     expect(screen.queryByRole('button', { name: 'Choose a folder' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Versioned backup' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Compare' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('heading', { name: 'Preparing the catalog switch' })).toHaveLength(
       2,
     );

@@ -118,3 +118,94 @@ ADR-0056 adds typed instrumented-only generated rename/undo review controls over
 ADR-0057 adds actual catalog path commits to the generated rename lab. Observe native names and catalog paths side by side; preserve stable asset IDs and catalog annotations in forward/reverse cycles. Native movement without a committed receipt is incomplete, requires fresh approval and cannot enable undo. This remains a constructor-owned private catalog, not general application library organization or durable jobs/restart adoption.
 
 Explicit managed destination (2026-11-01, ADR-0062): the default still requires an external folder outside every indexed root. A separate policy can bind a different existing managed root, with the native picker selecting that exact root object. Source/referenced/unavailable/overlapping roots and pending original recovery remain blocked. Optional destinationRootId is retained in immutable plans and fresh scope validation; absent fields preserve legacy identity/schema 7. Existing-root import output discovery reuses its filters and reports whether it started or joined a scan. Production copying/original mutation remains gated; local generated/native Windows evidence does not establish all-target acceptance. Preferred-root persistence and multiple-source execution remain open.
+
+## Dedicated workspace — 2026-11-07
+
+Open Structure Formater from Utilities and configure folder/filename rules. Its
+scope is every indexed photo/video in the catalog; selection, filters and albums
+are irrelevant. Preview restructure processes bounded native batches and displays
+240-row pages only after the complete global output namespace has been checked.
+Missing, excluded and offline media remain in scope as blocked. Source ordering
+and sequence are global. Catalog changes require rebuilding; cancel/unmount/new
+rules discard TEMP state. Saved templates and saved plans remain accessible.
+The separate explicit-photo preview still supports existing reviewed copy-plan
+consumers; a whole-library result page cannot be submitted as a complete plan.
+Run restructure remains disabled pending whole-library execution and recovery
+qualification. [ADR-0095](decisions/ADR-0095-whole-library-structure-preview.md)
+records the read-only adapter and limits.
+
+The native `organization_protection_status` read exposes backup/sync prerequisites
+separately from naming observations. Active backup/restore/recovery helpers,
+sync/comparison workers, all retained unfinished jobs and every enabled backup
+schedule block restructuring; errors fail closed. Schedule timing and OS authority
+do not waive the block. The page checks on entry (including hidden windows), on
+focus/visibility changes and every two visible seconds, with a manual retry. It
+does not alter jobs, schedule consent or originals. Sync currently has no recurring
+scheduler. These observations do not invalidate or prohibit read-only previews and
+do not grant execution authority. Atomic admission against concurrent work and
+schedule changes remains required for the future whole-library executor.
+
+## Date-based rule choices — 2026-11-07
+
+The shared rule editor uses three illustrated radio cards: By day (year/date/
+original filename), By month (year/month/timestamp and sequence), and Date & time
+(date/time and original filename). Inline SVG folder trees are clearly examples,
+not catalog observations. The event-name field and event preset are removed.
+Missing capture date uses a two-option segmented control (Undated folder or
+block); filename stem case uses Preserve/lowercase/UPPERCASE segments. These keep
+the existing typed policies, preview invalidation and original-extension handling.
+Custom paths remain editable and visibly unmatched to a preset. Stored templates,
+including historical event values, are loaded unchanged; selecting a new date
+preset clears the now-unused event value. There is no persisted schema migration
+or new execution authority.
+
+## Expanded naming layouts — 2026-11-07
+
+The later owner request supersedes the three-choice-only form. Layout groups
+cover Date (five requested plus three retained presets), Location (four), Tags
+(six), Camera (seven), and Custom. Trip grouping is omitted. Location uses only
+embedded indexed labels; tag levels follow the existing category parent graph;
+camera type requires an explicit observation. Camera → Event conditionally asks
+for an event name. Missing required context blocks the photo instead of choosing
+an arbitrary label, guessing from GPS or dropping it from scope.
+
+Custom assembles real path components with searchable predefined chips and
+literal folders, draggable grip/label handles, separate removal and a filename
+pattern. Click-to-pick/place and keyboard pickup/arrows/Enter/Escape provide
+alternatives without the old earlier/later arrow buttons. Drop commits once;
+canceled, interrupted or stale gestures leave the rule untouched. All native
+path/conflict/global sequence checks remain. New quarter/metadata patterns use
+preview policy v2; previous patterns and absent optional context retain v1 and
+legacy serialization. Template examples can carry explicit naming observations.
+Read [ADR-0096](decisions/ADR-0096-metadata-structure-rules.md) for exact context,
+reader coverage, compatibility and unchanged execution limits.
+
+## Rules-to-review flow — 2026-11-07
+
+The latest owner refinement separates the five folder categories from Original /
+Date + original / Sequence filename choices. Folder tree and sample-path views
+are explicitly illustrative, resolved natively from four fixed examples without
+catalog or source-file access. Advanced path editing, stem case, draggable Custom
+chips and existing immutable catalog templates remain available.
+
+Missing dates can use the existing whole-path Undated/original-name fallback or
+the new typed Skip policy. Skip retains rows and global sequence positions;
+non-date rules do not skip them. Historical Block rules still load. New optional
+whole-library observations are absent from legacy row serialization. Skip uses
+preview v2 and saved template schema 2, and is refused by executable selected-photo
+plan creation. It supplies no execution authority.
+
+Completed TEMP previews provide cached global move/folder/rename/attention/date/
+skip/unchanged totals. Native queries apply bounded literal path search and typed
+filters across the entire namespace before 240-row paging. Global summaries and
+sequence values do not change under filters. Errors/stale catalog revisions
+require fresh review. Session presets are catalog-scoped process memory, distinct
+from persistent catalog templates and approved plans.
+
+The dedicated review screen supports missing-date inspection and return to
+editing. Confirmation invokes fresh read-only native validation before an
+explicit simulated completion screen; no approval, operation or job is created.
+Actual Run restructure remains disabled, including when backup/sync prerequisites
+are clear. [ADR-0097](decisions/ADR-0097-structure-review-and-session-presets.md)
+records query, compatibility and simulation boundaries. This increment does not
+close M2 or authorize production original-file operations.

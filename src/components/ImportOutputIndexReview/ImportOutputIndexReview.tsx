@@ -1,3 +1,4 @@
+import { Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type { ImportCopyReceipt, ImportOutputIndex, ScanJob } from '../../bindings';
@@ -113,36 +114,40 @@ export function ImportOutputIndexReview({
     }
   }
   return (
-    <section aria-label="Index import output" aria-busy={pending}>
-      <h4>Add the output folder to your catalog</h4>
-      <p>
+    <chakra.section aria-label="Index import output" aria-busy={pending}>
+      <Heading as="h4" unstyled>
+        Add the output folder to your catalog
+      </Heading>
+      <Text>
         Choose the original destination again. Stillharbour scans this completed output folder
         without changing files. New folders are registered as referenced libraries; an explicitly
         selected managed destination uses its existing library scan settings. Indexing is separate
         from byte verification and independent backup.
-      </p>
+      </Text>
       <Button type="button" disabled={pending || running} onClick={() => void index()}>
         {result ? 'Review output registration' : 'Choose destination and index output'}
       </Button>
       {result && (
-        <p role="status">
+        <Text role="status">
           {result.alreadyRegistered && result.root.mode === 'managed'
             ? 'Using the existing managed destination library'
             : result.alreadyRegistered
               ? 'Output folder already registered'
               : 'Output folder registered'}
           : <bdi>{result.root.displayPath}</bdi>.
-        </p>
+        </Text>
       )}
       {result && !scan && (
-        <p>No scan is retained in the recent job list. Start a scan from the folder settings.</p>
+        <Text>
+          No scan is retained in the recent job list. Start a scan from the folder settings.
+        </Text>
       )}
       {scan && (
         <>
           <ScanJobProgress job={scan} label={result?.root.label ?? 'Imported output'} />
-          <p>
+          <Text>
             {scan.indexed} indexed entries · {scan.errors} issues.
-          </p>
+          </Text>
         </>
       )}
       {running && (
@@ -150,7 +155,7 @@ export function ImportOutputIndexReview({
           Cancel output scan
         </Button>
       )}
-      {error && <p role="alert">{error}</p>}
-    </section>
+      {error && <Text role="alert">{error}</Text>}
+    </chakra.section>
   );
 }

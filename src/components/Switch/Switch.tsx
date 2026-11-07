@@ -1,3 +1,4 @@
+import { Text } from '@chakra-ui/react';
 export function Switch({
   label,
   checked,
@@ -11,7 +12,7 @@ export function Switch({
 }) {
   return (
     <label className="switch-field">
-      <span>{label}</span>
+      <Text as="span">{label}</Text>
       <input
         className="switch-control"
         type="checkbox"

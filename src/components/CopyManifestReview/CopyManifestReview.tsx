@@ -1,3 +1,4 @@
+import { Box, Heading, List, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -85,20 +86,22 @@ export function CopyManifestReview({
   }
   const pages = manifest ? Math.max(1, Math.ceil(manifest.files.length / PAGE_SIZE)) : 1;
   return (
-    <section
+    <chakra.section
       className="organization-destination"
       aria-label="Compiled copy review"
       aria-busy={pending}
     >
-      <h3>Review all selected files together</h3>
-      <p>
+      <Heading as="h3" unstyled>
+        Review all selected files together
+      </Heading>
+      <Text>
         Choose a companion decision for each photo. Compilation rechecks those exact inventories and
         combines identical source-to-target mappings. Conflicting mappings stay blocked for review.
-      </p>
-      <p>
+      </Text>
+      <Text>
         {decisionIds.filter(Boolean).length} of {decisionIds.length} photos have an explicitly
         chosen decision.
-      </p>
+      </Text>
       <Button
         type="button"
         disabled={pending || !complete || detail.stale}
@@ -107,74 +110,78 @@ export function CopyManifestReview({
         {pending ? 'Compiling copy review…' : 'Compile copy review'}
       </Button>
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
       {manifest && (
         <>
-          <h4 ref={result} tabIndex={-1}>
+          <Heading as="h4" unstyled ref={result} tabIndex={-1}>
             Compiled file manifest
-          </h4>
+          </Heading>
           {changed && (
-            <p role="alert">The draft or chosen companion scope changed. Compile a fresh review.</p>
+            <Text role="alert">
+              The draft or chosen companion scope changed. Compile a fresh review.
+            </Text>
           )}
-          <p>
+          <Text>
             {manifest.files.length} proposed file outputs ·{' '}
             {BigInt(manifest.selectedBytes).toLocaleString()} bytes. Identical overlapping mappings
             are counted once.
-          </p>
-          <p>
+          </Text>
+          <Text>
             Copying requires separate native preparation and byte-verification reviews. This
             retained manifest does not approve copying. Recovery and metadata fidelity limits apply.
-          </p>
+          </Text>
           {manifest.issues.length > 0 && (
-            <p role="alert">
+            <Text role="alert">
               {manifest.issues.length} conflicts block the proposed copy. Build a new draft or
               choose a compatible companion scope.
-            </p>
+            </Text>
           )}
           {manifest.issues.length > 0 && (
-            <ul>
+            <List.Root unstyled>
               {manifest.issues.slice(0, 64).map((issue, index) => (
-                <li key={index}>
+                <List.Item unstyled key={index}>
                   {issues[issue.kind]} ({issue.fileIds.length} files)
-                </li>
+                </List.Item>
               ))}
-            </ul>
+            </List.Root>
           )}
           {manifest.issues.length > 64 && (
-            <p>{manifest.issues.length - 64} additional conflicts are retained in the manifest.</p>
+            <Text>
+              {manifest.issues.length - 64} additional conflicts are retained in the manifest.
+            </Text>
           )}
-          <div className="organization-table">
-            <table>
-              <caption>
+          <Box className="organization-table">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top">
                 Compiled files, page {page + 1} of {pages}
-              </caption>
-              <thead>
-                <tr>
-                  <th>Source filename</th>
-                  <th>Proposed destination</th>
-                  <th>Bytes</th>
-                  <th>Photo bundles</th>
-                </tr>
-              </thead>
-              <tbody>
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled>Source filename</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Proposed destination</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Bytes</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Photo bundles</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
                 {manifest.files.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((file) => (
-                  <tr key={file.id}>
-                    <td>
+                  <Table.Row unstyled key={file.id}>
+                    <Table.Cell unstyled>
                       <bdi title={`Library ${file.rootId}`}>{file.sourceName}</bdi>
-                    </td>
-                    <td>
+                    </Table.Cell>
+                    <Table.Cell unstyled>
                       <bdi>{file.targetRelativePath}</bdi>
-                    </td>
-                    <td>{BigInt(file.bytes).toLocaleString()}</td>
-                    <td>{file.bundleAssetIds.length}</td>
-                  </tr>
+                    </Table.Cell>
+                    <Table.Cell unstyled>{BigInt(file.bytes).toLocaleString()}</Table.Cell>
+                    <Table.Cell unstyled>{file.bundleAssetIds.length}</Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Table.Body>
+            </Table.Root>
+          </Box>
           <Button type="button" disabled={page === 0} onClick={() => setPage((value) => value - 1)}>
             Previous compiled files
           </Button>
@@ -185,7 +192,7 @@ export function CopyManifestReview({
           >
             Next compiled files
           </Button>
-          <p className="help">Manifest fingerprint: {manifest.digest}</p>
+          <Text className="help">Manifest fingerprint: {manifest.digest}</Text>
           {!changed && <CopyAssessmentReview key={manifest.digest} manifest={manifest} />}
           {!changed && manifest.issues.length === 0 && (
             <ImportComparisonReview key={`compare-${manifest.digest}`} manifest={manifest} />
@@ -195,6 +202,6 @@ export function CopyManifestReview({
           )}
         </>
       )}
-    </section>
+    </chakra.section>
   );
 }

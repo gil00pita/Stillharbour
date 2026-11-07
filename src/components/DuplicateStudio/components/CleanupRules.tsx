@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Text, chakra } from '@chakra-ui/react';
 import type { DuplicateGroup } from '../../../bindings';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -22,7 +22,7 @@ export function CleanupRules({
   const [preview, setPreview] = useState(false);
   return (
     <ReviewDialog title="Cleanup rules" onClose={onClose}>
-      <p>Preview a keeper policy. These session choices never approve file removal.</p>
+      <Text>Preview a keeper policy. These session choices never approve file removal.</Text>
       <Field.Root>
         <Field.Label>Retain this version</Field.Label>
         <NativeSelect
@@ -44,8 +44,8 @@ export function CleanupRules({
           keep multiple.
         </Field.HelperText>
       </Field.Root>
-      <fieldset>
-        <legend>Always protect</legend>
+      <chakra.fieldset>
+        <chakra.legend>Always protect</chakra.legend>
         {['Favourites', 'RAW files', 'Video masters', 'Shared albums', 'Edited derivatives'].map(
           (item) => (
             <label key={item}>
@@ -66,12 +66,12 @@ export function CleanupRules({
             </label>
           ),
         )}
-      </fieldset>
-      <p>
+      </chakra.fieldset>
+      <Text>
         These protections are requirements for a future cleanup plan. This build cannot verify
         shared membership, edit lineage or video masters, so removal stays blocked even if a
         protection is unchecked.
-      </p>
+      </Text>
       <Field.Root>
         <Field.Label>Minimum visual confidence · {threshold}%</Field.Label>
         <Input
@@ -90,39 +90,44 @@ export function CleanupRules({
           type of evidence.
         </Field.HelperText>
       </Field.Root>
-      <div className="duplicate-rule-preview" role="status">
+      <Box className="duplicate-rule-preview" role="status">
         <strong>{groups.length} groups in scope</strong>
-        <p>
+        <Text>
           0 scored groups meet {threshold}% · 0 files eligible for automatic removal · recoverable
           storage unknown.
-        </p>
-      </div>
+        </Text>
+      </Box>
       <details>
         <summary>Unavailable keeper signals</summary>
         {keeperRules
           .filter((item) => item.unavailable)
           .map((item) => (
-            <p key={item.value}>
+            <Text key={item.value}>
               {item.label}: {item.unavailable}
-            </p>
+            </Text>
           ))}
       </details>
       <Button onClick={() => setPreview(true)}>Preview cleanup</Button>
       {preview && (
-        <section className="duplicate-cleanup-confirmation" aria-label="Cleanup confirmation">
-          <h3>Keep your originals in place</h3>
-          <p>
+        <chakra.section
+          className="duplicate-cleanup-confirmation"
+          aria-label="Cleanup confirmation"
+        >
+          <Heading as="h3" unstyled>
+            Keep your originals in place
+          </Heading>
+          <Text>
             No files can move to Recently Deleted. Fresh byte verification, complete companion
             protection and exact-version independent recovery are required. No disk space will be
             freed.
-          </p>
-          <p>
+          </Text>
+          <Text>
             Proposed keeper preference: {keeperRules.find((item) => item.value === rule)?.label}.{' '}
             {protections.length} protection requirements selected. Changing a policy requires a new
             backend plan.
-          </p>
+          </Text>
           <Button disabled>Move to Recently Deleted unavailable</Button>
-        </section>
+        </chakra.section>
       )}
     </ReviewDialog>
   );

@@ -95,3 +95,60 @@ headers and the editable template index key. The header/menu change adds no
 new diagnostic class. The scan uses local schema-3 JSON with telemetry,
 remote scoring and supply-chain requests disabled; no numerical health score
 is claimed. Receipt: `.context/chrome-selection/react-doctor.json`.
+
+## Workspace consistency migration — 2026-11-07
+
+The documented pinned changed-scope command reports zero errors and ten warnings
+in four files after this broad JSX migration, with telemetry, supply-chain
+queries and remote scoring still disabled. Seven warnings move with the existing
+BackupWorkspace implementation into SyncScreen (complexity/length, activity
+callbacks and existing lookup/await/index-key patterns). The remaining findings
+are the re-identified table header subtree, formatting length in
+SavedOrganizationPlans and OrganizationPreview's existing template-load reset:
+that synchronous callback retires a pending preview when loading a template,
+not a rejected await lacking cleanup. No suppression or unsafe change to activity
+guards is introduced to satisfy the scanner. App's added source binding is
+encapsulated by a catalog-scope helper; its intermediate complexity warning is
+absent from the final scan. Raw reports: `.context/ui-react-doctor*.json`.
+
+The design detector reports only seventeen advisory palette/radius differences in
+existing CSS, including the owner-selected reference timeline. No new color
+literal or decorative effect is added. The stale Impeccable sidecar is left
+unchanged; a separate document refresh can reconcile it. These scans are source
+evidence, not native, accessibility or performance certification.
+
+## Whole-library formatter follow-up — 2026-11-07
+
+The same pinned changed-scope scan reports zero errors and eleven warnings
+(`.context/structure-react-doctor.json`). Ten match the preceding presentation
+pass. The additional StructureFormatter loading-reset finding points directly
+into its generation-guarded `finally` block. Rejection/cancellation/unmount tests
+verify that it releases busy state or retires that generation; no suppression or
+control-flow weakening is warranted. The obsolete selected-source App binding
+has been removed; whole-library preview scope belongs to the native adapter.
+
+Illustrated rule controls (2026-11-07): the same pinned changed-scope command
+reports zero errors/eleven existing reviewed warnings after the new radio cards
+and segmented controls. Neither new control nor the shared rule field introduces
+a diagnostic. Receipt: `.context/rule-cards-react-doctor.json`; no suppression or
+numeric remote score is used. Focused component checks pass 44 cases.
+
+Expanded layouts (2026-11-07): the first scan adds one chip-builder complexity
+warning. Extract its pure filtering/literal/path-label helpers; the final pinned
+changed-scope scan returns to zero errors/eleven existing reviewed warnings with
+no suppression (`.context/layouts-react-doctor-final.json`). Component behavior
+and the actual native Custom request are rechecked after extraction. Scanner
+coverage is source evidence, not physical input, metadata extraction or release
+qualification.
+
+## Structure review flow — 2026-11-07
+
+The final pinned changed-scope scan reports zero errors/ten reviewed presentation
+warnings (`.context/structure-flow-react-doctor-final.json`). The new structure
+workflow has no findings. Extract preset matching/description helpers and replace
+repeated metadata-category help branches with a typed lookup after an intermediate
+complexity finding. Generation-tagged build/validation state makes stale-request
+cleanup explicit and removes the preceding formatter loading-reset diagnostic.
+The existing selected-photo callback warning remains the previously documented
+synchronous reset, not an unhandled rejected await. No suppressions or remote
+score are introduced; source scans do not establish native/release qualification.

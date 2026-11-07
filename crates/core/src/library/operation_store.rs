@@ -118,6 +118,11 @@ impl Library {
         path: PathBuf,
         expected: (FileIdentity, String),
     ) -> Result<OrganizationPlanDetail> {
+        if input.template.missing_date == organization::MissingDatePolicy::Skip {
+            return Err(invalid(
+                "Skipping missing dates is a whole-library preview policy; executable selected-photo plans do not support it.",
+            ));
+        }
         let destination = self.organization_destination_for_root(
             input.asset_ids.clone(),
             input.template.clone(),
@@ -127,9 +132,10 @@ impl Library {
             input.destination_root_id.clone(),
         )?;
         let ids = input.asset_ids.clone();
+        let rules = input.template.clone();
         let (revision, sources) = self
             .catalog
-            .call(move |db| super::organization::snapshot(db, ids))?;
+            .call(move |db| super::organization::template_snapshot(db, ids, &rules))?;
         let preview = organization::preview(revision.clone(), input.template, sources.clone())?;
         if preview.fingerprint != input.preview_fingerprint
             || preview.catalog_revision != destination.catalog_revision
@@ -272,6 +278,7 @@ fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplat
         (uuid::Uuid::new_v4().to_string(), 1)
     };
     let stem_case = save.template.filename_stem_case.unwrap_or_default();
+    let skip_policy = save.template.missing_date == organization::MissingDatePolicy::Skip;
     let result = SavedTemplate {
         reference: TemplateRef { id, version },
         name: save.name.trim().into(),
@@ -279,7 +286,8 @@ fn save_template(db: &mut Connection, save: TemplateSave) -> Result<SavedTemplat
         created_at: store::now(),
         template: save.template,
         policies: TemplatePolicies {
-            schema_version: if stem_case == organization::FilenameStemCase::Preserve {
+            schema_version: if stem_case == organization::FilenameStemCase::Preserve && !skip_policy
+            {
                 1
             } else {
                 2
@@ -428,6 +436,97 @@ pub(crate) fn load(db: &Connection, id: &str) -> Result<StoredPlan> {
 mod tests {
     use super::*;
     use crate::organization::{MissingDatePolicy, OrganizationTemplate};
+    #[cfg(any(windows, target_os = "macos"))]
+    #[test]
+    fn skip_policy_refuses_executable_plan_before_destination_access() {
+        let owned = tempfile::tempdir().unwrap();
+        let data = owned.path().canonicalize().unwrap();
+        let catalog = std::sync::Arc::new(
+            crate::catalog::Catalog::open(data.join("Generated.stillharbour")).unwrap(),
+        );
+        let library = Library::new(
+            catalog.clone(),
+            super::super::LibraryOptions {
+                data_directory: data.clone(),
+                workers: super::super::WorkerPaths {
+                    executable: data.join("missing-worker"),
+                    exiftool: None,
+                    working_directory: data.join("worker"),
+                },
+            },
+        )
+        .unwrap();
+        let destination = data.join("absent-destination");
+        let error = library
+            .organization_plan_create(
+                PlanDraftInput {
+                    destination_root_id: None,
+                    asset_ids: vec![uuid::Uuid::new_v4().to_string()],
+                    template: OrganizationTemplate {
+                        pattern: "{capture:%Y}/{original_stem}.{ext}".into(),
+                        event: String::new(),
+                        missing_date: MissingDatePolicy::Skip,
+                        filename_stem_case: None,
+                    },
+                    preview_fingerprint: "no-preview-authority".into(),
+                    template_reference: None,
+                },
+                destination.clone(),
+                (
+                    FileIdentity {
+                        volume: 0,
+                        file: 0,
+                        links: 0,
+                    },
+                    String::new(),
+                ),
+            )
+            .unwrap_err();
+        assert!(error.message.contains("whole-library preview policy"));
+        assert!(!destination.exists());
+        let counts = catalog
+            .call(|db| {
+                Ok((
+                    db.query_row("SELECT count(*) FROM organization_plans", [], |r| {
+                        r.get::<_, u32>(0)
+                    })?,
+                    db.query_row("SELECT count(*) FROM operation_journal", [], |r| {
+                        r.get::<_, u32>(0)
+                    })?,
+                ))
+            })
+            .unwrap();
+        assert_eq!(counts, (0, 0));
+    }
+    #[test]
+    fn saved_skip_policy_is_explicitly_versioned_without_execution_authority() {
+        let mut db = Connection::open_in_memory().unwrap();
+        migrate(&db).unwrap();
+        let saved = save_template(
+            &mut db,
+            TemplateSave {
+                previous: None,
+                name: "Skip missing dates".into(),
+                description: String::new(),
+                samples: Vec::new(),
+                template: OrganizationTemplate {
+                    pattern: "{capture:%Y}/{original_stem}.{ext}".into(),
+                    event: String::new(),
+                    missing_date: MissingDatePolicy::Skip,
+                    filename_stem_case: None,
+                },
+            },
+        )
+        .unwrap();
+        assert_eq!(saved.policies.schema_version, 2);
+        assert_eq!(saved.template.missing_date, MissingDatePolicy::Skip);
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM organization_plans", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            0
+        );
+    }
     #[test]
     fn plan_content_is_retained_and_digest_and_catalog_binding_are_verified() {
         let mut db = Connection::open_in_memory().unwrap();
@@ -443,6 +542,7 @@ mod tests {
             revision: "1".into(),
             bytes: 42,
             capture: None,
+            metadata: None,
             available: true,
             companion_candidates: 0,
         }];
@@ -613,6 +713,7 @@ mod tests {
             samples: vec![crate::organization::TemplateSample {
                 relative_path: "Family/Photo.JPG".into(),
                 capture: None,
+                metadata: None,
                 sequence: 1,
                 expected_target: "wrong.JPG".into(),
             }],
@@ -678,6 +779,7 @@ mod tests {
             crate::organization::TemplateSample {
                 relative_path: "Family/Photo.JPG".into(),
                 capture: None,
+                metadata: None,
                 sequence: 1,
                 expected_target: format!("{folders}Photo.JPG"),
             };

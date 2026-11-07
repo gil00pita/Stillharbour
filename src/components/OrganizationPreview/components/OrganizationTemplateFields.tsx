@@ -1,43 +1,46 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import { NativeSelect } from '@/components/NativeSelect';
+import { OrganizationPresets } from '@/components/OrganizationPresets';
+import { SegmentedControl } from '@/components/SegmentedControl';
 import type { OrganizationTemplate } from '../../../bindings';
-import { presets } from '../presets';
 
 export function OrganizationTemplateFields({
   template,
   busy,
   onChange: update,
+  submitLabel = 'Build preview',
 }: {
   template: OrganizationTemplate;
   busy: boolean;
+  submitLabel?: string;
   onChange: (patch: Partial<OrganizationTemplate>) => void;
 }) {
   return (
-    <fieldset disabled={busy}>
-      <Field.Root asChild unstyled>
-        <label>
-          <Field.Label asChild unstyled>
-            <span>Preset</span>
-          </Field.Label>
-          <NativeSelect
-            value={presets.find((preset) => preset.pattern === template.pattern)?.pattern ?? ''}
-            onChange={(event) => {
-              if (event.target.value) update({ pattern: event.target.value });
-            }}
-          >
-            <option value="" disabled>
-              Custom template
-            </option>
-            {presets.map((preset) => (
-              <option key={preset.name} value={preset.pattern}>
-                {preset.name}
-              </option>
-            ))}
-          </NativeSelect>
-        </label>
-      </Field.Root>
+    <chakra.fieldset disabled={busy}>
+      <OrganizationPresets
+        pattern={template.pattern}
+        disabled={busy}
+        onChange={(pattern) =>
+          update({ pattern, ...(pattern.includes('{event}') ? {} : { event: '' }) })
+        }
+      />
+      {template.pattern.includes('{event}') && (
+        <Field.Root asChild unstyled required>
+          <label>
+            <Field.Label asChild unstyled>
+              <span>Event name</span>
+            </Field.Label>
+            <Input
+              required
+              maxLength={128}
+              value={template.event}
+              placeholder="For example, Lisbon-Trip"
+              onChange={(e) => update({ event: e.target.value })}
+            />
+          </label>
+        </Field.Root>
+      )}
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -53,73 +56,46 @@ export function OrganizationTemplateFields({
           />
         </label>
       </Field.Root>
-      <p className="help" id="organization-token-help">
+      <Text className="help" id="organization-token-help">
         Tokens:{' '}
-        {'{original_stem}, {original_folder}, {ext}, {event}, {capture:%Y-%m-%d}, {sequence:04}'}.
-        Keep the original extension. Unsafe names are blocked rather than silently renamed.
-      </p>
-      <div className="organization-options">
-        <Field.Root asChild unstyled>
-          <label>
-            <Field.Label asChild unstyled>
-              <span>Event name</span>
-            </Field.Label>
-            <Input
-              maxLength={128}
-              value={template.event}
-              onChange={(event) => update({ event: event.target.value })}
-            />
-          </label>
-        </Field.Root>
-        <Field.Root asChild unstyled>
-          <label>
-            <Field.Label asChild unstyled>
-              <span>When capture date is missing</span>
-            </Field.Label>
-            <NativeSelect
-              value={template.missingDate}
-              onChange={(event) =>
-                update({ missingDate: event.target.value === 'block' ? 'block' : 'undated' })
-              }
-            >
-              <option value="undated">Use Undated / original filename</option>
-              <option value="block">Block the affected photo</option>
-            </NativeSelect>
-          </label>
-        </Field.Root>
-        <Field.Root asChild unstyled>
-          <label>
-            <Field.Label asChild unstyled>
-              <span>Filename stem case</span>
-            </Field.Label>
-            <NativeSelect
-              value={template.filenameStemCase ?? 'preserve'}
-              aria-label="Filename stem case"
-              onChange={(event) =>
-                update({
-                  filenameStemCase:
-                    event.target.value === 'lowercase'
-                      ? 'lowercase'
-                      : event.target.value === 'uppercase'
-                        ? 'uppercase'
-                        : 'preserve',
-                })
-              }
-            >
-              <option value="preserve">Preserve</option>
-              <option value="lowercase">Lowercase</option>
-              <option value="uppercase">Uppercase</option>
-            </NativeSelect>
-          </label>
-        </Field.Root>
-      </div>
-      <p className="help">
+        {
+          '{capture:%Y-%m-%d}, {quarter}, {country}, {city}, {tag}, {brand}, {model}, {original_stem}, {ext}, {sequence:04}'
+        }
+        . Keep the original extension. Unsafe names are blocked rather than silently renamed.
+      </Text>
+      <Box className="organization-options">
+        <SegmentedControl
+          label="When capture date is missing"
+          value={template.missingDate}
+          disabled={busy}
+          choices={[
+            { value: 'undated', label: 'Use Undated folder' },
+            { value: 'block', label: 'Block photo' },
+            ...(template.missingDate === 'skip'
+              ? [{ value: 'skip' as const, label: 'Skip photo (preview only)' }]
+              : []),
+          ]}
+          onChange={(missingDate) => update({ missingDate })}
+        />
+        <SegmentedControl
+          label="Filename stem case"
+          value={template.filenameStemCase ?? 'preserve'}
+          disabled={busy}
+          choices={[
+            { value: 'preserve', label: 'Preserve' },
+            { value: 'lowercase', label: 'lowercase' },
+            { value: 'uppercase', label: 'UPPERCASE' },
+          ]}
+          onChange={(filenameStemCase) => update({ filenameStemCase })}
+        />
+      </Box>
+      <Text className="help">
         Stem case applies to proposed filenames, including Undated names. Folder names and extension
         case stay as previewed.
-      </p>
+      </Text>
       <Button type="submit" className="primary">
-        {busy ? 'Building preview…' : 'Build preview'}
+        {busy ? 'Building preview…' : submitLabel}
       </Button>
-    </fieldset>
+    </chakra.fieldset>
   );
 }

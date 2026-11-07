@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, List, Text } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Textarea } from '@/components/Textarea';
 import { useState } from 'react';
@@ -29,7 +29,7 @@ export function ScanOptions({
   return (
     <details className="scan-options">
       <summary>
-        <span>Advanced</span>
+        <Text as="span">Advanced</Text>
         <svg
           className="accordion-chevron"
           width="18"
@@ -47,8 +47,8 @@ export function ScanOptions({
           />
         </svg>
       </summary>
-      <div className="advanced-content">
-        <div className="scan-switches">
+      <Box className="advanced-content">
+        <Box className="scan-switches">
           <Switch
             label="Include hidden files"
             checked={filter.includeHiddenFiles}
@@ -61,12 +61,12 @@ export function ScanOptions({
             disabled={disabled}
             onChange={(value) => update('includeHiddenFolders', value)}
           />
-        </div>
-        <p className="help">
+        </Box>
+        <Text className="help">
           Add one value per tag with Enter or Tab. Hidden files and hidden folders are controlled
           separately.
-        </p>
-        <div className="form-grid">
+        </Text>
+        <Box className="form-grid">
           {scanTagFields.map(({ key, label, placeholder }) => (
             <TagInput
               key={key}
@@ -94,16 +94,18 @@ export function ScanOptions({
             disabled={disabled}
             onChange={(value) => update('maxBytes', value)}
           />
-        </div>
-        <p className="help">Size units use 1 KB = 1,000 bytes. Leave a size empty for no limit.</p>
-        <p className="help">
+        </Box>
+        <Text className="help">
+          Size units use 1 KB = 1,000 bytes. Leave a size empty for no limit.
+        </Text>
+        <Text className="help">
           File Extensions match regardless of letter case. This list controls discovery; previews
           depend on format support.
-        </p>
-        <p className="help">
+        </Text>
+        <Text className="help">
           Patterns use root-relative paths. Excluded folders win. Links, cloud placeholders and
           protected application folders are never opened.
-        </p>
+        </Text>
         <Field.Root asChild unstyled>
           <label>
             <Field.Label asChild unstyled>
@@ -139,15 +141,15 @@ export function ScanOptions({
           Preview filters
         </Button>
         {preview.length > 0 && (
-          <ul className="filter-preview">
+          <List.Root unstyled className="filter-preview">
             {Array.from(new Set(preview)).map((line) => (
-              <li key={line}>
+              <List.Item unstyled key={line}>
                 <bdi>{line}</bdi>
-              </li>
+              </List.Item>
             ))}
-          </ul>
+          </List.Root>
         )}
-      </div>
+      </Box>
     </details>
   );
 }

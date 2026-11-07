@@ -4,7 +4,7 @@ Owner-requested interface revision, 2026-11-05. The attached Duplicate Studio pr
 
 ## Navigation and search
 
-Secondary buttons use flat neutral fills without visible outlines; focus outlines and selected states remain visible. Utilities groups Duplicates, Integrity, Storage and Backup & Sync. Map remains library navigation. Jobs opens its existing nonmodal disclosure from the sidebar footer immediately above Settings, in expanded and collapsed navigation. Opening Jobs preserves the current workspace.
+Secondary buttons use flat neutral fills without visible outlines; focus outlines and selected states remain visible. Utilities groups Structure Formater, Duplicates, Integrity, Storage, Backup and Sync. Map remains library navigation. Jobs opens its full main-pane page from the sidebar footer immediately above Settings, in expanded and collapsed navigation. Opening Jobs preserves the current workspace.
 
 Photos, Albums / Tags and Map use one search field for filenames, calendar days and offline city/country suggestions. Typing continues ordinary filename/date searching. Choosing an explicit place clears the lookup text and applies its versioned GPS membership ID; subsequent text can narrow that place. Clear removes the place filter. Suggestions distinguish same-name cities, disclose GPS coverage, handle errors/retries, and support keyboard entry, Down to suggestions and Escape dismissal. The suggestion panel closes when a filename/date has no matching places, keeping the photo results clear. No separate Places button remains. Dates and location filters can still be combined through the filter panel.
 
@@ -42,7 +42,7 @@ The v3 anchored search composition follows [Chakra Popover](https://chakra-ui.co
 
 ## Scan setup, reconciliation and version history — 2026-11-05
 
-Duplicates, Integrity and Storage open with a welcome and the actual scan controls when no previous run exists. No empty duplicate studio or automatic first scan is shown. Choose registered libraries, scope and the tool's existing mode/properties before explicitly starting. Integrity baseline establishment still requires its own acknowledgement. Safe copy in Backup & Sync welcomes users into source/destination and verified/quick comparison setup; versioned backup retains its distinct profile setup and explicit approval flow.
+Duplicates, Integrity and Storage open with a welcome and the actual scan controls when no previous run exists. No empty duplicate studio or automatic first scan is shown. Choose registered libraries, scope and the tool's existing mode/properties before explicitly starting. Integrity baseline establishment still requires its own acknowledgement. Safe copy in Sync welcomes users into source/destination and verified/quick comparison setup; versioned backup retains its distinct profile setup and explicit approval flow.
 
 Returning to an inspection restores its saved settings and report. A new read-only reconciliation run checks current files in the background while the previous report stays visible. This intentionally rechecks on page entry rather than trusting timestamps or claiming a watcher detects every byte change. It is not continuous monitoring while the page stays open. A saved baseline-establishment run refreshes as **compare with baseline**, never another establishment. Existing running work is followed rather than duplicated. Another active inspection or unavailable roots leave saved results visible with a reason; missing previously registered roots remain selected until explicitly excluded from the next scan, so scope never narrows silently; no retry loop bypasses admission or offline checks. Canceled/failed refreshes retain the previous displayed report. Scope changes still require explicit Scan settings (Measurement details in Storage) and Start. Storage retains its explorer and clear results canvas: first-use setup is inline, measurement settings/progress/issues/coverage move into the header dialog after a report exists, version/background status sits below the primary title row, and the history icon stays in the header.
 
@@ -71,3 +71,35 @@ Latest HTML reference (2026-11-05, filters-top revision): place search and filte
 ## Compact Storage workspace — 2026-11-05
 
 The retained Storage explorer starts directly with the file filters, without an introductory paragraph, inline measurement setup, retained-inspection selector, job/status card, issue-review action or inventory coverage text. Concise version/background status sits below the primary title row, before the explorer. Before the first result, the utility welcome and real setup remain inline. The header's Measure storage / Measurement details button opens the native Storage measurement dialog containing the same explicit root/scope controls, start/cancel actions, current job, issues and coverage. The adjacent history icon selects retained versions. Close and Escape return focus to that header button. Escape is handled directly as well as through native dialog cancellation; a child control that consumes Escape keeps its interaction. Active work and incomplete coverage keep concise visible status; initial/error/no-report states remain explicit. Duplicates and Integrity retain their existing inline inspection interfaces. This presentation change preserves all native requests, original-file safeguards and read-only behavior.
+
+## Individual tool workspaces — 2026-11-07
+
+Backup opens the existing versioned snapshot/recovery workflow directly. Sync
+opens source/destination comparison and reviewed one-way transfer directly;
+there is no mode switch between them. Structure Formater opens directly on the
+folder/filename rules, with the entire indexed library as its fixed scope.
+Selection is not required. Native batches and result pages are bounded to 240,
+but sequence and conflict checks cover the complete library. Unavailable items
+are blocked rather than dropped. Saved templates/plans remain available. Actual
+restructuring stays disabled pending whole-library execution and recovery gates.
+Its Backup & sync check displays native active work, unresolved jobs and enabled
+backup schedules, including future schedules. It refreshes automatically and
+offers Check again after failures. Previewing remains available while blocked;
+the page never stops jobs or disables schedules automatically. Sync has no
+recurring scheduler yet. A clear check leaves the execution/recovery gate intact.
+The existing selected-photo name-preview/copy-plan workflow remains separate.
+The full page-by-page audit is in [UI_WORKSPACE_AUDIT.md](UI_WORKSPACE_AUDIT.md).
+
+Structure Formater's date-based presets use illustrated radio cards; the
+missing-date and stem-case options use labelled segmented controls. Event naming
+is removed from the form. Custom paths and saved-rule compatibility remain;
+choosing a different layout requires a new preview. See M2_ORGANIZATION_PREVIEWS
+for the exact patterns and compatibility boundary.
+
+The later expanded-layout request adds Date, Location, Tags, Camera and Custom
+category segments with 25 presets in total. Category browsing preserves the
+current rule until a preset is chosen. Custom is a searchable folder-chip builder
+with explicit literals, remove/reorder actions and a filename pattern. Metadata
+and ambiguous tag levels have explicit blocked states. The Event field is shown
+only when the rule uses Event; Trip is omitted. See ADR-0096 for exact token,
+compatibility, embedded-only location and reader-coverage semantics.

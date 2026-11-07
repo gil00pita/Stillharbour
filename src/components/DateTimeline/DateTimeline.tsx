@@ -1,3 +1,4 @@
+import { Box, Text, chakra, Button } from '@chakra-ui/react';
 import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import type { DateBucket } from '../../bindings';
 import {
@@ -155,20 +156,22 @@ export function DateTimeline({
     };
   }, []);
   return (
-    <nav
+    <chakra.nav
       ref={rail}
       className={`date-rail ${scrolling || dragging || focused ? 'is-scrolling' : ''}`}
       aria-label="Photo timeline"
       data-dragging={dragging}
       onPointerLeave={() => setHovered(null)}
     >
-      <span id={instructions} className="screen-reader-status">
+      <Text as="span" id={instructions} className="screen-reader-status">
         Drag to navigate through photos. Arrow keys move one photo; Home and End go to the newest
         and oldest photos. Escape stops dragging.
-      </span>
-      <div className="timeline-year-labels">
+      </Text>
+      <Box className="timeline-year-labels">
         {timelineYears(buckets, periods, current.year, height).map(({ bucket, top }) => (
-          <button
+          <Button
+            unstyled
+            type="submit"
             key={bucket.year}
             aria-current={bucket.year === current.year ? 'date' : undefined}
             aria-label={`Jump to ${bucket.year}, ${bucket.count} photos`}
@@ -179,9 +182,9 @@ export function DateTimeline({
             }}
           >
             {bucket.year}
-          </button>
+          </Button>
         ))}
-      </div>
+      </Box>
       <input
         ref={slider}
         className="date-scrubber"
@@ -258,16 +261,18 @@ export function DateTimeline({
         }}
         onPointerLeave={() => setHovered(null)}
       />
-      <div className="date-scrubber-track">
+      <Box className="date-scrubber-track">
         {timelineTicks(periods, height).map((tick) => (
-          <span
+          <Text
+            as="span"
             key={tick.period}
             className="timeline-tick"
             style={{ top: `${tick.position * 100}%` }}
           />
         ))}
         <i style={{ top: `${(value / denominator) * 100}%` }} />
-        <span
+        <Text
+          as="span"
           className="timeline-preview-marker"
           aria-hidden="true"
           style={{ top: `${(labelIndex / denominator) * 100}%` }}
@@ -284,7 +289,7 @@ export function DateTimeline({
         >
           {label}
         </output>
-      </div>
-    </nav>
+      </Box>
+    </chakra.nav>
   );
 }

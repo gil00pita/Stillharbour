@@ -1,5 +1,5 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
-import { Box, Field, useRecipe } from '@chakra-ui/react';
+import { Box, Field, useRecipe, Text, chakra } from '@chakra-ui/react';
 import type { AssetQuery, CatalogCollection, LibraryStatus } from '../../bindings';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -84,9 +84,9 @@ export function AlbumEditor({
       busy={busy}
       footer={
         <>
-          <span role="status">
+          <Text as="span" role="status">
             {selected.size} photos selected <small>· up to 500 per save</small>
-          </span>
+          </Text>
           <Button type="button" disabled={busy} onClick={onClose}>
             Cancel
           </Button>
@@ -106,19 +106,19 @@ export function AlbumEditor({
       }}
     >
       <Box css={styles}>
-        <form
+        <chakra.form
           id={formId}
           onSubmit={(e) => {
             e.preventDefault();
             void save();
           }}
         >
-          <p className="album-hint">
+          <Text className="album-hint">
             {album
               ? 'Choose photos from your library to add to this album.'
               : 'Give it a name, then choose the photos that belong.'}{' '}
             Originals stay in place.
-          </p>
+          </Text>
           {!album && (
             <Field.Root required invalid={Boolean(error)}>
               <Field.Label>Album name</Field.Label>
@@ -143,7 +143,7 @@ export function AlbumEditor({
               disabled={busy}
             />
           </Field.Root>
-          <div className="album-picker" aria-label="Choose album photos">
+          <Box className="album-picker" aria-label="Choose album photos">
             {feed.page?.assets.length ? (
               <AssetBrowser
                 assets={feed.page.assets}
@@ -165,18 +165,18 @@ export function AlbumEditor({
                 grouping={null}
               />
             ) : (
-              <p role="status">
+              <Text role="status">
                 {feed.loading ? 'Loading photos…' : 'No matching photos in your library.'}
-              </p>
+              </Text>
             )}
-          </div>
-          {error && <p role="alert">{error}</p>}
+          </Box>
+          {error && <Text role="alert">{error}</Text>}
           {feed.error && (
             <Button type="button" onClick={feed.retry}>
               Retry photos
             </Button>
           )}
-        </form>
+        </chakra.form>
       </Box>
     </InspectionDialog>
   );

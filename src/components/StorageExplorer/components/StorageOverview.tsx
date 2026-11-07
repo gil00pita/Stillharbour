@@ -1,3 +1,4 @@
+import { Box, Heading, Text, chakra } from '@chakra-ui/react';
 import type {
   InspectionFinding,
   InspectionVolume,
@@ -35,29 +36,31 @@ export function StorageOverview({
 }) {
   const loadedBytes = totalBytes(files);
   return (
-    <section className="storage-overview" aria-label="Storage overview">
-      <div className="storage-overview-heading">
-        <h2>Selected libraries</h2>
+    <chakra.section className="storage-overview" aria-label="Storage overview">
+      <Box className="storage-overview-heading">
+        <Heading as="h2" unstyled>
+          Selected libraries
+        </Heading>
         <strong>{displayBytes(summary.total.logicalBytes)} in scanned files</strong>
-      </div>
-      {volumes.length === 0 && <p>Drive capacity unavailable · Free space unknown</p>}
+      </Box>
+      {volumes.length === 0 && <Text>Drive capacity unavailable · Free space unknown</Text>}
       {volumes.map((volume) => {
         const segments = driveSegments(volume.totalBytes, volume.availableBytes);
         const name = volume.rootIds
           .map((id) => roots.find((root) => root.id === id)?.label ?? 'Previously registered root')
           .join(', ');
         return (
-          <section key={volume.id} aria-label={`Drive usage for ${name}`}>
-            <div className="storage-overview-heading">
+          <chakra.section key={volume.id} aria-label={`Drive usage for ${name}`}>
+            <Box className="storage-overview-heading">
               <b>{name}</b>
-              <span>
+              <Text as="span">
                 {segments
                   ? `${displayBytes(segments.used)} of ${displayBytes(segments.capacity)} used · ${displayBytes(segments.free)} available`
                   : `Capacity: ${displayBytes(volume.totalBytes)} · Free space ${volume.availableBytes === null ? 'unknown' : displayBytes(volume.availableBytes)}`}
-              </span>
-            </div>
+              </Text>
+            </Box>
             {segments && (
-              <div
+              <Box
                 className="storage-bar"
                 aria-label={`Drive storage: ${displayBytes(segments.free)} available`}
               >
@@ -69,7 +72,8 @@ export function StorageOverview({
                 ).map(
                   ([label, bytes, color]) =>
                     byteValuePositive(bytes) && (
-                      <span
+                      <Text
+                        as="span"
                         key={label}
                         tabIndex={0}
                         style={{
@@ -81,23 +85,23 @@ export function StorageOverview({
                       />
                     ),
                 )}
-              </div>
+              </Box>
             )}
             <small>
               Observed {volume.observedAt} · {volume.coverage}. Used space includes files outside
               this inspection.
             </small>
-          </section>
+          </chakra.section>
         );
       })}
-      <div className="storage-overview-heading">
+      <Box className="storage-overview-heading">
         <b>File types · logical size</b>
-        <span>
+        <Text as="span">
           {complete ? 'Loaded inspection' : 'Loaded file observations only'} ·{' '}
           {displayBytes(loadedBytes)}
-        </span>
-      </div>
-      <div className="storage-bar" aria-label="Scanned file-type breakdown">
+        </Text>
+      </Box>
+      <Box className="storage-bar" aria-label="Scanned file-type breakdown">
         {categories.map((category) => {
           const entries = files.filter((file) => categoryOf(file) === category);
           const bytes = totalBytes(entries);
@@ -117,8 +121,8 @@ export function StorageOverview({
             )
           );
         })}
-      </div>
-      <div className="storage-legend" aria-label="File-type legend">
+      </Box>
+      <Box className="storage-legend" aria-label="File-type legend">
         {categories.map((category) => {
           const entries = files.filter((file) => categoryOf(file) === category);
           return (
@@ -134,25 +138,25 @@ export function StorageOverview({
             )
           );
         })}
-      </div>
+      </Box>
       <details>
         <summary>How storage is counted · Read only</summary>
-        <p>
+        <Text>
           Drive usage is measured by the filesystem. File-type totals describe logical file sizes
           and may count hard-linked paths more than once; they cannot be subtracted from physical
           drive usage. Unknown or unscanned used space remains included in Used space. Filters,
           navigation and simulations never change these totals.
-        </p>
-        <p>
+        </Text>
+        <Text>
           Hard links counted once: {displayBytes(summary.total.uniqueObjectLogicalBytes)} · Reported
           allocation: {displayBytes(summary.total.reportedAllocatedBytes)}. Recoverable disk space
           is unknown. Same-volume quarantine frees {displayBytes(summary.quarantineFreedBytes)}.
-        </p>
+        </Text>
         {summary.accountingIncomplete && (
-          <p>Object accounting reached its bound; unknown metrics remain unmeasured.</p>
+          <Text>Object accounting reached its bound; unknown metrics remain unmeasured.</Text>
         )}
       </details>
-    </section>
+    </chakra.section>
   );
 }
 function byteValuePositive(value: string) {

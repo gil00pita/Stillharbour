@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -84,8 +84,14 @@ export function OrganizationTemplates({
     }
   }
   return (
-    <section className="organization-destination" aria-label="Saved templates" aria-busy={busy}>
-      <h3>Saved templates</h3>
+    <chakra.section
+      className="organization-destination"
+      aria-label="Saved templates"
+      aria-busy={busy}
+    >
+      <Heading as="h3" unstyled>
+        Saved templates
+      </Heading>
       <Button type="button" disabled={busy} onClick={() => void run(false)}>
         Load saved templates
       </Button>
@@ -181,22 +187,22 @@ export function OrganizationTemplates({
             </Button>
           )}
           {selected && (
-            <p role="status">
+            <Text role="status">
               Retained version {selected.reference.version}. Load it explicitly to use its saved
               settings.
-            </p>
+            </Text>
           )}
-          <p className="help">
+          <Text className="help">
             Each save retains an immutable version. Editing the preview does not change earlier
             plans.
-          </p>
+          </Text>
         </>
       )}
       {error && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {error}
-        </p>
+        </Text>
       )}
-    </section>
+    </chakra.section>
   );
 }

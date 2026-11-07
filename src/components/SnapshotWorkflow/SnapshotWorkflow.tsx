@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -40,22 +40,22 @@ function Evidence({
 }) {
   return (
     <dl className="backup-evidence">
-      <div>
+      <Box>
         <dt>Included in snapshot</dt>
         <dd>{value.included ? 'Recorded' : 'Not established'}</dd>
-      </div>
-      <div>
+      </Box>
+      <Box>
         <dt>Repository structure checked</dt>
         <dd>{value.structuralChecked ? 'Recorded' : 'Not established'}</dd>
-      </div>
-      <div>
+      </Box>
+      <Box>
         <dt>Stored data read and verified</dt>
         <dd>{value.dataReadVerified ? 'Recorded' : 'Not established'}</dd>
-      </div>
-      <div>
+      </Box>
+      <Box>
         <dt>Restored and byte-compared</dt>
         <dd>{value.restoredCompared ? 'Recorded' : 'Not established'}</dd>
-      </div>
+      </Box>
     </dl>
   );
 }
@@ -139,28 +139,32 @@ export function SnapshotWorkflow({
     return [id, root?.displayPath, root?.availability];
   });
   return (
-    <div className="backup-workspace">
+    <Box className="backup-workspace">
       {!loading && !profiles.length && (
         <UtilityWelcome
           title="Keep earlier versions within reach."
           description="Create a versioned backup profile to review its scope and destination. Backups and restores always need a separate review and approval."
         />
       )}
-      <h2>Encrypted versioned backup</h2>
-      <p>
+      <Heading as="h2" unstyled>
+        Encrypted versioned backup
+      </Heading>
+      <Text>
         Snapshots retain earlier versions in a restic repository. They need the repository recovery
         password and a verified restore to establish recoverability.
-      </p>
-      <p>
+      </Text>
+      <Text>
         This is separate from a readable safe copy. Removing a source does not automatically delete
         earlier snapshots.
-      </p>
-      <section className="backup-recovery" aria-label="Latest retained catalog">
-        <h3>Catalog saved before the latest switch</h3>
-        <p>
+      </Text>
+      <chakra.section className="backup-recovery" aria-label="Latest retained catalog">
+        <Heading as="h3" unstyled>
+          Catalog saved before the latest switch
+        </Heading>
+        <Text>
           Review the local catalog saved before your latest restore. Stillharbour checks that it is
           available and saves your current edits before preparing another switch.
-        </p>
+        </Text>
         {capabilities?.latestRetainedCatalogTransactionId && catalogId ? (
           <RetainedCatalogRestore
             key={catalogReviewEpoch}
@@ -170,28 +174,30 @@ export function SnapshotWorkflow({
             onActivityChange={onRetainedActivity}
           />
         ) : (
-          <p role="status">
+          <Text role="status">
             {!capabilities
               ? 'Local retained-catalog availability has not been established.'
               : !capabilities.latestRetainedCatalogTransactionId
                 ? 'No eligible local retained-catalog source is available in this session.'
                 : 'Current catalog identity is unavailable; a retained-catalog review cannot start.'}
-          </p>
+          </Text>
         )}
-      </section>
+      </chakra.section>
       {capabilityError && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {capabilityError}
-        </p>
+        </Text>
       )}
-      {loading && <p role="status">Loading snapshot profiles…</p>}
+      {loading && <Text role="status">Loading snapshot profiles…</Text>}
       {error && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {error}
-        </p>
+        </Text>
       )}
-      {capabilities?.unavailableReason && <p role="status">{capabilities.unavailableReason}</p>}
-      <div className="backup-controls">
+      {capabilities?.unavailableReason && (
+        <Text role="status">{capabilities.unavailableReason}</Text>
+      )}
+      <Box className="backup-controls">
         <Field.Root asChild unstyled>
           <label>
             <Field.Label asChild unstyled>
@@ -232,17 +238,17 @@ export function SnapshotWorkflow({
         >
           Refresh snapshot profiles
         </Button>
-      </div>
+      </Box>
       {!loading && !profiles.length && !error && (
-        <p>
+        <Text>
           No encrypted snapshot profiles are recorded. Create one using the current base library.
-        </p>
+        </Text>
       )}
       {selectedId && !selected && !loading && (
-        <p role="alert">
+        <Text role="alert">
           This profile is unavailable. Refresh profiles; a missing profile is not an empty
           repository.
-        </p>
+        </Text>
       )}
       {showSetup && (
         <SnapshotProfileForm
@@ -286,17 +292,19 @@ export function SnapshotWorkflow({
         />
       )}
       {capabilities && (
-        <aside className="backup-helper-limits">
-          <h3>Transfer and schedule limits</h3>
-          <p>{capabilities.helperLimits}</p>
-          <p>{capabilities.scheduleLimits}</p>
-          <p>
+        <chakra.aside className="backup-helper-limits">
+          <Heading as="h3" unstyled>
+            Transfer and schedule limits
+          </Heading>
+          <Text>{capabilities.helperLimits}</Text>
+          <Text>{capabilities.scheduleLimits}</Text>
+          <Text>
             Upload progress, a structural check and a restored-byte comparison are separate evidence
             levels. None alone proves an independent failure domain.
-          </p>
-        </aside>
+          </Text>
+        </chakra.aside>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -529,52 +537,64 @@ function SnapshotProfileWorkspace({
     onProfileUpdated(value);
   }
   return (
-    <section aria-label="Snapshot profile workspace" aria-busy={busy} className="backup-operation">
-      <h3>{profile.label}</h3>
-      <div className="backup-scope">
-        <section aria-label="Snapshot source roots">
-          <h4>Bound source roots</h4>
-          <ul>
+    <chakra.section
+      aria-label="Snapshot profile workspace"
+      aria-busy={busy}
+      className="backup-operation"
+    >
+      <Heading as="h3" unstyled>
+        {profile.label}
+      </Heading>
+      <Box className="backup-scope">
+        <chakra.section aria-label="Snapshot source roots">
+          <Heading as="h4" unstyled>
+            Bound source roots
+          </Heading>
+          <List.Root unstyled>
             {profile.rootIds.map((id) => {
               const root = status.roots.find((root) => root.id === id);
               return (
-                <li key={id}>
+                <List.Item unstyled key={id}>
                   <strong>{root?.label ?? 'Unavailable root'}</strong> · Last observed access:{' '}
                   {root?.availability ?? 'not registered'}
-                  <p className="backup-path">{root?.displayPath ?? id}</p>
-                </li>
+                  <Text className="backup-path">{root?.displayPath ?? id}</Text>
+                </List.Item>
               );
             })}
-          </ul>
-          <p>
+          </List.Root>
+          <Text>
             This profile keeps these root identities when the base library changes. Offline roots
             remain part of the expected scope.
-          </p>
-        </section>
-        <section aria-label="Snapshot repository">
-          <h4>Encrypted repository</h4>
-          <p className="backup-path">{profile.destinationDisplay}</p>
-          <p>
+          </Text>
+        </chakra.section>
+        <chakra.section aria-label="Snapshot repository">
+          <Heading as="h4" unstyled>
+            Encrypted repository
+          </Heading>
+          <Text className="backup-path">{profile.destinationDisplay}</Text>
+          <Text>
             {profile.protocol} · {profile.status.replaceAll('_', ' ')}
-          </p>
-          <p className="backup-path">
+          </Text>
+          <Text className="backup-path">
             Repository identity: {profile.repositoryId ?? 'Not established yet'}
-          </p>
+          </Text>
           {profile.hostFingerprint && (
-            <p className="backup-path">Configured host fingerprint: {profile.hostFingerprint}</p>
+            <Text className="backup-path">
+              Configured host fingerprint: {profile.hostFingerprint}
+            </Text>
           )}
-          <p>
+          <Text>
             Credentials:{' '}
             {profile.credentialsPresent
               ? 'Present in this device’s vault'
               : 'Unavailable or locked — unlock before starting'}
-          </p>
+          </Text>
           {profile.insecureTransport && (
-            <p>Plain FTP credentials and connection metadata are unencrypted.</p>
+            <Text>Plain FTP credentials and connection metadata are unencrypted.</Text>
           )}
-        </section>
-      </div>
-      <div className="backup-controls">
+        </chakra.section>
+      </Box>
+      <Box className="backup-controls">
         <Button
           disabled={busy || Boolean(running)}
           onClick={() =>
@@ -626,29 +646,29 @@ function SnapshotProfileWorkspace({
         >
           Refresh snapshot history
         </Button>
-      </div>
+      </Box>
       {profile.protocol === 'local' && (
-        <p>
+        <Text>
           Reauthorization requires a fresh native selection of this profile's repository parent. A
           different storage identity is not silently adopted.
-        </p>
+        </Text>
       )}
       <details className="backup-key-recovery">
         <summary>Repository password recovery</summary>
-        <p>
+        <Text>
           Encrypted snapshots require the repository password. Keep an independent recovery copy;
           losing the secret can make the backup unreadable.
-        </p>
-        <p>
+        </Text>
+        <Text>
           Export writes an unencrypted recovery key into a new file selected through the native
           dialog. Store that file separately and protect it from disclosure.
-        </p>
-        <p>
+        </Text>
+        <Text>
           Unlock uses a native secret dialog and creates a new profile credential binding. Previous
           credentials and repository history remain retained. Enter the existing repository
           password; choosing another password does not recover encrypted data.
-        </p>
-        <div className="backup-controls">
+        </Text>
+        <Box className="backup-controls">
           <Button
             disabled={busy || Boolean(running) || !capabilities?.credentialsAvailable}
             onClick={() => void action(() => unlock('repository'))}
@@ -663,7 +683,7 @@ function SnapshotProfileWorkspace({
               Unlock remote credentials…
             </Button>
           )}
-        </div>
+        </Box>
         <Button
           disabled={busy || !capabilities?.credentialsAvailable}
           onClick={() =>
@@ -678,13 +698,13 @@ function SnapshotProfileWorkspace({
         >
           Export repository recovery key…
         </Button>
-        {exportMessage && <p role="status">{exportMessage}</p>}
+        {exportMessage && <Text role="status">{exportMessage}</Text>}
       </details>
       {!profile.credentialsPresent && (
-        <p role="status">
+        <Text role="status">
           One or more required credentials are unavailable or locked on this device. A successful
           old upload cannot substitute for the repository recovery password.
-        </p>
+        </Text>
       )}
       {review && (
         <SnapshotReviewPanel
@@ -745,24 +765,26 @@ function SnapshotProfileWorkspace({
         />
       )}
       {error && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {error}
-        </p>
+        </Text>
       )}
       {historyError && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {historyError}
-        </p>
+        </Text>
       )}
-      {loading && <p role="status">Loading snapshots and job history…</p>}
+      {loading && <Text role="status">Loading snapshots and job history…</Text>}
       {!loading && !snapshots.length && !historyError && (
-        <p>
+        <Text>
           No application snapshots are recorded for this profile. This does not prove that an
           unavailable repository is empty.
-        </p>
+        </Text>
       )}
-      <div className="backup-controls">
-        <h4>Snapshot history</h4>
+      <Box className="backup-controls">
+        <Heading as="h4" unstyled>
+          Snapshot history
+        </Heading>
         <UtilityHistory
           versions={snapshots.map((snapshot) => ({
             id: snapshot.id,
@@ -782,8 +804,8 @@ function SnapshotProfileWorkspace({
             setApproval(null);
           }}
         />
-      </div>
-      <ul className="backup-job-list">
+      </Box>
+      <List.Root unstyled className="backup-job-list">
         {snapshots
           .filter(
             (snapshot) =>
@@ -791,17 +813,17 @@ function SnapshotProfileWorkspace({
               (snapshots.find((value) => value.id === versionId)?.id ?? snapshots[0]?.id),
           )
           .map((snapshot) => (
-            <li className="backup-job" key={snapshot.id}>
-              <h5>
+            <List.Item unstyled className="backup-job" key={snapshot.id}>
+              <Heading as="h5" unstyled>
                 {snapshot.time} · {snapshot.files} files · {snapshot.bytes} content bytes
-              </h5>
-              <p className="backup-path">Snapshot {snapshot.id}</p>
+              </Heading>
+              <Text className="backup-path">Snapshot {snapshot.id}</Text>
               <Evidence value={snapshot} />
-              <p>
+              <Text>
                 Catalog included: {snapshot.catalogIncluded ? 'Yes' : 'Not established'} · Source
                 retained: {snapshot.sourceRetained ? 'Yes' : 'Not established'}
-              </p>
-              <div className="backup-controls">
+              </Text>
+              <Box className="backup-controls">
                 <Button
                   disabled={busy}
                   aria-pressed={snapshotId === snapshot.id}
@@ -852,49 +874,57 @@ function SnapshotProfileWorkspace({
                 >
                   Review restore to new output…
                 </Button>
-              </div>
-            </li>
+              </Box>
+            </List.Item>
           ))}
-      </ul>
+      </List.Root>
       {selectedSnapshot && (
-        <section className="backup-entry-details" aria-label="Snapshot browser">
-          <h4>Snapshot {selectedSnapshot.time}</h4>
-          <p>
+        <chakra.section className="backup-entry-details" aria-label="Snapshot browser">
+          <Heading as="h4" unstyled>
+            Snapshot {selectedSnapshot.time}
+          </Heading>
+          <Text>
             The browser is read-only. Restore review currently covers the whole selected application
             snapshot, including its catalog; paging does not change that scope.
-          </p>
-          {browseLoading && <p role="status">Loading snapshot entries…</p>}
+          </Text>
+          {browseLoading && <Text role="status">Loading snapshot entries…</Text>}
           {browseError && (
-            <p className="error" role="alert">
+            <Text className="error" role="alert">
               {browseError}
-            </p>
+            </Text>
           )}
           {browse && (
             <>
-              <div className="backup-table">
-                <table>
-                  <caption>Stored snapshot entries</caption>
-                  <thead>
-                    <tr>
-                      <th>Relative path</th>
-                      <th>Kind</th>
-                      <th>Bytes</th>
-                      <th>Stored content evidence</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <Box className="backup-table">
+                <Table.Root unstyled>
+                  <Table.Caption unstyled captionSide="top">
+                    Stored snapshot entries
+                  </Table.Caption>
+                  <Table.Header unstyled>
+                    <Table.Row unstyled>
+                      <Table.ColumnHeader unstyled>Relative path</Table.ColumnHeader>
+                      <Table.ColumnHeader unstyled>Kind</Table.ColumnHeader>
+                      <Table.ColumnHeader unstyled>Bytes</Table.ColumnHeader>
+                      <Table.ColumnHeader unstyled>Stored content evidence</Table.ColumnHeader>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body unstyled>
                     {browse.entries.map((entry) => (
-                      <tr key={entry.id}>
-                        <td className="backup-path">{entry.displayPath}</td>
-                        <td>{entry.kind}</td>
-                        <td>{entry.bytes}</td>
-                        <td className="backup-path">{entry.digest ?? 'Not recorded'}</td>
-                      </tr>
+                      <Table.Row unstyled key={entry.id}>
+                        <Table.Cell unstyled className="backup-path">
+                          {entry.displayPath}
+                        </Table.Cell>
+                        <Table.Cell unstyled>{entry.kind}</Table.Cell>
+                        <Table.Cell unstyled>{entry.bytes}</Table.Cell>
+                        <Table.Cell unstyled className="backup-path">
+                          {entry.digest ?? 'Not recorded'}
+                        </Table.Cell>
+                      </Table.Row>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="backup-controls">
+                  </Table.Body>
+                </Table.Root>
+              </Box>
+              <Box className="backup-controls">
                 <Button
                   disabled={browseOffset === 0 || browseLoading}
                   onClick={() => {
@@ -905,10 +935,10 @@ function SnapshotProfileWorkspace({
                 >
                   Previous snapshot entries
                 </Button>
-                <span>
+                <Text as="span">
                   Entries {browse.entries.length ? browseOffset + 1 : 0}–
                   {browseOffset + browse.entries.length} of {browse.total}
-                </span>
+                </Text>
                 <Button
                   disabled={browse.nextOffset === null || browseLoading}
                   onClick={() => {
@@ -919,7 +949,7 @@ function SnapshotProfileWorkspace({
                 >
                   Next snapshot entries
                 </Button>
-              </div>
+              </Box>
             </>
           )}
           <Button
@@ -931,31 +961,33 @@ function SnapshotProfileWorkspace({
           >
             Close snapshot browser
           </Button>
-        </section>
+        </chakra.section>
       )}
       <details>
         <summary>Retention preview</summary>
-        <p>
+        <Text>
           Keep all {snapshots.length} listed snapshots. No automatic pruning, forgetting or history
           expiry is enabled. Source removal does not authorize deleting repository history.
-        </p>
-        <p>
+        </Text>
+        <Text>
           This is the application's recorded snapshot history; an incomplete or unavailable
           repository is not treated as empty.
-        </p>
+        </Text>
       </details>
-      <h4>Snapshot jobs</h4>
-      <ul className="backup-job-list">
+      <Heading as="h4" unstyled>
+        Snapshot jobs
+      </Heading>
+      <List.Root unstyled className="backup-job-list">
         {jobs.map((job) => (
-          <li key={job.id} className="backup-job">
-            <h5>
+          <List.Item unstyled key={job.id} className="backup-job">
+            <Heading as="h5" unstyled>
               {job.action.replaceAll('_', ' ')} · {job.state.replaceAll('_', ' ')}
-            </h5>
-            <p role="status">{job.message}</p>
-            <p>
+            </Heading>
+            <Text role="status">{job.message}</Text>
+            <Text>
               Phase: {job.phase.replaceAll('_', ' ')} · {job.files} files · {job.bytes} content
               bytes
-            </p>
+            </Text>
             <Evidence value={job} />
             <CatalogRestore
               job={job}
@@ -991,14 +1023,14 @@ function SnapshotProfileWorkspace({
                 }
               />
             )}
-            <p>
+            <Text>
               Source retained: {job.sourceRetained ? 'Yes' : 'Not established'} · Independent
               recovery:{' '}
               {job.independentRecoveryVerified
                 ? 'Verified for the recorded scope'
                 : 'Not established'}
-            </p>
-            {job.snapshotId && <p className="backup-path">Snapshot {job.snapshotId}</p>}
+            </Text>
+            {job.snapshotId && <Text className="backup-path">Snapshot {job.snapshotId}</Text>}
             {active(job) && (
               <Button
                 disabled={busy || job.state === 'cancel_requested'}
@@ -1013,9 +1045,9 @@ function SnapshotProfileWorkspace({
                 Cancel snapshot job
               </Button>
             )}
-          </li>
+          </List.Item>
         ))}
-      </ul>
+      </List.Root>
       <SnapshotSchedulePanel
         key={
           review?.action === 'backup'
@@ -1062,7 +1094,7 @@ function SnapshotProfileWorkspace({
           })
         }
       />
-    </section>
+    </chakra.section>
   );
 }
 
@@ -1090,96 +1122,102 @@ export function SnapshotReviewPanel({
     review.items.length === review.files &&
     (review.action !== 'backup' || review.catalogIncluded);
   return (
-    <section className="backup-review" aria-label="Snapshot action review">
-      <h4>
+    <chakra.section className="backup-review" aria-label="Snapshot action review">
+      <Heading as="h4" unstyled>
         {review.action === 'backup'
           ? 'Review encrypted snapshot backup'
           : 'Review restore to a new protected output'}
-      </h4>
-      <p className="backup-path">Target: {review.targetDisplay}</p>
-      <ul aria-label="Reviewed snapshot source paths">
+      </Heading>
+      <Text className="backup-path">Target: {review.targetDisplay}</Text>
+      <List.Root unstyled aria-label="Reviewed snapshot source paths">
         {review.sourceDisplayPaths.map((path, index) => (
-          <li className="backup-path" key={index}>
+          <List.Item unstyled className="backup-path" key={index}>
             {path}
-          </li>
+          </List.Item>
         ))}
-      </ul>
-      <p>
+      </List.Root>
+      <Text>
         Approve the entire {review.items.length}-entry manifest, including entries on other pages.
         Manifest digest: <code>{review.digest}</code>
-      </p>
-      <div className="backup-table">
-        <table>
-          <caption>Exact reviewed snapshot files</caption>
-          <thead>
-            <tr>
-              <th>Native display path</th>
-              <th>Bytes</th>
-              <th>Full digest</th>
-            </tr>
-          </thead>
-          <tbody>
+      </Text>
+      <Box className="backup-table">
+        <Table.Root unstyled>
+          <Table.Caption unstyled captionSide="top">
+            Exact reviewed snapshot files
+          </Table.Caption>
+          <Table.Header unstyled>
+            <Table.Row unstyled>
+              <Table.ColumnHeader unstyled>Native display path</Table.ColumnHeader>
+              <Table.ColumnHeader unstyled>Bytes</Table.ColumnHeader>
+              <Table.ColumnHeader unstyled>Full digest</Table.ColumnHeader>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body unstyled>
             {review.items.slice(offset, offset + 200).map((item, index) => (
-              <tr key={`${offset + index}:${item.displayPath}`}>
-                <td className="backup-path">{item.displayPath}</td>
-                <td>{item.bytes}</td>
-                <td>
+              <Table.Row unstyled key={`${offset + index}:${item.displayPath}`}>
+                <Table.Cell unstyled className="backup-path">
+                  {item.displayPath}
+                </Table.Cell>
+                <Table.Cell unstyled>{item.bytes}</Table.Cell>
+                <Table.Cell unstyled>
                   <code>{item.fullDigest}</code>
-                </td>
-              </tr>
+                </Table.Cell>
+              </Table.Row>
             ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="backup-controls">
+          </Table.Body>
+        </Table.Root>
+      </Box>
+      <Box className="backup-controls">
         <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
           Previous snapshot plan entries
         </Button>
-        <span>
+        <Text as="span">
           {Math.min(offset + 1, review.items.length)}–{Math.min(offset + 200, review.items.length)}{' '}
           of {review.items.length}
-        </span>
+        </Text>
         <Button
           disabled={offset + 200 >= review.items.length}
           onClick={() => setOffset(offset + 200)}
         >
           Next snapshot plan entries
         </Button>
-      </div>
-      <p>
+      </Box>
+      <Text>
         {review.files} files · {review.bytes} content bytes · Catalog included:{' '}
         {review.catalogIncluded ? 'Yes' : 'No'} · Source retained:{' '}
         {review.sourceRetained ? 'Yes' : 'Not confirmed'}
-      </p>
-      <p>
+      </Text>
+      <Text>
         Roots:{' '}
         {review.rootIds
           .map((id) => roots.find((root) => root.id === id)?.label ?? `Unavailable root ${id}`)
           .join(' · ')}
-      </p>
+      </Text>
       {review.issues.length > 0 && (
-        <ul aria-label="Snapshot review issues">
+        <List.Root unstyled aria-label="Snapshot review issues">
           {review.issues.map((issue, index) => (
-            <li key={index}>{issue}</li>
+            <List.Item unstyled key={index}>
+              {issue}
+            </List.Item>
           ))}
-        </ul>
+        </List.Root>
       )}
       {!review.executionAvailable && (
-        <p role="status">
+        <Text role="status">
           {review.unavailableReason ?? 'This action has not passed its required native gates.'}
-        </p>
+        </Text>
       )}
       {!safeScope && (
-        <p role="alert">
+        <Text role="alert">
           This review does not confirm the required source-retaining catalog scope. Refresh and
           review again before any action.
-        </p>
+        </Text>
       )}
-      <p>
+      <Text>
         {review.action === 'backup'
           ? 'Encrypted repository data requires the recovery password. Inclusion, structural checks, data reads and restored-byte comparison remain separate evidence.'
           : 'Restore writes into a new output namespace. It does not overwrite an active library or automatically reopen a restored catalog. Root mappings and history must be reconciled before further actions.'}
-      </p>
+      </Text>
       <label>
         <input
           type="checkbox"
@@ -1189,7 +1227,7 @@ export function SnapshotReviewPanel({
         />
         I reviewed this exact scope, target, listed issues and preservation policy
       </label>
-      <div className="backup-controls">
+      <Box className="backup-controls">
         {!approved ? (
           <Button
             disabled={busy || !review.executionAvailable || !safeScope || !acknowledged}
@@ -1209,8 +1247,8 @@ export function SnapshotReviewPanel({
         <Button disabled={busy} onClick={onClose}>
           Close snapshot action review
         </Button>
-      </div>
-    </section>
+      </Box>
+    </chakra.section>
   );
 }
 
@@ -1244,32 +1282,36 @@ function SnapshotSchedulePanel({
     review.sourceRetained,
   );
   return (
-    <section className="backup-review" aria-label="Snapshot schedule">
-      <h4>Repeat an exact reviewed backup</h4>
-      <p>{capabilities?.scheduleLimits ?? 'Checking scheduling capability…'}</p>
-      <p>
+    <chakra.section className="backup-review" aria-label="Snapshot schedule">
+      <Heading as="h4" unstyled>
+        Repeat an exact reviewed backup
+      </Heading>
+      <Text>{capabilities?.scheduleLimits ?? 'Checking scheduling capability…'}</Text>
+      <Text>
         Schedules run only while the Stillharbour process is running. Fully-quit execution is
         unavailable. Only UTC elapsed intervals are offered.
-      </p>
-      <p>
+      </Text>
+      <Text>
         New or changed files, source roots, versions or endpoints require a new review. This consent
         never expands automatically to new content.
-      </p>
-      {!review && <p>Review the backup scope above before configuring its repeating schedule.</p>}
-      {review && (
-        <p>
-          Current reviewed manifest: {review.files} files · {review.bytes} content bytes.
-        </p>
+      </Text>
+      {!review && (
+        <Text>Review the backup scope above before configuring its repeating schedule.</Text>
       )}
-      <form
+      {review && (
+        <Text>
+          Current reviewed manifest: {review.files} files · {review.bytes} content bytes.
+        </Text>
+      )}
+      <chakra.form
         onSubmit={(event) => {
           event.preventDefault();
           if (available && acknowledged && validInterval)
             onSave(Number(interval), enabled, catchUp);
         }}
       >
-        <fieldset disabled={busy || running || !available}>
-          <legend>Exact-scope recurring consent</legend>
+        <chakra.fieldset disabled={busy || running || !available}>
+          <chakra.legend>Exact-scope recurring consent</chakra.legend>
           <label>
             Interval in minutes
             <Input
@@ -1296,7 +1338,7 @@ function SnapshotSchedulePanel({
             />
             Allow one catch-up after sleep or restart when the reviewed manifest is unchanged
           </label>
-          <p>If unchecked, missed deadlines more than 30 seconds overdue are skipped.</p>
+          <Text>If unchecked, missed deadlines more than 30 seconds overdue are skipped.</Text>
           <label>
             <input
               type="checkbox"
@@ -1308,22 +1350,22 @@ function SnapshotSchedulePanel({
           <Button type="submit" disabled={!validInterval || !acknowledged}>
             Save snapshot schedule
           </Button>
-        </fieldset>
-      </form>
+        </chakra.fieldset>
+      </chakra.form>
       {schedule && (
-        <p>
+        <Text>
           {schedule.enabled ? 'Enabled' : 'Not enabled or authorization unavailable'} · Next due{' '}
           {schedule.nextDue || 'Not scheduled'} · {schedule.timezone} ·{' '}
           {schedule.dstPolicy.replaceAll('_', ' ')} · Last scheduled attempt{' '}
           {schedule.lastRun ?? 'Not recorded'}
           {!schedule.fullyQuitSupported && ' · Fully-quit execution unavailable'}
-        </p>
+        </Text>
       )}
       {schedule && (
         <Button disabled={busy} onClick={onDisable}>
           Disable future snapshot repeats
         </Button>
       )}
-    </section>
+    </chakra.section>
   );
 }

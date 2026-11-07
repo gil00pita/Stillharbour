@@ -1261,6 +1261,42 @@ async fn library_request(
             LibraryRequest::OrganizationCompanions { asset_id } => {
                 LibraryResponse::OrganizationCompanions(library.organization_companions(asset_id)?)
             }
+            LibraryRequest::OrganizationProtectionStatus {} => {
+                LibraryResponse::OrganizationProtectionStatus(
+                    library.organization_protection_status()?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryStart { template } => {
+                LibraryResponse::OrganizationLibraryPreview(
+                    library.organization_library_start(template)?,
+                )
+            }
+            LibraryRequest::OrganizationTemplateExamples { template } => {
+                LibraryResponse::OrganizationTemplateExamples(
+                    stillharbour_core::organization::template_examples(template)?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryQuery {
+                preview_id,
+                offset,
+                query,
+            } => LibraryResponse::OrganizationLibraryPreview(
+                library.organization_library_query(preview_id, offset, query)?,
+            ),
+            LibraryRequest::OrganizationLibraryAdvance { preview_id } => {
+                LibraryResponse::OrganizationLibraryPreview(
+                    library.organization_library_advance(preview_id)?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryPage { preview_id, offset } => {
+                LibraryResponse::OrganizationLibraryPreview(
+                    library.organization_library_page(preview_id, offset)?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryDiscard { preview_id } => {
+                library.organization_library_discard(preview_id)?;
+                LibraryResponse::Updated(0)
+            }
             LibraryRequest::OrganizationPreview {
                 asset_ids,
                 template,

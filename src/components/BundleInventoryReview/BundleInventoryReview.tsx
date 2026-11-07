@@ -1,3 +1,4 @@
+import { Box, Heading, List, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -150,19 +151,19 @@ export function BundleInventoryReview({
     }
   }
   return (
-    <section
+    <chakra.section
       className="organization-destination bundle-inventory"
       aria-label="Complete companion inventory"
       aria-busy={busy}
     >
-      <h3 ref={heading} tabIndex={-1}>
+      <Heading as="h3" unstyled ref={heading} tabIndex={-1}>
         Companions for <bdi>{row.sourcePath}</bdi>
-      </h3>
-      <p>
+      </Heading>
+      <Text>
         Read all filenames in this photo’s immediate folder, including files excluded from the
         gallery. No file contents are read or changed. Folders, links and placeholders stay at
         source. This review creates no copy approval.
-      </p>
+      </Text>
       <Button type="button" disabled={busy || changed} onClick={() => void run('inventory')}>
         {pending === 'inventory'
           ? 'Reading filenames…'
@@ -177,62 +178,68 @@ export function BundleInventoryReview({
         Close companion inventory
       </Button>
       {error && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {error}
-        </p>
+        </Text>
       )}
       {changed && (
-        <p role="alert">
+        <Text role="alert">
           The retained plan or source changed. Build a fresh saved plan before confirming
           companions.
-        </p>
+        </Text>
       )}
       {inventory && (
         <>
-          <p>
+          <Text>
             {inventory.entries.length} observed entries ·{' '}
             {selected.size +
               (inventory.entries.some((entry) => entry.relation === 'primary') ? 1 : 0)}{' '}
             files selected for review
-          </p>
+          </Text>
           {!inventory.inventoryComplete && (
-            <p role="alert">
+            <Text role="alert">
               The inventory is incomplete. Truncated, unreadable or unobserved entries block
               confirmation.
-            </p>
+            </Text>
           )}
           {(inventory.truncated || inventory.indexedLimitExceeded) && (
-            <p>Inventory limits were reached. This is not the complete folder scope.</p>
+            <Text>Inventory limits were reached. This is not the complete folder scope.</Text>
           )}
           {inventory.unobservedCandidates.length > 0 && (
             <>
-              <p>Indexed candidates not observed in this folder:</p>
-              <ul>
+              <Text>Indexed candidates not observed in this folder:</Text>
+              <List.Root unstyled>
                 {inventory.unobservedCandidates.map((name) => (
-                  <li key={name}>
+                  <List.Item unstyled key={name}>
                     <bdi>{name}</bdi>
-                  </li>
+                  </List.Item>
                 ))}
-              </ul>
+              </List.Root>
             </>
           )}
-          <div className="organization-table">
-            <table>
-              <caption ref={caption} tabIndex={-1}>
+          <Box className="organization-table">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top" ref={caption} tabIndex={-1}>
                 All observed folder entries · page {page + 1} of{' '}
                 {Math.max(1, Math.ceil(inventory.entries.length / PAGE_SIZE))}
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Include</th>
-                  <th scope="col">Name</th>
-                  <th scope="col">Observation</th>
-                </tr>
-              </thead>
-              <tbody>
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled scope="col">
+                    Include
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled scope="col">
+                    Name
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled scope="col">
+                    Observation
+                  </Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
                 {inventory.entries.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((entry) => (
-                  <tr key={entry.id}>
-                    <td>
+                  <Table.Row unstyled key={entry.id}>
+                    <Table.Cell unstyled>
                       <input
                         type="checkbox"
                         aria-label={`Include ${entry.name}`}
@@ -254,14 +261,14 @@ export function BundleInventoryReview({
                           setReviewed(false);
                         }}
                       />
-                    </td>
-                    <td>
+                    </Table.Cell>
+                    <Table.Cell unstyled>
                       <bdi>{entry.name}</bdi>
                       {!entry.nameRepresentable && (
-                        <p>Name cannot be represented by the template.</p>
+                        <Text>Name cannot be represented by the template.</Text>
                       )}
-                    </td>
-                    <td>
+                    </Table.Cell>
+                    <Table.Cell unstyled>
                       {kinds[entry.kind]} · {relations[entry.relation]} ·{' '}
                       {entry.bytes === null
                         ? 'Size unavailable'
@@ -270,13 +277,13 @@ export function BundleInventoryReview({
                       {entry.catalogAssetId
                         ? `Catalog: ${entry.catalogPresence ?? 'unknown'}`
                         : 'Not indexed in the catalog'}
-                      {entry.error && <p>{entry.error}</p>}
-                    </td>
-                  </tr>
+                      {entry.error && <Text>{entry.error}</Text>}
+                    </Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Table.Body>
+            </Table.Root>
+          </Box>
           <Button
             type="button"
             disabled={busy || page === 0}
@@ -291,16 +298,16 @@ export function BundleInventoryReview({
           >
             Next filenames
           </Button>
-          <p>
+          <Text>
             Include every possible same-stem, filename-sidecar and AppleDouble companion.
             Unsupported or ambiguous companions block confirmation. You may also include other
             regular files explicitly. At most 64 companions can be retained per photo.
-          </p>
+          </Text>
           {mandatoryMissing && (
-            <p>
+            <Text>
               Some possible companions are excluded or cannot be included. This bundle cannot be
               confirmed.
-            </p>
+            </Text>
           )}
           <label className="bundle-review-ack">
             <input
@@ -322,47 +329,47 @@ export function BundleInventoryReview({
         </>
       )}
       {confirmation && (
-        <section aria-label="Retained companion decision">
-          <p role="status">
+        <chakra.section aria-label="Retained companion decision">
+          <Text role="status">
             Companion review retained · {confirmation.files.length}{' '}
             {confirmation.files.length === 1 ? 'file' : 'files'} ·{' '}
             {BigInt(confirmation.totalBytes).toLocaleString()} bytes. Copying remains unavailable.
-          </p>
-          <ul>
+          </Text>
+          <List.Root unstyled>
             {confirmation.files.map((file) => (
-              <li key={file.entryId}>
+              <List.Item unstyled key={file.entryId}>
                 <bdi>{file.sourceName}</bdi> → <bdi>{file.targetRelativePath}</bdi>
-              </li>
+              </List.Item>
             ))}
-          </ul>
+          </List.Root>
           {onChoose && (
             <Button type="button" disabled={busy || changed} onClick={() => onChoose(confirmation)}>
               Use this decision in copy review
             </Button>
           )}
-        </section>
+        </chakra.section>
       )}
       {history && (
-        <section aria-label="Companion review history">
-          <p>
+        <chakra.section aria-label="Companion review history">
+          <Text>
             Retained decisions are not revalidated by loading history. Read all filenames again
             before any future operation.
-          </p>
+          </Text>
           {history.length === 0 ? (
-            <p>No retained companion reviews.</p>
+            <Text>No retained companion reviews.</Text>
           ) : (
-            <ul>
+            <List.Root unstyled>
               {history.map((record) => (
-                <li key={record.id}>
+                <List.Item unstyled key={record.id}>
                   <Button type="button" disabled={busy} onClick={() => setConfirmation(record)}>
                     View {record.files.length} files · review {record.id}
                   </Button>
-                </li>
+                </List.Item>
               ))}
-            </ul>
+            </List.Root>
           )}
-        </section>
+        </chakra.section>
       )}
-    </section>
+    </chakra.section>
   );
 }

@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 // Loaded only by desktop-test entry code. This is visibly generated-fixture
@@ -174,36 +174,38 @@ export function GeneratedRenameLab() {
         close();
       }}
     >
-      <header className="organization-heading">
-        <h2 id="rename-lab-title">Generated rename and undo fixture</h2>
+      <chakra.header className="organization-heading">
+        <Heading as="h2" unstyled id="rename-lab-title">
+          Generated rename and undo fixture
+        </Heading>
         <Button onClick={close}>Close fixture review</Button>
-      </header>
-      <div className="organization-body">
-        <p>
+      </chakra.header>
+      <Box className="organization-body">
+        <Text>
           Test instrumentation · disposable generated files only. Local retained versions are not
           independent recovery. Real-library mutations remain disabled.
-        </p>
-        {error && <p role="alert">{error} Inspect retained state before another action.</p>}
+        </Text>
+        {error && <Text role="alert">{error} Inspect retained state before another action.</Text>}
         {worker?.busy && (
-          <section aria-label="Active generated worker">
+          <chakra.section aria-label="Active generated worker">
             {worker.job && <OriginalJobProgress job={worker.job} />}
-            <p aria-live="polite">
+            <Text aria-live="polite">
               {worker.job
                 ? `${worker.completedMoves} / ${worker.totalMoves} journaled moves.`
                 : 'Preparing queued worker.'}{' '}
               {worker.stopRequested
                 ? 'Stop requested; finishing the current verification or journal boundary.'
                 : 'Native worker active.'}
-            </p>
+            </Text>
             <Button
               disabled={stopping || worker.stopRequested || !worker.job}
               onClick={() => void stop()}
             >
               Stop after current step
             </Button>
-          </section>
+          </chakra.section>
         )}
-        <fieldset disabled={busy || stopping || worker?.busy}>
+        <chakra.fieldset disabled={busy || stopping || worker?.busy}>
           {!review && !worker?.scopeCreated && (
             <>
               <Button onClick={() => void request({ kind: 'create' })}>
@@ -225,10 +227,10 @@ export function GeneratedRenameLab() {
                   <Input value={event} onChange={(e) => setEvent(e.target.value)} />
                 </label>
               </Field.Root>
-              <p>
+              <Text>
                 Five disposable payloads, including a same-stem XMP companion. No capture dates.
                 Filename templates only; missing dates block.
-              </p>
+              </Text>
               <Button
                 onClick={() =>
                   void request({
@@ -251,55 +253,57 @@ export function GeneratedRenameLab() {
           )}
           {review && (
             <>
-              <p role="status">
+              <Text role="status">
                 {review.reverse ? 'Undo' : 'Rename'} · {review.state} · {review.completedSteps} /{' '}
                 {review.totalSteps} journaled steps
-              </p>
-              <p>Plan: {review.planId}</p>
-              <p>
+              </Text>
+              <Text>Plan: {review.planId}</Text>
+              <Text>
                 {review.catalogCommitted
                   ? 'Catalog paths committed with stable asset IDs.'
                   : 'Catalog paths await the verified native operation and atomic catalog commit.'}
-              </p>
+              </Text>
               {review.state === 'needs_catalog_commit' && (
-                <p>
+                <Text>
                   Native movement is complete. Fresh approval checks the files and commits catalog
                   paths without repeating moves.
-                </p>
+                </Text>
               )}
               {review.jobs.length > 0 && (
-                <section aria-label="Durable organization jobs">
-                  <h3>Durable organization jobs</h3>
+                <chakra.section aria-label="Durable organization jobs">
+                  <Heading as="h3" unstyled>
+                    Durable organization jobs
+                  </Heading>
                   {review.jobs
                     .filter((job) => !worker?.busy || job.id !== worker.job?.id)
                     .map((job) => (
-                      <div key={job.id}>
+                      <Box key={job.id}>
                         <OriginalJobProgress job={job} />
                         <OriginalHistoryReview job={job} readHistory={readGeneratedHistory} />
-                      </div>
+                      </Box>
                     ))}
-                </section>
+                </chakra.section>
               )}
-              <table aria-label="Generated rename targets">
-                <thead>
-                  <tr>
-                    <th>Before</th>
-                    <th>After</th>
-                    <th>At last inspection</th>
-                    <th>Catalog path</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table.Root unstyled aria-label="Generated rename targets">
+                <Table.Header unstyled>
+                  <Table.Row unstyled>
+                    <Table.ColumnHeader unstyled>Before</Table.ColumnHeader>
+                    <Table.ColumnHeader unstyled>After</Table.ColumnHeader>
+                    <Table.ColumnHeader unstyled>At last inspection</Table.ColumnHeader>
+                    <Table.ColumnHeader unstyled>Catalog path</Table.ColumnHeader>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body unstyled>
                   {review.members.map((member) => (
-                    <tr key={member.id}>
-                      <td>{member.before}</td>
-                      <td>{member.after}</td>
-                      <td>{member.observed}</td>
-                      <td>{member.catalogPath}</td>
-                    </tr>
+                    <Table.Row unstyled key={member.id}>
+                      <Table.Cell unstyled>{member.before}</Table.Cell>
+                      <Table.Cell unstyled>{member.after}</Table.Cell>
+                      <Table.Cell unstyled>{member.observed}</Table.Cell>
+                      <Table.Cell unstyled>{member.catalogPath}</Table.Cell>
+                    </Table.Row>
                   ))}
-                </tbody>
-              </table>
+                </Table.Body>
+              </Table.Root>
               {review.state !== 'completed' && (
                 <>
                   <label>
@@ -344,9 +348,9 @@ export function GeneratedRenameLab() {
               )}
             </>
           )}
-        </fieldset>
-        {busy && <p role="status">Checking generated native state…</p>}
-      </div>
+        </chakra.fieldset>
+        {busy && <Text role="status">Checking generated native state…</Text>}
+      </Box>
     </dialog>
   );
 }

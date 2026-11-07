@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import { useEffect, useRef, useState } from 'react';
@@ -87,8 +87,8 @@ export function KeeperControls({
       : ids.filter((value) => value !== id);
   }
   return (
-    <fieldset disabled={busy}>
-      <legend>Backend keeper review</legend>
+    <chakra.fieldset disabled={busy}>
+      <chakra.legend>Backend keeper review</chakra.legend>
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -109,14 +109,14 @@ export function KeeperControls({
           </NativeSelect>
         </label>
       </Field.Root>
-      <p>
+      <Text>
         Explicit keep choices and protected folders take priority. Preferred folders follow the
         order selected. Unknown dates require review; date ties use stable IDs. Changes take effect
         in a newly retained review.
-      </p>
+      </Text>
       {folders.map(([id, path]) => (
-        <div key={id}>
-          <span>{path}</span>
+        <Box key={id}>
+          <Text as="span">{path}</Text>
           <label>
             <input
               type="checkbox"
@@ -140,7 +140,7 @@ export function KeeperControls({
             Prefer this folder{' '}
             {preferredFolders.includes(id) ? `(${preferredFolders.indexOf(id) + 1})` : ''}
           </label>
-        </div>
+        </Box>
       ))}
       <details>
         <summary>Manual keep choices on this member page</summary>
@@ -173,15 +173,15 @@ export function KeeperControls({
         {busy ? 'Reviewing…' : 'Retain backend keeper review'}
       </Button>
       <Button onClick={() => void latest()}>Load latest retained keeper review</Button>
-      {error && <p role="alert">{error}</p>}
+      {error && <Text role="alert">{error}</Text>}
       {review && (
-        <div role="status">
-          <p>
+        <Box role="status">
+          <Text>
             Retained review · {review.input.order.replaceAll('_', ' ')} ·{' '}
             {review.input.protectedFolders.length} protected folders ·{' '}
             {review.input.preferredFolders.length} preferred folders. These recorded choices may
             differ from the current form.
-          </p>
+          </Text>
           <Button
             onClick={() => {
               setOrder(review.input.order);
@@ -192,30 +192,34 @@ export function KeeperControls({
           >
             Reuse this recorded policy in the form
           </Button>
-          <p>{review.explanation}</p>
-          <p>
+          <Text>{review.explanation}</Text>
+          <Text>
             {review.keepers.length} suggested keepers; {review.blocks.length} cleanup blocks.
             Quarantine remains unavailable.
-          </p>
-          {review.suggestionBlock && <p>{review.suggestionBlock.replaceAll('_', ' ')}</p>}
-          <ul>
+          </Text>
+          {review.suggestionBlock && <Text>{review.suggestionBlock.replaceAll('_', ' ')}</Text>}
+          <List.Root unstyled>
             {review.keepers.map((id) => (
-              <li key={id}>Keep: {rows.find((row) => row.id === id)?.displayPath ?? id}</li>
+              <List.Item unstyled key={id}>
+                Keep: {rows.find((row) => row.id === id)?.displayPath ?? id}
+              </List.Item>
             ))}
-          </ul>
-          <ul>
+          </List.Root>
+          <List.Root unstyled>
             {review.blocks.slice(0, 64).map((block, index) => (
-              <li key={`${block.assetId}:${index}`}>
+              <List.Item unstyled key={`${block.assetId}:${index}`}>
                 {rows.find((row) => row.id === block.assetId)?.name ?? block.assetId}:{' '}
                 {block.reason.replaceAll('_', ' ')}
-              </li>
+              </List.Item>
             ))}
-          </ul>
+          </List.Root>
           {review.blocks.length > 64 && (
-            <p>Showing the first 64 blocks; the complete review is retained in the catalog.</p>
+            <Text>
+              Showing the first 64 blocks; the complete review is retained in the catalog.
+            </Text>
           )}
-        </div>
+        </Box>
       )}
-    </fieldset>
+    </chakra.fieldset>
   );
 }

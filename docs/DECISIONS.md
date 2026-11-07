@@ -373,3 +373,40 @@ The owner requests welcome/setup on first use, restored results, actual backgrou
 ## Jobs page — owner revision, 2026-11-06
 
 The owner requests a full Jobs page instead of a popover. Retain the existing sidebar entry and count, native controls and status poll. Keep the prior workspace mounted, hidden and inert while Jobs fills main; Back restores it and opener focus. Normal sidebar navigation exits Jobs. No schema, dependency, native permission, approval or production-mutation change. See CODEX_SPEC and ACCEPTANCE_TESTS for the replacement navigation contract.
+
+## Workspace UX and complete Chakra presentation pass — 2026-11-07
+
+The owner asks to retain the current visual identity and improve uneven fields,
+headers, search and buttons; this clarification governs over the attachment's
+no-redesign sentence. Incorporate the collapsed-sidebar branch first, without
+renaming this workspace's branch. Separate Backup and Sync navigation, put the
+whole-library rules on Structure Formater and retain the native safety gates.
+The owner's subsequent scope correction is implemented in ADR-0095: bounded
+native previews cover the complete catalog without selection. No main catalog
+schema, dependency or persisted identity change is needed. The page audit and migration record live
+in [UI_WORKSPACE_AUDIT.md](UI_WORKSPACE_AUDIT.md). Both-platform CI and existing
+milestone, preservation and packaged-release gates remain binding.
+
+## Expanded structure naming — 2026-11-07
+
+Owner-approved date, embedded-location-only, catalog-tag, camera and custom-chip
+layouts follow ADR-0096. Omit Trip; Camera → Event has an explicit conditional
+name field. Reuse the catalog tag-category graph and actual indexed metadata,
+blocking missing/ambiguous values. New optional observation/sample fields omit
+absent context so old fingerprints/plan JSON remain compatible. New naming and
+quarter policies use v2; earlier patterns stay v1. Read-only metadata helper
+allowlist additions do not silently rescan catalogs, extend original-write
+authority or establish all-format/platform field extraction. No main catalog
+migration or dependency change is needed; all execution/recovery gates remain.
+
+
+## Structure review and session presets — 2026-11-07
+
+[ADR-0097](decisions/ADR-0097-structure-review-and-session-presets.md) separates
+folder/naming controls, pure native illustrative examples and catalog-scoped
+session presets from actual catalog-wide read-only review. Typed Skip retains
+rows/global sequences; legacy serialization stays stable and executable
+selected-photo plans reject this policy. Native TEMP summaries and bounded
+full-scope literal filtering precede pagination. Explicit simulation revalidates
+read-only state without approving or executing anything; original-file mutation
+and future atomic backup/sync admission remain gated.

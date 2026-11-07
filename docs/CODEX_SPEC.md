@@ -1031,3 +1031,126 @@ Move Catalog and Saved plans from Photos to the Albums / Tags header. Photos use
 ### Explicit Map → Photos handoff — owner revision, 2026-11-06
 
 Rename the map action to Show in photos. Only that action transfers the current map query/selection; ordinary sidebar Photos navigation clears any previous handoff. Show its spatial scope as a tag with an × remove control inside the Photos search field and in active Filters, with bounds/cell/location counted once. Clearing the map scope retains independent filename/date/place constraints. Preserve Map context for Return to map and the existing read-only geographic-query and original-file gates. See [M5_MAP.md](M5_MAP.md) for the detailed behavior and native regression boundary.
+
+## Workspace consistency — owner revision, 2026-11-07
+
+Retain the dark photo-first identity and original logo. All pages use the shared
+64 px title bar, 18/24 px title, 36 px header controls and consistent title/search/
+action lanes. Primary actions inside task bodies and viewer targets retain 44 px
+geometry. Search in Photos, Albums / Tags, Folders and Map shares a labelled
+36 px frame; place and map-filter behavior remain unchanged. The chronology rail
+is always visible, reserving 96 px for its labels and interaction lane so date
+output stays inside the canvas at both endpoints. This supersedes idle fading
+and the earlier 56 px reserved lane.
+
+Utilities now contains Structure Formater, Duplicates, Integrity, Storage, Backup
+and Sync. Backup opens encrypted versioned snapshots/recovery directly; Sync
+opens existing source/destination comparison and reviewed one-way copying. This
+removes the Backup & Sync mode switch without changing stored profiles or any
+capability, approval, recovery or execution gate.
+
+Structure Formater opens directly on folder/filename rules for the entire indexed
+library. No photo selection is required; current gallery filters, albums and Map
+queries do not restrict its scope. Preview restructure uses bounded native batches
+and result pages (240 rows), with one global sequence and conflict namespace.
+Unavailable, missing and excluded indexed media remain visible as blocked entries;
+sidecars are companion observations, not independent media outputs. A catalog
+revision change invalidates the observation. Cancel, leaving the page and new
+rules discard session state. Saved templates and existing saved plans remain
+available. The separate selected-photo name preview retains its existing bounded
+planning contract. Run restructure stays explicitly disabled pending a reviewed
+whole-library execution plan, destination/companion validation and proven recovery.
+Entering or previewing the page never renames or moves originals. See
+[ADR-0095](decisions/ADR-0095-whole-library-structure-preview.md).
+
+The native `organization_protection_status` observation checks active snapshot,
+restore/recovery, sync and folder-comparison workers, all retained unfinished
+backup/sync jobs, and every configured enabled backup schedule. Any enabled
+schedule blocks regardless of its due time or current OS authorization. Paused,
+cancel-requested and interrupted work stays blocked; invalid/unreadable state
+fails closed. Sync has no recurring scheduler yet. The page refreshes this check
+every two seconds and on focus, without canceling work or disabling schedules.
+Read-only previews remain available. A clear observation is not permission to
+move files: the unavailable future executor must recheck these conditions
+atomically with work admission and schedule activation, and retain native write
+scopes plus the existing review/recovery gates throughout the operation.
+
+Applicable React layout, text, list, image, table and button elements use Chakra
+v3. Native composition, checkbox/range semantics, SVG, bidirectional path text,
+dialog/disclosure behavior and dynamic photographic/map geometry remain explicit
+exceptions. See [Workspace audit](UI_WORKSPACE_AUDIT.md) for the page review,
+market references and migration inventory. Existing preservation and release
+gates are unchanged.
+
+### Structure rule controls — owner refinement, 2026-11-07
+
+Replace the preset dropdown with three keyboard-accessible radio cards and
+inline SVG example folder trees: By day, By month, and Date & time. New presets
+use capture dates/times, original filenames and deterministic sequences, without
+event naming. Remove the event-name field. Present missing-date handling and
+filename stem case as labelled segmented radio groups. Keep custom path editing,
+visible selected/focus/disabled states and invalidation of previews after changes.
+Preserve previously saved rule data without migration; only an explicit new
+preset selection clears its unused event value. Whole-library scope, blocked
+unavailable entries, native validation and execution/recovery gates are unchanged.
+
+### Expanded structure layouts — owner revision, 2026-11-07
+
+Provide By date, By location, By tags, By camera and Custom groups. Date choices
+include Year; Year → Month; Year → Month → Day; Year → Quarter; Year → Month →
+Location (Country), retaining the previous three date/time choices. Location
+choices are Country; Country → City; Country → Region → City; Country → City →
+Place. Use embedded indexed naming metadata only; do not reverse-geocode GPS.
+The owner explicitly omits Year → Trip → Location.
+
+Tags offer Tag; Tag → Subcategory; Tag → Subcategory → Subject; Tag → Location
+(City); Tag → Year; Tag → Year → Month. Follow existing catalog category parents,
+requiring unambiguous prefixes for each requested level. Camera choices are Type;
+Type → Brand; Type → Brand → Model; Brand → Model; Camera → Year → Month;
+Camera → Event; Camera → File format. Combined Camera uses observed make/model;
+explicit camera type is never guessed. Camera → Event exposes an event-name
+field only when its token is used. Missing or ambiguous values block the photo;
+no multi-output fan-out or arbitrary first tag is implied.
+
+Custom uses an input with predefined folder chips, explicit literals, removal
+and draggable grip/label handles instead of earlier/later arrow buttons. Show a
+floating chip and insertion marker across wrapped rows; apply the rule once on
+drop, preserving every other level and the filename. Provide click-to-pick/place
+and keyboard pickup/destination/drop/cancel alternatives, announcements and focus
+restoration. Escape, outside drops, pointer interruption, focus loss, changed
+rules or disabled editing cancel without applying a stale order. Filename patterns and the full rule
+remain editable. Native relative-path, original-extension, global conflict and
+revision checks remain authoritative. See ADR-0096 for observation limits,
+backward-compatible optional data, metadata-reader/platform limitations and the
+unchanged production execution/recovery gate. Existing catalogs are not silently
+rescanned to collect new fields.
+
+
+### Structure editing and review — owner refinement, 2026-11-07
+
+Keep the five working folder categories and draggable custom levels. Separate
+folder layouts from Original / Date + original / Sequence filename formats, stem
+case and missing-date policy. Provide live Folder tree and Sample paths from
+explicit native illustrative examples; actual library inspection begins only on
+Preview restructure. Advanced path editing remains available.
+
+Add Skip photo alongside Undated. For date-dependent rules, keep missing-date rows
+in place with typed skipped status, no target and unchanged global sequence;
+Undated preserves its existing original-filename fallback. Non-date rules do not
+skip simply because a date is missing; loaded historical Block rules remain
+readable. New Skip policy is preview v2, saved template schema 2 and explicitly
+unsupported for executable selected-photo plans. Legacy absent fields/digests
+remain unchanged.
+
+Save/load named presets in catalog-scoped session memory, distinct from durable
+catalog templates and saved plans. Review includes complete global move,
+destination-folder, rename and missing-date totals; native full-scope literal
+before/after search; All, Changes, Needs attention, Missing dates and Skipped
+filters; and at most 240 rows per page. Missing-date notices describe indexed
+capture provenance. Preserve stale/error/cancel states and return to editing.
+
+Confirmation freshly revalidates the native report and presents an explicitly
+simulated completion screen without source I/O, approval or job creation. Actual
+Run restructure stays disabled, irrespective of clear prerequisite observations.
+ADR-0097 defines bounds and semantics; whole-library atomic admission, recovery,
+companion/destination qualification and both-platform gates remain required.

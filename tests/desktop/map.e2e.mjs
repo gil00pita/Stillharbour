@@ -169,7 +169,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       );
       assert.equal(await $('.map-filter-trigger').getAttribute('aria-expanded'), 'false');
       const searchGeometry = await browser.execute(() => {
-        const frame = document.querySelector('.map-search-controls .search-input-frame');
+        const frame = document.querySelector('.map-page .app-page-header .search-input-frame');
         const input = frame?.querySelector('input[type="search"]');
         const icon = frame?.querySelector(':scope > svg');
         const filter = document.querySelector('.map-filter-trigger');
@@ -179,6 +179,11 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
         const text = input.getBoundingClientRect();
         const glyph = icon.getBoundingClientRect();
         const trigger = filter.getBoundingClientRect();
+        const glyphTarget = document.elementFromPoint(
+          glyph.left + glyph.width / 2,
+          glyph.top + glyph.height / 2,
+        );
+        const iconPointerTransparent = getComputedStyle(icon).pointerEvents === 'none';
         return {
           inputInside: text.left >= field.left && text.right <= field.right,
           iconInside:
@@ -191,9 +196,11 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
           inputReachable:
             document.elementFromPoint(text.left + text.width / 2, text.top + text.height / 2) ===
             input,
-          iconUnobstructed: icon.contains(
-            document.elementFromPoint(glyph.left + glyph.width / 2, glyph.top + glyph.height / 2),
-          ),
+          iconPointerTransparent,
+          // The shared decorative magnifier passes hits to its own search frame.
+          // An unrelated overlay must still fail this check.
+          iconUnobstructed:
+            icon.contains(glyphTarget) || (iconPointerTransparent && glyphTarget === frame),
           filterBesideSearch: trigger.left >= field.right && Math.abs(trigger.top - field.top) < 2,
         };
       });
@@ -202,6 +209,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
         iconInside: true,
         iconBeforeInput: true,
         inputReachable: true,
+        iconPointerTransparent: true,
         iconUnobstructed: true,
         filterBesideSearch: true,
       });
@@ -228,7 +236,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             .querySelector('[role="dialog"][aria-label="Map filters"]')
             .getBoundingClientRect();
           const input = document
-            .querySelector('.map-search-controls .search-input-frame')
+            .querySelector('.map-page .app-page-header .search-input-frame')
             .getBoundingClientRect();
           const filter = document.querySelector('.map-filter-trigger').getBoundingClientRect();
           return (

@@ -106,7 +106,7 @@ describe('Utility scan lifecycle', () => {
       );
     }
 
-    await $('button[aria-label="Backup & Sync"]').click();
+    await $('button[aria-label="Sync"]').click();
     await $('section[aria-label="Scan introduction"]').waitForDisplayed();
     const destination = await invoke('test_performance', {
       action: 'backup_destination_fixture',
@@ -144,7 +144,7 @@ describe('Utility scan lifecycle', () => {
     assert.equal(saved.reviewPlan, null);
     assert.equal(saved.capabilities.executionAvailable, false);
     await $('button[aria-label="Photos"]').click();
-    await $('button[aria-label="Backup & Sync"]').click();
+    await $('button[aria-label="Sync"]').click();
     await browser.waitUntil(
       async () => (await native({ kind: 'backup_comparison_history' })).length === 2,
       { timeout: 45000 },

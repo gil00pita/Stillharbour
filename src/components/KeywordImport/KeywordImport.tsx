@@ -1,3 +1,4 @@
+import { Text } from '@chakra-ui/react';
 import { useState } from 'react';
 import { Button } from '@/components/Button';
 import { errorMessage, libraryData } from '../../ipc';
@@ -41,11 +42,11 @@ export function KeywordImport({
   return (
     <details>
       <summary>Import observed keywords</summary>
-      <p className="help">
+      <Text className="help">
         Import the retained source observations into manual tags. Labels you previously removed stay
         suppressed unless you explicitly restore them. No embedded metadata or sidecars are
         rewritten.
-      </p>
+      </Text>
       <label className="check-row">
         <input
           type="checkbox"
@@ -58,8 +59,8 @@ export function KeywordImport({
       <Button disabled={busy} onClick={() => void apply()}>
         Import keywords into catalog
       </Button>
-      {error && <p role="alert">{error}</p>}
-      <p role="status">{notice}</p>
+      {error && <Text role="alert">{error}</Text>}
+      <Text role="status">{notice}</Text>
     </details>
   );
 }

@@ -1,5 +1,5 @@
 import { PageHeader } from '@/components/PageHeader';
-import { Field } from '@chakra-ui/react';
+import { Field, Heading, Text, chakra } from '@chakra-ui/react';
 import { Box } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -359,17 +359,17 @@ export function InspectionScreen({
               ? 'Health check settings'
               : 'Storage measurement settings'}
         </summary>
-        <fieldset
+        <chakra.fieldset
           disabled={busy || running}
           className={`inspection-controls ${section === 'Duplicates' ? 'duplicate-controls' : ''}`}
         >
-          <legend className={section === 'Duplicates' ? 'screen-reader-status' : undefined}>
+          <chakra.legend className={section === 'Duplicates' ? 'screen-reader-status' : undefined}>
             {section === 'Duplicates'
               ? 'Find duplicate clusters'
               : section === 'Integrity'
                 ? 'Check file health'
                 : 'Measure storage usage'}
-          </legend>
+          </chakra.legend>
           {section === 'Duplicates' && (
             <DuplicateMatchOptions
               options={options}
@@ -377,7 +377,7 @@ export function InspectionScreen({
               disabled={busy || running}
             />
           )}
-          <div className="inspection-roots">
+          <Box className="inspection-roots">
             {rootIds
               .filter((id) => !status.roots.some((root) => root.id === id))
               .map((id) => (
@@ -408,7 +408,7 @@ export function InspectionScreen({
                 <small>{root.availability}</small>
               </label>
             ))}
-          </div>
+          </Box>
           {section === 'Duplicates' ? (
             <InspectionChoiceCards
               label="File scope"
@@ -435,18 +435,18 @@ export function InspectionScreen({
               </label>
             </Field.Root>
           )}
-          <p>
+          <Text>
             Your hidden-file, hidden-folder, filename-pattern and size exclusions still apply.
             Gallery file-type and date filters do not limit this inspection. Links, special files
             and cloud placeholders are reported, never followed or downloaded.
-          </p>
+          </Text>
           {section === 'Duplicates' && (
             <>
-              <p>
+              <Text>
                 Exact matches are confirmed by comparing every byte. Matching names, sizes or other
                 properties only identify candidates; they never authorize quarantine.
-              </p>
-              <div>
+              </Text>
+              <Box>
                 {options.mode === 'properties' && (
                   <PropertyControls
                     rules={options.rules}
@@ -454,16 +454,16 @@ export function InspectionScreen({
                     onChange={(rules) => setOptions({ ...options, rules })}
                   />
                 )}
-              </div>
+              </Box>
             </>
           )}
           {unavailable && (
-            <p role="status">
+            <Text role="status">
               Reconnect selected unavailable folders before inspecting. Their retained inventory is
               not an empty folder.
-            </p>
+            </Text>
           )}
-          {invalidRules && <p role="status">Choose at least one property criterion.</p>}
+          {invalidRules && <Text role="status">Choose at least one property criterion.</Text>}
           {section === 'Integrity' && (
             <>
               <Field.Root asChild unstyled>
@@ -486,11 +486,11 @@ export function InspectionScreen({
                   </NativeSelect>
                 </label>
               </Field.Root>
-              <p>
+              <Text>
                 Checksums read complete file bytes. A mismatch means changed since baseline, not
                 proven damage. Previous baselines remain in history; these checks do not establish
                 backup or original-file recovery.
-              </p>
+              </Text>
               {healthMode === 'establish_baseline' && (
                 <label>
                   <input
@@ -528,16 +528,18 @@ export function InspectionScreen({
                 : `Start ${section === 'Duplicates' ? 'duplicate' : 'storage'} inspection`}
             </Button>
           }
-        </fieldset>
+        </chakra.fieldset>
       </details>
       {job && (
-        <section className="inspection-job" aria-label="Inspection job">
-          <h2>{job.state.replaceAll('_', ' ')}</h2>
-          <p role="status">{job.message}</p>
-          <p>
+        <chakra.section className="inspection-job" aria-label="Inspection job">
+          <Heading as="h2" unstyled>
+            {job.state.replaceAll('_', ' ')}
+          </Heading>
+          <Text role="status">{job.message}</Text>
+          <Text>
             {job.filesObserved.toLocaleString()} observed · {job.filesChecked.toLocaleString()}{' '}
             examined · {displayBytes(job.bytesRead)} read · {job.issues.toLocaleString()} issues
-          </p>
+          </Text>
           {running && (
             <>
               <progress aria-label="Inspection in progress" />
@@ -550,9 +552,11 @@ export function InspectionScreen({
             </>
           )}
           {job.limited && (
-            <p>Inspection reached a bound. These results do not cover the whole selected scope.</p>
+            <Text>
+              Inspection reached a bound. These results do not cover the whole selected scope.
+            </Text>
           )}
-          <p>
+          <Text>
             Retained scope: {job.input.scope.replaceAll('_', ' ')} ·{' '}
             {job.input.rootIds
               .map(
@@ -562,8 +566,8 @@ export function InspectionScreen({
               )
               .join(', ')}
             . Re-run to check current files; retained results grant no mutation approval.
-          </p>
-        </section>
+          </Text>
+        </chakra.section>
       )}
       {report && (
         <>
@@ -571,10 +575,10 @@ export function InspectionScreen({
           {section === 'Duplicates' && (
             <details>
               <summary>Format applicability</summary>
-              <p>{report.id3Applicability}</p>
+              <Text>{report.id3Applicability}</Text>
             </details>
           )}
-          <p className="inspection-coverage">
+          <Text className="inspection-coverage">
             Inventory:{' '}
             {report.coverage.enumerationComplete
               ? 'completed for this eligible scope'
@@ -582,13 +586,13 @@ export function InspectionScreen({
             · {report.coverage.excludedEntries} excluded entries/scopes ·{' '}
             {report.coverage.inaccessibleEntries} inaccessible/unsupported entries ·{' '}
             {report.coverage.incompleteDirectories} incomplete directories.
-          </p>
+          </Text>
         </>
       )}
     </>
   );
   const versionLabel = viewedJob && (
-    <p>
+    <Text>
       Showing scan from {formatScanDate(viewedJob.startedAt)} ·{' '}
       {viewedJob.state.replaceAll('_', ' ')}
       {historical ? ' · Historical version' : ''}
@@ -606,17 +610,19 @@ export function InspectionScreen({
             .join(', ')}
         </>
       )}
-    </p>
+    </Text>
   );
   return (
-    <div className={`inspection-page inspection-section-${section.toLowerCase()}`}>
+    <Box className={`inspection-page inspection-section-${section.toLowerCase()}`}>
       <PageHeader>
-        <header className="toolbar">
+        <chakra.header className="toolbar">
           {navigationControl}
           <Box minW="0">
-            <h1>{section}</h1>
+            <Heading as="h1" unstyled>
+              {section}
+            </Heading>
           </Box>
-          <div className="header-actions">
+          <Box className="header-actions">
             {section === 'Storage' ? (
               <>
                 <Button
@@ -657,13 +663,13 @@ export function InspectionScreen({
               }}
             />
             {jobsControl}
-          </div>
-        </header>
+          </Box>
+        </chakra.header>
       </PageHeader>
-      <div className="inspection-content">
+      <Box className="inspection-content">
         {section === 'Storage' && (
           <>
-            {notice && <p role="status">{notice}</p>}
+            {notice && <Text role="status">{notice}</Text>}
             {versionLabel}
           </>
         )}
@@ -679,22 +685,22 @@ export function InspectionScreen({
             description="Choose your libraries and scan settings below. Your first results will appear here, and each scan keeps its own history. Originals stay unchanged."
           />
         )}
-        {loading && <p role="status">Loading saved scans…</p>}
+        {loading && <Text role="status">Loading saved scans…</Text>}
         {section !== 'Storage' && (
           <>
-            {notice && <p role="status">{notice}</p>}
+            {notice && <Text role="status">{notice}</Text>}
             {versionLabel}
-            <p>
+            <Text>
               {section === 'Duplicates'
                 ? 'Find identical files or compare file properties. Review the matches while your originals stay unchanged.'
                 : 'Check integrity without rewriting or repairing originals.'}
-            </p>
+            </Text>
           </>
         )}
         {error && (section !== 'Storage' || !storageDetailsOpen) && (
-          <p role="alert" className="error">
+          <Text role="alert" className="error">
             {error}
-          </p>
+          </Text>
         )}
         {section === 'Duplicates' && viewedJob && (
           <DuplicateStudio
@@ -717,9 +723,9 @@ export function InspectionScreen({
                 }}
               >
                 {error && (
-                  <p role="alert" className="error">
+                  <Text role="alert" className="error">
                     {error}
-                  </p>
+                  </Text>
                 )}
                 {inspectionDetails}
               </InspectionDialog>
@@ -737,22 +743,22 @@ export function InspectionScreen({
               />
             )}
             {viewedJob && !report?.storage && !error && (
-              <p role="status">
+              <Text role="status">
                 No storage observations available. Open Measurement details to review or rerun.
-              </p>
+              </Text>
             )}
           </>
         ) : (
           inspectionDetails
         )}
         {files && section === 'Integrity' && (
-          <section aria-label="Inspected files">
+          <chakra.section aria-label="Inspected files">
             <IntegrityFindings key={viewedJob?.id} rows={files.rows} />
             {files.next && <Button onClick={() => void nextFiles()}>Next file page</Button>}
-          </section>
+          </chakra.section>
         )}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -766,8 +772,8 @@ function PropertyControls({
   disabled: boolean;
 }) {
   return (
-    <fieldset>
-      <legend>Advanced candidate rules</legend>
+    <chakra.fieldset>
+      <chakra.legend>Advanced candidate rules</chakra.legend>
       <InspectionChoiceCards
         label="Combination"
         value={rules.logic}
@@ -786,7 +792,7 @@ function PropertyControls({
         disabled={disabled}
         onChange={(logic) => onChange({ ...rules, logic })}
       />
-      <div className="inspection-rule-options">
+      <Box className="inspection-rule-options">
         {(
           ['filename', 'extension', 'size', 'modified', 'created', 'readonly', 'content'] as const
         ).map((key) => (
@@ -809,7 +815,7 @@ function PropertyControls({
             }
           </label>
         ))}
-      </div>
+      </Box>
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -827,7 +833,7 @@ function PropertyControls({
           />
         </label>
       </Field.Root>
-      <p>Missing dates or attributes are unknown. Dates do not use EXIF or Unix ctime.</p>
+      <Text>Missing dates or attributes are unknown. Dates do not use EXIF or Unix ctime.</Text>
       <label>
         <input
           type="checkbox"
@@ -872,10 +878,10 @@ function PropertyControls({
           />
         </label>
       </Field.Root>
-      <p>
+      <Text>
         Comparison keys are shown in the table. Original names remain unchanged; empty keys are
         unknown.
-      </p>
-    </fieldset>
+      </Text>
+    </chakra.fieldset>
   );
 }

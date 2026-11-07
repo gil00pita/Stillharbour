@@ -1,3 +1,4 @@
+import { Box, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import type { FolderPage, StorageSummary } from '../../bindings';
@@ -67,13 +68,15 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
     setTrail([...trail, { id, name }]);
   }
   return (
-    <section className="inspection-storage" aria-labelledby="storage-totals-title">
-      <h2 id="storage-totals-title">Storage in this inspection</h2>
-      <p data-bytes={summary.total.logicalBytes}>
+    <chakra.section className="inspection-storage" aria-labelledby="storage-totals-title">
+      <Heading as="h2" unstyled id="storage-totals-title">
+        Storage in this inspection
+      </Heading>
+      <Text data-bytes={summary.total.logicalBytes}>
         Total file size: {displayBytes(summary.total.logicalBytes)}. Logical sizes count hard-linked
         paths separately; allocation is not recoverable space.
-      </p>
-      <nav className="inspection-breadcrumbs" aria-label="Storage folders">
+      </Text>
+      <chakra.nav className="inspection-breadcrumbs" aria-label="Storage folders">
         {trail.map((node, index) => (
           <Button
             key={node.id}
@@ -88,21 +91,21 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
             {node.name}
           </Button>
         ))}
-      </nav>
+      </chakra.nav>
       {(error || geometryError) && (
-        <div role="alert">
-          <p>{error ?? geometryError}</p>
+        <Box role="alert">
+          <Text>{error ?? geometryError}</Text>
           {error && <Button onClick={() => setRetry(retry + 1)}>Retry folder totals</Button>}
-        </div>
+        </Box>
       )}
-      {!current && !error && <p role="status">Loading retained folder totals…</p>}
+      {!current && !error && <Text role="status">Loading retained folder totals…</Text>}
       {current && (
         <>
-          <p>
+          <Text>
             Map area: observed logical file bytes. Small or zero-byte entries may have no visible
             area; the table retains their counts.
-          </p>
-          <div className="inspection-map" aria-label="Logical-byte storage map">
+          </Text>
+          <Box className="inspection-map" aria-label="Logical-byte storage map">
             {tiles.map((tile, index) => (
               <Button
                 key={tile.id}
@@ -120,59 +123,71 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
                 title={`${tile.label} · ${displayBytes(tile.bytes)}`}
                 onClick={() => open(tile.id, tile.label)}
               >
-                <span>{tile.label}</span>
+                <Text as="span">{tile.label}</Text>
                 <small>{displayBytes(tile.bytes)}</small>
               </Button>
             ))}
-          </div>
-          <div className="inspection-table-wrap">
-            <table>
-              <caption>Folder totals for {current.parent.name}</caption>
-              <thead>
-                <tr>
-                  <th>Folder</th>
-                  <th>Files</th>
-                  <th aria-sort={ascending ? 'ascending' : 'descending'}>
+          </Box>
+          <Box className="inspection-table-wrap">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top">
+                Folder totals for {current.parent.name}
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled>Folder</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Files</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled aria-sort={ascending ? 'ascending' : 'descending'}>
                     <Button onClick={() => setAscending(!ascending)}>
                       File size · sort this page
                     </Button>
-                  </th>
-                  <th>Hard links counted once</th>
-                  <th>Reported allocation</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <th scope="row">Total: {current.parent.name}</th>
-                  <td>{current.parent.files.toLocaleString()}</td>
-                  <td data-bytes={current.parent.logicalBytes}>
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Hard links counted once</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Reported allocation</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled scope="row">
+                    Total: {current.parent.name}
+                  </Table.ColumnHeader>
+                  <Table.Cell unstyled>{current.parent.files.toLocaleString()}</Table.Cell>
+                  <Table.Cell unstyled data-bytes={current.parent.logicalBytes}>
                     {displayBytes(current.parent.logicalBytes)}
-                  </td>
-                  <td>{displayBytes(current.parent.uniqueObjectLogicalBytes)}</td>
-                  <td>{displayBytes(current.parent.reportedAllocatedBytes)}</td>
-                </tr>
-                <tr>
-                  <th scope="row">Files directly in this folder</th>
-                  <td>{current.parent.directFiles.toLocaleString()}</td>
-                  <td>{displayBytes(current.parent.directLogicalBytes)}</td>
-                  <td>Included in total</td>
-                  <td>Included in total</td>
-                </tr>
+                  </Table.Cell>
+                  <Table.Cell unstyled>
+                    {displayBytes(current.parent.uniqueObjectLogicalBytes)}
+                  </Table.Cell>
+                  <Table.Cell unstyled>
+                    {displayBytes(current.parent.reportedAllocatedBytes)}
+                  </Table.Cell>
+                </Table.Row>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled scope="row">
+                    Files directly in this folder
+                  </Table.ColumnHeader>
+                  <Table.Cell unstyled>{current.parent.directFiles.toLocaleString()}</Table.Cell>
+                  <Table.Cell unstyled>
+                    {displayBytes(current.parent.directLogicalBytes)}
+                  </Table.Cell>
+                  <Table.Cell unstyled>Included in total</Table.Cell>
+                  <Table.Cell unstyled>Included in total</Table.Cell>
+                </Table.Row>
                 {(ascending ? [...current.rows].reverse() : current.rows).map((row) => (
-                  <tr key={row.id}>
-                    <th scope="row">
+                  <Table.Row unstyled key={row.id}>
+                    <Table.ColumnHeader unstyled scope="row">
                       <Button onClick={() => open(row.id, row.name)}>{row.name}</Button>
-                    </th>
-                    <td>{row.files.toLocaleString()}</td>
-                    <td>{displayBytes(row.logicalBytes)}</td>
-                    <td>{displayBytes(row.uniqueObjectLogicalBytes)}</td>
-                    <td>{displayBytes(row.reportedAllocatedBytes)}</td>
-                  </tr>
+                    </Table.ColumnHeader>
+                    <Table.Cell unstyled>{row.files.toLocaleString()}</Table.Cell>
+                    <Table.Cell unstyled>{displayBytes(row.logicalBytes)}</Table.Cell>
+                    <Table.Cell unstyled>{displayBytes(row.uniqueObjectLogicalBytes)}</Table.Cell>
+                    <Table.Cell unstyled>{displayBytes(row.reportedAllocatedBytes)}</Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
-          <div className="inspection-actions">
+              </Table.Body>
+            </Table.Root>
+          </Box>
+          <Box className="inspection-actions">
             <Button
               disabled={!cursor}
               onClick={() => {
@@ -193,9 +208,9 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
             >
               Next folder page
             </Button>
-          </div>
+          </Box>
         </>
       )}
-    </section>
+    </chakra.section>
   );
 }

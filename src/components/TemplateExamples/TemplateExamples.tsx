@@ -1,7 +1,21 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import type { TemplateSample } from '../../bindings';
+import type { TemplateSample, OrganizationMetadata } from '../../bindings';
+
+const namingFields: { key: keyof OrganizationMetadata; label: string }[] = [
+  { key: 'country', label: 'Country' },
+  { key: 'region', label: 'Region' },
+  { key: 'city', label: 'City' },
+  { key: 'place', label: 'Place' },
+  { key: 'tag', label: 'Tag' },
+  { key: 'subcategory', label: 'Subcategory' },
+  { key: 'subject', label: 'Subject' },
+  { key: 'cameraType', label: 'Camera type' },
+  { key: 'brand', label: 'Brand' },
+  { key: 'model', label: 'Model' },
+  { key: 'fileFormat', label: 'File format' },
+];
 
 export function TemplateExamples({
   samples,
@@ -16,16 +30,16 @@ export function TemplateExamples({
     onChange(samples.map((sample, i) => (i === index ? { ...sample, ...patch } : sample)));
   }
   return (
-    <fieldset disabled={disabled}>
-      <legend>Template examples</legend>
-      <p className="help">
+    <chakra.fieldset disabled={disabled}>
+      <chakra.legend>Template examples</chakra.legend>
+      <Text className="help">
         Test up to four independent examples when saving. Enter portable source names with / between
         folders and capture-local dates such as 2026-10-31T14:30:00, without a timezone. Examples
         use no files and do not check destination collisions or companions.
-      </p>
+      </Text>
       {samples.map((sample, index) => (
-        <fieldset key={index}>
-          <legend>Example {index + 1}</legend>
+        <chakra.fieldset key={index}>
+          <chakra.legend>Example {index + 1}</chakra.legend>
           <Field.Root asChild unstyled>
             <label>
               <Field.Label asChild unstyled>
@@ -77,10 +91,34 @@ export function TemplateExamples({
               />
             </label>
           </Field.Root>
+          <details>
+            <summary>Example location, tag and camera values</summary>
+            {namingFields.map((field) => (
+              <Field.Root key={field.key} asChild unstyled>
+                <label>
+                  <Field.Label asChild unstyled>
+                    <span>
+                      Example {index + 1} {field.label.toLowerCase()}
+                    </span>
+                  </Field.Label>
+                  <Input
+                    maxLength={128}
+                    value={sample.metadata?.[field.key] ?? ''}
+                    onChange={(event) => {
+                      const metadata = { ...sample.metadata };
+                      if (event.target.value) metadata[field.key] = event.target.value;
+                      else delete metadata[field.key];
+                      update(index, { metadata });
+                    }}
+                  />
+                </label>
+              </Field.Root>
+            ))}
+          </details>
           <Button type="button" onClick={() => onChange(samples.filter((_, i) => i !== index))}>
             Remove example {index + 1}
           </Button>
-        </fieldset>
+        </chakra.fieldset>
       ))}
       <Button
         type="button"
@@ -94,6 +132,6 @@ export function TemplateExamples({
       >
         Add example
       </Button>
-    </fieldset>
+    </chakra.fieldset>
   );
 }

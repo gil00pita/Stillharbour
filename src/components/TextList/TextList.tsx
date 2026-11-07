@@ -1,3 +1,4 @@
+import { Box, Text, chakra, Button } from '@chakra-ui/react';
 import {
   usePhotoAlbumMenu,
   usePhotoAlbumKeys,
@@ -50,12 +51,12 @@ export function TextListControls({
     };
   }, []);
   return (
-    <div className="text-list-controls">
+    <Box className="text-list-controls">
       <SortControl value={sort} onChange={onSort} label="Text list sort" disabled={busy} />
       <details ref={menu} className="text-list-columns">
         <summary>Columns</summary>
-        <fieldset>
-          <legend>Visible columns</legend>
+        <chakra.fieldset>
+          <chakra.legend>Visible columns</chakra.legend>
           <label className="check-row">
             <input type="checkbox" checked disabled /> Name (always shown)
           </label>
@@ -76,12 +77,12 @@ export function TextListControls({
               {column.label}
             </label>
           ))}
-          <button type="button" onClick={() => onColumns([...DEFAULT_TEXT_COLUMNS])}>
+          <Button unstyled type="button" onClick={() => onColumns([...DEFAULT_TEXT_COLUMNS])}>
             Reset columns
-          </button>
-        </fieldset>
+          </Button>
+        </chakra.fieldset>
       </details>
-    </div>
+    </Box>
   );
 }
 
@@ -98,18 +99,20 @@ export function TextListHeader({
 }) {
   const fields = [{ id: 'name', label: 'Name', sort: 'name' }, ...textListLayout(columns).visible];
   return (
-    <div className="text-list-head" role="row">
-      <span role="columnheader" aria-label="Selection" />
+    <Box className="text-list-head" role="row">
+      <Text as="span" role="columnheader" aria-label="Selection" />
       {fields.map((column) => {
         const active = sort === column.sort;
         return (
-          <span
+          <Text
+            as="span"
             role="columnheader"
             key={column.id}
             aria-sort={active ? (sort === 'name' ? 'ascending' : 'descending') : undefined}
           >
             {column.sort && onSort ? (
-              <button
+              <Button
+                unstyled
                 type="button"
                 data-sort={column.sort}
                 disabled={busy}
@@ -134,14 +137,14 @@ export function TextListHeader({
                     />
                   </svg>
                 )}
-              </button>
+              </Button>
             ) : (
               column.label
             )}
-          </span>
+          </Text>
         );
       })}
-    </div>
+    </Box>
   );
 }
 
@@ -171,7 +174,7 @@ export function TextListRow({
   const selection = usePhotoSelection();
   const selecting = selection?.active ?? selectionActive;
   return (
-    <div
+    <Box
       onContextMenu={contextMenu}
       onKeyDown={contextKeys}
       role="row"
@@ -180,7 +183,7 @@ export function TextListRow({
       data-asset-id={asset.id}
       data-date={asset.date}
     >
-      <span role="cell" className="text-list-selection">
+      <Text as="span" role="cell" className="text-list-selection">
         {(!selection || selecting) && (
           <input
             className="asset-check"
@@ -194,9 +197,11 @@ export function TextListRow({
             onKeyDown={onNavigate}
           />
         )}
-      </span>
-      <span role="cell" className="text-list-name">
-        <button
+      </Text>
+      <Text as="span" role="cell" className="text-list-name">
+        <Button
+          unstyled
+          type="submit"
           className="asset-open"
           aria-label={`Open ${asset.name}`}
           title={asset.name}
@@ -208,8 +213,8 @@ export function TextListRow({
           }}
         >
           <bdi>{asset.name}</bdi>
-        </button>
-      </span>
+        </Button>
+      </Text>
       {textListLayout(columns).visible.map((column) => {
         const value = textColumnValue(column.id, asset, offline);
         const rawDate =
@@ -221,12 +226,18 @@ export function TextListRow({
                 ? asset.addedAt
                 : null;
         return (
-          <span role="cell" key={column.id} data-column={column.id} title={rawDate || value}>
+          <Text
+            as="span"
+            role="cell"
+            key={column.id}
+            data-column={column.id}
+            title={rawDate || value}
+          >
             <bdi>{value}</bdi>
-          </span>
+          </Text>
         );
       })}
-    </div>
+    </Box>
   );
 }
 

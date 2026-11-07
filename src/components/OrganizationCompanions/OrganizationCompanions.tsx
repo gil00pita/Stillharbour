@@ -1,3 +1,4 @@
+import { Box, List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type { OrganizationCompanionReview } from '../../bindings';
@@ -45,7 +46,7 @@ export function OrganizationCompanions({
     review !== null &&
     (review.catalogRevision !== revision || review.catalogRevision !== previewRevision);
   return (
-    <div className="organization-companions">
+    <Box className="organization-companions">
       <Button type="button" disabled={busy} onClick={() => void load()}>
         {busy
           ? 'Loading companions…'
@@ -54,34 +55,34 @@ export function OrganizationCompanions({
             : 'Review indexed companions'}
       </Button>
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
       {review && (
-        <section aria-label="Indexed companion candidates">
+        <chakra.section aria-label="Indexed companion candidates">
           {stale && (
-            <p role="alert">
+            <Text role="alert">
               The catalog changed. Build a fresh preview and review companions again.
-            </p>
+            </Text>
           )}
-          <p className="help">
+          <Text className="help">
             Name matches need review; they are not confirmed bundles. Unindexed files may be absent.
             These files have no proposed destination and are not included in selected byte totals.
-          </p>
+          </Text>
           {review.truncated && (
-            <p role="status">
+            <Text role="status">
               Showing {review.candidates.length} candidates; more indexed matches remain.
-            </p>
+            </Text>
           )}
           {review.candidates.length === 0 ? (
-            <p>No indexed name matches. This does not prove there are no companions.</p>
+            <Text>No indexed name matches. This does not prove there are no companions.</Text>
           ) : (
-            <ul>
+            <List.Root unstyled>
               {review.candidates.map((candidate) => (
-                <li key={candidate.assetId}>
+                <List.Item unstyled key={candidate.assetId}>
                   <bdi>{candidate.sourcePath}</bdi>
-                  <p>
+                  <Text>
                     {candidate.filenameSidecar
                       ? 'Filename-sidecar candidate'
                       : 'Same-stem candidate'}
@@ -89,16 +90,16 @@ export function OrganizationCompanions({
                     {candidate.isMedia ? 'Media' : 'Non-photo file'}
                     {' · '}
                     {BigInt(candidate.bytes).toLocaleString()} bytes
-                  </p>
-                  <p>
+                  </Text>
+                  <Text>
                     Catalog state: {candidate.presence} · Library: {candidate.rootAvailability}
-                  </p>
-                </li>
+                  </Text>
+                </List.Item>
               ))}
-            </ul>
+            </List.Root>
           )}
-        </section>
+        </chakra.section>
       )}
-    </div>
+    </Box>
   );
 }

@@ -1,6 +1,6 @@
 import { AlbumActions, type OpenMenu, type PhotoSelection } from './context';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { Box, Menu, Portal, useRecipe } from '@chakra-ui/react';
+import { Box, Menu, Portal, useRecipe, Text } from '@chakra-ui/react';
 import type { AssetSummary, CatalogCollection, LibraryStatus } from '../../bindings';
 import { metadata } from '../../metadata/ipc';
 import { errorMessage } from '../../ipc';
@@ -51,9 +51,9 @@ export function PhotoAlbumActions({
   return (
     <AlbumActions.Provider value={{ show, selection }}>
       {children}
-      <span className="screen-reader-status" role="status">
+      <Text as="span" className="screen-reader-status" role="status">
         {notice}
-      </span>
+      </Text>
       <Menu.Root
         key={`${anchor.x}:${anchor.y}`}
         open={open}
@@ -208,13 +208,13 @@ function AlbumChooser({
         if (!saving.current) onClose();
       }}
     >
-      <div className="album-chooser">
-        <p>
+      <Box className="album-chooser">
+        <Text>
           Choose a custom album for <bdi>{asset.name}</bdi>.
-        </p>
+        </Text>
         {error && (
-          <div role="alert">
-            <p>{error}</p>
+          <Box role="alert">
+            <Text>{error}</Text>
             <Button
               disabled={busy}
               onClick={() => {
@@ -224,22 +224,22 @@ function AlbumChooser({
             >
               Reload albums
             </Button>
-          </div>
+          </Box>
         )}
-        {!collections && !error && <p role="status">Loading albums…</p>}
+        {!collections && !error && <Text role="status">Loading albums…</Text>}
         {collections?.map((album) => (
           <Button key={album.id} disabled={busy} onClick={() => void add(album)}>
             {album.name}
-            <span>{album.memberCount} photos</span>
+            <Text as="span">{album.memberCount} photos</Text>
           </Button>
         ))}
-        {collections?.length === 0 && <p>No custom albums yet.</p>}
+        {collections?.length === 0 && <Text>No custom albums yet.</Text>}
         <Button className="primary" disabled={busy} onClick={() => setCreating(true)}>
           + Create new album
         </Button>
-        <p className="help">Tag albums follow photo tags automatically.</p>
-        {busy && <p role="status">Adding photo…</p>}
-      </div>
+        <Text className="help">Tag albums follow photo tags automatically.</Text>
+        {busy && <Text role="status">Adding photo…</Text>}
+      </Box>
     </InspectionDialog>
   );
 }

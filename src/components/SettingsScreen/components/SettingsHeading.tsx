@@ -1,3 +1,4 @@
+import { Box, Heading, chakra } from '@chakra-ui/react';
 import { PageHeader } from '@/components/PageHeader';
 import type { ReactNode, Ref } from 'react';
 
@@ -12,15 +13,15 @@ export function SettingsHeading({
 }) {
   return (
     <PageHeader>
-      <header className="toolbar settings-heading">
-        <div className="settings-title-row">
+      <chakra.header className="toolbar settings-heading">
+        <Box className="settings-title-row">
           {navigationControl}
-          <h1 ref={heading} tabIndex={-1}>
+          <Heading as="h1" unstyled ref={heading} tabIndex={-1}>
             Settings
-          </h1>
+          </Heading>
           {jobsControl}
-        </div>
-      </header>
+        </Box>
+      </chakra.header>
     </PageHeader>
   );
 }

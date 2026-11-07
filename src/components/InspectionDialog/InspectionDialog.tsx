@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Box, useRecipe } from '@chakra-ui/react';
+import { Box, useRecipe, Heading, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { inspectionDialogRecipe } from './InspectionDialog.recipe';
 
@@ -45,14 +45,16 @@ export function InspectionDialog({
           close();
         }}
       >
-        <header>
-          <h2>{title}</h2>
+        <chakra.header>
+          <Heading as="h2" unstyled>
+            {title}
+          </Heading>
           <Button disabled={busy} onClick={close}>
             Close
           </Button>
-        </header>
-        <div className="inspection-content">{children}</div>
-        {footer && <footer className="inspection-dialog-footer">{footer}</footer>}
+        </chakra.header>
+        <Box className="inspection-content">{children}</Box>
+        {footer && <chakra.footer className="inspection-dialog-footer">{footer}</chakra.footer>}
       </dialog>
     </Box>
   );

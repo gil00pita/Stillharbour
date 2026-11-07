@@ -26,15 +26,17 @@ import { RootSetup } from '@/components/RootSetup';
 import logo from '../../../assets/branding/stillharbour-logo.svg';
 import { libraryData } from '../../ipc';
 import { BackupScreen } from '@/components/BackupScreen';
+import { SyncScreen } from '@/components/SyncScreen';
+import { StructureFormatter } from '@/components/StructureFormatter';
 import { useCatalogSwitchState } from '../../backup/catalogSwitchState';
 import { CatalogSwitchStopped } from '@/components/CatalogSwitchStopped';
 import { NotesDraftContext, type NotesDraft } from '../../metadata/notesDrafts';
 import { ErrorToast } from '@/components/ErrorToast';
-import { Box, Text } from '@chakra-ui/react';
+import { Box, Text, Heading, Image, chakra } from '@chakra-ui/react';
 
-type AppSection = Section | 'Settings' | InspectionSection | 'Backup & Sync' | 'Map';
+type AppSection =
+  Section | 'Settings' | InspectionSection | 'Backup' | 'Sync' | 'Structure Formater' | 'Map';
 type LibraryLaunch = { query: AssetQuery; selectedId: string | null; generation: number };
-
 export default function App() {
   const stopped = useCatalogSwitchState();
   return stopped ? <CatalogSwitchStopped state={stopped} /> : <ConnectedApplication />;
@@ -89,7 +91,7 @@ function ConnectedApplication() {
   const jobsControl = null;
   const configuring = Boolean(selected) || (!hasLibrary && section !== 'Settings');
   return (
-    <div
+    <Box
       className={`app-shell ${hasLibrary ? 'has-library' : ''} ${collapsed ? 'navigation-collapsed' : ''}`}
     >
       <Sidebar
@@ -130,7 +132,7 @@ function ConnectedApplication() {
           setSettingsId(null);
         }}
       />
-      <main
+      <chakra.main
         ref={main}
         id="library"
         className={
@@ -148,7 +150,7 @@ function ConnectedApplication() {
           onDismiss={() => setError(null)}
           onReconnect={!foundation ? reconnect : undefined}
         />
-        <div className="workspace-page" hidden={jobsOpen} inert={jobsOpen}>
+        <Box className="workspace-page" hidden={jobsOpen} inert={jobsOpen}>
           {configuring && (
             <SetupHeader
               hasLibrary={hasLibrary}
@@ -184,7 +186,7 @@ function ConnectedApplication() {
               onDefaultsSaved={() => setNavigationOverride(null)}
             />
           </NotesDraftScope>
-        </div>
+        </Box>
         {jobsOpen && (
           <JobsPage
             status={status}
@@ -195,11 +197,11 @@ function ConnectedApplication() {
             }}
           />
         )}
-        <p className="screen-reader-status" role="status">
+        <Text className="screen-reader-status" role="status">
           {notice}
-        </p>
-      </main>
-    </div>
+        </Text>
+      </chakra.main>
+    </Box>
   );
 }
 
@@ -228,7 +230,9 @@ function NavigationToggle({ collapsed, onToggle }: { collapsed: boolean; onToggl
           strokeWidth="1.5"
         />
       </svg>
-      <span className="nav-label">{collapsed ? 'Expand' : 'Collapse'}</span>
+      <Text as="span" className="nav-label">
+        {collapsed ? 'Expand' : 'Collapse'}
+      </Text>
     </Button>
   );
 }
@@ -243,7 +247,9 @@ function NavigationIcon({ section }: { section: AppSection | 'Map' | 'Utilities'
     Duplicates: 'M4 4h11v13H4ZM9 8h11v13H9',
     Integrity: 'M12 3l8 3v6c0 5-8 9-8 9s-8-4-8-9V6ZM8 12l3 3 5-6',
     Storage: 'M4 4h16v16H4ZM4 11h16M12 11v9',
-    'Backup & Sync': 'M4 6h16v14H4ZM8 6V3h8v3M8 13h8m-4-3v6',
+    Backup: 'M4 6h16v14H4ZM8 6V3h8v3M8 13h8m-4-3v6',
+    Sync: 'M4 7h15m-4-4 4 4-4 4M20 17H5m4-4-4 4 4 4',
+    'Structure Formater': 'M4 4h6v5H4ZM14 15h6v5h-6ZM7 9v8h7M7 13h10V5h-3',
     Settings:
       'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1Z',
   };
@@ -274,7 +280,7 @@ function Sidebar({
   onToggleNavigation: () => void;
 }) {
   return (
-    <aside
+    <chakra.aside
       id="app-sidebar"
       className="sidebar"
       aria-label="Stillharbour"
@@ -287,7 +293,7 @@ function Sidebar({
         borderBottom="1px solid {colors.border}"
         className="brand"
       >
-        <img src={logo} alt="" width="32" height="34" />
+        <Image src={logo} alt="" htmlWidth={32} htmlHeight={34} />
         <Text as="span" m="0" gap={0} lineHeight={1}>
           <Text fontSize="sm" m="0" as="span">
             Stillharbour
@@ -295,9 +301,9 @@ function Sidebar({
           {version && (
             <>
               {' '}
-              <span className="brand-version" aria-label="Application version">
+              <Text as="span" className="brand-version" aria-label="Application version">
                 {version}
-              </span>
+              </Text>
             </>
           )}
           <small>Your media library organizer.</small>
@@ -306,7 +312,7 @@ function Sidebar({
       <Box as="nav" aria-label="Main navigation" p="4">
         {hasLibrary ? (
           <>
-            <div className="nav-group" role="group" aria-label="Collection">
+            <Box className="nav-group" role="group" aria-label="Collection">
               {(['Photos', 'Folders', 'Tags'] as const).map((item) => (
                 <Button
                   key={item}
@@ -318,7 +324,9 @@ function Sidebar({
                   }}
                 >
                   <NavigationIcon section={item} />
-                  <span className="nav-label">{item === 'Tags' ? 'Albums / Tags' : item}</span>
+                  <Text as="span" className="nav-label">
+                    {item === 'Tags' ? 'Albums / Tags' : item}
+                  </Text>
                 </Button>
               ))}
               <Button
@@ -328,24 +336,37 @@ function Sidebar({
                 onClick={() => onNavigate('Map')}
               >
                 <NavigationIcon section="Map" />
-                <span className="nav-label">Map</span>
+                <Text as="span" className="nav-label">
+                  Map
+                </Text>
               </Button>
-            </div>
-            <div className="nav-group" role="group" aria-label="Utilities">
-              <div className="nav-group-label">Utilities</div>
-              {(['Duplicates', 'Integrity', 'Storage', 'Backup & Sync'] as const).map((item) => (
+            </Box>
+            <Box className="nav-group" role="group" aria-label="Utilities">
+              <Box className="nav-group-label">Utilities</Box>
+              {(
+                [
+                  'Structure Formater',
+                  'Duplicates',
+                  'Integrity',
+                  'Storage',
+                  'Backup',
+                  'Sync',
+                ] as const
+              ).map((item) => (
                 <Button
                   key={item}
                   aria-label={item}
-                  title={collapsed ? item : undefined}
+                  title={item}
                   aria-current={!jobsOpen && section === item ? 'page' : undefined}
                   onClick={() => onNavigate(item)}
                 >
                   <NavigationIcon section={item} />
-                  <span className="nav-label">{item}</span>
+                  <Text as="span" className="nav-label">
+                    {item}
+                  </Text>
                 </Button>
               ))}
-            </div>
+            </Box>
           </>
         ) : (
           <Button
@@ -358,29 +379,33 @@ function Sidebar({
               <rect x="3" y="14" width="7" height="7" rx="1" />
               <rect x="14" y="14" width="7" height="7" rx="1" />
             </svg>
-            <span className="nav-label">Library</span>
+            <Text as="span" className="nav-label">
+              Library
+            </Text>
           </Button>
         )}
       </Box>
       <Box as="footer" className="sidebar-footer" py="4" px="5">
-        <nav aria-label="Workspace actions">
+        <chakra.nav aria-label="Workspace actions">
           {jobsControl}
           {(['Settings'] as const).map((item) => (
             <Button
               key={item}
               aria-label={item}
-              title={collapsed ? item : undefined}
+              title={item}
               aria-current={!jobsOpen && section === item ? 'page' : undefined}
               onClick={() => onNavigate(item)}
             >
               <NavigationIcon section={item} />
-              <span className="nav-label">{item}</span>
+              <Text as="span" className="nav-label">
+                {item}
+              </Text>
             </Button>
           ))}
           <NavigationToggle collapsed={collapsed} onToggle={onToggleNavigation} />
-        </nav>
+        </chakra.nav>
       </Box>
-    </aside>
+    </chakra.aside>
   );
 }
 
@@ -396,8 +421,8 @@ function LibraryWelcome({
   onChoose: () => void;
 }) {
   return (
-    <section className="welcome" aria-labelledby="welcome-title">
-      <div className="folder-mark">
+    <chakra.section className="welcome" aria-labelledby="welcome-title">
+      <Box className="folder-mark">
         <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
           <path
             d="M5 12a3 3 0 0 1 3-3h9l4 4h11a3 3 0 0 1 3 3v14a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V12Z"
@@ -406,17 +431,17 @@ function LibraryWelcome({
           />
           <path d="M5 18h30" stroke="currentColor" strokeWidth="1.5" />
         </svg>
-      </div>
-      <h2 id="welcome-title">
+      </Box>
+      <Heading as="h2" unstyled id="welcome-title">
         {hasLibrary ? 'Add another library folder.' : 'A home for the moments you keep.'}
-      </h2>
-      <p className="welcome-description">
+      </Heading>
+      <Text className="welcome-description">
         Choose your photo library folder. Your originals stay in place.
-      </p>
+      </Text>
       <Button className="primary" onClick={onChoose} disabled={disabled}>
         {busy ? 'Please wait…' : 'Choose a folder'}
       </Button>
-    </section>
+    </chakra.section>
   );
 }
 
@@ -444,7 +469,7 @@ function LibraryOnboarding({
   onError: (error: unknown) => void;
 }) {
   return (
-    <div className="workspace">
+    <Box className="workspace">
       {!root && !selected && (
         <LibraryWelcome
           hasLibrary={hasLibrary}
@@ -465,7 +490,7 @@ function LibraryOnboarding({
           onError={onError}
         />
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -484,17 +509,19 @@ function SetupHeader({
 }) {
   return (
     <PageHeader>
-      <header className="toolbar">
-        <h1>{hasLibrary ? (section === 'Tags' ? 'Albums / Tags' : section) : 'Your library'}</h1>
-        <div className="header-actions">
+      <chakra.header className="toolbar">
+        <Heading as="h1" unstyled>
+          {hasLibrary ? (section === 'Tags' ? 'Albums / Tags' : section) : 'Your library'}
+        </Heading>
+        <Box className="header-actions">
           {hasLibrary && (
             <Button onClick={onChoose} disabled={busy}>
               Add folder
             </Button>
           )}
           {jobsControl}
-        </div>
-      </header>
+        </Box>
+      </chakra.header>
     </PageHeader>
   );
 }
@@ -529,16 +556,16 @@ function WorkspaceContent({
   const preferences = settings.preferences;
   if (!preferences)
     return (
-      <div className="settings-loading" role="status">
+      <Box className="settings-loading" role="status">
         {settings.error ? (
           <>
-            <p role="alert">{settings.error}</p>
+            <Text role="alert">{settings.error}</Text>
             <Button onClick={settings.retry}>Retry settings</Button>
           </>
         ) : (
-          <p>Loading settings…</p>
+          <Text>Loading settings…</Text>
         )}
-      </div>
+      </Box>
     );
   const {
     status,
@@ -611,7 +638,24 @@ function WorkspaceContent({
         onError={showError}
       />
     );
-  if (section === 'Backup & Sync')
+  if (section === 'Structure Formater')
+    return status ? (
+      <StructureFormatter
+        key={foundation?.catalogId ?? 'catalog'}
+        status={status}
+        catalogId={foundation?.catalogId ?? null}
+      />
+    ) : null;
+  if (section === 'Sync')
+    return status ? (
+      <SyncScreen
+        key={foundation?.catalogId ?? 'catalog'}
+        status={status}
+        navigationControl={null}
+        jobsControl={jobsControl}
+      />
+    ) : null;
+  if (section === 'Backup')
     return status ? (
       <BackupScreen
         navigationControl={null}
@@ -670,16 +714,18 @@ function WorkspaceContent({
           initialQuery={album?.query ?? libraryLaunch?.query}
           albumControls={
             album ? (
-              <div className="album-detail-bar">
+              <Box className="album-detail-bar">
                 <Button onClick={() => setActiveAlbum(null)}>← All albums</Button>
-                <div>
-                  <h2>{album.name}</h2>
-                  <span>
+                <Box>
+                  <Heading as="h2" unstyled>
+                    {album.name}
+                  </Heading>
+                  <Text as="span">
                     {album.fromTags
                       ? 'From tags · Collected automatically from photo tags'
                       : 'Custom album'}
-                  </span>
-                </div>
+                  </Text>
+                </Box>
                 {!album.fromTags && (
                   <Button
                     onClick={() => {
@@ -698,7 +744,7 @@ function WorkspaceContent({
                     Add photos
                   </Button>
                 )}
-              </div>
+              </Box>
             ) : undefined
           }
           initialSelectedId={libraryLaunch?.selectedId ?? null}

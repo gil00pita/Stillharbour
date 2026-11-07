@@ -1,15 +1,18 @@
+import { Heading, Text, chakra } from '@chakra-ui/react';
 import type { OriginalOperationJob } from '../../bindings';
 
 export function OriginalJobProgress({ job }: { job: OriginalOperationJob }) {
   const running = job.state === 'queued' || job.state === 'running';
   const completed = job.state === 'completed_verified';
   return (
-    <section
+    <chakra.section
       className="job-entry"
       aria-label={`${job.kind === 'undo' ? 'Undo' : 'Rename'} organization job`}
     >
-      <h3>{job.kind === 'undo' ? 'Undo organization' : 'Rename files'} · Generated fixture</h3>
-      <p>
+      <Heading as="h3" unstyled>
+        {job.kind === 'undo' ? 'Undo organization' : 'Rename files'} · Generated fixture
+      </Heading>
+      <Text>
         {job.state === 'needs_recovery'
           ? 'Needs recovery review'
           : completed
@@ -17,16 +20,16 @@ export function OriginalJobProgress({ job }: { job: OriginalOperationJob }) {
             : job.state === 'queued'
               ? 'Queued'
               : 'Running'}
-      </p>
+      </Text>
       {running ? (
         <progress aria-label="Organization job in progress" />
       ) : (
         <progress aria-label="Organization job outcome" max={1} value={completed ? 1 : 0} />
       )}
-      <p>
+      <Text>
         {job.verifiedMoves} / {job.totalMoves} verified moves
-      </p>
-      <p className="help">{job.message}</p>
-    </section>
+      </Text>
+      <Text className="help">{job.message}</Text>
+    </chakra.section>
   );
 }

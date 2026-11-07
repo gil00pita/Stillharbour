@@ -512,7 +512,7 @@ fn members(
     Ok(result)
 }
 
-fn categories(db: &Connection) -> Result<Vec<TagCategory>> {
+pub(super) fn categories(db: &Connection) -> Result<Vec<TagCategory>> {
     let values=db.prepare("SELECT CASE WHEN length(CAST(id AS BLOB))=36 THEN id END,version,CASE WHEN length(CAST(label AS BLOB))<=128 THEN label END,CASE WHEN parent_id IS NULL THEN NULL WHEN length(CAST(parent_id AS BLOB))=36 THEN parent_id ELSE '' END FROM catalog_tag_categories ORDER BY label,id LIMIT 513")?.query_map([],|r|Ok(TagCategory{id:r.get(0)?,version:r.get(1)?,label:r.get(2)?,parent_id:r.get(3)?}))?.collect::<rusqlite::Result<Vec<_>>>()?;
     validate_categories(&values)?;
     Ok(values)

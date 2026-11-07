@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from '../../test/render';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '@/components/App';
-import type { AssetQuery } from '../../bindings';
+import type { ReactNode } from 'react';
+import { defaultQuery } from '../../library/model';
+import type { AlbumSummary, AssetQuery } from '../../bindings';
 import { mapPhotoQuery, type MapBrowseState } from '../../map/state';
 import { fixturePreferences } from '../../library/__tests__/fixtures';
 import { getStatus, library, libraryData, pickDirectory, getPreferences } from '../../ipc';
@@ -19,16 +21,42 @@ vi.mock('@/components/LibraryScreen', () => ({
   LibraryScreen: ({
     initialQuery,
     onReturnToMap,
+    albumControls,
   }: {
     initialQuery?: AssetQuery;
     onReturnToMap?: () => void;
+    albumControls?: ReactNode;
   }) => (
     <div>
       <output aria-label="Photo query">
-        {initialQuery?.mapBounds ? 'Map area' : 'All photos'}
+        {initialQuery?.albumId
+          ? 'Album photos'
+          : initialQuery?.mapBounds
+            ? 'Map area'
+            : 'All photos'}
       </output>
+      {albumControls}
       {onReturnToMap && <button onClick={onReturnToMap}>Return to map</button>}
     </div>
+  ),
+}));
+vi.mock('@/components/AlbumsPage', () => ({
+  AlbumsPage: ({ onOpen }: { onOpen: (album: AlbumSummary) => void }) => (
+    <button
+      onClick={() =>
+        onOpen({
+          id: 'album',
+          name: 'Generated album',
+          fromTags: false,
+          version: 1,
+          photoCount: 1,
+          covers: [],
+          query: { ...defaultQuery, albumId: 'album' },
+        })
+      }
+    >
+      Open generated album
+    </button>
   ),
 }));
 vi.mock('../../ipc', async (original) => ({
@@ -282,6 +310,26 @@ it('suppresses native context menus throughout the sidebar', async () => {
 });
 
 it('applies the map query only through Show in photos and drops it on ordinary Photos navigation', async () => {
+  registerLibraryForNavigation();
+  render(<App />);
+  const photos = await screen.findByRole('button', { name: 'Photos' });
+  fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+  fireEvent.click(photos);
+  expect(screen.getByLabelText('Photo query')).toHaveTextContent('All photos');
+  fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show in photos' }));
+  expect(screen.getByLabelText('Photo query')).toHaveTextContent('Map area');
+  fireEvent.click(screen.getByRole('button', { name: 'Return to map' }));
+  fireEvent.click(photos);
+  expect(screen.getByLabelText('Photo query')).toHaveTextContent('All photos');
+  fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show in photos' }));
+  expect(screen.getByLabelText('Photo query')).toHaveTextContent('Map area');
+  fireEvent.click(photos);
+  expect(screen.getByLabelText('Photo query')).toHaveTextContent('All photos');
+});
+
+function registerLibraryForNavigation() {
   vi.mocked(libraryData).mockResolvedValue({
     roots: [
       {
@@ -302,20 +350,35 @@ it('applies the map query only through Show in photos and drops it on ordinary P
     metadataAvailable: true,
     previewAvailable: true,
   });
-  render(<App />);
-  const photos = await screen.findByRole('button', { name: 'Photos' });
-  fireEvent.click(screen.getByRole('button', { name: 'Map' }));
-  fireEvent.click(photos);
-  expect(screen.getByLabelText('Photo query')).toHaveTextContent('All photos');
-  fireEvent.click(screen.getByRole('button', { name: 'Map' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Show in photos' }));
-  expect(screen.getByLabelText('Photo query')).toHaveTextContent('Map area');
-  fireEvent.click(screen.getByRole('button', { name: 'Return to map' }));
-  fireEvent.click(photos);
-  expect(screen.getByLabelText('Photo query')).toHaveTextContent('All photos');
-  fireEvent.click(screen.getByRole('button', { name: 'Map' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Show in photos' }));
-  expect(screen.getByLabelText('Photo query')).toHaveTextContent('Map area');
-  fireEvent.click(photos);
-  expect(screen.getByLabelText('Photo query')).toHaveTextContent('All photos');
-});
+}
+
+it.each(['map', 'album'] as const)(
+  'opens whole-library rules independently of the active %s query',
+  async (scope) => {
+    registerLibraryForNavigation();
+    render(<App />);
+    await screen.findByRole('button', { name: 'Photos' });
+    if (scope === 'map') {
+      fireEvent.click(screen.getByRole('button', { name: 'Map' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Show in photos' }));
+    } else {
+      fireEvent.click(screen.getByRole('button', { name: 'Albums / Tags' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Open generated album' }));
+    }
+    expect(screen.getByLabelText('Photo query')).toHaveTextContent(
+      scope === 'map' ? 'Map area' : 'Album photos',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Structure Formater' }));
+    expect(screen.getByRole('heading', { name: 'Structure Formater' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Entire library' })).toBeVisible();
+    expect(screen.getByRole('radiogroup', { name: 'Filename format' })).toBeVisible();
+    fireEvent.click(screen.getByText('Advanced path rule'));
+    expect(screen.getByRole('textbox', { name: 'Path template' })).toBeVisible();
+    expect(screen.queryByLabelText('Photo query')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Choose photos' })).not.toBeInTheDocument();
+    expect(libraryData).not.toHaveBeenCalledWith(
+      expect.objectContaining({ kind: 'organization_library_start' }),
+      expect.anything(),
+    );
+  },
+);

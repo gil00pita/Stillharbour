@@ -1,3 +1,4 @@
+import { Box, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import { useState } from 'react';
 import type { InspectionFinding } from '../../bindings';
 import { Button } from '@/components/Button';
@@ -20,26 +21,28 @@ export function IntegrityFindings({ rows }: { rows: InspectionFinding[] }) {
   const flagged = rows.filter(needsAttention);
   const visible = attention ? flagged : rows;
   return (
-    <section className="integrity-findings" aria-label="File health findings">
-      <h2>File health findings</h2>
-      <p>
+    <chakra.section className="integrity-findings" aria-label="File health findings">
+      <Heading as="h2" unstyled>
+        File health findings
+      </Heading>
+      <Text>
         Review changed checksums, unreadable files and incomplete checks separately. A checksum
         mismatch means changed since baseline; it does not prove damage.
-      </p>
+      </Text>
       <dl className="inspection-metrics">
-        <div>
+        <Box>
           <dt>Files on this page</dt>
           <dd>{rows.length}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Need attention</dt>
           <dd>{flagged.length}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Not checked</dt>
           <dd>{rows.filter((row) => row.content === 'not_checked').length}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Unavailable</dt>
           <dd>
             {
@@ -47,59 +50,61 @@ export function IntegrityFindings({ rows }: { rows: InspectionFinding[] }) {
                 .length
             }
           </dd>
-        </div>
+        </Box>
       </dl>
-      <div className="inspection-actions" role="group" aria-label="Health finding filters">
+      <Box className="inspection-actions" role="group" aria-label="Health finding filters">
         <Button aria-pressed={!attention} onClick={() => setAttention(false)}>
           All findings
         </Button>
         <Button aria-pressed={attention} onClick={() => setAttention(true)}>
           Needs attention
         </Button>
-      </div>
-      <div className="inspection-table-wrap">
-        <table>
-          <caption>Retained health observations · current member page</caption>
-          <thead>
-            <tr>
-              <th>File</th>
-              <th>Presence</th>
-              <th>Content check</th>
-              <th>Checksum</th>
-              <th>Coverage and next step</th>
-            </tr>
-          </thead>
-          <tbody>
+      </Box>
+      <Box className="inspection-table-wrap">
+        <Table.Root unstyled>
+          <Table.Caption unstyled captionSide="top">
+            Retained health observations · current member page
+          </Table.Caption>
+          <Table.Header unstyled>
+            <Table.Row unstyled>
+              <Table.ColumnHeader unstyled>File</Table.ColumnHeader>
+              <Table.ColumnHeader unstyled>Presence</Table.ColumnHeader>
+              <Table.ColumnHeader unstyled>Content check</Table.ColumnHeader>
+              <Table.ColumnHeader unstyled>Checksum</Table.ColumnHeader>
+              <Table.ColumnHeader unstyled>Coverage and next step</Table.ColumnHeader>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body unstyled>
             {visible.map((row) => (
-              <tr key={row.id}>
-                <th scope="row">
+              <Table.Row unstyled key={row.id}>
+                <Table.ColumnHeader unstyled scope="row">
                   <bdi>{row.name}</bdi>
                   <small>
                     <bdi>{row.displayPath}</bdi>
                   </small>
-                </th>
-                <td>{row.inventory.replaceAll('_', ' ')}</td>
-                <td>{row.content.replaceAll('_', ' ')}</td>
-                <td>{row.checksum.replaceAll('_', ' ')}</td>
-                <td>
+                </Table.ColumnHeader>
+                <Table.Cell unstyled>{row.inventory.replaceAll('_', ' ')}</Table.Cell>
+                <Table.Cell unstyled>{row.content.replaceAll('_', ' ')}</Table.Cell>
+                <Table.Cell unstyled>{row.checksum.replaceAll('_', ' ')}</Table.Cell>
+                <Table.Cell unstyled>
                   {row.error?.message ?? row.coverage}
                   {row.checksum === 'changed_since_baseline' && (
-                    <p>
+                    <Text>
                       Preserve this version and compare with independent recovery. Baseline history
                       is retained.
-                    </p>
+                    </Text>
                   )}
-                </td>
-              </tr>
+                </Table.Cell>
+              </Table.Row>
             ))}
-          </tbody>
-        </table>
+          </Table.Body>
+        </Table.Root>
         {!visible.length && (
-          <p>
+          <Text>
             No findings match this filter on the loaded page. Uninspected scope remains unknown.
-          </p>
+          </Text>
         )}
-      </div>
-    </section>
+      </Box>
+    </chakra.section>
   );
 }

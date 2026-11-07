@@ -921,3 +921,128 @@ These extend the existing album/tag criteria; they do not replace preservation g
 - The map action is named Show in photos. Only that action transfers the viewport/cell/no-location scope and representative selection. Direct Map → Photos sidebar navigation is unfiltered, including after an earlier transfer/Return to map and while a transferred Photos view is already active.
 - Transferred Photos views show a map-scope tag with a separate × remove control inside the search field and the matching removable active filter in Filters. Bounds/cell/location count as one filter; the search input continues to represent filename/date text only. Show an accurate no-location label when appropriate.
 - Remove the map-scope tag with its × immediately without clearing filename/date/place constraints; removal in Filters follows draft/Apply/Close behavior. Verify chip visibility/hit testing at desktop and minimum widths, ordinary navigation after repeated transfers, native query results and unchanged generated sources.
+
+## Workspace consistency — owner revision, 2026-11-07
+
+- Measure the shared 64 px title/brand row on every destination at 1180 and
+  660 px. Check native logo containment, 18/24 px titles, 36 px header controls,
+  right-aligned action groups and no clipped/covered actions or window overflow.
+  Photos, Albums, Folders and Map search share frame geometry and accessible labels.
+- Timeline remains visible without hover/focus/scroll. Current/preview output
+  fits inside its reserved 96 px lane at Home/End and compact sizes. Retain live
+  captured dragging, ordinal seeks, wheel/keyboard behavior and bounded feeds.
+- Backup opens snapshots/recovery directly; Sync opens comparison directly.
+  Neither page contains the old mode switch. Saved profiles/history remain
+  bound to their existing identities and preserve every native approval gate.
+- Structure Formater opens directly on rules and Entire library, with no Choose
+  photos step. Preview every indexed media item across all locations regardless
+  of the active gallery query, selection, album or Map scope. With more than 240
+  generated entries, verify bounded batches/pages, globally increasing sequences,
+  cross-batch equal/ancestor/case conflicts updating earlier pages, and unavailable
+  items retained as blocked. Cancel and unmount reject late results; native
+  handles reject superseded sessions, duplicate advances and catalog revision
+  changes. Empty scope and errors are explicit. Changed rules invalidate results.
+  Saved templates/plans remain available. Run restructure stays visibly disabled
+  with its recovery/whole-library execution gate. Audit unchanged generated
+  originals. The separate selected-photo preview retains its planning tests.
+- Structure Formater reads backup/sync prerequisites from native state, not a
+  paged Jobs list. Active backup/restore/verification, sync/comparison, paused or
+  cancel-requested work, and retained unresolved jobs block restructuring. Check
+  old interrupted jobs behind more than 128 recent terminal jobs. Every enabled
+  backup schedule blocks, including far-future, overdue and deauthorized records;
+  disabled schedules and terminal history do not. Corrupt/unknown state and IPC
+  errors fail closed. The check must never cancel jobs, disable schedules or alter
+  originals. Verify polling/focus refresh, request coalescing and exit cleanup.
+  Read-only previews remain available, and Run restructure stays disabled even
+  when this prerequisite check is clear. Actual atomic execution admission remains
+  part of the unavailable whole-library executor gate, including any future sync
+  scheduler; a cached observation cannot authorize execution.
+- Run all frontend component tests for the broad Chakra migration, plus the
+  affected native page-chrome, timeline, organization, utility and backup flows.
+  Preserve generated-source/neighbor audits and report failures explicitly.
+
+Native entry points are `page-chrome.e2e.mjs`, `timeline-navigation.e2e.mjs`,
+`structure-formatter.e2e.mjs`, `utilities-scans.e2e.mjs`, the affected Foundation
+organization/annotation/viewer scenarios and `m4-application.e2e.mjs`. Component
+checks alone do not qualify native operation, Windows, accessibility, preservation
+or release acceptance. Actual outcomes belong in IMPLEMENTATION_LOG.
+
+### Structure rule cards — 2026-11-07
+
+- Show three date-based radio cards with decorative SVG folder-tree examples;
+  selecting one updates the actual path template. Keyboard arrows change presets.
+- Remove the event-name field and event preset. Use labelled segmented controls
+  for missing-date policy and filename stem case, with correct checked/focus and
+  disabled behavior. Keyboard changes must reach the typed native preview request.
+- Custom and historical saved templates load unchanged and show custom state;
+  choosing a new date preset clears its unused event value. Every change
+  invalidates prior results; unavailable originals and all execution gates remain.
+- Verify desktop/minimum-window layout and no horizontal overflow. Re-run the
+  generated whole-library smoke and selected-name preview consumers, retaining
+  native path, original-extension and unchanged-source assertions.
+
+### Expanded structure rules — 2026-11-07
+
+- Expose all requested date/location/tag/camera choices in labelled groups, with
+  examples and responsive radio cards. Omit Trip; location names use embedded
+  indexed observations only. Show Event name only for an event-based rule.
+- Custom supports searching/adding predefined chips, adding safe explicit folder
+  names, removing/reordering levels, Backspace/Enter and custom filename patterns.
+  Enforce the bounded path model; actual typed native requests must change with
+  the chips. Category browsing alone does not replace a current rule.
+- Custom chips use draggable grips/labels with a floating preview and insertion
+  marker, replacing earlier/later buttons. Drag across wrapped rows and commit
+  once on release; preserve duplicate levels and the exact filename pattern.
+  Verify click-to-pick/place, Space/Enter pickup, bounded arrows/Home/End, Enter
+  placement, Escape cancellation, announcements and focus restoration. Outside
+  drops, pointer cancellation/capture loss, window blur, changed rules and disabled
+  editing must discard pending moves. Scrolling near the panel edge keeps long
+  chip lists reachable. The resulting native preview request must contain the
+  reordered pattern, with original bytes and all execution gates unchanged.
+- Check quarter boundaries and all metadata tokens with synthetic sources;
+  malformed/absent/ambiguous labels and tag branches stay blocked. Reject injected
+  separators, traversal and unsafe names. Missing metadata cannot be bypassed by
+  Undated fallback. Preserve originals/extensions and global cross-page conflicts.
+- Preserve legacy v1 preview/plan fingerprints and omitted optional fields; new
+  naming/quarter policies use v2. Saved examples retain validated optional naming
+  context. Destination review and plan creation capture the same context.
+- Native generated checks use explicit catalog-only naming observations and
+  verify exact location, tag and camera target prefixes, the Custom builder and
+  unchanged fixture originals. This is not extraction coverage for all embedded
+  formats/platforms or a waiver of execution/recovery/physical-input gates.
+
+
+### Structure editor, review and simulation — 2026-11-07
+
+- Verify all five folder categories work; changing folders preserves filename
+  settings, and Original / Date + original / Sequence preserves folder levels.
+  Stem case leaves extensions unchanged; Advanced path rule exposes the raw rule.
+- Live Folder tree / Sample paths must be explicitly illustrative, rendered by
+  the native pure resolver. Reject invalid rules, hide stale examples and show
+  failures. Never inspect original files to generate illustrative examples.
+- Undated retains its documented whole-path/original-name fallback. Skip retains
+  date-dependent missing-date rows without targets and does not renumber following
+  rows; non-date layouts do not skip them. Keep historical Block readable, old
+  row serialization/digests stable and saved Skip policies versioned. Executable
+  selected-photo plan creation must reject Skip before destination work.
+- Save, load, remove and validate session preset names; reject duplicates and
+  explicit limits without eviction. Navigation preserves catalog-scoped values;
+  another catalog cannot see them, and reload clears them. Preserve distinct
+  durable Catalog templates and Saved plans workflows.
+- Native global summaries classify moves, destination folders, renames, unchanged,
+  attention, missing indexed dates and skipped rows; blocked/colliding/skipped
+  outputs must not inflate eligible actions. Verify filters/search outside the
+  first 240 rows, literal Unicode and SQL wildcard characters, query bounds,
+  stable sequences/global summary, cached complete membership and revision/session
+  invalidation. Needs attention may include handled missing-date rows.
+- Review retains before/after paths and per-row status, missing-date notice,
+  pagination, no-results/error/stale states and Back to editing. Debounce queries,
+  retire stale responses, restore stage focus and keep compact layouts usable.
+- Cancel confirmation without completion; revalidate natively before simulated
+  completion, refuse changed/unavailable previews and retire late responses.
+  Clearly state that no originals changed. Assert no organization approval,
+  execution, backup/sync or mutation request occurs; actual Run restructure stays
+  disabled in every stage. Generated-source bytes remain unchanged.
+- These local generated/native checks do not establish Windows/physical input,
+  packaged releases, metadata extraction across formats or production recovery.
+  Existing preservation and both-platform CI gates remain binding (ADR-0097).

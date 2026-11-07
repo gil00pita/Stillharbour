@@ -66,6 +66,9 @@ function setup() {
 async function build() {
   fireEvent.click(screen.getByRole('button', { name: 'Build preview' }));
   await screen.findByText('1 proposed · 0 blocked · 42 selected file bytes');
+  await waitFor(() => {
+    for (const radio of screen.getAllByRole('radio')) expect(radio).toBeEnabled();
+  });
 }
 
 it('sends catalog IDs and typed settings, renders untrusted paths as text and keeps execution unavailable', async () => {
@@ -103,26 +106,29 @@ it('sends catalog IDs and typed settings, renders untrusted paths as text and ke
 it('invalidates prior results when editing policy, pattern or preset', async () => {
   setup();
   await build();
-  fireEvent.change(screen.getByLabelText('Event name'), { target: { value: 'Trip' } });
-  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('radio', { name: 'By month' }));
+  await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
   await build();
-  fireEvent.change(screen.getByLabelText('When capture date is missing'), {
-    target: { value: 'block' },
-  });
-  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  fireEvent.click(
+    within(screen.getByRole('radiogroup', { name: 'When capture date is missing' })).getByRole(
+      'radio',
+      { name: 'Block photo' },
+    ),
+  );
+  await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
   await build();
   fireEvent.change(screen.getByLabelText('Path template'), {
-    target: { value: '{event}/{original_stem}.{ext}' },
+    target: { value: '{capture:%Y}/Archive/{original_stem}.{ext}' },
   });
-  expect(screen.getByLabelText('Preset')).toHaveValue('');
-  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  expect(screen.getByRole('combobox', { name: 'Folder levels' })).toBeVisible();
+  await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
 });
 it('binds explicit stem case to a fresh preview and preserves extension help', async () => {
   setup();
-  expect(screen.getByLabelText('Filename stem case')).toHaveValue('preserve');
+  expect(screen.getByRole('radio', { name: 'Preserve' })).toBeChecked();
   await build();
-  fireEvent.change(screen.getByLabelText('Filename stem case'), { target: { value: 'uppercase' } });
-  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('radio', { name: 'UPPERCASE' }));
+  await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
   await build();
   expect(libraryData).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -132,8 +138,8 @@ it('binds explicit stem case to a fresh preview and preserves extension help', a
     'organization_preview',
   );
   expect(screen.getByText(/Folder names and extension case stay as previewed/)).toBeVisible();
-  fireEvent.change(screen.getByLabelText('Filename stem case'), { target: { value: 'preserve' } });
-  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('radio', { name: 'Preserve' }));
+  await waitFor(() => expect(screen.queryByRole('table')).not.toBeInTheDocument());
   await build();
   const last = vi
     .mocked(libraryData)

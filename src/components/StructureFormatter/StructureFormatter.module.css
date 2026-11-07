@@ -1,0 +1,13 @@
+/* Bridge legacy unlayered primary-button rules; recipes remain responsible for
+   layout and tokens. Keep this override local to this flow and its portals. */
+.footer :global(.primary),
+.dialog :global(.primary),
+.completion :global(.primary) {
+  margin-block: 0;
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding-block: 0;
+}
+.footer :global(.help) {
+  margin: 0;
+}

@@ -1,3 +1,4 @@
+import { List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -78,49 +79,51 @@ export function RetainedCopyInspection({
     }
   }
   return (
-    <section aria-label="Retained copy inspection" aria-busy={pending}>
+    <chakra.section aria-label="Retained copy inspection" aria-busy={pending}>
       <Button type="button" disabled={pending} onClick={() => void inspect()}>
         {pending ? 'Inspecting retained bytes…' : 'Choose original destination and inspect'}
       </Button>
-      <p className="help">
+      <Text className="help">
         Inspection compares actual files with their sources. It grants no permission to resume or
         change files. Originals and retained outputs remain in place.
-      </p>
+      </Text>
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
       {result && (
         <>
-          <p>
+          <Text>
             <bdi>{result.destinationDisplayPath}</bdi> / <bdi>{result.outputFolder}</bdi>
-          </p>
-          <p role="status">
+          </Text>
+          <Text role="status">
             {result.inspection.allPublishedBytesVerified
               ? 'Every selected output was freshly compared with its source.'
               : 'Some files need attention or remain staged. Keep their files and journal for recovery.'}
-          </p>
-          <ol start={page * 64 + 1}>
-            {result.files.slice(page * 64, (page + 1) * 64).map((file, index) => (
-              <li key={file.id}>
-                <p>
-                  <bdi>{file.sourcePath}</bdi> → <bdi>{file.targetPath}</bdi>
-                </p>
-                <p>
-                  {file.bytes} bytes —{' '}
-                  {labels[result.inspection.states[page * 64 + index] ?? 'needs_attention']}
-                </p>
-                {result.issues
-                  .filter((issue) => issue.fileId === file.id)
-                  .map((issue) => (
-                    <p className="error" key={issue.fileId}>
-                      {issue.error.code}: {issue.error.message}
-                    </p>
-                  ))}
-              </li>
-            ))}
-          </ol>
+          </Text>
+          <List.Root asChild unstyled>
+            <ol start={page * 64 + 1}>
+              {result.files.slice(page * 64, (page + 1) * 64).map((file, index) => (
+                <List.Item unstyled key={file.id}>
+                  <Text>
+                    <bdi>{file.sourcePath}</bdi> → <bdi>{file.targetPath}</bdi>
+                  </Text>
+                  <Text>
+                    {file.bytes} bytes —{' '}
+                    {labels[result.inspection.states[page * 64 + index] ?? 'needs_attention']}
+                  </Text>
+                  {result.issues
+                    .filter((issue) => issue.fileId === file.id)
+                    .map((issue) => (
+                      <Text className="error" key={issue.fileId}>
+                        {issue.error.code}: {issue.error.message}
+                      </Text>
+                    ))}
+                </List.Item>
+              ))}
+            </ol>
+          </List.Root>
           <Button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
             Previous inspected files
           </Button>
@@ -141,6 +144,6 @@ export function RetainedCopyInspection({
           )}
         </>
       )}
-    </section>
+    </chakra.section>
   );
 }

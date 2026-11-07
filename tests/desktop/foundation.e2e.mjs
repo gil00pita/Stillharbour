@@ -7,6 +7,23 @@ import { warmPhotoForScroll } from './warmPhoto.mjs';
 import { assertViewerControlsOverlay } from './viewer-controls.mjs';
 import { createEvidenceDirectory } from './evidence.mjs';
 
+// Prepare viewport/focus through the same native DOM operations used by the
+// instrumented Jobs tests. WebDriver's wheel/animation-frame scrolling stalls
+// when WKWebView is occluded; these helpers do not claim physical input.
+async function revealOrganizationControl(element) {
+  await browser.execute(
+    (node) => node.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' }),
+    await element,
+  );
+}
+async function openOrganizationWorkspace() {
+  const action = await $('button=Preview organization');
+  await browser.execute((node) => {
+    node.focus();
+    node.click();
+  }, action);
+}
+
 async function native(request) {
   return browser.tauri.execute(
     async ({ core }, request) => core.invoke('library_request', { request }),
@@ -37,7 +54,7 @@ async function reviewBackupComparison(evidence, existingPicker) {
   const picker = existingPicker ?? (await browser.tauri.mock('foundation_request'));
   try {
     await picker.mockReturnValue({ kind: 'directory', data: destination });
-    await $('button[aria-label="Backup & Sync"]').click();
+    await $('button[aria-label="Sync"]').click();
     await $('.backup-workspace').waitForDisplayed();
     assert.equal(await $('button=Review append plan').isEnabled(), false);
     await $('button=Choose destination').click();
@@ -139,7 +156,7 @@ async function reviewBackupComparison(evidence, existingPicker) {
     await $('section[aria-label="Entry details"]').scrollIntoView();
     await browser.saveScreenshot(`.context/screenshots/m4a-${process.platform}-entry-details.png`);
     await $('button[aria-label="Photos"]').click();
-    await $('button[aria-label="Backup & Sync"]').click();
+    await $('button[aria-label="Sync"]').click();
     // Returning starts a real background comparison. It becomes the next
     // baseline; a subsequent manual scan must not pretend it never happened.
     let refreshed;
@@ -523,6 +540,40 @@ async function ownedOperationReceipt() {
     }, token);
   }
 }
+async function chooseOrganizationSegment(label, value) {
+  await browser.execute(
+    (label, value) => {
+      const group = [...document.querySelectorAll('.segmented-control')].find(
+        (element) =>
+          document.getElementById(element.getAttribute('aria-labelledby'))?.textContent === label,
+      );
+      const input = [...group.querySelectorAll('input[type="radio"]')].find(
+        (element) => element.value === value,
+      );
+      input.closest('label').scrollIntoView({ block: 'center', behavior: 'instant' });
+      input.click();
+    },
+    label,
+    value,
+  );
+  await browser.waitUntil(() =>
+    browser.execute(
+      (label, value) => {
+        const group = [...document.querySelectorAll('.segmented-control')].find(
+          (element) =>
+            document.getElementById(element.getAttribute('aria-labelledby'))?.textContent === label,
+        );
+        return [...group.querySelectorAll('[data-part="item"]')].some(
+          (item) =>
+            item.dataset.state === 'checked' && item.querySelector('input')?.value === value,
+        );
+      },
+      label,
+      value,
+    ),
+  );
+}
+
 async function reviewFilenameStemCase(assetIds, evidence) {
   const template = {
     pattern: '{capture:%Y}/{capture:%Y-%m-%d}/{original_stem}.{ext}',
@@ -532,7 +583,7 @@ async function reviewFilenameStemCase(assetIds, evidence) {
   };
   const expected = (await native({ kind: 'organization_preview', asset_ids: assetIds, template }))
     .data;
-  await changeSizeUnit('Filename stem case', 'uppercase');
+  await chooseOrganizationSegment('Filename stem case', 'uppercase');
   await $('button=Build preview').click();
   await $('.organization-table tbody tr:first-child').waitForDisplayed();
   const shown = await browser.execute(() =>
@@ -561,7 +612,7 @@ async function reviewFilenameStemCase(assetIds, evidence) {
   await browser.saveScreenshot(
     `.context/screenshots/m2-filename-stem-case-${process.platform}.png`,
   );
-  await changeSizeUnit('Filename stem case', 'preserve');
+  await chooseOrganizationSegment('Filename stem case', 'preserve');
   assert.equal(await $('.organization-table').isExisting(), false);
 }
 async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
@@ -603,7 +654,7 @@ async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
       timeout: 15000,
       timeoutMsg: 'Managed destination chooser is still disabled after policy selection',
     });
-    await choose.scrollIntoView();
+    await revealOrganizationControl(choose);
     await choose.click();
     await browser.waitUntil(
       async () =>
@@ -1811,7 +1862,11 @@ async function assertPhotoScanningArt() {
 async function assertFormControlsAligned(selector) {
   const controls = await browser.execute((selector) => {
     const root = document.querySelector(selector);
-    return [...root.querySelectorAll('select, input:not([type="checkbox"]):not([type="range"])')]
+    return [
+      ...root.querySelectorAll(
+        'select, input:not([type="checkbox"]):not([type="range"]):not([type="radio"])',
+      ),
+    ]
       .filter((element) => element.getClientRects().length && !element.closest('.tag-editor'))
       .map((element) => ({
         tag: element.tagName,
@@ -1820,7 +1875,21 @@ async function assertFormControlsAligned(selector) {
         fits: element.getBoundingClientRect().width <= element.parentElement.clientWidth + 1,
       }));
   }, selector);
-  assert.ok(controls.some((control) => control.tag === 'SELECT'));
+  assert.ok(controls.some((control) => ['SELECT', 'INPUT'].includes(control.tag)));
+  const segments = await browser.execute(
+    (selector) =>
+      [...document.querySelector(selector).querySelectorAll('.segmented-control')].map(
+        (element) => ({
+          height: element.getBoundingClientRect().height,
+          fits: element.getBoundingClientRect().width <= element.parentElement.clientWidth + 1,
+        }),
+      ),
+    selector,
+  );
+  assert.ok(
+    segments.every((segment) => segment.height >= 36 && segment.fits),
+    JSON.stringify(segments),
+  );
   assert.ok(
     controls.every((control) => control.height >= 36 && control.font >= 13 && control.fits),
     JSON.stringify(controls),
@@ -2581,12 +2650,12 @@ describe('native read-only library', () => {
         // Keep the selected asset; stale plans must stay disabled if inputs do
         // change. Text list has the existing no-image-demand contract.
         await galleryView('Text list');
-        await $('button=Preview organization').click();
         const stemCaseIds = await browser.execute(() =>
           [...document.querySelectorAll('.asset-check:checked')].map(
             (input) => input.closest('[data-asset-id]').dataset.assetId,
           ),
         );
+        await openOrganizationWorkspace();
         await reviewFilenameStemCase(stemCaseIds, evidence);
         await reviewManagedDestinationPolicy(evidence, picker);
         const destination = await browser.tauri.execute(async ({ core }) =>
@@ -3863,6 +3932,13 @@ describeMac('macOS M1 library — generated native fixtures', () => {
         const expected = bounds.top + (Number(slider.value) / Number(slider.max)) * bounds.height;
         return {
           vertical: slider.getAttribute('aria-orientation') === 'vertical',
+          labelKind: document.querySelector('.timeline-current').getAttribute('aria-label'),
+          expected,
+          labelBottom: bubble.bottom,
+          thumbCenter: (thumb.top + thumb.bottom) / 2,
+          value: slider.value,
+          maximum: slider.max,
+          hidden: document.hidden,
           hitWidth: bounds.width,
           markerCount: document.querySelectorAll('.timeline-tick').length,
           aligned:
@@ -3874,7 +3950,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       assert.equal(timelineGeometry.vertical, true);
       assert.ok(timelineGeometry.hitWidth >= 24);
       assert.ok(timelineGeometry.markerCount >= 0 && timelineGeometry.markerCount <= 80);
-      assert.equal(timelineGeometry.aligned, true);
+      assert.equal(timelineGeometry.aligned, true, JSON.stringify(timelineGeometry));
       assert.equal(timelineGeometry.contained, true);
       const sticky = await browser.execute(() => {
         const viewport = document.querySelector('.asset-viewport').getBoundingClientRect();
@@ -4585,7 +4661,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       assert.equal(expected.kind, 'organization_preview');
       assert.equal(expected.data.rows.length, 2);
       assert.equal(expected.data.executionAvailable, false);
-      await $('button=Preview organization').click();
+      await openOrganizationWorkspace();
       await $('.organization-preview[open]').waitForDisplayed();
       await assertFormControlsAligned('.organization-preview');
       await reviewFilenameStemCase(ids, evidence);
@@ -4685,7 +4761,10 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       );
     } finally {
       const close = await $$('button[aria-label="Close organization preview"]');
-      if (close.length) await close[0].click();
+      if (close.length) {
+        await revealOrganizationControl(close[0]);
+        await close[0].click();
+      }
       await browser.setWindowSize(1180, 780);
       const after = JSON.parse(
         execFileSync(

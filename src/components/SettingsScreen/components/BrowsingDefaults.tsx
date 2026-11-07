@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Text, chakra } from '@chakra-ui/react';
 import type { AppPreferences, LibraryStatus } from '../../../bindings';
 import { NativeSelect } from '@/components/NativeSelect';
 import { BrowserControls } from '@/components/BrowserControls';
@@ -14,13 +14,15 @@ export function BrowsingDefaults({
   onChange: (patch: Partial<AppPreferences>) => void;
 }) {
   return (
-    <section className="settings-section" aria-labelledby="browsing-defaults-title">
-      <h2 id="browsing-defaults-title">Browsing defaults</h2>
-      <p className="help">
+    <chakra.section className="settings-section" aria-labelledby="browsing-defaults-title">
+      <Heading as="h2" unstyled id="browsing-defaults-title">
+        Browsing defaults
+      </Heading>
+      <Text className="help">
         Applied when you open Photos. Changes here do not alter your catalog notes or scan existing
         folders.
-      </p>
-      <div className="form-grid">
+      </Text>
+      <Box className="form-grid">
         <Field.Root asChild unstyled>
           <label>
             <Field.Label asChild unstyled>
@@ -62,7 +64,7 @@ export function BrowsingDefaults({
             </NativeSelect>
           </label>
         </Field.Root>
-      </div>
+      </Box>
       <BrowserControls
         mode={draft.galleryView}
         size={draft.thumbnailSize}
@@ -76,6 +78,6 @@ export function BrowsingDefaults({
         checked={draft.navigationCollapsed}
         onChange={(navigationCollapsed) => update({ navigationCollapsed })}
       />
-    </section>
+    </chakra.section>
   );
 }

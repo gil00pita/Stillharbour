@@ -1,3 +1,4 @@
+import { Box, Heading } from '@chakra-ui/react';
 import { usePhotoSelection } from '@/components/PhotoAlbumActions';
 import { dayLabel, type PhotoHeading } from '../../library/model';
 
@@ -14,7 +15,7 @@ export function DateHeading({
 }) {
   const selection = usePhotoSelection();
   return (
-    <div className="date-heading" data-day={heading.date} style={{ width: heading.width }}>
+    <Box className="date-heading" data-day={heading.date} style={{ width: heading.width }}>
       {(!selection || selection.active) && (
         <input
           type="checkbox"
@@ -24,10 +25,10 @@ export function DateHeading({
           onChange={() => onSelect?.(heading.ids)}
         />
       )}
-      <h2 title={dayLabel(heading.date)} aria-label={dayLabel(heading.date)}>
+      <Heading as="h2" unstyled title={dayLabel(heading.date)} aria-label={dayLabel(heading.date)}>
         {dayLabel(heading.date, undefined, heading.width < 350)}
-      </h2>
+      </Heading>
       {heading.width >= 180 && <small>{heading.ids.length} shown</small>}
-    </div>
+    </Box>
   );
 }

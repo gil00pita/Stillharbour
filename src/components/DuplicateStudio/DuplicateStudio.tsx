@@ -1,5 +1,5 @@
 import { useRef, useState, type MouseEvent } from 'react';
-import { Box, Field, useRecipe } from '@chakra-ui/react';
+import { Box, Field, useRecipe, Heading, Text, chakra } from '@chakra-ui/react';
 import type { DuplicatePage, FindingPage, InspectionJob, LibraryStatus } from '../../bindings';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -61,12 +61,16 @@ export function DuplicateStudio({
     .reduce((total, group) => total + Math.max(0, group.memberCount - 1), 0);
   return (
     <Box as="section" css={styles} className="duplicate-studio" aria-label="Duplicate groups">
-      <div className="duplicate-summary">
-        <div>
-          <h2>Make room for the photos that matter.</h2>
-          <p>Compare the evidence, choose what stays, and keep uncertain versions together.</p>
-        </div>
-        <div className="duplicate-summary-actions">
+      <Box className="duplicate-summary">
+        <Box>
+          <Heading as="h2" unstyled>
+            Make room for the photos that matter.
+          </Heading>
+          <Text>
+            Compare the evidence, choose what stays, and keep uncertain versions together.
+          </Text>
+        </Box>
+        <Box className="duplicate-summary-actions">
           <Button
             onClick={(event) => {
               recentOpener.current = event.currentTarget;
@@ -76,34 +80,36 @@ export function DuplicateStudio({
             Recently Deleted
           </Button>
           <Button onClick={openRules}>Cleanup rules</Button>
-        </div>
-      </div>
+        </Box>
+      </Box>
       <dl className="duplicate-totals">
-        <div>
+        <Box>
           <dt>Groups on this page</dt>
           <dd>{rows.length}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Potential duplicates</dt>
           <dd>{candidates}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Exact-match groups</dt>
           <dd>{exact.length}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Recoverable storage</dt>
           <dd>Not verified</dd>
-        </div>
+        </Box>
       </dl>
-      <p className="duplicate-safety-note">
+      <Text className="duplicate-safety-note">
         Read-only review · Cleanup needs fresh byte verification, protected companions and verified
         independent recovery. Recently Deleted retains bytes and frees {displayBytes('0')}.
-      </p>
-      <div className="duplicate-workspace">
-        <div className="duplicate-queue">
-          <div className="duplicate-queue-head">
-            <h3>Duplicate clusters</h3>
+      </Text>
+      <Box className="duplicate-workspace">
+        <Box className="duplicate-queue">
+          <Box className="duplicate-queue-head">
+            <Heading as="h3" unstyled>
+              Duplicate clusters
+            </Heading>
             <Field.Root>
               <Field.Label className="screen-reader-status">Search duplicate groups</Field.Label>
               <Input
@@ -114,16 +120,16 @@ export function DuplicateStudio({
                 onChange={(event) => setSearch(event.target.value)}
               />
             </Field.Root>
-            <div className="duplicate-filters" role="group" aria-label="Duplicate filters">
+            <Box className="duplicate-filters" role="group" aria-label="Duplicate filters">
               {['All groups', 'Exact matches', 'Needs review', 'Can automate'].map((item) => (
                 <Button key={item} aria-pressed={filter === item} onClick={() => setFilter(item)}>
                   {item}
                 </Button>
               ))}
-            </div>
-          </div>
+            </Box>
+          </Box>
           {rows.length > 0 && (
-            <div className="duplicate-select-all">
+            <Box className="duplicate-select-all">
               <label>
                 <input
                   type="checkbox"
@@ -137,14 +143,14 @@ export function DuplicateStudio({
                 />{' '}
                 Select shown groups
               </label>
-              <span>{selected.size} selected</span>
-            </div>
+              <Text as="span">{selected.size} selected</Text>
+            </Box>
           )}
-          <div className="duplicate-clusters">
+          <Box className="duplicate-clusters">
             {matches.map((group, index) => {
               const observed = findings?.rows.find((row) => group.memberIds.includes(row.id));
               return (
-                <article
+                <chakra.article
                   key={group.id}
                   className={`duplicate-cluster ${group.id === current?.id ? 'is-current' : ''}`}
                 >
@@ -167,29 +173,29 @@ export function DuplicateStudio({
                     aria-pressed={group.id === current?.id}
                     onClick={() => setSelectedId(group.id)}
                   >
-                    <span className="duplicate-cluster-number" aria-hidden="true">
+                    <Text as="span" className="duplicate-cluster-number" aria-hidden="true">
                       {String(index + 1).padStart(2, '0')}
-                    </span>
-                    <span>
+                    </Text>
+                    <Text as="span">
                       <strong>
                         <bdi>{observed?.name ?? evidenceLabels[group.evidence]}</bdi>
                       </strong>
-                      <span>
+                      <Text as="span">
                         {group.memberCount} files ·{' '}
                         {group.evidence === 'hard_link_aliases'
                           ? 'Shared object'
                           : `${Math.max(0, group.memberCount - 1)} potential duplicate${group.memberCount === 2 ? '' : 's'}`}
-                      </span>
+                      </Text>
                       <small>{evidenceLabels[group.evidence]}</small>
                       <small>Visual confidence: not measured</small>
-                    </span>
+                    </Text>
                   </Button>
-                </article>
+                </chakra.article>
               );
             })}
             {!matches.length && (
-              <div className="duplicate-empty">
-                <h3>
+              <Box className="duplicate-empty">
+                <Heading as="h3" unstyled>
                   {filter === 'Can automate'
                     ? 'Automatic cleanup is unavailable'
                     : rows.length
@@ -199,8 +205,8 @@ export function DuplicateStudio({
                         : job
                           ? 'No completed duplicate groups'
                           : 'Start with a duplicate inspection'}
-                </h3>
-                <p>
+                </Heading>
+                <Text>
                   {filter === 'Can automate'
                     ? 'Even exact matches need a fresh surviving keeper, companion checks and independent recovery. No groups can be automated in this build.'
                     : rows.length
@@ -210,16 +216,16 @@ export function DuplicateStudio({
                         : job
                           ? 'No matching groups are retained in this inspection. Incomplete and unavailable scope remains unknown.'
                           : 'Choose folders and a matching method above. Your originals stay in place.'}
-                </p>
-              </div>
+                </Text>
+              </Box>
             )}
-          </div>
+          </Box>
           {groups?.next && <Button onClick={next}>Next group page</Button>}
           {selected.size > 0 && (
             <Button onClick={openRules}>Review rules for {selected.size} groups</Button>
           )}
-        </div>
-        <div className="duplicate-inspector">
+        </Box>
+        <Box className="duplicate-inspector">
           {current && job ? (
             <DuplicateDetail
               key={`${job.id}:${current.id}`}
@@ -230,16 +236,20 @@ export function DuplicateStudio({
               onRule={(rule) => setPolicy((previous) => ({ ...previous, rule }))}
             />
           ) : (
-            <div className="duplicate-empty">
+            <Box className="duplicate-empty">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M4 4h11v13H4ZM9 8h11v13H9" stroke="currentColor" strokeWidth="1" />
               </svg>
-              <h3>Every version has a story</h3>
-              <p>Choose a cluster to inspect its files, matching evidence and keeper choices.</p>
-            </div>
+              <Heading as="h3" unstyled>
+                Every version has a story
+              </Heading>
+              <Text>
+                Choose a cluster to inspect its files, matching evidence and keeper choices.
+              </Text>
+            </Box>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
       {rules && (
         <CleanupRules
           policy={policy}
@@ -266,16 +276,18 @@ export function DuplicateStudio({
 function RecentlyDeleted({ onClose }: { onClose: () => void }) {
   return (
     <ReviewDialog title="Recently Deleted" onClose={onClose}>
-      <h3>No files have been moved</h3>
-      <p>
+      <Heading as="h3" unstyled>
+        No files have been moved
+      </Heading>
+      <Text>
         Duplicate removal and Undo are unavailable until the native cleanup and recovery gates pass.
         A retained keeper review does not move files here.
-      </p>
-      <p>
+      </Text>
+      <Text>
         When available, removal will preserve files and their original paths without automatic
         expiry. Restoring will require a new collision-safe plan. Quarantine does not reclaim
         storage.
-      </p>
+      </Text>
       <Button disabled>Undo removal unavailable</Button>
     </ReviewDialog>
   );

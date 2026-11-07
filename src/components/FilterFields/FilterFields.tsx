@@ -1,5 +1,5 @@
 import { mapFilterLabel } from '@/utils/map-filter-label';
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -16,7 +16,7 @@ export function QueryFields({
   status: LibraryStatus;
 }) {
   return (
-    <div className="panel-query-fields">
+    <Box className="panel-query-fields">
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -37,8 +37,8 @@ export function QueryFields({
       </Field.Root>
       <SortControl value={query.sort} onChange={(sort) => filter({ sort })} />
 
-      <section className="panel-criteria">
-        <div className="form-grid">
+      <chakra.section className="panel-criteria">
+        <Box className="form-grid">
           <Field.Root asChild unstyled>
             <label>
               <Field.Label asChild unstyled>
@@ -155,7 +155,7 @@ export function QueryFields({
               </NativeSelect>
             </label>
           </Field.Root>
-        </div>
+        </Box>
         <label className="check-row">
           <input
             type="checkbox"
@@ -187,8 +187,8 @@ export function QueryFields({
           <input type="checkbox" disabled />
           Similar groups · unavailable
         </label>
-      </section>
-    </div>
+      </chakra.section>
+    </Box>
   );
 }
 
@@ -208,10 +208,12 @@ export function LibraryFacets({
   return (
     <>
       {section === 'Folders' && (
-        <div className="folder-strip">
-          <h2>Folders</h2>
+        <Box className="folder-strip">
+          <Heading as="h2" unstyled>
+            Folders
+          </Heading>
           {!query.rootId ? (
-            <p>Select a library to browse its folders.</p>
+            <Text>Select a library to browse its folders.</Text>
           ) : (
             <>
               <Button
@@ -233,11 +235,13 @@ export function LibraryFacets({
               ))}
             </>
           )}
-        </div>
+        </Box>
       )}
       {section === 'Tags' && (
-        <div className="folder-strip">
-          <h2>Tags</h2>
+        <Box className="folder-strip">
+          <Heading as="h2" unstyled>
+            Tags
+          </Heading>
           {tags.length ? (
             tags.map((tag) => (
               <Button
@@ -250,9 +254,9 @@ export function LibraryFacets({
               </Button>
             ))
           ) : (
-            <p>Add tags in Photo details to organize your library.</p>
+            <Text>Add tags in Photo details to organize your library.</Text>
           )}
-        </div>
+        </Box>
       )}
     </>
   );
@@ -273,11 +277,11 @@ export function RootAvailability({
   return (
     <>
       {root && (
-        <div className="root-status">
-          <span>
+        <Box className="root-status">
+          <Text as="span">
             <bdi>{root.label}</bdi> · {root.availability.replaceAll('_', ' ')} ·{' '}
             {root.mode === 'referenced' ? 'read only' : 'managed'}
-          </span>
+          </Text>
           <Button type="button" onClick={() => onSettings(root.id)}>
             Scan settings
           </Button>
@@ -286,15 +290,15 @@ export function RootAvailability({
               Relink folder
             </Button>
           )}
-        </div>
+        </Box>
       )}
       {status.roots.some((root) =>
         ['offline', 'inaccessible', 'needs_relink'].includes(root.availability),
       ) && (
-        <p className="availability-note">
+        <Text className="availability-note">
           Some originals are unavailable. Catalog details and cached previews remain available.
           Select a library to reconnect it.
-        </p>
+        </Text>
       )}
     </>
   );
@@ -329,7 +333,7 @@ export function ActiveFilters({
     maxBytes: 'Maximum bytes',
   };
   return (
-    <div className="active-filters" aria-label="Active filters">
+    <Box className="active-filters" aria-label="Active filters">
       {fields
         .filter((key) => query[key])
         .map((key) => (
@@ -376,6 +380,6 @@ export function ActiveFilters({
           {query.rejected ? 'Rejected' : 'Not rejected'} ×
         </Button>
       )}
-    </div>
+    </Box>
   );
 }

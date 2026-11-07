@@ -399,3 +399,71 @@ Albums / Tags owns Catalog and Saved plans. Photos keeps search, Filter and Sele
 ### Inline map scope — 2026-11-06
 
 Render the active map scope inside the search field as a compact tag with a distinct × remove target. The search icon, tag and editable text share one border; the tag label itself does not remove the filter. Truncate long labels while keeping the × and text entry available, and return focus to text entry after removal. Preserve the same map filter membership and independent filename/date/place constraints.
+
+## Workspace precision — owner revision, 2026-11-07
+
+Retain the studio palette, system typography, owner SVG and photo geometry.
+Primary page chrome is always 64 px with an 18/24 px title; header search and
+buttons share 36 px height. Keep a 136 px desktop title lane where search exists,
+relaxing at compact widths. Align all search frames and group actions on the
+right. Body primary actions and viewer targets retain 44 px. Bound search flex
+sizing so all compact album controls remain reachable. Long navigation labels
+truncate instead of changing row height, retaining accessible names/tooltips.
+
+Backup owns encrypted versioned snapshots/recovery; Sync owns comparison and
+reviewed one-way copy. Structure Formater uses a short introduction, divided
+whole-library scope summary and inline rule editor, following the utility task
+model. No source chooser or selected-photo handoff is needed. Keep field labels,
+controls and help in consistent vertical groups. Results have bounded pagination
+and explicit progress, cancellation, stale, empty and failure states.
+The chronology rail remains visible at rest and reserves 96 px for its contained
+labels; this supersedes the fading 56 px lane. No new decorative effects, assets
+or persisted identity changes are introduced. See docs/UI_WORKSPACE_AUDIT.md.
+
+## Structure rule choices — 2026-11-07
+
+Replace the preset dropdown with three radio cards showing precise inline SVG
+folder-tree examples. Use the existing graphite/sage palette, flat borders and
+system type. The selected card has a sage border and checked indicator; keyboard
+focus remains distinct. Cards form three columns when space permits and become
+compact illustration/text rows in narrow content panes. Dates/times replace
+event naming. Missing-date and filename-case choices use segmented radio groups
+with static checked fills, named groups and visible keyboard focus; selection does
+not depend on an animated indicator. Custom path editing remains below the cards.
+
+## Expanded structure categories and chips — 2026-11-07
+
+Use a labelled five-way segmented category selector above illustrated radio
+cards. Keep existing folder-tree drawings; accommodate four path rows without
+clipping. Browsing categories does not silently select a new rule. Custom uses a
+flat bordered input containing ordered chips and a search field, with draggable
+grip/label handles and separate remove targets, an inline predefined-part palette and a separate filename
+pattern. Keep help secondary, focus visible and compact panes free of horizontal
+overflow. Required metadata gaps are shown as blocked preview rows. Event input
+appears only for event-based rules. No guessed location or camera class is shown
+as fact. Examples stay illustrative rather than catalog measurements.
+
+Custom chips use a grab cursor, six-dot grips, a portalled floating chip and a
+clear insertion line. Keep their original positions until release; wrapped rows
+remain drop targets. Click-to-pick/place and keyboard pickup/arrows/Enter/Escape
+share the same controls, with announcements and restored focus. Remove the old
+earlier/later arrow buttons; retain the existing flat surfaces and focus treatment.
+
+## Structure editor and review — 2026-11-07
+
+Retain the existing dark studio identity. Use a divided editing pane and sticky
+illustrative tree/path pane, stacking below 760 px of content width. Five category
+tabs lead to compact illustrated folder cards; filename, missing-date and case
+segments are separate, with the complete path under Advanced. Examples clearly
+label their invented source data. Preserve Custom chip dragging and alternatives.
+
+Review replaces editing with four restrained global metrics, an actionable
+missing-indexed-date notice, full-scope search/filter controls and a before/after
+path table. Keep one footer with Back to editing, Save preset, an explicitly named
+simulation action and disabled actual Run restructure. Stage headings receive
+focus; loading/error/stale states stay explicit. Use portalled Chakra v3 dialogs,
+initial cancellation focus, named session presets and existing focus treatments.
+Completion uses a compact confirmation mark, simulated totals and explicit
+unchanged-library text, with a return to editing/review and disabled actual run.
+Do not repeat the editing introduction or global footer on completion. Shared
+control geometry remains aligned at desktop and minimum window sizes.

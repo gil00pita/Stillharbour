@@ -1,3 +1,4 @@
+import { Text, chakra, Button } from '@chakra-ui/react';
 import {
   usePhotoAlbumMenu,
   usePhotoAlbumKeys,
@@ -63,7 +64,7 @@ function ImageTile({
   const selecting = selection?.active ?? selectionActive;
   const [imageFailure, setImageFailure] = useState(false);
   return (
-    <article
+    <chakra.article
       onContextMenu={contextMenu}
       onKeyDown={contextKeys}
       data-asset-id={asset.id}
@@ -89,7 +90,9 @@ function ImageTile({
           onKeyDown={onNavigate}
         />
       )}
-      <button
+      <Button
+        unstyled
+        type="submit"
         className="asset-open"
         aria-label={`Open ${asset.name}`}
         onKeyDown={onNavigate}
@@ -111,21 +114,23 @@ function ImageTile({
           onFailure={() => setImageFailure(true)}
         />
         {mode !== 'gallery' && (
-          <span className="asset-name">
+          <Text as="span" className="asset-name">
             <bdi>{asset.name}</bdi>
-          </span>
+          </Text>
         )}
-      </button>
+      </Button>
       {imageFailure && onRetry && (
-        <button
+        <Button
+          unstyled
+          type="submit"
           className="asset-preview-retry"
           onClick={onRetry}
           aria-label={`Retry preview for ${asset.name}`}
         >
           Retry preview
-        </button>
+        </Button>
       )}
-    </article>
+    </chakra.article>
   );
 }
 
@@ -160,11 +165,12 @@ export function TileImage({
     ? 'Cached preview failed to load'
     : (preview?.error ?? asset.previewError ?? 'Preview unavailable');
   return (
-    <span className="photo-area" style={{ height: imageHeight }}>
-      <span
+    <Text as="span" className="photo-area" style={{ height: imageHeight }}>
+      <Text
+        as="span"
         className={`photo-layers t-skel ${clearLoaded && !imageFailed ? 'is-revealed' : ''} ${document.visibilityState === 'hidden' ? 'without-motion' : ''}`}
       >
-        <span className="t-skel-skeleton">
+        <Text as="span" className="t-skel-skeleton">
           {tinyReady ? (
             <CachedPreviewImage
               className={fallbackEdge === 32 ? 'photo-tiny-preview' : undefined}
@@ -178,18 +184,18 @@ export function TileImage({
               title={unavailable ? `Smaller preview · ${status}` : undefined}
             />
           ) : (
-            <span className="preview-fallback" title={status}>
+            <Text as="span" className="preview-fallback" title={status}>
               {unavailable && tinyPreview?.state !== 'pending' ? (
                 <>
                   <bdi>{asset.name}</bdi>
-                  <span>{status}</span>
+                  <Text as="span">{status}</Text>
                 </>
               ) : (
                 'Preparing preview…'
               )}
-            </span>
+            </Text>
           )}
-        </span>
+        </Text>
         {(preview?.state === 'ready' || clearLoaded) && !imageFailed && (
           <CachedPreviewImage
             className="t-skel-content"
@@ -205,9 +211,9 @@ export function TileImage({
             }}
           />
         )}
-      </span>
+      </Text>
       <PhotoBadges asset={asset} offline={offline} unavailable={unavailable} />
-    </span>
+    </Text>
   );
 }
 
@@ -223,14 +229,16 @@ function PhotoBadges({
   return (
     <>
       {(offline || asset.presence !== 'present') && (
-        <span className="asset-badge">{offline ? 'Offline original' : asset.presence}</span>
+        <Text as="span" className="asset-badge">
+          {offline ? 'Offline original' : asset.presence}
+        </Text>
       )}
       {asset.favorite && !unavailable && (
-        <span className="favorite-badge" title="Favorite" aria-label="Favorite">
+        <Text as="span" className="favorite-badge" title="Favorite" aria-label="Favorite">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z" />
           </svg>
-        </span>
+        </Text>
       )}
     </>
   );

@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Textarea } from '@/components/Textarea';
 import { useEffect, useRef, useState } from 'react';
@@ -146,80 +146,86 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
         onClose();
       }}
     >
-      <header className="organization-heading">
-        <h2 id="saved-plans-title">Saved organization plans</h2>
+      <chakra.header className="organization-heading">
+        <Heading as="h2" unstyled id="saved-plans-title">
+          Saved organization plans
+        </Heading>
         <Button onClick={onClose}>Close saved plans</Button>
-      </header>
-      <div className="organization-body" aria-busy={busy}>
-        <p>
+      </chakra.header>
+      <Box className="organization-body" aria-busy={busy}>
+        <Text>
           Retained drafts preserve their original paths and template versions. Copying remains
           unavailable.
-        </p>
+        </Text>
         <Button disabled={busy} onClick={() => void list()}>
           Refresh plans
         </Button>
         {error && (
-          <p className="error" role="alert">
+          <Text className="error" role="alert">
             {error}
-          </p>
+          </Text>
         )}
         {page?.plans.length === 0 && (
-          <p>
+          <Text>
             No saved plans yet. Select photos, build an organization preview and choose a
             destination.
-          </p>
+          </Text>
         )}
-        <ul>
+        <List.Root unstyled>
           {page?.plans.map((plan) => (
-            <li key={plan.id}>
+            <List.Item unstyled key={plan.id}>
               <Button disabled={busy} onClick={() => void open(plan.id)}>
                 <bdi>{plan.destinationPath}</bdi> · {plan.proposed} proposed · {plan.createdAt}
               </Button>
-            </li>
+            </List.Item>
           ))}
-        </ul>
+        </List.Root>
         {page?.next && (
           <Button disabled={busy} onClick={() => void list(page.next)}>
             Load more plans
           </Button>
         )}
         {detail && (
-          <section aria-label="Saved plan detail">
-            <h3>Draft · {detail.plan.createdAt}</h3>
-            <p>
+          <chakra.section aria-label="Saved plan detail">
+            <Heading as="h3" unstyled>
+              Draft · {detail.plan.createdAt}
+            </Heading>
+            <Text>
               <bdi>{detail.plan.destinationPath}</bdi>
-            </p>
+            </Text>
             {detail.stale && (
-              <p role="alert">
+              <Text role="alert">
                 The catalog changed. This retained draft needs a fresh preview before any future
                 approval.
-              </p>
+              </Text>
             )}
-            <p>
+            <Text>
               Destination identity was checked when saved. It is not reserved or revalidated by
               reopening this draft.
-            </p>
-            <p>
+            </Text>
+            <Text>
               {detail.plan.preview.proposed} proposed · {detail.plan.preview.blocked} blocked ·{' '}
               {BigInt(detail.plan.preview.selectedBytes).toLocaleString()} selected file bytes
-            </p>
+            </Text>
             {detail.plan.templateReference && (
-              <p>Template version {detail.plan.templateReference.version}</p>
+              <Text>Template version {detail.plan.templateReference.version}</Text>
             )}
-            <div className="organization-table">
+            <Box className="organization-table">
               <OrganizationTrees rows={detail.plan.preview.rows} />
-              <table>
-                <caption>Retained source and destination paths</caption>
-                <thead>
-                  <tr>
-                    <th>Source</th>
-                    <th>Destination relative path</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <Table.Root unstyled>
+                <Table.Caption unstyled captionSide="top">
+                  Retained source and destination paths
+                </Table.Caption>
+                <Table.Header unstyled>
+                  <Table.Row unstyled>
+                    <Table.ColumnHeader unstyled>Source</Table.ColumnHeader>
+                    <Table.ColumnHeader unstyled>Destination relative path</Table.ColumnHeader>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body unstyled>
                   {detail.plan.preview.rows.map((row) => (
-                    <tr key={row.assetId}>
-                      <td>
+                    <Table.Row unstyled key={row.assetId}>
+                      <Table.Cell unstyled>
                         <bdi>{row.sourcePath}</bdi>
                         <Button
                           type="button"
@@ -232,17 +238,19 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                           Review all companion filenames
                         </Button>
                         {companionChoices[row.assetId] && (
-                          <p className="help">Chosen review: {companionChoices[row.assetId]?.id}</p>
+                          <Text className="help">
+                            Chosen review: {companionChoices[row.assetId]?.id}
+                          </Text>
                         )}
-                      </td>
-                      <td>
+                      </Table.Cell>
+                      <Table.Cell unstyled>
                         <bdi>{row.targetRelativePath ?? 'Blocked'}</bdi>
-                      </td>
-                    </tr>
+                      </Table.Cell>
+                    </Table.Row>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </Table.Body>
+              </Table.Root>
+            </Box>
             {companionRow && (
               <BundleInventoryReview
                 key={`${detail.plan.id}:${companionRow.assetId}`}
@@ -268,22 +276,22 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
             )}
             <CopyManifestReview key={detail.plan.id} detail={detail} choices={companionChoices} />
             <SavedImportPlans key={`imports:${detail.plan.id}`} planId={detail.plan.id} />
-            <p className="help">
+            <Text className="help">
               Copying requires fresh companion, destination and capacity checks, separate native
               preparation and explicit approval. Recovery and metadata fidelity limits apply.
-            </p>
-            <p className="help">Fingerprint: {detail.plan.digest}</p>
+            </Text>
+            <Text className="help">Fingerprint: {detail.plan.digest}</Text>
             <Button disabled={busy} onClick={() => void exportText('json')}>
               View JSON export
             </Button>
             <Button disabled={busy} onClick={() => void exportText('csv')}>
               View CSV export
             </Button>
-            <p className="help">
+            <Text className="help">
               Save a new review file to a native-selected folder outside your libraries. The
               generated filename is preserved; an existing file is never replaced. Exports contain
               review data, not original photos or execution approval.
-            </p>
+            </Text>
             <Button disabled={busy} onClick={() => void saveFile('json')}>
               Save JSON file…
             </Button>
@@ -291,10 +299,10 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
               Save CSV file…
             </Button>
             {savedExport && (
-              <p role="status">
+              <Text role="status">
                 Review file saved: <bdi>{savedExport.path}</bdi> ·{' '}
                 {BigInt(savedExport.bytes).toLocaleString()} bytes verified.
-              </p>
+              </Text>
             )}
             {exported && (
               <Field.Root asChild unstyled>
@@ -311,9 +319,9 @@ export function SavedOrganizationPlans({ onClose }: { onClose: () => void }) {
                 </label>
               </Field.Root>
             )}
-          </section>
+          </chakra.section>
         )}
-      </div>
+      </Box>
     </dialog>
   );
 }

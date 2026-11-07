@@ -1,3 +1,4 @@
+import { Box, Text, IconButton } from '@chakra-ui/react';
 import type { ReactNode, RefObject } from 'react';
 
 const icons = {
@@ -66,15 +67,17 @@ export function ViewerControls({
   favorite: ReactNode;
 }) {
   return (
-    <div className="viewer-controls viewer-zoom" role="group" aria-label="Photo controls">
-      <button
+    <Box className="viewer-controls viewer-zoom" role="group" aria-label="Photo controls">
+      <IconButton
+        unstyled
+        type="submit"
         aria-label="Zoom out"
         title="Zoom out"
         disabled={zoom <= 1 || !canZoom}
         onClick={() => onZoom(Math.max(1, zoom - 0.25))}
       >
         <ToolIcon name="out" />
-      </button>
+      </IconButton>
       <input
         type="range"
         aria-label="Preview zoom"
@@ -86,20 +89,30 @@ export function ViewerControls({
         onChange={(event) => onZoom(Number(event.target.value) / 100)}
       />
       <output>{Math.round(zoom * 100)}% of fit</output>
-      <button
+      <IconButton
+        unstyled
+        type="submit"
         aria-label="Zoom in"
         title="Zoom in"
         disabled={zoom >= 4 || !canZoom}
         onClick={() => onZoom(Math.min(4, zoom + 0.25))}
       >
         <ToolIcon name="in" />
-      </button>
-      <button aria-label="Fit image" title="Fit image" onClick={() => onZoom(1)}>
+      </IconButton>
+      <IconButton
+        unstyled
+        type="submit"
+        aria-label="Fit image"
+        title="Fit image"
+        onClick={() => onZoom(1)}
+      >
         <ToolIcon name="fit" />
-      </button>
-      <span className="viewer-control-divider" aria-hidden="true" />
+      </IconButton>
+      <Text as="span" className="viewer-control-divider" aria-hidden="true" />
       {favorite}
-      <button
+      <IconButton
+        unstyled
+        type="submit"
         ref={infoButtonRef}
         aria-label="Info"
         title="Photo information"
@@ -107,15 +120,17 @@ export function ViewerControls({
         onClick={onInfo}
       >
         <ToolIcon name="info" />
-      </button>
-      <button
+      </IconButton>
+      <IconButton
+        unstyled
+        type="submit"
         aria-label="Filmstrip"
         title={filmstrip ? 'Hide filmstrip' : 'Show filmstrip'}
         aria-pressed={filmstrip}
         onClick={onFilmstrip}
       >
         <ToolIcon name="filmstrip" />
-      </button>
-    </div>
+      </IconButton>
+    </Box>
   );
 }

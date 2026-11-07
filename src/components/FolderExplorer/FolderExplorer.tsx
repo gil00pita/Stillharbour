@@ -1,7 +1,7 @@
 import { PageHeader } from '@/components/PageHeader';
-import { Field } from '@chakra-ui/react';
+import { Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
+import { SearchField } from '@/components/SearchField';
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -135,46 +135,37 @@ export function FolderExplorer({
   }
   const parent = page?.ancestors.at(-1);
   return (
-    <div className="library-page">
-      <div className="library-underlay" inert={Boolean(viewer)} aria-hidden={Boolean(viewer)}>
+    <Box className="library-page">
+      <Box className="library-underlay" inert={Boolean(viewer)} aria-hidden={Boolean(viewer)}>
         <PageHeader>
-          <header className="toolbar explorer-toolbar">
+          <chakra.header className="toolbar explorer-toolbar">
             {navigationControl}
-            <h1>Folders</h1>
-            <Field.Root asChild unstyled>
-              <label className="fixed-search">
-                <Field.Label asChild unstyled>
-                  <span>
-                    <span className="screen-reader-status">
-                      {root ? 'Filter files in this folder' : 'Search libraries'}
-                    </span>
-                  </span>
-                </Field.Label>
-                <Input
-                  type="search"
-                  maxLength={256}
-                  placeholder={root ? 'Filter files in this folder…' : 'Search libraries…'}
-                  value={location.search}
-                  onChange={(event) => {
-                    restore.current = { location, offset: 0, focus: null };
-                    setLocation({ ...location, cursor: null, search: event.target.value });
-                  }}
-                />
-              </label>
-            </Field.Root>
-            <div className="explorer-views" aria-label="Folder view">
+            <Heading as="h1" unstyled>
+              Folders
+            </Heading>
+            <SearchField
+              maxLength={256}
+              label={root ? 'Filter files in this folder' : 'Search libraries'}
+              placeholder={root ? 'Filter files in this folder…' : 'Search libraries…'}
+              value={location.search}
+              onChange={(search) => {
+                restore.current = { location, offset: 0, focus: null };
+                setLocation({ ...location, cursor: null, search });
+              }}
+            />
+            <Box className="explorer-views" aria-label="Folder view">
               <Button aria-pressed={mode === 'icons'} onClick={() => setMode('icons')}>
                 Icons
               </Button>
               <Button aria-pressed={mode === 'details'} onClick={() => setMode('details')}>
                 Details
               </Button>
-            </div>
+            </Box>
             {jobsControl}
-          </header>
+          </chakra.header>
         </PageHeader>
-        <div className="folder-explorer">
-          <div className="explorer-navigation">
+        <Box className="folder-explorer">
+          <Box className="explorer-navigation">
             <Button onClick={back} disabled={!history.length}>
               Back
             </Button>
@@ -188,15 +179,17 @@ export function FolderExplorer({
             >
               Up
             </Button>
-            <nav aria-label="Folder path">
+            <chakra.nav aria-label="Folder path">
               <Button onClick={() => navigate(HOME)} disabled={!root}>
                 Libraries
               </Button>
               {root && (
                 <>
                   {(page?.ancestors ?? []).map((directory) => (
-                    <span key={directory.id}>
-                      <span aria-hidden="true">/</span>
+                    <Text as="span" key={directory.id}>
+                      <Text as="span" aria-hidden="true">
+                        /
+                      </Text>
                       <Button
                         title={directory.name}
                         onClick={() =>
@@ -210,29 +203,33 @@ export function FolderExplorer({
                       >
                         <bdi>{directory.name}</bdi>
                       </Button>
-                    </span>
+                    </Text>
                   ))}
-                  <span aria-current="location">
-                    <span aria-hidden="true">/</span>
+                  <Text as="span" aria-current="location">
+                    <Text as="span" aria-hidden="true">
+                      /
+                    </Text>
                     <bdi>{page?.directory.name ?? root.label}</bdi>
-                  </span>
+                  </Text>
                 </>
               )}
-            </nav>
-          </div>
+            </chakra.nav>
+          </Box>
           <FolderStatus root={root} page={page} libraryCount={status.roots.length} />
           {browse.error && (
-            <p role="alert" className="error">
+            <Text role="alert" className="error">
               {browse.error} <Button onClick={browse.retry}>Retry folder</Button>
-            </p>
+            </Text>
           )}
           {browse.loading && !page ? (
-            <p role="status">Loading indexed contents…</p>
+            <Text role="status">Loading indexed contents…</Text>
           ) : browse.error && !page ? (
-            <div className="empty-results">
-              <h2>Folder could not be loaded</h2>
-              <p>Retry, or choose another folder.</p>
-            </div>
+            <Box className="empty-results">
+              <Heading as="h2" unstyled>
+                Folder could not be loaded
+              </Heading>
+              <Text>Retry, or choose another folder.</Text>
+            </Box>
           ) : items.length ? (
             <ExplorerCanvas
               items={items}
@@ -244,8 +241,8 @@ export function FolderExplorer({
               onError={onError}
             />
           ) : (
-            <div className="empty-results">
-              <h2>
+            <Box className="empty-results">
+              <Heading as="h2" unstyled>
                 {root
                   ? location.search
                     ? 'No matching indexed files'
@@ -253,20 +250,20 @@ export function FolderExplorer({
                   : location.search
                     ? 'No matching libraries'
                     : 'No libraries added'}
-              </h2>
-              <p>
+              </Heading>
+              <Text>
                 {root
                   ? 'Choose another folder, or check its scan settings.'
                   : 'Add a photo folder in Settings to browse its indexed contents.'}
-              </p>
-            </div>
+              </Text>
+            </Box>
           )}
           {root && page && (
-            <div className="explorer-pagination">
-              <span>
+            <Box className="explorer-pagination">
+              <Text as="span">
                 {page.entries.length.toLocaleString()} shown · {page.total.toLocaleString()} indexed
                 items
-              </span>
+              </Text>
               <Button
                 disabled={browse.loading || !page.previousCursor}
                 onClick={() => {
@@ -285,10 +282,10 @@ export function FolderExplorer({
               >
                 Next items
               </Button>
-            </div>
+            </Box>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
       {viewer && (
         <PhotoViewer
           initial={viewer}
@@ -314,7 +311,7 @@ export function FolderExplorer({
           }}
         />
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -329,35 +326,35 @@ function FolderStatus({
 }) {
   return (
     <>
-      <p className="explorer-status" role="status">
+      <Text className="explorer-status" role="status">
         {root
           ? `${root.label} · ${root.availability.replaceAll('_', ' ')} · ${page?.total.toLocaleString() ?? '…'} indexed items in this folder`
           : `${libraryCount} indexed libraries`}
-      </p>
+      </Text>
       {root && !['online', 'scanning'].includes(root.availability) && (
-        <p className="availability-note">
+        <Text className="availability-note">
           Originals are {root.availability.replaceAll('_', ' ')}. Showing retained catalog contents
           and available cached previews.
-        </p>
+        </Text>
       )}
       {root && (root.availability === 'scanning' || page?.directory.state === 'incomplete') && (
-        <p className="help">Indexing is incomplete. These catalog contents may be partial.</p>
+        <Text className="help">Indexing is incomplete. These catalog contents may be partial.</Text>
       )}
       {page?.directory.state === 'missing' && (
-        <p className="availability-note">
+        <Text className="availability-note">
           This folder is no longer at this location. Go Up to see current folders; its changes
           remain in Jobs.
-        </p>
+        </Text>
       )}
       {page?.directory.state === 'retained' && (
-        <p className="help">
+        <Text className="help">
           This folder was not seen in the latest scan. Showing retained catalog contents.
-        </p>
+        </Text>
       )}
-      <p className="explorer-help help">
+      <Text className="explorer-help help">
         Only items allowed by your scan settings are indexed. Filename filtering keeps folders
         visible.
-      </p>
+      </Text>
     </>
   );
 }

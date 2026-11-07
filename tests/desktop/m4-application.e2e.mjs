@@ -109,9 +109,8 @@ describe('M4 application snapshot lifecycle — generated native fixtures', () =
     assert.deepEqual(await snapshot({ kind: 'jobs', profile_id: profile.id }, 'jobs'), []);
 
     await browser.refresh();
-    await $('button[aria-label="Backup & Sync"]').waitForDisplayed();
-    await $('button[aria-label="Backup & Sync"]').click();
-    await $('button=Versioned backup').click();
+    await $('button[aria-label="Backup"]').waitForDisplayed();
+    await $('button[aria-label="Backup"]').click();
     await $('.backup-workspace select').waitForEnabled();
     // The embedded driver's option click does not perform a native select change.
     // Exercise the same DOM change event as the existing foundation native suite.
@@ -398,7 +397,7 @@ describe('M4 application snapshot lifecycle — generated native fixtures', () =
     );
     assert.ok((await stopped.getText()).includes('not confirmed active'));
     assert.ok((await stopped.getText()).includes('Close and reopen Stillharbour'));
-    assert.equal(await $('button=Versioned backup').isExisting(), false);
+    assert.equal(await $('.backup-workspace').isExisting(), false);
     const admission = await browser.tauri.execute(async ({ core }) => {
       try {
         await core.invoke('library_request', { request: { kind: 'status' } });

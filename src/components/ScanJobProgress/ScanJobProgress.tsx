@@ -1,3 +1,4 @@
+import { Box, Text } from '@chakra-ui/react';
 import { useId } from 'react';
 import type { ScanJob } from '../../bindings';
 import { thumbnailProgress, thumbnailDescription } from '../../library/jobProgress';
@@ -42,9 +43,9 @@ export function ScanJobProgress({
       ? `Indexing files · ${job.processedFiles ?? 0} of ${job.totalFiles} · ${percentage}%`
       : (descriptions[job.state] ?? 'Scan not running');
   return (
-    <div className="job-progress">
+    <Box className="job-progress">
       {active || completed ? (
-        <div
+        <Box
           className={`job-progress-track ${active && job.state !== 'paused' && percentage === undefined ? 'is-active' : 'is-complete'}`}
           role="progressbar"
           aria-label={`Scan progress for ${label}`}
@@ -54,7 +55,8 @@ export function ScanJobProgress({
           aria-valuemin={0}
           aria-valuemax={100}
         >
-          <span
+          <Text
+            as="span"
             className="job-progress-fill"
             style={
               percentage === undefined
@@ -64,14 +66,14 @@ export function ScanJobProgress({
                 : { width: `${completed ? 100 : percentage}%` }
             }
           />
-        </div>
+        </Box>
       ) : (
-        <div className="job-progress-track" aria-hidden="true" />
+        <Box className="job-progress-track" aria-hidden="true" />
       )}
-      <p id={descriptionId} className="help" hidden={compact}>
+      <Text id={descriptionId} className="help" hidden={compact}>
         {description}
-      </p>
-    </div>
+      </Text>
+    </Box>
   );
 }
 
@@ -96,8 +98,8 @@ function ThumbnailProgress({
   const description = thumbnailDescription(job, processed, percentage);
   const showProgress = active || completed;
   return (
-    <div className="job-progress">
-      <div
+    <Box className="job-progress">
+      <Box
         className={`job-progress-track ${showProgress ? (indeterminate && job.state !== 'paused' ? 'is-active' : 'is-complete') : ''}`}
         role={showProgress ? 'progressbar' : undefined}
         aria-hidden={showProgress ? undefined : true}
@@ -108,7 +110,8 @@ function ThumbnailProgress({
         aria-valuemin={0}
         aria-valuemax={100}
       >
-        <span
+        <Text
+          as="span"
           className="job-progress-fill"
           style={
             indeterminate
@@ -118,10 +121,10 @@ function ThumbnailProgress({
               : { width: `${value}%` }
           }
         />
-      </div>
-      <p id={descriptionId} className="help" hidden={compact}>
+      </Box>
+      <Text id={descriptionId} className="help" hidden={compact}>
         {description}
-      </p>
-    </div>
+      </Text>
+    </Box>
   );
 }

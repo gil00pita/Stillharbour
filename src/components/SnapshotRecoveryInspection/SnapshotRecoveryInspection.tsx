@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useState } from 'react';
@@ -16,12 +16,14 @@ export function SnapshotRecoveryInspection({
   const [snapshotId, setSnapshotId] = useState(job.snapshotId ?? '');
   const valid = !snapshotId || /^[a-fA-F0-9]{64}$/.test(snapshotId);
   return (
-    <section aria-label="Inspect interrupted snapshot" className="backup-review">
-      <h5>Inspect existing snapshot</h5>
-      <p>
+    <chakra.section aria-label="Inspect interrupted snapshot" className="backup-review">
+      <Heading as="h5" unstyled>
+        Inspect existing snapshot
+      </Heading>
+      <Text>
         Check the repository's existing content and compare a fresh restore with this job's frozen
         manifest. This does not retry the backup, remove a lock or delete history.
-      </p>
+      </Text>
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -36,16 +38,18 @@ export function SnapshotRecoveryInspection({
           />
         </label>
       </Field.Root>
-      <p>
+      <Text>
         Leave empty to inspect this job's recorded snapshot. If the result is ambiguous, use the
         exact 64-character snapshot ID reported by the backend.
-      </p>
+      </Text>
       {!valid && (
-        <p role="status">A concrete snapshot ID must contain exactly 64 hexadecimal characters.</p>
+        <Text role="status">
+          A concrete snapshot ID must contain exactly 64 hexadecimal characters.
+        </Text>
       )}
       <Button disabled={disabled || !valid} onClick={() => onInspect(snapshotId || null)}>
         Inspect existing snapshot
       </Button>
-    </section>
+    </chakra.section>
   );
 }

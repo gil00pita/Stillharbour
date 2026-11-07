@@ -1,4 +1,4 @@
-import { RadioCard, useSlotRecipe } from '@chakra-ui/react';
+import { RadioCard, useSlotRecipe, Box, Image, Text } from '@chakra-ui/react';
 import { useId } from 'react';
 import { inspectionChoiceCardsRecipe } from './InspectionChoiceCards.slot-recipe';
 
@@ -42,7 +42,7 @@ export function InspectionChoiceCards<Value extends string>({
       <RadioCard.Label css={styles.label} className="inspection-choice-label">
         {label}
       </RadioCard.Label>
-      <div className="inspection-choice-grid">
+      <Box className="inspection-choice-grid">
         {choices.map((choice) => (
           <RadioCard.Item
             key={choice.value}
@@ -55,7 +55,13 @@ export function InspectionChoiceCards<Value extends string>({
             />
             <RadioCard.ItemControl css={styles.itemControl}>
               {choice.image && (
-                <img src={choice.image} alt="" width="640" height="427" decoding="async" />
+                <Image
+                  src={choice.image}
+                  alt=""
+                  htmlWidth={640}
+                  htmlHeight={427}
+                  decoding="async"
+                />
               )}
               <RadioCard.ItemContent css={styles.itemContent}>
                 <RadioCard.ItemText css={styles.itemText}>{choice.label}</RadioCard.ItemText>
@@ -66,7 +72,9 @@ export function InspectionChoiceCards<Value extends string>({
                   >
                     {choice.description}
                     {choice.badge && (
-                      <span className="inspection-choice-badge">{choice.badge}</span>
+                      <Text as="span" className="inspection-choice-badge">
+                        {choice.badge}
+                      </Text>
                     )}
                   </RadioCard.ItemDescription>
                 )}
@@ -75,7 +83,7 @@ export function InspectionChoiceCards<Value extends string>({
             </RadioCard.ItemControl>
           </RadioCard.Item>
         ))}
-      </div>
+      </Box>
     </RadioCard.Root>
   );
 }

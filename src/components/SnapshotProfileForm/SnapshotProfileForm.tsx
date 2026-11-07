@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -112,22 +112,26 @@ export function SnapshotProfileForm({
   );
   const locked = busy || disabled;
   return (
-    <section className="backup-review" aria-label="New snapshot profile" aria-busy={busy}>
-      <h3>New encrypted snapshot profile</h3>
-      <p>
+    <chakra.section className="backup-review" aria-label="New snapshot profile" aria-busy={busy}>
+      <Heading as="h3" unstyled>
+        New encrypted snapshot profile
+      </Heading>
+      <Text>
         Source: {base?.label ?? 'No base library configured'}{' '}
-        <span className="backup-path">{base?.displayPath}</span>
-      </p>
-      <p>
+        <Text as="span" className="backup-path">
+          {base?.displayPath}
+        </Text>
+      </Text>
+      <Text>
         The base root is included automatically. Hidden files, companions and unknown regular files
         remain in scope; unsupported or unavailable entries must be reported.
-      </p>
+      </Text>
       {base && (
-        <p>
+        <Text>
           Base availability: {base.availability}. An unavailable root cannot be treated as empty.
-        </p>
+        </Text>
       )}
-      <form
+      <chakra.form
         onSubmit={(event) => {
           event.preventDefault();
           if (canCreate)
@@ -154,8 +158,8 @@ export function SnapshotProfileForm({
             });
         }}
       >
-        <fieldset disabled={locked} className="backup-form-grid">
-          <legend>Profile and source scope</legend>
+        <chakra.fieldset disabled={locked} className="backup-form-grid">
+          <chakra.legend>Profile and source scope</chakra.legend>
           <Field.Root asChild unstyled>
             <label>
               <Field.Label asChild unstyled>
@@ -168,8 +172,8 @@ export function SnapshotProfileForm({
               />
             </label>
           </Field.Root>
-          <fieldset>
-            <legend>Additional roots (optional)</legend>
+          <chakra.fieldset>
+            <chakra.legend>Additional roots (optional)</chakra.legend>
             {status.roots
               .filter((root) => root.id !== base?.id)
               .map((root) => (
@@ -207,11 +211,11 @@ export function SnapshotProfileForm({
                     Unavailable root {id} — uncheck explicitly to remove it from this new profile
                   </label>
                 ))}
-            {status.roots.length <= 1 && <p>No additional roots are configured.</p>}
-          </fieldset>
-        </fieldset>
-        <fieldset disabled={locked} className="backup-form-grid">
-          <legend>Destination</legend>
+            {status.roots.length <= 1 && <Text>No additional roots are configured.</Text>}
+          </chakra.fieldset>
+        </chakra.fieldset>
+        <chakra.fieldset disabled={locked} className="backup-form-grid">
+          <chakra.legend>Destination</chakra.legend>
           <Field.Root asChild unstyled>
             <label>
               <Field.Label asChild unstyled>
@@ -242,10 +246,10 @@ export function SnapshotProfileForm({
             </label>
           </Field.Root>
           {protocol === 'local' ? (
-            <div>
-              <p className="backup-path">
+            <Box>
+              <Text className="backup-path">
                 {selection?.displayPath ?? 'Choose a separate parent folder for this repository.'}
-              </p>
+              </Text>
               <Button
                 type="button"
                 onClick={() =>
@@ -258,12 +262,12 @@ export function SnapshotProfileForm({
                 Choose snapshot destination
               </Button>
               {selection && !selection.identityAvailable && (
-                <p role="alert">
+                <Text role="alert">
                   This folder cannot supply the required native identity. Choose another
                   destination.
-                </p>
+                </Text>
               )}
-            </div>
+            </Box>
           ) : (
             <>
               <Field.Root asChild unstyled>
@@ -318,10 +322,10 @@ export function SnapshotProfileForm({
                   />
                 </label>
               </Field.Root>
-              <p>
+              <Text>
                 The backend creates a separate repository namespace. Selecting a destination never
                 authorizes deleting its other contents.
-              </p>
+              </Text>
               {protocol === 'sftp' && (
                 <label>
                   Verified server public host key
@@ -381,11 +385,11 @@ export function SnapshotProfileForm({
                 </>
               )}
               {protocol === 'ftp' && (
-                <div role="note">
-                  <p>
+                <Box role="note">
+                  <Text>
                     Plain FTP exposes transport credentials and connection metadata. Restic encrypts
                     backup payloads, but that does not conceal the FTP login.
-                  </p>
+                  </Text>
                   <label>
                     <input
                       type="checkbox"
@@ -396,17 +400,17 @@ export function SnapshotProfileForm({
                     />
                     I explicitly accept this unencrypted FTP transport for this profile
                   </label>
-                </div>
+                </Box>
               )}
             </>
           )}
-        </fieldset>
-        <fieldset disabled={locked}>
-          <legend>Device credential vault</legend>
-          <p>
+        </chakra.fieldset>
+        <chakra.fieldset disabled={locked}>
+          <chakra.legend>Device credential vault</chakra.legend>
+          <Text>
             Passwords are entered in the native credential dialog. They are not stored in this form
             or exported with profile settings.
-          </p>
+          </Text>
           <Button
             type="button"
             disabled={!capabilities?.credentialsAvailable}
@@ -425,7 +429,7 @@ export function SnapshotProfileForm({
               : 'Set repository recovery password…'}
           </Button>
           {repositoryRef && (
-            <p>Repository recovery password saved in this device's credential vault.</p>
+            <Text>Repository recovery password saved in this device's credential vault.</Text>
           )}
           {protocol !== 'local' && (
             <>
@@ -451,39 +455,41 @@ export function SnapshotProfileForm({
                 {transportRef ? 'Set different remote credentials…' : 'Set remote credentials…'}
               </Button>
               {transportRef && (
-                <p>
+                <Text>
                   Remote credentials saved for these exact endpoint settings. Changing the endpoint
                   requires new native enrollment.
-                </p>
+                </Text>
               )}
             </>
           )}
           {!capabilities?.credentialsAvailable && (
-            <p>{capabilities?.unavailableReason ?? 'Checking native credential availability…'}</p>
+            <Text>
+              {capabilities?.unavailableReason ?? 'Checking native credential availability…'}
+            </Text>
           )}
-          <p>
+          <Text>
             Keep an independent recovery copy of your repository password. Losing it can make
             encrypted backups unreadable.
-          </p>
-        </fieldset>
+          </Text>
+        </chakra.fieldset>
         {error && (
-          <p className="error" role="alert">
+          <Text className="error" role="alert">
             {error}
-          </p>
+          </Text>
         )}
-        <div className="backup-controls">
+        <Box className="backup-controls">
           <Button className="primary" type="submit" disabled={locked || !canCreate}>
             Save snapshot profile
           </Button>
           <Button type="button" disabled={locked} onClick={onClose}>
             Close new profile
           </Button>
-        </div>
-        <p>
+        </Box>
+        <Text>
           Saving stores the reviewed binding only. Starting a backup requires a separate scope
           review and approval.
-        </p>
-      </form>
-    </section>
+        </Text>
+      </chakra.form>
+    </chakra.section>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useId, useState } from 'react';
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Image, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import type { AssetSummary } from '../../bindings';
@@ -28,14 +28,14 @@ export function DuplicateComparison({ assets }: { assets: AssetSummary[] }) {
     const edge = previewEdges([result])[0];
     if (!edge || failed.has(asset.id))
       return (
-        <div className="duplicate-image-state" role="status">
+        <Box className="duplicate-image-state" role="status">
           {failed.has(asset.id)
             ? 'Preview failed to load.'
             : (result?.error ?? 'Preparing cached preview…')}
-        </div>
+        </Box>
       );
     return (
-      <img
+      <Image
         src={previewUrl(asset, edge)}
         alt={asset.name}
         draggable={false}
@@ -44,19 +44,19 @@ export function DuplicateComparison({ assets }: { assets: AssetSummary[] }) {
     );
   }
   return (
-    <section className="duplicate-comparison" aria-label="Compare duplicate previews">
-      <div className="duplicate-mode-bar" role="group" aria-label="Comparison mode">
+    <chakra.section className="duplicate-comparison" aria-label="Compare duplicate previews">
+      <Box className="duplicate-mode-bar" role="group" aria-label="Comparison mode">
         {['Slider', 'Side by side', 'Difference heatmap'].map((item) => (
           <Button key={item} aria-pressed={mode === item} onClick={() => setMode(item)}>
             {item}
           </Button>
         ))}
-      </div>
-      <p className="duplicate-preview-note">
+      </Box>
+      <Text className="duplicate-preview-note">
         Cached previews up to 512 px · visual inspection cannot prove byte equality.
-      </p>
-      {error && <p role="alert">{error}</p>}
-      <div
+      </Text>
+      {error && <Text role="alert">{error}</Text>}
+      <Box
         className={`duplicate-stage ${mode === 'Side by side' || !ready ? 'duplicate-stage-pair' : 'duplicate-stage-overlay'} ${mode === 'Difference heatmap' && ready ? `duplicate-heat-${id}` : ''}`}
       >
         {assets.map((asset, index) => (
@@ -76,13 +76,13 @@ export function DuplicateComparison({ assets }: { assets: AssetSummary[] }) {
           </figure>
         ))}
         {ready && mode === 'Slider' && (
-          <div
+          <Box
             className="duplicate-slider-line"
             style={{ left: `${position}%` }}
             aria-hidden="true"
           />
         )}
-      </div>
+      </Box>
       {mode === 'Slider' && (
         <Field.Root>
           <Field.Label>Comparison slider · {position}%</Field.Label>
@@ -110,11 +110,11 @@ export function DuplicateComparison({ assets }: { assets: AssetSummary[] }) {
             </filter>
           </svg>
           <style>{`.duplicate-heat-${id} { filter: url(#heat-${id}); }`}</style>
-          <p className="duplicate-preview-note">
+          <Text className="duplicate-preview-note">
             Black: unchanged preview pixels. Warm to pale: increasing difference. Previews are
             unaligned and include colour, scaling and framing differences; this is not an
             original-pixel or damage analysis.
-          </p>
+          </Text>
         </>
       )}
       {(error || failed.size > 0) && (
@@ -128,6 +128,6 @@ export function DuplicateComparison({ assets }: { assets: AssetSummary[] }) {
           Retry comparison previews
         </Button>
       )}
-    </section>
+    </chakra.section>
   );
 }

@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import { useEffect, useRef, useState } from 'react';
@@ -312,15 +312,17 @@ export function ImportPlanReview({
     if (epoch.current === token) setJob(value);
   }
   return (
-    <section aria-label="Import decisions" className="organization-destination">
-      <h4>Import decisions</h4>
-      <p>
+    <chakra.section aria-label="Import decisions" className="organization-destination">
+      <Heading as="h4" unstyled>
+        Import decisions
+      </Heading>
+      <Text>
         Save one explicit choice per confirmed bundle. Source files remain in place. A saved plan
         grants no approval.
-      </p>
+      </Text>
       {bundles && (
-        <fieldset disabled={pending || active || copyActive}>
-          <legend>Choose each whole bundle</legend>
+        <chakra.fieldset disabled={pending || active || copyActive}>
+          <chakra.legend>Choose each whole bundle</chakra.legend>
           {bundles.map((bundle) => (
             <Field.Root key={bundle.fileIds[0]} asChild unstyled>
               <label>
@@ -361,9 +363,11 @@ export function ImportPlanReview({
           >
             Save import decisions
           </Button>
-        </fieldset>
+        </chakra.fieldset>
       )}
-      {!capability?.available && <p>{capability?.reason ?? 'Checking import availability…'}</p>}
+      {!capability?.available && (
+        <Text>{capability?.reason ?? 'Checking import availability…'}</Text>
+      )}
       <Button
         type="button"
         disabled={pending || active || copyActive || capability?.available !== true}
@@ -372,10 +376,10 @@ export function ImportPlanReview({
         Review saved import decisions
       </Button>
       {history && (
-        <div>
-          <p>Recent import plans and attempts (up to 32 each).</p>
+        <Box>
+          <Text>Recent import plans and attempts (up to 32 each).</Text>
           {history.plans.map((saved) => (
-            <p key={saved.id}>
+            <Text key={saved.id}>
               <Button
                 type="button"
                 disabled={pending || active || copyActive}
@@ -384,10 +388,10 @@ export function ImportPlanReview({
                 Open import plan: {saved.copyFiles} copy / {saved.skipFiles} existing ·{' '}
                 {saved.createdAt}
               </Button>
-            </p>
+            </Text>
           ))}
           {history.sessions.map((session) => (
-            <p key={session.id}>
+            <Text key={session.id}>
               <Button
                 type="button"
                 disabled={pending || active || copyActive}
@@ -395,36 +399,38 @@ export function ImportPlanReview({
               >
                 Review import attempt: {session.state.replaceAll('_', ' ')} · {session.createdAt}
               </Button>
-            </p>
+            </Text>
           ))}
-          {!history.plans.length && <p>No import decisions are retained for this manifest.</p>}
+          {!history.plans.length && (
+            <Text>No import decisions are retained for this manifest.</Text>
+          )}
           {copyReceipts.map((receipt) => (
-            <div key={receipt.jobId}>
-              <p>
+            <Box key={receipt.jobId}>
+              <Text>
                 Completed import: {receipt.copiedFileIds.length} new{' '}
                 {receipt.copiedFileIds.length === 1 ? 'file' : 'files'} copied /{' '}
                 {receipt.skippedFiles.length} existing{' '}
                 {receipt.skippedFiles.length === 1 ? 'file' : 'files'} verified ·{' '}
                 {receipt.verifiedAt}. Sources retained; no approval restored.
-              </p>
+              </Text>
               <ImportOutputIndexReview receipt={receipt} sourceRootId={manifest.files[0]!.rootId} />
-            </div>
+            </Box>
           ))}
-        </div>
+        </Box>
       )}
       {plan && (
         <>
-          <p role="status">
+          <Text role="status">
             Saved import plan: {plan.copyFileIds.length} files to copy · {plan.skipFiles.length}{' '}
             existing files selected for fresh verification.
-          </p>
+          </Text>
           <details>
             <summary>Saved file decisions</summary>
-            <ul>
+            <List.Root unstyled>
               {manifest.files.map((file) => {
                 const keeper = plan.skipFiles.find((keeper) => keeper.fileId === file.id);
                 return (
-                  <li key={file.id}>
+                  <List.Item unstyled key={file.id}>
                     <bdi>{file.sourceName}</bdi> →{' '}
                     {keeper ? (
                       <>
@@ -438,10 +444,10 @@ export function ImportPlanReview({
                         <bdi>{file.targetRelativePath}</bdi> · planned new copy
                       </>
                     )}
-                  </li>
+                  </List.Item>
                 );
               })}
-            </ul>
+            </List.Root>
           </details>
           {plan.executionAvailable ? (
             <>
@@ -489,16 +495,16 @@ export function ImportPlanReview({
               onActivityChange={setCopyActive}
             />
           ) : (
-            <p>Verified import copying is unavailable in this build.</p>
+            <Text>Verified import copying is unavailable in this build.</Text>
           )}
         </>
       )}
       {job && (
-        <p role="status">
+        <Text role="status">
           Import verification: {job.state.replaceAll('_', ' ')} · {job.verifiedFiles}/
           {job.totalFiles} complete files · {BigInt(job.bytesRead).toLocaleString()} payload bytes
           read.
-        </p>
+        </Text>
       )}
       {active && (
         <>
@@ -513,21 +519,21 @@ export function ImportPlanReview({
         </>
       )}
       {job?.state === 'completed' && (
-        <p>
+        <Text>
           Import recorded: {job.verifiedFiles} existing files freshly compared. Source files
           retained; no output folder created. Observed {job.finishedAt}.
-        </p>
+        </Text>
       )}
       {job?.state === 'needs_recovery' && (
-        <p>
+        <Text>
           This retained attempt has no complete outcome. It will not replay. Review current files
           and obtain fresh approval for another verification attempt.
-        </p>
+        </Text>
       )}
       {job?.state === 'canceled' && (
-        <p>Import canceled; no skipped-import completion was recorded.</p>
+        <Text>Import canceled; no skipped-import completion was recorded.</Text>
       )}
-      {(error || job?.error) && <p role="alert">{error ?? errorMessage(job?.error)}</p>}
-    </section>
+      {(error || job?.error) && <Text role="alert">{error ?? errorMessage(job?.error)}</Text>}
+    </chakra.section>
   );
 }

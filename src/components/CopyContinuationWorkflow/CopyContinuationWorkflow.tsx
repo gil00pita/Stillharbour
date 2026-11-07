@@ -1,3 +1,4 @@
+import { Box, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -211,32 +212,32 @@ export function CopyContinuationWorkflow({
     }
   }
   return (
-    <section aria-label="Reviewed copy continuation" aria-busy={pending}>
+    <chakra.section aria-label="Reviewed copy continuation" aria-busy={pending}>
       <Button type="button" disabled={pending || active} onClick={() => void create()}>
         Review verification and continuation
       </Button>
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
       {review && (
         <>
-          <h4 ref={heading} tabIndex={-1}>
+          <Heading as="h4" unstyled ref={heading} tabIndex={-1}>
             Continuation review
-          </h4>
-          <p>
+          </Heading>
+          <Text>
             <bdi>{review.destinationDisplayPath}</bdi> / <bdi>{review.outputFolder}</bdi>
-          </p>
-          <p>
+          </Text>
+          <Text>
             All retained bytes will be freshly compared with their sources. Matching stages may be
             continued; matching published files remain in place. Originals remain. Recorded phases
             below describe history; fresh verification is pending.
-          </p>
+          </Text>
           {review.recordedComplete && (
-            <p>All files have recorded completion. This action freshly verifies them.</p>
+            <Text>All files have recorded completion. This action freshly verifies them.</Text>
           )}
-          <p>
+          <Text>
             Additional data allowance:{' '}
             {BigInt(review.assessment.capacity.roundedDataBytes).toLocaleString()} bytes. Estimated
             peak additional space:{' '}
@@ -244,42 +245,44 @@ export function CopyContinuationWorkflow({
             bytes. Observed available:{' '}
             {BigInt(review.assessment.capacity.observedAvailableBytes).toLocaleString()} bytes.
             Space is not reserved.
-          </p>
-          <p>
+          </Text>
+          <Text>
             The application journal also requires 128 MiB at admission, with its existing 32 MiB
             allowance credited on a shared volume. Runtime output and journal reserves remain in
             force.
-          </p>
-          <div className="organization-table">
-            <table>
-              <caption>Retained source and output paths</caption>
-              <thead>
-                <tr>
-                  <th>Source</th>
-                  <th>Output</th>
-                  <th>Recorded phase</th>
-                  <th>Retained stage bytes</th>
-                </tr>
-              </thead>
-              <tbody>
+          </Text>
+          <Box className="organization-table">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top">
+                Retained source and output paths
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled>Source</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Output</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Recorded phase</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Retained stage bytes</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
                 {review.files.slice(page * 64, (page + 1) * 64).map((row) => (
-                  <tr key={row.file.id}>
-                    <td>
+                  <Table.Row unstyled key={row.file.id}>
+                    <Table.Cell unstyled>
                       <bdi>{row.file.sourcePath}</bdi>
-                    </td>
-                    <td>
+                    </Table.Cell>
+                    <Table.Cell unstyled>
                       <bdi>{row.file.targetPath}</bdi>
-                    </td>
-                    <td>{phases[row.recordedPhase]}</td>
-                    <td>
+                    </Table.Cell>
+                    <Table.Cell unstyled>{phases[row.recordedPhase]}</Table.Cell>
+                    <Table.Cell unstyled>
                       {row.retainedStageBytes ??
                         (row.outputPresent ? 'Published output' : 'No stage')}
-                    </td>
-                  </tr>
+                    </Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Table.Body>
+            </Table.Root>
+          </Box>
           <Button type="button" disabled={page === 0} onClick={() => setPage(page - 1)}>
             Previous continuation files
           </Button>
@@ -321,6 +324,6 @@ export function CopyContinuationWorkflow({
       )}
       {current && <CopyJobProgress job={current} {...(onRefresh ? { onRefresh } : {})} />}
       {active && <CopyIoControls />}
-    </section>
+    </chakra.section>
   );
 }

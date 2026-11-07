@@ -1,3 +1,4 @@
+import { Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -32,9 +33,9 @@ export function CatalogRestore({
     !job.sourceRetained
   ) {
     return (
-      <p>
+      <Text>
         Catalog switch review requires a completed whole-snapshot restore with full verification.
-      </p>
+      </Text>
     );
   }
   return (
@@ -159,7 +160,7 @@ function CatalogRestoreWorkspace({
   const blocked = disabled || busy || Boolean(prepared) || uncertain;
   const ready = review?.approvalAvailable && review.roots.every((root) => root.confirmed);
   return (
-    <section
+    <chakra.section
       className="backup-review"
       aria-label={retained ? 'Retained catalog switch' : 'Restored catalog switch'}
       data-catalog-source={review?.sourceKind}
@@ -167,20 +168,20 @@ function CatalogRestoreWorkspace({
       data-snapshot-id={review?.snapshotId ?? undefined}
       data-retained-transaction-id={review?.retainedTransactionId ?? undefined}
     >
-      <h5>
+      <Heading as="h5" unstyled>
         {retained ? 'Use the catalog saved before the latest switch' : 'Use this restored catalog'}
-      </h5>
+      </Heading>
       {retained && (
-        <p>
+        <Text>
           This local retained source comes from the latest activated catalog switch. Current edits
           will be preserved again in a new transaction; it does not need repository credentials or
           backup helpers.
-        </p>
+        </Text>
       )}
-      <p>
+      <Text>
         Review switching Stillharbour to this {retained ? 'retained' : 'restored'} catalog. The
         current catalog and its newer edits must be preserved separately; edits are not merged.
-      </p>
+      </Text>
       {!prepared && !uncertain && (
         <Button
           disabled={blocked}
@@ -215,7 +216,7 @@ function CatalogRestoreWorkspace({
       )}
       {review && (
         <>
-          <p>
+          <Text>
             {review.sourceKind === 'retained_pre_restore' ? (
               <>
                 Source: Local catalog saved before switch{' '}
@@ -227,9 +228,9 @@ function CatalogRestoreWorkspace({
                 <code>{review.restoreJobId}</code>
               </>
             )}
-          </p>
+          </Text>
           <dl className="backup-evidence">
-            <div>
+            <Box>
               <dt>
                 {retained
                   ? 'Current and retained catalog UUID'
@@ -238,42 +239,42 @@ function CatalogRestoreWorkspace({
               <dd>
                 <code>{review.catalogId}</code>
               </dd>
-            </div>
-            <div>
+            </Box>
+            <Box>
               <dt>Validated catalog schema</dt>
               <dd>{review.schema}</dd>
-            </div>
-            <div>
+            </Box>
+            <Box>
               <dt>Current catalog revision</dt>
               <dd>
                 <code>{review.currentRevision}</code>
               </dd>
-            </div>
-            <div>
+            </Box>
+            <Box>
               <dt>{retained ? 'Retained catalog revision' : 'Restored catalog revision'}</dt>
               <dd>
                 <code>{review.restoredRevision}</code>
               </dd>
-            </div>
+            </Box>
           </dl>
-          <p>
+          <Text>
             Exact review digest: <code>{review.digest}</code>
-          </p>
-          <p>{review.warning}</p>
-          <p>
+          </Text>
+          <Text>{review.warning}</Text>
+          <Text>
             Each source root requires a fresh native selection matching its saved identity and
             volume. Displayed paths do not authorize access.
-          </p>
-          <ul aria-label="Restored catalog root mappings">
+          </Text>
+          <List.Root unstyled aria-label="Restored catalog root mappings">
             {review.roots.map((root) => (
-              <li key={root.rootId}>
+              <List.Item unstyled key={root.rootId}>
                 <strong>{root.label}</strong> · Root UUID <code>{root.rootId}</code>
-                <p className="backup-path">Saved location: {root.savedDisplayPath}</p>
-                <p className="backup-path">
+                <Text className="backup-path">Saved location: {root.savedDisplayPath}</Text>
+                <Text className="backup-path">
                   {root.confirmed
                     ? `Native identity confirmed: ${root.confirmedDisplayPath}`
                     : 'Native identity not confirmed'}
-                </p>
+                </Text>
                 <Button
                   disabled={blocked}
                   onClick={() =>
@@ -318,14 +319,14 @@ function CatalogRestoreWorkspace({
                 >
                   Choose native location for {root.label}
                 </Button>
-              </li>
+              </List.Item>
             ))}
-          </ul>
+          </List.Root>
           {!ready && (
-            <p role="status">
+            <Text role="status">
               Catalog approval is unavailable until every required native mapping and backend check
               is confirmed.
-            </p>
+            </Text>
           )}
           <label>
             <input
@@ -363,7 +364,7 @@ function CatalogRestoreWorkspace({
             </Button>
           ) : (
             <>
-              <p>Approval recorded. Catalog preparation has not started.</p>
+              <Text>Approval recorded. Catalog preparation has not started.</Text>
               <Button
                 disabled={blocked}
                 onClick={() =>
@@ -413,31 +414,33 @@ function CatalogRestoreWorkspace({
           )}
         </>
       )}
-      {busy && <p role="status">{progress}</p>}
+      {busy && <Text role="status">{progress}</Text>}
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
       {uncertain && (
-        <p role="status">
+        <Text role="status">
           Preparation was not confirmed. Close and reopen Stillharbour to reconcile the pending
           switch before another attempt. Existing catalogs are retained.
-        </p>
+        </Text>
       )}
       {prepared && (
-        <div role="status">
-          <p>{prepared.message}</p>
-          <p>
+        <Box role="status">
+          <Text>{prepared.message}</Text>
+          <Text>
             Pending restart. The current catalog is retained; this response does not confirm that
             the restored catalog is active.
-          </p>
-          <p>Close and reopen Stillharbour to validate and apply the prepared catalog switch.</p>
-          <p>
+          </Text>
+          <Text>
+            Close and reopen Stillharbour to validate and apply the prepared catalog switch.
+          </Text>
+          <Text>
             Catalog switch transaction: <code>{prepared.transactionId}</code>
-          </p>
-        </div>
+          </Text>
+        </Box>
       )}
-    </section>
+    </chakra.section>
   );
 }

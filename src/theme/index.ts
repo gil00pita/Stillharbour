@@ -1,3 +1,8 @@
+import { structurePathBuilderRecipe } from '../components/StructurePathBuilder/StructurePathBuilder.recipe';
+import { structureFormatterRecipe } from '../components/StructureFormatter/StructureFormatter.recipe';
+import { structureDialogRecipe } from '../components/StructureFormatter/StructureDialog.slot-recipe';
+import { organizationPresetsRecipe } from '../components/OrganizationPresets/OrganizationPresets.slot-recipe';
+import { segmentedControlRecipe } from '../components/SegmentedControl/SegmentedControl.slot-recipe';
 import { pageHeaderRecipe } from '../components/PageHeader/PageHeader.recipe';
 import { albumsPageRecipe } from '../components/AlbumsPage/AlbumsPage.recipe';
 import { albumEditorRecipe } from '../components/AlbumEditor/AlbumEditor.recipe';
@@ -30,10 +35,19 @@ export const system = createSystem(
           3: { value: '0.75rem' },
           4: { value: '1rem' },
           5: { value: '1.25rem' },
+          6: { value: '1.5rem' },
+          8: { value: '2rem' },
         },
         lineHeights: { title: { value: '24px' }, control: { value: '20px' } },
-        fontSizes: { lg: { value: '18px' }, xs: { value: '12px' }, sm: { value: '13px' } },
-        zIndex: { popover: { value: 1500 } },
+        fontSizes: {
+          md: { value: '16px' },
+          lg: { value: '18px' },
+          xl: { value: '22px' },
+          '2xl': { value: '26px' },
+          xs: { value: '12px' },
+          sm: { value: '13px' },
+        },
+        zIndex: { popover: { value: 1500 }, modal: { value: 1400 }, tooltip: { value: 1600 } },
         colors,
         fonts,
         radii: { control: { value: '6px' }, panel: { value: '12px' } },
@@ -42,6 +56,10 @@ export const system = createSystem(
           control: { value: '36px' },
           full: { value: '100%' },
           sm: { value: '24rem' },
+          md: { value: '28rem' },
+          lg: { value: '32rem' },
+          '2xl': { value: '42rem' },
+          24: { value: '6rem' },
           toast: { value: '34rem' },
           64: { value: '16rem' },
           16: { value: '4rem' },
@@ -49,12 +67,17 @@ export const system = createSystem(
       },
       semanticTokens,
       slotRecipes: {
+        dialog: structureDialogRecipe,
+        organizationPresets: organizationPresetsRecipe,
+        segmentGroup: segmentedControlRecipe,
         field: defaultConfig.theme!.slotRecipes!.field!,
         radioCard: inspectionChoiceCardsRecipe,
         popover: placeSearchRecipe,
         toast: errorToastRecipe,
       },
       recipes: {
+        structurePathBuilder: structurePathBuilderRecipe,
+        structureFormatter: structureFormatterRecipe,
         pageHeader: pageHeaderRecipe,
         albumsPage: albumsPageRecipe,
         albumEditor: albumEditorRecipe,
