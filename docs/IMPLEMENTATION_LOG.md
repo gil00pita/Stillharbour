@@ -4001,3 +4001,24 @@ ordinary frontend assets and retaining the existing large-chunk advisory. Change
 file formatting and whitespace checks pass. The preflight excludes test routes
 and desktop-test dependencies; it does not certify signing or installed packages.
 Publish this refinement to existing PR #31; both-platform CI remains pending.
+
+## 2026-11-07 — Merge current remote main
+
+**Request/scope:** merge `origin/main` at `6eadc6a` into the existing
+`feat/app-ui-redesign-audit` branch, resolve conflicts, commit and push. Preserve
+the current structure-review workflow and the already incorporated sidebar,
+file-size and desktop-test fixes from main's squashed PR #29.
+
+**Resolution:** retain the branch's appended sections in IMPLEMENTATION_LOG.md
+and UTILITIES_UI.md; the incoming side adds no conflicting text. All other paths
+merge automatically. Before adding this entry, the resolved index exactly matches
+the pre-merge HEAD tree: no application code, dependencies, tests, configuration
+or safety behavior changes. Preserve the merge relationship with both parents;
+do not rebase or rename the branch.
+
+**Fresh checks:** strict TypeScript passes. Changed-file Prettier and whitespace
+checks pass; no unmerged index entries or conflict markers remain. Earlier
+frontend, Rust and generated native results remain unchanged-code evidence, not
+new execution; no full suite or platform qualification is repeated for this
+documentation-only resolution. Both-platform CI and existing production
+restructure/preservation/release gates remain binding before merging the PR.
