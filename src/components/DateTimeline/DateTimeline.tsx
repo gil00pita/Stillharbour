@@ -185,6 +185,7 @@ export function DateTimeline({
       css={{
         '--timeline-line': '{colors.brand.solid}',
         position: 'relative',
+        zIndex: 4,
         width: '32px',
         minHeight: '0',
         margin: '0',

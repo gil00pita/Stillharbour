@@ -4359,3 +4359,13 @@ screenshots are under `.context/display-menu/`; source audit verifies 32
 unchanged generated entries. Physical window focus was not observed, so DOM
 restoration is not a physical keyboard/OS qualification. Full native/platform
 and preservation gates remain; publish to existing PR #32 with CI still required.
+
+## 2026-11-07 — Raise the date rail above thumbnails
+
+Increase DateTimeline's positioned root to z-index 4, above thumbnail controls
+at z-index 3, so the month overlay can paint over adjacent photos. Update the UI
+contract and acceptance note. The 32 px lane and navigation behavior remain.
+
+Fresh checks: 35 DateTimeline/AssetBrowser cases, strict TypeScript, scoped ESLint,
+changed-file formatting and whitespace pass. No native visual rerun for this
+one-line styling fix; full current both-platform CI remains the PR #32 merge gate.

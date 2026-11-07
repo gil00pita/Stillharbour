@@ -24,6 +24,7 @@ modes. Each size amount contains its labelled unit dropdown with no overlap of
 editable text; exact bytes, validation and disabled states remain intact. Bound
 scanning art to 160 px width and reserve a 32 px timeline lane at both window
 sizes; retain drag/keyboard seeks and hide the overlaid month label at rest.
+The rail and month label must stack above thumbnail controls without cropping.
 Failed Integrity runs offer explicit retry without automatic replay on opening;
 offline roots remain blocked and baseline establishment requires a fresh
 acknowledgement. Retrying failed report reads must not create a new scan.

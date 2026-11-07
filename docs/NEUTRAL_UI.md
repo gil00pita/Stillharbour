@@ -85,7 +85,8 @@ validation, unlimited blank, zero and disabled behavior remain unchanged.
 The scanning artwork is bounded to 160 px wide, retains its aspect ratio, and
 respects reduced motion. The date rail reserves exactly 32 px at desktop and
 compact widths. Year markers and the full-height range target remain in that
-lane; the month label appears as an overlay to its left while hovering, focusing,
+lane. The rail stacks above thumbnail controls so its month label can overlay
+photos without being obscured; the label appears to its left while hovering, focusing,
 dragging or scrolling, and hides at rest so photos retain their space.
 
 Failed/canceled inspections expose an explicit retry. Reopening a failed run
