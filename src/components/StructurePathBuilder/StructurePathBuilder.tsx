@@ -1,26 +1,30 @@
-import { Box, Field, IconButton, List, Text, useRecipe } from '@chakra-ui/react';
+import { Box, Field, IconButton, List, Portal, Text, useRecipe } from '@chakra-ui/react';
 import { useId, useRef, useState } from 'react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import { structurePathBuilderRecipe } from './StructurePathBuilder.recipe';
+import { structurePathBuilderRecipe, chipDragPreviewStyle } from './StructurePathBuilder.recipe';
 import { pathParts, withFolders, folderChoices, folderPartLabel } from './path-parts';
+import { reorderFolders } from './reorder';
+import { useFolderReorder } from './use-folder-reorder';
 
-function ChipIcon({ kind }: { kind: 'left' | 'right' | 'remove' }) {
+function ChipIcon({ kind }: { kind: 'grip' | 'remove' }) {
   return (
     <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <path
-        d={
-          kind === 'remove'
-            ? 'm4 4 8 8M12 4l-8 8'
-            : kind === 'left'
-              ? 'm10 3-5 5 5 5'
-              : 'm6 3 5 5-5 5'
-        }
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {kind === 'grip' ? (
+        <path
+          d="M5 3h.01M11 3h.01M5 8h.01M11 8h.01M5 13h.01M11 13h.01"
+          stroke="currentColor"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+        />
+      ) : (
+        <path
+          d="m4 4 8 8M12 4l-8 8"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      )}
     </svg>
   );
 }
@@ -54,44 +58,53 @@ export function StructurePathBuilder({
     setActive(0);
     input.current?.focus();
   }
-  function move(index: number, delta: number) {
-    const parts = [...folders];
-    const destination = index + delta;
-    const part = parts[index];
-    if (part === undefined || destination < 0 || destination >= parts.length) return;
-    parts.splice(index, 1);
-    parts.splice(destination, 0, part);
-    change(parts);
-  }
+  const { container, interaction, announcement, handleProps } = useFolderReorder(
+    pattern,
+    folders,
+    disabled,
+    (from, to) => change(reorderFolders(folders, from, to)),
+  );
   const occurrences = new Map<string, number>();
   return (
     <Box css={styles} className="structure-path-builder">
       <Field.Root disabled={disabled} unstyled display="grid" gap="2" minWidth="0">
         <Field.Label htmlFor={id}>Folder levels</Field.Label>
-        <Box className="structure-path-input">
+        <Box className="structure-path-input" ref={container}>
           <List.Root unstyled className="structure-path-chips" aria-label="Folder levels in order">
             {folders.map((part, index) => {
               const occurrence = (occurrences.get(part) ?? 0) + 1;
               occurrences.set(part, occurrence);
               return (
-                <List.Item unstyled className="structure-path-chip" key={`${part}:${occurrence}`}>
-                  <Text as="span">{label(part)}</Text>
-                  <IconButton
+                <List.Item
+                  unstyled
+                  className="structure-path-chip"
+                  key={`${part}:${occurrence}`}
+                  data-picked={interaction?.from === index || undefined}
+                  data-dragging={
+                    (interaction?.kind === 'drag' && interaction.from === index) || undefined
+                  }
+                  data-drop={
+                    interaction?.to === index && interaction.from !== index
+                      ? interaction.from < index
+                        ? 'after'
+                        : 'before'
+                      : undefined
+                  }
+                >
+                  <Button
                     type="button"
-                    disabled={disabled || index === 0}
-                    aria-label={`Move ${label(part)} level ${index + 1} earlier`}
-                    onClick={() => move(index, -1)}
+                    className="structure-chip-handle"
+                    disabled={disabled}
+                    data-folder-index={index}
+                    aria-label={`Reorder ${label(part)} level ${index + 1}`}
+                    aria-describedby={`${id}-reorder-help`}
+                    aria-pressed={interaction?.from === index}
+                    title="Drag to reorder, or click to pick up and place"
+                    {...handleProps(index)}
                   >
-                    <ChipIcon kind="left" />
-                  </IconButton>
-                  <IconButton
-                    type="button"
-                    disabled={disabled || index === folders.length - 1}
-                    aria-label={`Move ${label(part)} level ${index + 1} later`}
-                    onClick={() => move(index, 1)}
-                  >
-                    <ChipIcon kind="right" />
-                  </IconButton>
+                    <ChipIcon kind="grip" />
+                    <Text as="span">{label(part)}</Text>
+                  </Button>
                   <IconButton
                     type="button"
                     disabled={disabled}
@@ -157,9 +170,39 @@ export function StructurePathBuilder({
         </Box>
         <Field.HelperText className="help">
           Chips run from outermost folder to innermost. Search predefined parts, or type a literal
-          folder name. Use the arrows to reorder; Backspace removes the last level.
+          folder name. Drag chips to reorder, or click a chip and then its destination. Backspace
+          removes the last level.
         </Field.HelperText>
+        <Text id={`${id}-reorder-help`} className="screen-reader-status">
+          Space or Enter picks up a folder level. Arrow keys move its destination; Home and End
+          choose the first and last level. Enter places it. Escape cancels.
+        </Text>
+        <Text
+          role="status"
+          aria-label="Folder order"
+          className="screen-reader-status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {announcement}
+        </Text>
       </Field.Root>
+      {interaction?.ghost && (
+        <Portal>
+          <Box
+            css={chipDragPreviewStyle}
+            aria-hidden="true"
+            data-folder-drag-preview=""
+            style={{
+              transform: `translate(${interaction.ghost.x}px, ${interaction.ghost.y}px)`,
+              width: interaction.ghost.width,
+            }}
+          >
+            <ChipIcon kind="grip" />
+            <Text as="span">{label(folders[interaction.from] ?? '')}</Text>
+          </Box>
+        </Portal>
+      )}
       {open && (
         <Box
           as="ul"

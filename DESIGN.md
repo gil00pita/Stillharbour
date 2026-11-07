@@ -436,9 +436,15 @@ not depend on an animated indicator. Custom path editing remains below the cards
 Use a labelled five-way segmented category selector above illustrated radio
 cards. Keep existing folder-tree drawings; accommodate four path rows without
 clipping. Browsing categories does not silently select a new rule. Custom uses a
-flat bordered input containing ordered chips and a search field, with explicit
-reorder/remove targets, an inline predefined-part palette and a separate filename
+flat bordered input containing ordered chips and a search field, with draggable
+grip/label handles and separate remove targets, an inline predefined-part palette and a separate filename
 pattern. Keep help secondary, focus visible and compact panes free of horizontal
 overflow. Required metadata gaps are shown as blocked preview rows. Event input
 appears only for event-based rules. No guessed location or camera class is shown
 as fact. Examples stay illustrative rather than catalog measurements.
+
+Custom chips use a grab cursor, six-dot grips, a portalled floating chip and a
+clear insertion line. Keep their original positions until release; wrapped rows
+remain drop targets. Click-to-pick/place and keyboard pickup/arrows/Enter/Escape
+share the same controls, with announcements and restored focus. Remove the old
+earlier/later arrow buttons; retain the existing flat surfaces and focus treatment.

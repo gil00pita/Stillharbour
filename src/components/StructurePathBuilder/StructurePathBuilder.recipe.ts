@@ -1,4 +1,4 @@
-import { defineRecipe } from '@chakra-ui/react';
+import { defineRecipe, defineStyle } from '@chakra-ui/react';
 import { focusRing } from '../../theme/focus-ring';
 
 export const structurePathBuilderRecipe = defineRecipe({
@@ -26,19 +26,48 @@ export const structurePathBuilderRecipe = defineRecipe({
     },
     '& .structure-path-chips': { display: 'contents', listStyle: 'none', padding: 0, margin: 0 },
     '& .structure-path-chip': {
+      position: 'relative',
       display: 'inline-flex',
+      maxWidth: '100%',
       alignItems: 'center',
       gap: '1',
       borderRadius: 'control',
       bg: 'brand.selected',
-      paddingLeft: '2',
       color: 'fg',
+      '&[data-picked=true]': { outline: '1px solid', outlineColor: 'brand.focusRing' },
+      '&[data-dragging=true]': { opacity: 0.45 },
+      '&[data-drop]::after': {
+        content: '""',
+        position: 'absolute',
+        top: '0',
+        bottom: '0',
+        width: '0.5',
+        bg: 'brand.focusRing',
+        borderRadius: 'full',
+        pointerEvents: 'none',
+      },
+      '&[data-drop=before]::after': { insetInlineStart: '-1.5' },
+      '&[data-drop=after]::after': { insetInlineEnd: '-1.5' },
     },
     '& .structure-path-chip button': {
       padding: '1',
       minHeight: 'control',
       minWidth: 'control',
       border: 0,
+      height: 'auto',
+    },
+    '& .structure-path-chip .structure-chip-handle': {
+      cursor: 'grab',
+      touchAction: 'none',
+      userSelect: 'none',
+      paddingInline: '2',
+      gap: '2',
+      minWidth: 0,
+      minHeight: 'control',
+      _active: { cursor: 'grabbing' },
+      _disabled: { cursor: 'not-allowed' },
+      '& span': { whiteSpace: 'normal', overflowWrap: 'anywhere' },
+      '& svg': { flexShrink: 0 },
     },
     '& .structure-part-options': {
       display: 'flex',
@@ -64,4 +93,25 @@ export const structurePathBuilderRecipe = defineRecipe({
       fontVariantNumeric: 'tabular-nums',
     },
   },
+});
+
+export const chipDragPreviewStyle = defineStyle({
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  zIndex: 'tooltip',
+  pointerEvents: 'none',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '2',
+  paddingInline: '2',
+  paddingBlock: '2',
+  minHeight: 'control',
+  bg: 'brand.selected',
+  color: 'fg',
+  borderRadius: 'control',
+  boxShadow: 'lg',
+  fontSize: 'sm',
+  overflowWrap: 'anywhere',
+  '& svg': { flexShrink: 0 },
 });

@@ -987,6 +987,20 @@ retained job/schedule blockers using disposable catalogs; the native structure
 spec verifies typed IPC, the clear-but-disabled state and panel fit at both widths.
 Recurring OS-consent integration tests remain explicit opt-ins, not evidence
 provided by these read-only prerequisite checks.
+
+Custom folder-chip reordering is frontend-only: `StructurePathBuilder` owns its
+presentation, `use-folder-reorder.ts` owns pointer/click/keyboard lifecycles, and
+`reorder.ts` owns bounded ordering, wrapped-row geometry and edge scrolling. It
+uses Pointer Events with capture instead of HTML5 drag/drop, keeping Tauri's
+existing native file-drop configuration intact; [Tauri documents the Windows
+HTML5-handler conflict](https://v2.tauri.app/reference/config/#dragdropenabled).
+The click-to-place alternative follows [WCAG's dragging-movement
+guidance](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html).
+Run the builder, presets and organization/structure component suites; the native
+structure smoke additionally drags across wrapped chips, captures the ghost and
+confirms the actual reordered native request and unchanged generated originals.
+Pointer capture follows the [standard browser
+API](https://developer.mozilla.org/en-US/docs/Web/API/Element/setPointerCapture).
 These checks use generated fixtures; no personal catalog or library is a test.
 
 Native visibility diagnostics: retain document.hidden and document.hasFocus()

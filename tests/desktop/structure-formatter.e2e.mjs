@@ -339,6 +339,76 @@ describe('Structure Formater — entire generated library', () => {
           .value.includes('/{country}/'),
       ),
     );
+    for (const part of ['City', 'Model']) {
+      await builder.setValue(part);
+      await browser.keys('Enter');
+    }
+    await browser.setWindowSize(660, 560);
+    await browser.execute(() =>
+      document.querySelector('.structure-path-input').scrollIntoView({ block: 'center' }),
+    );
+    const drag = await browser.execute(() => {
+      const handles = [...document.querySelectorAll('[data-folder-index]')];
+      const from = handles[0].getBoundingClientRect();
+      const to = handles.at(-1).getBoundingClientRect();
+      const pattern = document.querySelector(
+        'input[aria-describedby="organization-token-help"]',
+      ).value;
+      const parts = pattern.split('/');
+      const filename = parts.pop();
+      parts.push(parts.shift());
+      return {
+        from: {
+          x: Math.round(from.left + from.width / 2),
+          y: Math.round(from.top + from.height / 2),
+        },
+        to: { x: Math.round(to.left + to.width / 2), y: Math.round(to.top + to.height / 2) },
+        wrapped: to.top > from.top,
+        pattern,
+        expected: [...parts, filename].join('/'),
+      };
+    });
+    assert.equal(drag.wrapped, true, 'The native drag must cross wrapped chip rows');
+    await browser.performActions([
+      {
+        type: 'pointer',
+        id: 'folder-chip',
+        parameters: { pointerType: 'mouse' },
+        actions: [
+          { type: 'pointerMove', duration: 0, ...drag.from },
+          { type: 'pointerDown', button: 0 },
+          { type: 'pointerMove', duration: 180, ...drag.to },
+        ],
+      },
+    ]);
+    await $('[data-folder-drag-preview]').waitForExist();
+    assert.equal(
+      await browser.execute(
+        () => document.querySelector('input[aria-describedby="organization-token-help"]').value,
+      ),
+      drag.pattern,
+      'Dragging must not submit intermediate rules',
+    );
+    await browser.saveScreenshot('.context/ui-redesign/structure-chips-dragging-660.png');
+    await browser.performActions([
+      {
+        type: 'pointer',
+        id: 'folder-chip',
+        parameters: { pointerType: 'mouse' },
+        actions: [{ type: 'pointerUp', button: 0 }],
+      },
+    ]);
+    await browser.releaseActions();
+    await browser.waitUntil(() =>
+      browser.execute(
+        (expected) =>
+          document.querySelector('input[aria-describedby="organization-token-help"]').value ===
+          expected,
+        drag.expected,
+      ),
+    );
+    assert.equal(await $('[data-folder-drag-preview]').isExisting(), false);
+    await writeFile('.context/ui-redesign/structure-chip-drag.json', JSON.stringify(drag, null, 2));
     for (const [width, height] of [
       [1180, 780],
       [660, 560],
@@ -356,6 +426,10 @@ describe('Structure Formater — entire generated library', () => {
           .scrollIntoView({ block: 'start', behavior: 'instant' }),
       );
       await browser.saveScreenshot(`.context/ui-redesign/structure-layouts-custom-${width}.png`);
+      await browser.execute(() =>
+        document.querySelector('.structure-path-input').scrollIntoView({ block: 'center' }),
+      );
+      await browser.saveScreenshot(`.context/ui-redesign/structure-chips-${width}.png`);
     }
     await browser.execute(() =>
       [...document.querySelectorAll('.structure-page button')]
@@ -368,7 +442,7 @@ describe('Structure Formater — entire generated library', () => {
         .filter((request) => request.kind === 'organization_library_start')
         .at(-1),
     );
-    assert(customStart.template.pattern.includes('/{country}/'));
+    assert.equal(customStart.template.pattern, drag.expected);
     const activeId = await browser.execute(
       () =>
         window.__structureRequests

@@ -3852,3 +3852,53 @@ and atomic admission remain unavailable under their existing review/recovery gat
 
 **Next gate:** review the published PR and obtain passing required GitHub CI on
 both target platforms before merging. Creating the PR does not authorize a merge.
+
+### 2026-11-07 — Drag to reorder Custom folder chips
+
+**Request/scope:** replace Custom's earlier/later arrow buttons with draggable
+folder chips, retaining the existing dark control styling and actual native
+template behavior. Grip/label buttons support pointer dragging, a portalled ghost,
+wrapped-row insertion feedback and edge scrolling. Apply the new order once on
+drop, preserving duplicates, other folder levels and the filename. Keep separate
+remove buttons. The same handles support click-to-pick/place and keyboard
+Space/Enter pickup, arrows/Home/End destination, Enter placement and Escape
+cancellation, with announcements and restored focus. Interrupted/outside drops,
+capture loss, window blur, changed rules and disabled editing cancel stale work.
+
+**Files/decisions:** update StructurePathBuilder's implementation, recipe and
+colocated tests; add private `use-folder-reorder.ts` and `reorder.ts`. Extend the
+generated native structure spec to drag the first folder across wrapped rows and
+assert the exact reordered native preview request. Update DESIGN, specification,
+acceptance criteria, user/development guidance and M2 preview documentation.
+Use Pointer Events with capture and no new dependencies; keep Tauri's native
+file-drop settings intact, avoiding its documented Windows HTML5 drag/drop
+handler conflict. Retain a non-drag pointer alternative alongside keyboard use.
+No native safety, persistence, naming policy or execution authority changes.
+
+**Fresh checks:** 40 focused frontend cases across seven builder/preset/structure/
+organization consumer files pass (5.21 seconds); strict types and lint pass.
+Instrumented native macOS structure smoke passes one case in 8.5 seconds: real
+rendered wrapped-chip geometry, pointer actions, ghost state with no intermediate
+rule change, completed reorder, exact subsequent native preview pattern and
+unchanged generated-source audit. Visually review the 1180/660-pixel result and
+held-drag screenshots in `.context/ui-redesign/structure-chips-*.png`; the JSON
+receipt is `structure-chip-drag.json`. The final pinned local React Doctor scan
+reports zero errors/eleven existing reviewed warnings, with no new findings.
+Production build and release preflight pass, restoring ordinary frontend assets
+and retaining the existing large-chunk advisory. Changed-file formatting and
+whitespace checks pass. Logs use `.context/chip-drag-*`.
+
+**Retained failures/fixes:** initial lint catches synchronous state reset in an
+effect and ref inference through a grouped hook result; reset stale local state
+during render, isolate capture cleanup, and destructure the hook result without
+suppression. Two first-run assertions select the fixture's implicit output status
+as well as reorder announcements; label the announcement region and assert it
+specifically, then all focused tests pass. A documentation patch initially fails
+on an outdated context line, is reapplied with the current paragraph and formatted.
+
+**Publication/limits:** update existing PR #31 on the same branch after these
+checks. Earlier full frontend/Rust receipts remain separate evidence, not fresh
+execution for this refinement; no Rust/native safety behavior changed. Embedded
+pointer/keyboard tests do not certify physical input, assistive technology or
+Windows behavior. Both-platform CI and the existing production restructure and
+recovery qualification gates remain pending; no originals are moved or renamed.

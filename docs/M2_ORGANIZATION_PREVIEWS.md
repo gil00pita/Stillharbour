@@ -170,7 +170,10 @@ for an event name. Missing required context blocks the photo instead of choosing
 an arbitrary label, guessing from GPS or dropping it from scope.
 
 Custom assembles real path components with searchable predefined chips and
-literal folders, removal/reordering and a separate filename pattern. All native
+literal folders, draggable grip/label handles, separate removal and a filename
+pattern. Click-to-pick/place and keyboard pickup/arrows/Enter/Escape provide
+alternatives without the old earlier/later arrow buttons. Drop commits once;
+canceled, interrupted or stale gestures leave the rule untouched. All native
 path/conflict/global sequence checks remain. New quarter/metadata patterns use
 preview policy v2; previous patterns and absent optional context retain v1 and
 legacy serialization. Template examples can carry explicit naming observations.

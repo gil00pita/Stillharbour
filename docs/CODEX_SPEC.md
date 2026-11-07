@@ -1113,7 +1113,12 @@ field only when its token is used. Missing or ambiguous values block the photo;
 no multi-output fan-out or arbitrary first tag is implied.
 
 Custom uses an input with predefined folder chips, explicit literals, removal
-and keyboard-accessible reorder controls; filename patterns and the full rule
+and draggable grip/label handles instead of earlier/later arrow buttons. Show a
+floating chip and insertion marker across wrapped rows; apply the rule once on
+drop, preserving every other level and the filename. Provide click-to-pick/place
+and keyboard pickup/destination/drop/cancel alternatives, announcements and focus
+restoration. Escape, outside drops, pointer interruption, focus loss, changed
+rules or disabled editing cancel without applying a stale order. Filename patterns and the full rule
 remain editable. Native relative-path, original-extension, global conflict and
 revision checks remain authoritative. See ADR-0096 for observation limits,
 backward-compatible optional data, metadata-reader/platform limitations and the

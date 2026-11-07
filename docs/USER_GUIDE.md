@@ -154,8 +154,12 @@ A missing or ambiguous required value blocks that photo in the preview.
 
 In **Custom**, type into **Folder levels** to find a predefined part, or enter a
 literal folder name. Enter adds the highlighted part; Backspace on an empty
-input removes the last level. Each chip has controls to move it earlier/later or
-remove it. Folder levels read left to right, from outside to inside. Edit the
+input removes the last level. Drag a chip by its grip or label to reorder it;
+the insertion marker shows its destination, including on wrapped rows. You can
+also click a chip, then click its destination chip. With a grip focused, press
+Space or Enter to pick it up, arrows (or Home/End) to choose a level, and Enter
+to place it. Escape cancels, and the × still removes a level. Folder levels read
+left to right, from outside to inside. Edit the
 filename pattern separately, then preview the actual paths. Camera → Event asks
 for one event name for this rule; Trip grouping is omitted.
 

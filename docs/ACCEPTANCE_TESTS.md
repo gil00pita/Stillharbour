@@ -990,6 +990,15 @@ or release acceptance. Actual outcomes belong in IMPLEMENTATION_LOG.
   names, removing/reordering levels, Backspace/Enter and custom filename patterns.
   Enforce the bounded path model; actual typed native requests must change with
   the chips. Category browsing alone does not replace a current rule.
+- Custom chips use draggable grips/labels with a floating preview and insertion
+  marker, replacing earlier/later buttons. Drag across wrapped rows and commit
+  once on release; preserve duplicate levels and the exact filename pattern.
+  Verify click-to-pick/place, Space/Enter pickup, bounded arrows/Home/End, Enter
+  placement, Escape cancellation, announcements and focus restoration. Outside
+  drops, pointer cancellation/capture loss, window blur, changed rules and disabled
+  editing must discard pending moves. Scrolling near the panel edge keeps long
+  chip lists reachable. The resulting native preview request must contain the
+  reordered pattern, with original bytes and all execution gates unchanged.
 - Check quarter boundaries and all metadata tokens with synthetic sources;
   malformed/absent/ambiguous labels and tag branches stay blocked. Reject injected
   separators, traversal and unsafe names. Missing metadata cannot be bypassed by
