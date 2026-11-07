@@ -1142,3 +1142,16 @@ fingerprints; do not invent observations to make fixtures compile. Run focused
 organization and Map/PlaceSearch tests, Rust format, script lint/format and the
 generated Map desktop spec. Windows compilation/execution remains a Windows CI
 check; a macOS run does not exercise `#![cfg(windows)]` integration tests.
+
+Catalog restart navigation (2026-11-07): the separate three-launch catalog suite
+opens the dedicated **Backup** page directly. Its shared helper waits for the
+snapshot profile selector even when preparing a retained-catalog return without
+a selected profile. The removed Backup & Sync navigation and Versioned backup
+mode button must not be used as test locators. Once preparation stops the normal
+application, assert that the actual backup workspace and navigation are absent,
+and retain the native BUSY admission check. Phases two/three require the first
+phase's real receipt; never manufacture receipts or bypass failed preparation.
+Run `npm run desktop:test:catalog` sequentially with a matching instrumented
+executable to exercise all three actual processes, retained generations, byte
+audits and scoped cleanup. Failed owned sessions stay retained under the existing
+harness rules. The main eighteen-spec desktop suite is separate evidence.

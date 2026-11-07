@@ -4061,6 +4061,48 @@ restructure gates remain unchanged. Script lint/syntax, Prettier, Rust formattin
 and whitespace checks pass. Commit/push these fixes to the existing PR branch
 for fresh hosted validation.
 
+## 2026-11-07 — Repair dedicated catalog-restart navigation
+
+**Request/evidence:** resolve both Foundation native failures from run
+42405964914 at `589a531`. Both platforms now pass all eighteen main desktop
+specs. The separate catalog-restart suite fails in launch one because its shared
+helper still locates Backup & Sync and Versioned backup, removed when those
+workspaces were separated. Launches two/three then lack phase one's receipt;
+these are consequences of the initial failure, not missing-data recovery to bypass.
+
+**Change:** `tests/catalog-desktop/native.mjs` opens the dedicated Backup page
+and waits for its actual snapshot profile selector with or without a selected
+profile. Replace the obsolete mode-button absence assertion after preparation
+with absence of the real backup workspace and Backup navigation; retain native
+BUSY admission, explicit review/root identity/approval, real process exits,
+phase-receipt requirements and all source/retained-catalog audits. Audit tests
+and scripts for the old navigation/mode/Map wrapper locators; no occurrences
+remain. Update DEVELOPMENT with the separate three-launch navigation/check
+contract. No application code, dependencies, fixture ownership, catalog schema
+or production preservation gate changes.
+
+**Fresh verification:** `npm run desktop:test:catalog` passes both session-owner
+Node tests and all three macOS native specs in 42 seconds (26.7 / 8.9 / 1.7 s).
+Receipts verify three distinct native PIDs and confirmed exits, stable catalog/
+root identities, activation of the earlier verified catalog, a new reviewed
+return transaction, preservation of both generations of edits, source/restore
+byte comparison and independently retained catalogs. The final complete receipt
+confirms native credentials/authority cleanup and removal of only the owned
+generated directory. The unchanged admission guard rejects normal requests
+with BUSY after preparation. Script lint/syntax, changed-file formatting and
+whitespace checks pass. Log: `.context/ci-catalog-repair-native.log`; receipts:
+`.context/m4-catalog-restart/9129d601f5b7a0f2176d1c277d971cbc/`.
+
+**Reused inputs/limits:** matching instrumented executable SHA-256
+`917c65b2415cfcdbc197221912b51085be58653acdcba20b3dfe27fd6b11a684` is unchanged,
+as are application/build inputs and ordinary production frontend assets. No
+rebuild, full Rust/desktop rerun or new native operation is necessary for this
+external test-helper correction. The eighteen-spec both-platform passes above
+are prior hosted evidence, not fresh local execution. Fresh Windows catalog-
+restart and complete both-platform CI remain pending after commit/push to the
+existing PR branch. No personal catalog or library is used; production execution,
+recovery and release gates remain binding.
+
 ## 2026-11-07 — Copy audit branch and redesign the neutral Chakra workspace
 
 **Request/scope:** copy `feat/app-ui-redesign-audit`, then redesign the existing
@@ -4380,3 +4422,27 @@ DEVELOPMENT. Review finds no embedded credentials. All three JSON files parse;
 changed-file formatting and whitespace pass. No application code or runtime
 dependencies change, so application tests are not rerun for this publication.
 Push this follow-up to the existing branch/PR #32; merge gates remain binding.
+
+## 2026-11-07 — Merge current main into the redesign branch
+
+**Request/state:** commit any pending work, merge origin/main and push. The working
+tree was clean at `c80fd48`; no preliminary commit was needed. Fetch main at
+`23c19b9`, the squash merge of the original audit work plus catalog-restart fixes.
+Comparison against inherited snapshot `589a531` proves that main adds changes
+only to DEVELOPMENT, IMPLEMENTATION_LOG and the catalog desktop helper.
+
+**Resolution:** the squash history produces 120 conflicts against the later
+Chakra migration. Preserve the branch's current tree, including stylesheet
+removals, and integrate all three verified incoming changes: dedicated Backup
+navigation, snapshot-selector readiness, stopped-workspace assertions and both
+complete documentation additions. Verify the resolved tree differs from the
+pre-merge branch in only those three paths before adding this entry. Application,
+Rust, dependencies and build inputs remain identical to the pre-merge branch.
+
+**Fresh checks:** strict TypeScript, both catalog session-owner Node regressions,
+catalog helper syntax/ESLint, changed-file formatting and whitespace pass; no
+unresolved paths remain. Existing application/native evidence retains its earlier
+scope; no native catalog restore or full desktop suite is rerun for this
+navigation-helper integration. Complete the two-parent merge and push the same
+branch. Main now contains the structure feature, so update PR #32's title/body
+around its remaining Chakra/UI diff; current both-platform CI remains required.

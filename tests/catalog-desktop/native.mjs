@@ -91,11 +91,10 @@ export function auditIdentity(value) {
   for (const field of ['volume', 'file', 'links']) assert.match(value[field], /^\d+$/);
 }
 export async function openBackup(profileId = null) {
-  await $('button[aria-label="Backup & Sync"]').waitForDisplayed();
-  await $('button[aria-label="Backup & Sync"]').click();
-  await $('button=Versioned backup').click();
+  await $('button[aria-label="Backup"]').waitForDisplayed();
+  await $('button[aria-label="Backup"]').click();
+  await $('.backup-workspace select').waitForEnabled();
   if (profileId) {
-    await $('.backup-workspace select').waitForEnabled();
     await browser.execute((id) => {
       const select = document.querySelector('.backup-workspace select');
       if (!(select instanceof HTMLSelectElement))
@@ -174,7 +173,8 @@ export async function prepareCatalog({
   );
   assert.ok((await stopped.getText()).includes('not confirmed active'));
   assert.ok((await stopped.getText()).includes('Close and reopen Stillharbour'));
-  assert.equal(await $('button=Versioned backup').isExisting(), false);
+  assert.equal(await $('.backup-workspace').isExisting(), false);
+  assert.equal(await $('button[aria-label="Backup"]').isExisting(), false);
   const admission = await browser.tauri.execute(async ({ core }) => {
     try {
       await core.invoke('library_request', { request: { kind: 'status' } });
