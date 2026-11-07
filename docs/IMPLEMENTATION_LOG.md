@@ -4191,3 +4191,11 @@ the aborted broad native run, hidden-document menu failure and pending full
 macOS/Windows CI. Fresh Git review, supported-file formatting and whitespace
 checks precede publication. No merge or release qualification is requested;
 record the actual publication result separately.
+
+**Publication:** commit `3912ed6` pushes to the unchanged branch and
+[PR #32](https://github.com/gil00pita/Stillharbour/pull/32) opens against `main`
+with the complete 260-file diff, including inherited audit work. Fresh fetch,
+supported-file Prettier, staged/complete-PR whitespace review and authenticated
+publication succeed. Record this outcome in a documentation follow-up; leave
+the PR unmerged and the same branch checked out. Hosted CI remains pending;
+none of the earlier scoped evidence is relabelled as a new full native pass.
