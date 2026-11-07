@@ -54,6 +54,48 @@ The 2026-11-06 refactor moves component tests to their owning component folders;
 shared hooks use `src/hooks/use-*.ts`. Import components through `@/components/<Name>`.
 [React Doctor review](REACT_DOCTOR_REVIEW.md) records the diagnostic evidence and limits.
 
+Collapsed sidebar alignment: the Foundation desktop smoke checks every navigation
+icon against the logo centre and matches main/footer button edges at 1180×780 and
+660×560, including overflowing navigation at minimum height. Keep collapsed
+main/footer horizontal padding equal and size buttons from the shared rail width
+(excluding its border and padding), rather than the scrollbar-reduced scrollport.
+Native macOS scrollbars can consume 13 px even with `scrollbar-width: thin`;
+overlay-scrollbar browser fixtures alone missed the resulting 6.5 px icon shift.
+The smoke saves geometry JSON and screenshots before asserting alignment so the
+scrollbar width survives failures. Do not reintroduce negative navigation margins.
+Expanded padding remains unchanged. Browser fixtures are separate from native evidence.
+
+File-size field geometry: keep the unit's `Field.Root` as a flex container. An
+inline select can contribute extra baseline descent to its wrapper, stretching
+the adjacent amount input through the shared grid row (41 px versus 36 px on
+macOS 15 CI). `tests/desktop/file-size-fields.e2e.mjs` checks both native and
+bottom-edge fallback baselines at desktop/minimum sizes in a fresh Settings
+session, without a registered library. Test-only `contain: layout` suppresses the
+select's intrinsic baseline as specified by [CSS containment](https://www.w3.org/TR/css-contain-1/#containment-layout);
+it does not set either control's height. Geometry JSON and screenshots are saved
+before assertions in `.context/screenshots/file-size-*`, already uploaded by CI.
+
+The Foundation organization workflow opens Saved plans from Albums / Tags. After
+closing the dialog it must navigate back to Photos before using the Filter panel,
+then reselect its stable fixture IDs for subsequent compare/viewer checks. Section
+navigation mounts a fresh photo selection; closing Saved plans alone does not
+return to Photos. Retain all original-file and destination-neighbor audits.
+After clearing the selection, activate Done selecting before opening a photo;
+clearing selected IDs alone intentionally leaves selection mode active.
+
+Windows desktop regressions (2026-11-06): Map's search glyph now lives inside
+`.search-input-frame`; measure that shared border, the glyph before the input,
+input hit testing and the adjacent Filters trigger. Storage's explorer is a direct
+child of the page content, with version/background status allowed before it;
+the explorer itself starts at its filters and measurement controls stay in the
+dialog. Keep the viewer's single-row and pointer-reachability checks at minimum
+window size: Windows window borders can leave a 644 px content viewport inside
+a 660 px outer window. The slider may shrink while icon button widths remain fixed.
+The shared generated metadata export flow waits for the newly applied tag-history
+identity before selecting its Undo button, avoiding a cached previous first-row
+element while the history reloads. Existing catalog revision/conflict checks remain
+binding; the harness does not retry a rejected undo or alter backend revisions.
+
 Native CI regressions (2026-11-06): `npm run desktop:test:build` then `npm run desktop:test` checks favorite motion policy, Foundation/gallery/saved-profile baselines and Storage Escape using generated fixtures. The heart scenario records motion inputs and deliberately exercises hidden-document suppression; it does not force animations against OS preferences. Foundation focuses the fading timeline before asserting visibility and records `timeline-top-failure.json` on a start-position mismatch; CI retains that diagnostic with existing gallery evidence. A reopened saved backup profile starts an actual comparison, so its report becomes the baseline of the following manual scan. Component tests wait for the portalled Map filters' focus lifecycle before sending Escape; the native case focuses its ordinary Close filters button before the actual key so a native select cannot consume it. No personal-library fixture or preservation gate changes.
 
 Viewer hit-test CI follow-up (2026-11-06): Foundation and `tests/desktop/viewer-controls.e2e.mjs` share `viewer-controls.mjs`. A persistent notification from the deliberately unavailable generated preview can cover the floating toolbar. Verify its exact known description, dismiss it through Dismiss error, and await removal before testing every control and navigation arrow at desktop/minimum sizes, with Info open/closed. Unexpected notifications fail visibly and remain present. The dedicated native case forces this state through the existing test-only picker interceptor and verifies unchanged generated sources; it adds no production hook or file operation. Failed hit-tests retain control names, bounds, disabled state, actual hit elements and a screenshot under `.context/screenshots/viewer-controls-failure.*`, already included in CI artifacts. Do not weaken targets, skip disabled-button hit-tests or bypass pointer geometry with programmatic clicks.

@@ -295,6 +295,10 @@ export async function finishMetadataExports(directory) {
     });
     await $('button=Preview tag change').click();
     await $('button=Apply reviewed tag change').waitForDisplayed();
+    const previousHistory = new Set(
+      (await catalogMetadata({ kind: 'tag_history' })).map((entry) => entry.id),
+    );
+    await $('button=Apply reviewed tag change').waitForEnabled();
     await $('button=Apply reviewed tag change').click();
     await browser.waitUntil(
       async () =>
@@ -307,7 +311,18 @@ export async function finishMetadataExports(directory) {
           })
         ).data.total === 1,
     );
-    const undo = $('section[aria-label="Tag changes"] ul li:first-child button');
+    let appliedHistory;
+    await browser.waitUntil(async () => {
+      const fresh = (await catalogMetadata({ kind: 'tag_history' })).filter(
+        (entry) => !previousHistory.has(entry.id),
+      );
+      assert.ok(fresh.length <= 1, 'Only the reviewed fixture tag change adds history');
+      appliedHistory = fresh[0];
+      return Boolean(appliedHistory);
+    });
+    const undo = $('section[aria-label="Tag changes"]').$(
+      `button=Undo tag change ${appliedHistory.id.slice(0, 8)}`,
+    );
     await undo.waitForDisplayed();
     await browser.waitUntil(async () => undo.isEnabled());
     await undo.click();

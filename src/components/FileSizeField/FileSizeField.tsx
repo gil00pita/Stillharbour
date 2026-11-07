@@ -79,7 +79,7 @@ export function FileSizeField({
             }}
             onChange={(event) => update(event.target.value, draft.unit)}
           />
-          <Field.Root unstyled minW="0" disabled={disabled}>
+          <Field.Root unstyled display="flex" minW="0" disabled={disabled}>
             <NativeSelect
               aria-label={`${label} unit`}
               disabled={disabled}

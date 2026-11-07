@@ -187,6 +187,10 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             glyph.right < field.right &&
             glyph.top > field.top &&
             glyph.bottom < field.bottom,
+          iconBeforeInput: glyph.right <= text.left,
+          inputReachable:
+            document.elementFromPoint(text.left + text.width / 2, text.top + text.height / 2) ===
+            input,
           iconUnobstructed: icon.contains(
             document.elementFromPoint(glyph.left + glyph.width / 2, glyph.top + glyph.height / 2),
           ),
@@ -196,6 +200,8 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
       assert.deepEqual(searchGeometry, {
         inputInside: true,
         iconInside: true,
+        iconBeforeInput: true,
+        inputReachable: true,
         iconUnobstructed: true,
         filterBesideSearch: true,
       });
@@ -222,7 +228,7 @@ describe('M5 generated map and catalog metadata desktop slice', () => {
             .querySelector('[role="dialog"][aria-label="Map filters"]')
             .getBoundingClientRect();
           const input = document
-            .querySelector('.map-search-controls input')
+            .querySelector('.map-search-controls .search-input-frame')
             .getBoundingClientRect();
           const filter = document.querySelector('.map-filter-trigger').getBoundingClientRect();
           return (
