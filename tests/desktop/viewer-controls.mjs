@@ -26,6 +26,7 @@ export async function assertViewerControlsOverlay(observations = {}) {
     const frame = viewer.querySelector('.viewer-image-frame').getBoundingClientRect();
     return {
       motion: viewer.dataset.motion,
+      viewport: { width: innerWidth, height: innerHeight },
       canvas: { width: canvas.width, height: canvas.height },
       frame: { width: frame.width, height: frame.height },
     };
@@ -53,6 +54,10 @@ export async function assertViewerControlsOverlay(observations = {}) {
   const geometry = await browser.execute(() => {
     const controls = document.querySelector('.viewer-controls');
     const bar = controls.getBoundingClientRect();
+    const zoom = controls.querySelector('input[type="range"]');
+    const range = zoom.getBoundingClientRect();
+    const output = controls.querySelector('output');
+    const readout = output.getBoundingClientRect();
     const photo = document.querySelector('.viewer-photo').getBoundingClientRect();
     const heart = controls.querySelector('.viewer-favorite');
     const buttons = [...controls.querySelectorAll('button')];
@@ -97,7 +102,19 @@ export async function assertViewerControlsOverlay(observations = {}) {
         return Math.abs(bounds.top + bounds.height / 2 - first.top - first.height / 2) < 1;
       }),
       buttonsReachable: buttonBounds.every((button) => button.reachable),
+      buttonWidthsRetained: buttonBounds.every((button) => button.width >= 44),
       navigationReachable: navigationBounds.every((button) => button.reachable),
+      zoomControlsFit:
+        range.width >= 24 &&
+        range.height >= 24 &&
+        range.left >= bar.left &&
+        range.right <= bar.right &&
+        zoom.contains(
+          document.elementFromPoint(range.left + range.width / 2, range.top + range.height / 2),
+        ) &&
+        readout.left >= bar.left &&
+        readout.right <= bar.right &&
+        output.scrollWidth <= output.clientWidth,
       buttonBounds,
       navigationBounds,
     };
@@ -112,7 +129,9 @@ export async function assertViewerControlsOverlay(observations = {}) {
         heartBeforeInfo: true,
         singleRow: true,
         buttonsReachable: true,
+        buttonWidthsRetained: true,
         navigationReachable: true,
+        zoomControlsFit: true,
       },
       JSON.stringify({ buttonBounds, navigationBounds }),
     );

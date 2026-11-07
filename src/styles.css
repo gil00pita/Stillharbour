@@ -2017,7 +2017,9 @@ SOFTWARE.
 }
 .viewer-controls input[type='range'] {
   width: clamp(40px, 6vw, 80px);
+  min-width: 24px;
   min-height: 24px;
+  margin: 0;
   padding: 0;
   border: 0;
   background: transparent;
@@ -2025,6 +2027,8 @@ SOFTWARE.
 }
 .viewer-controls output {
   min-width: 64px;
+  flex-shrink: 0;
+  white-space: nowrap;
   font-size: 12px;
   color: var(--muted);
   text-align: center;

@@ -99,7 +99,8 @@ def failure_servers(protocol, base, environment, listen_port, binaries):
         raise RuntimeError('Unsupported fixed proxy protocol.')
     proxy_logs = base / 'proxy-process'
     proxy_logs.mkdir()
-    with PROBE.server(command, base, backend_env, backend_port):
+    startup_timeout = PROBE.WINDOWS_SMB_STARTUP_SECONDS if protocol == 'smb' and sys.platform == 'win32' else 20
+    with PROBE.server(command, base, backend_env, backend_port, startup_timeout=startup_timeout):
         proxy_env = {**environment, 'STILLHARBOUR_BACKEND_PORT': str(backend_port)}
         with PROBE.server([sys.executable, ROOT / 'scripts/m4_disconnect_proxy.py'],
                           proxy_logs, proxy_env, listen_port):

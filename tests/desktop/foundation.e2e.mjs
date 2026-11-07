@@ -4935,6 +4935,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
       // selection. Restore these stable fixture IDs for the following viewer checks.
       await $('button[aria-label="Photos"]').click();
       await $('.asset-viewport').waitForDisplayed();
+      await $('button[aria-controls="library-filter-panel"]').waitForDisplayed();
       await galleryView('Timeline');
       await enterPhotoSelection();
       for (const id of ids) {
@@ -4965,6 +4966,8 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await browser.waitUntil(async () => (await native({ kind: 'tags' })).data.includes('Reviewed'));
     await browser.saveScreenshot('.context/screenshots/photo-canvas-selection.png');
     await $('button=Clear selection').click();
+    // Clearing the batch leaves explicit selection mode active. Finish it
+    // before clicking a photo to open the viewer.
     await $('button=Done selecting').click();
     // Inject one transport-error event; the follow-up PNG read is real native
     // owned-cache traffic and must recover without a catalog rescan.

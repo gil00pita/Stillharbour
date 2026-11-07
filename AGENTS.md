@@ -70,7 +70,9 @@ Documentation claims must match behavior. Hide or clearly disable unfinished pro
 
 ## Validation and reporting
 
-M0 establishes the actual workspace layout and package manager commands. Thereafter run the repository's documented equivalents of cargo fmt --check, cargo clippy with warnings denied for owned code, cargo test --workspace, strict frontend type checking, linting, component tests, build, desktop smoke tests, and git diff --check.
+Use focused local validation during development and full GitHub CI before merging. Follow the change/risk table and commands in [Development](docs/DEVELOPMENT.md#local-validation-and-ci). Select tests for affected behavior and its consumers, including shared dependencies; file proximity alone does not define coverage. Run `git diff --check` for every change. Run the relevant preservation, failure/recovery and native checks locally when changing safety-sensitive behavior.
+
+Reserve `npm run check` and the complete desktop/transport suites for CI, broad changes or explicit milestone/release qualification rather than every small edit. Reuse recorded passing checks only while their relevant code, dependencies, configuration and build inputs remain unchanged. Rerun affected checks after edits or failures; report reused evidence separately from fresh execution. Full passing CI on both target platforms is required before merge; local completion may be reported with CI pending. Milestone, preservation and packaged-release gates remain binding.
 
 Do not invent passing commands, UI screenshots, throughput measurements, native OS tests, signed installers, protocol tests or restore evidence. State exactly which checks ran and which could not run. A browser test is not a native desktop integration test.
 
@@ -711,26 +713,24 @@ src/
 
 ## 13. Testing and validation patterns
 
-Use the lightest check that matches the risk of the change, and always report what you ran.
-Examples below use `npm run` to match the README; Yarn v1 equivalents are `yarn lint`, `yarn doctor --scope changed`, `yarn build`, etc.
+Use the local validation policy above and the risk table in [Development](docs/DEVELOPMENT.md#local-validation-and-ci). Use the pinned npm toolchain and scripts present in `package.json`.
 
 ### Commands
 
-- `npm run lint` — run ESLint across the project. Use this for TypeScript, React, import-order, React Hooks, Next.js Core Web Vitals, and Prettier-backed style checks.
-- `npm run lint:fix` — use only when you intend to apply automatic ESLint fixes. Review the diff afterward because import and object sorting can move code around.
-- `npm run format:check` — verify Prettier formatting without writing files.
-- `npm run build` — run after changes that affect Next.js routing, server/client boundaries, theme setup, package versions, or shared TypeScript types.
-- `npm run doctor` — run React Doctor for React-specific health checks, dead-code analysis, dependency/import problems, circular imports, and issues ESLint may not catch.
-- `npm run doctor -- --scope changed` — prefer this for focused feature work when the branch is large and you only need diagnostics for changed code.
-- `npm run doctor -- --staged` — use this before committing staged UI or React component changes.
+- `npm run lint` — run the configured ESLint checks for frontend changes.
+- `npm run typecheck` — check strict TypeScript, including consumers of changed components/types.
+- `npm test -- <test-file-or-directory>` — run affected component behavior and consumer tests; `npm run test:watch -- <test-file-or-directory>` supports iteration.
+- `npm exec -- prettier --check <changed-files>` — verify formatting without writing files.
+- `npm run build` — validate frontend output when changing theme setup, build configuration, package versions or shared TypeScript types.
+- For React Doctor, follow [the recorded local workflow](docs/REACT_DOCTOR_REVIEW.md); there is no `doctor` npm script.
 
 ### Patterns
 
-- Start with `npm run lint` for almost every code change. Fix real issues rather than weakening rules or adding broad disables.
+- Choose local checks from the risk table before running them. Fix real issues rather than weakening rules or adding broad disables.
 - Use React Doctor as a second pass for React architecture and code-health issues, especially after adding hooks, shared components, providers, barrel exports, or dependency changes.
 - For component behavior, prefer Testing Library patterns that assert what users can see or do: accessible names, roles, keyboard flow, form errors, and state changes.
 - For Chakra UI components, test behavior and accessibility rather than implementation details. Avoid assertions tied to generated class names or DOM internals from Chakra/Ark.
-- For Storybook-backed components, keep stories current when props, visual states, or examples change; run `npm run build-storybook` when story structure or preview configuration changes.
+- Keep existing stories current when props, visual states or examples change; use only commands available in the checkout.
 - When a check fails because of unrelated existing issues, capture the command and the first relevant failure in the final response instead of silently skipping validation.
 
 ### Don't
