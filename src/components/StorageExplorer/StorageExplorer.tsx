@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Box, Field, useRecipe } from '@chakra-ui/react';
+import { Box, Field, useRecipe, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import type {
   FindingPage,
   InspectionFinding,
@@ -229,7 +229,7 @@ export function StorageExplorer({
       css={styles}
       className={`inspection-storage storage-explorer ${expanded ? 'storage-expanded' : ''}`}
     >
-      <section className="storage-filters" aria-label="Storage filters">
+      <chakra.section className="storage-filters" aria-label="Storage filters">
         <Field.Root>
           <Field.Label>Search</Field.Label>
           <Input
@@ -301,8 +301,8 @@ export function StorageExplorer({
           </NativeSelect>
         </Field.Root>
         <Button onClick={reset}>Reset</Button>
-      </section>
-      <div className="storage-chips" aria-label="Active storage filters">
+      </chakra.section>
+      <Box className="storage-chips" aria-label="Active storage filters">
         {Object.entries(filters)
           .filter(([, value]) => value)
           .map(([key, value]) => (
@@ -314,7 +314,7 @@ export function StorageExplorer({
               {key === 'minimum' ? `At least ${displayBytes(value)}` : value} ×
             </Button>
           ))}
-      </div>
+      </Box>
       <StorageOverview
         summary={summary}
         volumes={volumes}
@@ -324,15 +324,15 @@ export function StorageExplorer({
         selected={filters.category}
         onSelect={(value) => update('category', value)}
       />
-      <p className="storage-note">
+      <Text className="storage-note">
         {page.rows.length.toLocaleString()} loaded of {summary.total.files.toLocaleString()}{' '}
         retained observations
         {page.next ? ' · Filters and file-type totals cover loaded observations only.' : '.'} Camera
         uses current recorded catalog metadata; missing, unread and unavailable metadata remains
         unknown. Age uses retained last-modified dates.
-      </p>
+      </Text>
       {cameraFailures > 0 && (
-        <p role="status">
+        <Text role="status">
           Camera metadata unavailable for {cameraFailures} files.{' '}
           <Button
             onClick={() => {
@@ -344,9 +344,9 @@ export function StorageExplorer({
           >
             Retry camera metadata
           </Button>
-        </p>
+        </Text>
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <Text role="alert">{error}</Text>}
       {page.next && (
         <Button disabled={loading || page.rows.length >= maxFiles} onClick={() => void more()}>
           {loading
@@ -356,7 +356,7 @@ export function StorageExplorer({
               : 'Load more file observations'}
         </Button>
       )}
-      <div className="storage-toolbar">
+      <Box className="storage-toolbar">
         <strong>
           {filtered.length.toLocaleString()} files · {displayBytes(bytes)}
           {simulate ? ' · Simulation' : ''}
@@ -384,7 +384,7 @@ export function StorageExplorer({
             ))}
           </NativeSelect>
         </Field.Root>
-        <div>
+        <Box>
           {['Map', 'List'].map((value) => (
             <Button key={value} aria-pressed={view === value} onClick={() => setView(value)}>
               {value}
@@ -393,9 +393,9 @@ export function StorageExplorer({
           <Button aria-pressed={expanded} onClick={() => setExpanded((value) => !value)}>
             {expanded ? 'Reduce map' : 'Expand map'}
           </Button>
-        </div>
-      </div>
-      <nav className="storage-breadcrumbs" aria-label="Storage folders">
+        </Box>
+      </Box>
+      <chakra.nav className="storage-breadcrumbs" aria-label="Storage folders">
         {focusedFiles && (
           <Button
             onClick={() => {
@@ -441,8 +441,8 @@ export function StorageExplorer({
         >
           Parent folder
         </Button>
-      </nav>
-      <div className="storage-legend" aria-label={`${mode} map legend`}>
+      </chakra.nav>
+      <Box className="storage-legend" aria-label={`${mode} map legend`}>
         {legend.map((label) => {
           const file = page.rows.find((file) =>
             mode === 'Age'
@@ -452,21 +452,23 @@ export function StorageExplorer({
                 : categoryOf(file) === label,
           );
           return (
-            <span key={label}>
+            <Text as="span" key={label}>
               <i style={{ background: file ? colorOf(file, mode, cameras) : 'var(--muted)' }} />{' '}
               {label}
-            </span>
+            </Text>
           );
         })}
-      </div>
-      <div className="storage-workspace">
-        <div>
+      </Box>
+      <Box className="storage-workspace">
+        <Box>
           {!filtered.length ? (
-            <div className="storage-empty" role="status">
-              <h3>No files match this view</h3>
-              <p>Clear a filter or load more observations.</p>
+            <Box className="storage-empty" role="status">
+              <Heading as="h3" unstyled>
+                No files match this view
+              </Heading>
+              <Text>Clear a filter or load more observations.</Text>
               <Button onClick={reset}>Clear storage filters</Button>
-            </div>
+            </Box>
           ) : view === 'Map' ? (
             <>
               <StorageMap
@@ -478,26 +480,28 @@ export function StorageExplorer({
                 selectGroup={setSelection}
                 openGroup={openGroup}
               />
-              <p className="storage-note">
+              <Text className="storage-note">
                 Area represents logical size. Empty files have no area; use List to find them.
                 Select a folder heading, then Open folder, or double-click it.
-              </p>
+              </Text>
             </>
           ) : (
-            <section aria-label="Inspected files">
-              <h3>Files · largest first</h3>
-              <table className="storage-table">
-                <thead>
-                  <tr>
-                    <th>File / location</th>
-                    <th>Size</th>
-                    <th>File type</th>
-                  </tr>
-                </thead>
-                <tbody>
+            <chakra.section aria-label="Inspected files">
+              <Heading as="h3" unstyled>
+                Files · largest first
+              </Heading>
+              <Table.Root unstyled className="storage-table">
+                <Table.Header unstyled>
+                  <Table.Row unstyled>
+                    <Table.ColumnHeader unstyled>File / location</Table.ColumnHeader>
+                    <Table.ColumnHeader unstyled>Size</Table.ColumnHeader>
+                    <Table.ColumnHeader unstyled>File type</Table.ColumnHeader>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body unstyled>
                   {sorted.map((file) => (
-                    <tr key={file.id}>
-                      <th scope="row">
+                    <Table.Row unstyled key={file.id}>
+                      <Table.ColumnHeader unstyled scope="row">
                         <Button
                           aria-pressed={selectedFile?.id === file.id}
                           onClick={() => setSelection(file)}
@@ -505,36 +509,42 @@ export function StorageExplorer({
                           {file.name}
                         </Button>
                         <small>{file.displayPath}</small>
-                      </th>
-                      <td data-bytes={file.bytes}>{displayBytes(file.bytes)}</td>
-                      <td>{categoryOf(file)}</td>
-                    </tr>
+                      </Table.ColumnHeader>
+                      <Table.Cell unstyled data-bytes={file.bytes}>
+                        {displayBytes(file.bytes)}
+                      </Table.Cell>
+                      <Table.Cell unstyled>{categoryOf(file)}</Table.Cell>
+                    </Table.Row>
                   ))}
-                </tbody>
-              </table>
-            </section>
+                </Table.Body>
+              </Table.Root>
+            </chakra.section>
           )}
           <details onToggle={(event) => setFolderTotalsOpen(event.currentTarget.open)}>
             <summary>Complete retained folder totals</summary>
             {folderTotalsOpen && <StorageReview jobId={jobId} summary={summary} />}
           </details>
-        </div>
-        <aside className="storage-inspector" aria-label="File inspector">
+        </Box>
+        <chakra.aside className="storage-inspector" aria-label="File inspector">
           {!selection && (
             <>
-              <h3>File inspector</h3>
-              <p>Select a file or folder to inspect its size and location.</p>
+              <Heading as="h3" unstyled>
+                File inspector
+              </Heading>
+              <Text>Select a file or folder to inspect its size and location.</Text>
             </>
           )}
           {selectedFile && (
             <>
-              <div
+              <Box
                 className="storage-file-icon"
                 aria-label={`${categoryOf(selectedFile)} file icon`}
               >
                 ▤
-              </div>
-              <h3>{selectedFile.name}</h3>
+              </Box>
+              <Heading as="h3" unstyled>
+                {selectedFile.name}
+              </Heading>
               <dl>
                 <dt>Location</dt>
                 <dd>{selectedFile.displayPath}</dd>
@@ -563,7 +573,7 @@ export function StorageExplorer({
                 <dt>Availability</dt>
                 <dd>{selectedFile.inventory.replaceAll('_', ' ')}</dd>
               </dl>
-              {selectedFile.error && <p role="status">{selectedFile.error.message}</p>}
+              {selectedFile.error && <Text role="status">{selectedFile.error.message}</Text>}
               <Button
                 disabled={!!protectedFile || tray.some((file) => file.id === selectedFile.id)}
                 onClick={() => setTray((previous) => [...previous, selectedFile])}
@@ -571,19 +581,21 @@ export function StorageExplorer({
                 Add to review tray
               </Button>
               {protectedFile && (
-                <p className="storage-note">
+                <Text className="storage-note">
                   Protected, read-only or protection status unknown. Review selection is
                   unavailable.
-                </p>
+                </Text>
               )}
             </>
           )}
           {selectedGroup && (
             <>
-              <h3>{selectedGroup.name}</h3>
-              <p>
+              <Heading as="h3" unstyled>
+                {selectedGroup.name}
+              </Heading>
+              <Text>
                 {selectedGroup.files.length} files · {displayBytes(totalBytes(selectedGroup.files))}
-              </p>
+              </Text>
               <dl>
                 {categories.map((category) => {
                   const entries = selectedGroup.files.filter(
@@ -591,10 +603,10 @@ export function StorageExplorer({
                   );
                   return (
                     entries.length > 0 && (
-                      <div key={category}>
+                      <Box key={category}>
                         <dt>{category}</dt>
                         <dd>{displayBytes(totalBytes(entries))}</dd>
-                      </div>
+                      </Box>
                     )
                   );
                 })}
@@ -604,11 +616,13 @@ export function StorageExplorer({
               </Button>
             </>
           )}
-          <section className="storage-tray" aria-label="Review tray">
-            <h3>Review tray · {tray.length}</h3>
-            <p className="storage-note">Planning only. No files are moved or deleted.</p>
+          <chakra.section className="storage-tray" aria-label="Review tray">
+            <Heading as="h3" unstyled>
+              Review tray · {tray.length}
+            </Heading>
+            <Text className="storage-note">Planning only. No files are moved or deleted.</Text>
             {tray.map((file) => (
-              <p key={file.id}>
+              <Text key={file.id}>
                 {file.name} · {displayBytes(file.bytes)}{' '}
                 <Button
                   aria-label={`Remove ${file.name} from tray`}
@@ -618,7 +632,7 @@ export function StorageExplorer({
                 >
                   Remove
                 </Button>
-              </p>
+              </Text>
             ))}
             <Button
               disabled={!tray.length}
@@ -631,14 +645,14 @@ export function StorageExplorer({
               {simulate ? 'End simulation' : 'Preview without these files'}
             </Button>
             {simulate && (
-              <p role="status">
+              <Text role="status">
                 Simulation: {displayBytes(totalBytes(tray))} of logical file sizes excluded. This is
                 not guaranteed reclaimed disk space. Drive totals are unchanged.
-              </p>
+              </Text>
             )}
-          </section>
-        </aside>
-      </div>
+          </chakra.section>
+        </chakra.aside>
+      </Box>
     </Box>
   );
 }

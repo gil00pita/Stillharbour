@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import { useId, useState, type FormEvent } from 'react';
@@ -54,14 +54,16 @@ export function ImportDestinationSettings({
     }
   }
   return (
-    <section className="settings-section" aria-labelledby="import-destination-title">
-      <h2 id="import-destination-title">Import destination</h2>
-      <p className="help">
+    <chakra.section className="settings-section" aria-labelledby="import-destination-title">
+      <Heading as="h2" unstyled id="import-destination-title">
+        Import destination
+      </Heading>
+      <Text className="help">
         Suggest a library for new import plans in this catalog. Your base library and browsing
         defaults stay unchanged. You still choose the destination folder and approve each copy;
         unavailable libraries and source folders cannot be used as destinations.
-      </p>
-      <form
+      </Text>
+      <chakra.form
         className="settings-import-form"
         aria-label="Import destination preference"
         onSubmit={(event) => void save(event)}
@@ -102,21 +104,21 @@ export function ImportDestinationSettings({
           </label>
         </Field.Root>
         {unavailableReason && (
-          <p className="help" id={unavailableId}>
+          <Text className="help" id={unavailableId}>
             {unavailableReason}
-          </p>
+          </Text>
         )}
         <Button type="submit" disabled={!catalogId || !onSave || pending || !dirty}>
           {pending ? 'Saving import destination…' : 'Save import destination'}
         </Button>
         {saved && (
-          <p role="status">
+          <Text role="status">
             Import destination saved for this catalog. Folder grants and existing plans are
             unchanged.
-          </p>
+          </Text>
         )}
-        {error && <p role="alert">{error}</p>}
-      </form>
-    </section>
+        {error && <Text role="alert">{error}</Text>}
+      </chakra.form>
+    </chakra.section>
   );
 }

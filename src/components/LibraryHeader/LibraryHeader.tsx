@@ -1,3 +1,4 @@
+import { Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import type { ReactNode } from 'react';
@@ -37,9 +38,11 @@ export function LibraryHeader({
 }) {
   return (
     <PageHeader>
-      <header className="toolbar photo-toolbar">
+      <chakra.header className="toolbar photo-toolbar">
         {navigationControl}
-        <h1>{section === 'Tags' ? 'Albums / Tags' : section}</h1>
+        <Heading as="h1" unstyled>
+          {section === 'Tags' ? 'Albums / Tags' : section}
+        </Heading>
         <PlaceSearch
           value={value}
           onSearch={onSearch}
@@ -48,31 +51,38 @@ export function LibraryHeader({
           disabled={busy}
           filterScope={mapScope}
         />
-        <Button
-          onClick={onFilter}
-          disabled={busy}
-          aria-label={activeCount ? `Filter (${activeCount} active)` : 'Filter'}
-          aria-haspopup="dialog"
-          aria-expanded={filterOpen}
-          aria-controls="library-filter-panel"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-              d="M4 7h16M4 17h16M9 4v6m6 4v6"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-          Filter{activeCount > 0 && <span className="filter-count">{activeCount}</span>}
-        </Button>
-        {jobsControl}
-        {onSelect && (
-          <Button type="button" aria-pressed={selecting} disabled={busy} onClick={onSelect}>
-            {selecting ? 'Done selecting' : 'Select'}
+        <Box className="header-actions">
+          <Button
+            onClick={onFilter}
+            disabled={busy}
+            aria-label={activeCount ? `Filter (${activeCount} active)` : 'Filter'}
+            aria-haspopup="dialog"
+            aria-expanded={filterOpen}
+            aria-controls="library-filter-panel"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path
+                d="M4 7h16M4 17h16M9 4v6m6 4v6"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+            Filter
+            {activeCount > 0 && (
+              <Text as="span" className="filter-count">
+                {activeCount}
+              </Text>
+            )}
           </Button>
-        )}
-      </header>
+          {jobsControl}
+          {onSelect && (
+            <Button type="button" aria-pressed={selecting} disabled={busy} onClick={onSelect}>
+              {selecting ? 'Done selecting' : 'Select'}
+            </Button>
+          )}
+        </Box>
+      </chakra.header>
     </PageHeader>
   );
 }

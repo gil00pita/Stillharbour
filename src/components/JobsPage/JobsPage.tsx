@@ -1,5 +1,5 @@
 import { PageHeader } from '@/components/PageHeader';
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -47,30 +47,32 @@ export function JobsPage({
       />
     ));
   return (
-    <section className="jobs-page" aria-labelledby={id}>
+    <chakra.section className="jobs-page" aria-labelledby={id}>
       <PageHeader>
-        <header className="toolbar jobs-heading">
-          <div>
-            <h1 id={id} ref={heading} tabIndex={-1}>
+        <chakra.header className="toolbar jobs-heading">
+          <Box>
+            <Heading as="h1" unstyled id={id} ref={heading} tabIndex={-1}>
               Jobs
-            </h1>
-          </div>
-          <Button type="button" aria-label="Back from Jobs" onClick={onBack}>
-            Back
-          </Button>
-        </header>
+            </Heading>
+          </Box>
+          <Box className="header-actions">
+            <Button type="button" aria-label="Back from Jobs" onClick={onBack}>
+              Back
+            </Button>
+          </Box>
+        </chakra.header>
       </PageHeader>
-      <div className="jobs-content">
-        <p className="help">Follow background work and review recent outcomes.</p>
+      <Box className="jobs-content">
+        <Text className="help">Follow background work and review recent outcomes.</Text>
         {!status ? (
-          <p role="status">Connecting to jobs…</p>
+          <Text role="status">Connecting to jobs…</Text>
         ) : (
           <>
-            <p className="help">
+            <Text className="help">
               {activeCount
                 ? `${activeCount} running ${activeCount === 1 ? 'job' : 'jobs'}`
                 : 'No running jobs.'}
-            </p>
+            </Text>
             <ThumbnailJobAction status={status} onRefresh={onRefresh} />
             {entries(active)}
             {activeCopies.map((job) => (
@@ -80,7 +82,7 @@ export function JobsPage({
             {copyJobs
               .filter((job) => !copyJobActive(job))
               .map((job) => (
-                <div key={job.id}>
+                <Box key={job.id}>
                   <CopyJobProgress job={job} onRefresh={onRefresh} />
                   {job.action === 'prepare_names' && !job.readyReviewId && (
                     <ReopenPreparedCopy job={job} />
@@ -88,17 +90,17 @@ export function JobsPage({
                   {(job.action === 'copy_files' || job.readyReviewId) && (
                     <RetainedCopyInspection job={job} onRefresh={onRefresh} />
                   )}
-                </div>
+                </Box>
               ))}
             {inspections.map((job) => (
               <InspectionJobProgress key={job.id} job={job} onRefresh={onRefresh} />
             ))}
             <LibraryChanges status={status} />
             {originalJobs.map((job) => (
-              <div key={job.id}>
+              <Box key={job.id}>
                 <OriginalJobProgress job={job} />
                 <OriginalHistoryReview job={job} />
-              </div>
+              </Box>
             ))}
             {recent.length > 0 && (
               <details className="recent-jobs">
@@ -108,8 +110,8 @@ export function JobsPage({
             )}
           </>
         )}
-      </div>
-    </section>
+      </Box>
+    </chakra.section>
   );
 }
 
@@ -158,18 +160,18 @@ function JobEntry({
     }
   }
   return (
-    <section
+    <chakra.section
       data-job-kind={job.kind ?? 'scan'}
       className="job-row"
       aria-label={`${job.kind === 'thumbnails' ? 'Thumbnail' : 'Scan'} job for ${label}`}
     >
-      <h3>
+      <Heading as="h3" unstyled>
         <bdi>{label}</bdi>
-      </h3>
+      </Heading>
       <ScanJobProgress job={job} label={label} />
       <JobCounts job={job} />
-      <p className="help">{job.message}</p>
-      <div className="job-actions">
+      <Text className="help">{job.message}</Text>
+      <Box className="job-actions">
         <Button
           aria-expanded={expanded}
           aria-controls={detailId}
@@ -220,14 +222,14 @@ function JobEntry({
                 : 'Cancel scan'}
           </Button>
         )}
-      </div>
+      </Box>
       {cancelError && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {cancelError}
-        </p>
+        </Text>
       )}
       {expanded && <JobDetails id={detailId} detail={detail} error={detailError} />}
-    </section>
+    </chakra.section>
   );
 }
 
@@ -257,7 +259,7 @@ function ThumbnailJobAction({
     }
   }
   return (
-    <div className="thumbnail-job-action">
+    <Box className="thumbnail-job-action">
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -279,19 +281,21 @@ function ThumbnailJobAction({
       <Button onClick={() => void generate()} disabled={pending}>
         {pending ? 'Starting…' : 'Generate thumbnails'}
       </Button>
-      <p className="help">Prepare tiny previews in the background. Originals stay read-only.</p>
+      <Text className="help">
+        Prepare tiny previews in the background. Originals stay read-only.
+      </Text>
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
-    </div>
+    </Box>
   );
 }
 
 function JobCounts({ job }: { job: ScanJob }) {
   return (
-    <p className="job-counts">
+    <Text className="job-counts">
       {job.kind === 'thumbnails' ? (
         <>
           {job.indexed.toLocaleString()} generated · {job.skipped.toLocaleString()} cached ·{' '}
@@ -303,7 +307,7 @@ function JobCounts({ job }: { job: ScanJob }) {
           {job.skipped.toLocaleString()} skipped · {job.errors.toLocaleString()} issues
         </>
       )}
-    </p>
+    </Text>
   );
 }
 
@@ -317,31 +321,31 @@ function JobDetails({
   error: string | null;
 }) {
   return (
-    <div id={id} className="job-details">
+    <Box id={id} className="job-details">
       {error ? (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {error}
-        </p>
+        </Text>
       ) : !detail ? (
-        <p role="status">Loading job details…</p>
+        <Text role="status">Loading job details…</Text>
       ) : detail.issues.length ? (
         <>
-          <p className="help">
+          <Text className="help">
             Skip reasons and failures (up to 200 entries). Retry scans the saved scope again,
             reusing unchanged metadata. Change scan settings to include intentionally excluded
             files. Cached thumbnails are reused.
-          </p>
-          <ul>
+          </Text>
+          <List.Root unstyled>
             {Array.from(new Set(detail.issues)).map((issue) => (
-              <li key={issue}>
+              <List.Item unstyled key={issue}>
                 <bdi>{issue}</bdi>
-              </li>
+              </List.Item>
             ))}
-          </ul>
+          </List.Root>
         </>
       ) : (
-        <p>No file issues recorded.</p>
+        <Text>No file issues recorded.</Text>
       )}
-    </div>
+    </Box>
   );
 }

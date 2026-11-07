@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useEffect, useId, useRef, useState } from 'react';
@@ -52,7 +52,7 @@ export function RootSetup({
     throughDate: null,
   }));
   return (
-    <form
+    <chakra.form
       className={`root-setup ${embedded ? 'inline-scan-settings' : 'selected-folder'}`}
       onSubmit={(event) => {
         event.preventDefault();
@@ -60,14 +60,22 @@ export function RootSetup({
           void onSave(label, mode, scanFilterFromForm(filter, event.currentTarget));
       }}
     >
-      <div className="folder-information">
-        {!embedded && <h3>{root ? 'Scan settings' : 'Selected folder'}</h3>}
-        <p className="path">
+      <Box className="folder-information">
+        {!embedded && (
+          <Heading as="h3" unstyled>
+            {root ? 'Scan settings' : 'Selected folder'}
+          </Heading>
+        )}
+        <Text className="path">
           <bdi>{selected?.displayPath ?? root?.displayPath}</bdi>
-        </p>
-      </div>
-      {!root && <span className="selection-state">Not scanned</span>}
-      <div className="form-grid">
+        </Text>
+      </Box>
+      {!root && (
+        <Text as="span" className="selection-state">
+          Not scanned
+        </Text>
+      )}
+      <Box className="form-grid">
         <Field.Root asChild unstyled>
           <label>
             <Field.Label asChild unstyled>
@@ -84,36 +92,36 @@ export function RootSetup({
             />
           </label>
         </Field.Root>
-        <div className="mode-field">
-          <span className="field-label">
+        <Box className="mode-field">
+          <Text as="span" className="field-label">
             Folder mode · {mode === 'managed' ? 'Managed' : 'Read only'}
-          </span>
+          </Text>
           <Switch
             label="Read only"
             checked={mode === 'referenced'}
             disabled={busy}
             onChange={(readOnly) => setMode(readOnly ? 'referenced' : 'managed')}
           />
-        </div>
-      </div>
-      <p className="help">
+        </Box>
+      </Box>
+      <Text className="help">
         {mode === 'referenced'
           ? 'Originals stay in this folder. Scanning only reads them.'
           : 'Managed permission is saved for future approved operations. This version only reads originals.'}
-      </p>
+      </Text>
       {identityUnavailable && (
-        <div className="error" role="alert" id={identityAlertId}>
+        <Box className="error" role="alert" id={identityAlertId}>
           <strong>Scanning is unavailable for this folder</strong>
-          <p>
+          <Text>
             Stillharbour cannot verify folder identity on this platform or volume. Save &amp; Start
             scanning is disabled to protect your library. On Windows, select an ordinary local NTFS
             folder; network volumes, other filesystems, links and cloud placeholders are not
             supported.
-          </p>
-        </div>
+          </Text>
+        </Box>
       )}
       <ScanOptions filter={filter} disabled={busy} onChange={setFilter} onError={onError} />
-      <div className="folder-actions">
+      <Box className="folder-actions">
         <Button type="button" onClick={onCancel} disabled={busy}>
           {embedded ? 'Discard scan changes' : 'Cancel'}
         </Button>
@@ -125,8 +133,8 @@ export function RootSetup({
         >
           {scanSubmitLabel(busy, scanRunning, Boolean(root))}
         </Button>
-      </div>
-    </form>
+      </Box>
+    </chakra.form>
   );
 }
 

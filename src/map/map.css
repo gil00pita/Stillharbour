@@ -5,17 +5,6 @@
   flex: 1;
   overflow: auto;
 }
-.map-search-controls {
-  display: flex;
-  align-items: start;
-  justify-content: flex-end;
-  flex: 1;
-  min-width: 0;
-  gap: 8px;
-}
-.map-search-controls .map-filter-trigger {
-  flex-shrink: 0;
-}
 .map-geography {
   position: relative;
   height: clamp(260px, 45vh, 520px);
@@ -227,14 +216,6 @@
   }
   .map-geography {
     height: 280px;
-  }
-  .map-search-controls {
-    flex-basis: 100%;
-    width: 100%;
-  }
-  .map-page .map-search-controls .fixed-search {
-    flex-basis: 0;
-    min-width: 0;
   }
 }
 

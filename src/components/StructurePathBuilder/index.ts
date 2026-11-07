@@ -1,0 +1,1 @@
+export { StructurePathBuilder } from './StructurePathBuilder';

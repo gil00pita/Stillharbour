@@ -1,4 +1,4 @@
-import { Field, Popover, Portal, Stack } from '@chakra-ui/react';
+import { Field, Popover, Portal, Stack, Text } from '@chakra-ui/react';
 import { useState } from 'react';
 import type { AssetQuery, LibraryStatus } from '../../bindings';
 import { Button } from '@/components/Button';
@@ -44,7 +44,12 @@ export function MapFilters({
               strokeLinecap="round"
             />
           </svg>
-          Filters{count > 0 && <span className="filter-count">{count}</span>}
+          Filters
+          {count > 0 && (
+            <Text as="span" className="filter-count">
+              {count}
+            </Text>
+          )}
         </Button>
       </Popover.Trigger>
       <Portal>

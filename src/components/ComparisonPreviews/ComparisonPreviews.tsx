@@ -1,3 +1,4 @@
+import { Box, Heading, Image, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import { libraryData, errorMessage } from '../../ipc';
@@ -15,7 +16,7 @@ export function ComparisonPreviews({ runId, entryId }: { runId: string; entryId:
     };
   }, []);
   return (
-    <div>
+    <Box>
       <Button
         disabled={busy}
         onClick={async () => {
@@ -50,23 +51,25 @@ export function ComparisonPreviews({ runId, entryId }: { runId: string; entryId:
       >
         Load side-by-side previews
       </Button>
-      <p>
+      <Text>
         Explicit read-only previews use the shared byte budget and bounded decoder. Unsupported,
         missing or changed files retain their text observations.
-      </p>
-      <div className="backup-scope" aria-label="Side-by-side comparison previews">
+      </Text>
+      <Box className="backup-scope" aria-label="Side-by-side comparison previews">
         {(['source', 'destination'] as const).map((side) => (
-          <section key={side}>
-            <h5>{side === 'source' ? 'Source preview' : 'Destination preview'}</h5>
+          <chakra.section key={side}>
+            <Heading as="h5" unstyled>
+              {side === 'source' ? 'Source preview' : 'Destination preview'}
+            </Heading>
             {results[side]?.image && (
-              <img src={results[side].image} alt={`${side} comparison preview`} />
+              <Image src={results[side].image} alt={`${side} comparison preview`} />
             )}
-            <p role="status">
+            <Text role="status">
               {results[side]?.message ?? (busy ? 'Preparing preview…' : 'Preview not requested.')}
-            </p>
-          </section>
+            </Text>
+          </chakra.section>
         ))}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }

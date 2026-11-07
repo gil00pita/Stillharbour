@@ -1,3 +1,4 @@
+import { Box, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -71,28 +72,28 @@ export function CopyAssessmentReview({ manifest }: { manifest: CopyManifest }) {
   }
   const capacity = report?.capacity;
   return (
-    <section aria-label="Copy space and fidelity" aria-busy={pending}>
+    <chakra.section aria-label="Copy space and fidelity" aria-busy={pending}>
       <Button type="button" disabled={pending} onClick={() => void check()}>
         {pending ? 'Checking copy space…' : 'Check copy space and fidelity'}
       </Button>
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
       {report && capacity && (
         <>
-          <h4 ref={heading} tabIndex={-1}>
+          <Heading as="h4" unstyled ref={heading} tabIndex={-1}>
             Copy space estimate and fidelity
-          </h4>
-          <p>
+          </Heading>
+          <Text>
             {capacity.status === 'insufficient_for_estimate'
               ? 'Observed space is below the copy estimate. Choose another destination or reduce the selection.'
               : 'Observed space meets this planning estimate.'}{' '}
             Space is not reserved; recheck before approval and copying.
-          </p>
+          </Text>
           {capacity.status === 'insufficient_for_estimate' && (
-            <p role="alert">Insufficient observed space blocks copying.</p>
+            <Text role="alert">Insufficient observed space blocks copying.</Text>
           )}
           <dl>
             {(
@@ -108,45 +109,47 @@ export function CopyAssessmentReview({ manifest }: { manifest: CopyManifest }) {
                 ['Native allocation unit', capacity.allocationUnitBytes],
               ] satisfies [string, string][]
             ).map(([label, bytes]) => (
-              <div key={label}>
+              <Box key={label}>
                 <dt>{label}</dt>
                 <dd>{BigInt(bytes).toLocaleString()} bytes</dd>
-              </div>
+              </Box>
             ))}
           </dl>
-          <p>
+          <Text>
             {capacity.outputDirectories} output folders, including the pending output root. Staging
             and publication use the same file objects. Allowances are estimates, not a filesystem
             capacity guarantee.
-          </p>
-          <p>
+          </Text>
+          <Text>
             Originals stay in place. This report does not verify any copied content or independent
             backup. The current copy engine has these fidelity limits:
-          </p>
-          <div className="organization-table">
-            <table>
-              <caption>Copy fidelity scope</caption>
-              <thead>
-                <tr>
-                  <th>Aspect</th>
-                  <th>Current support</th>
-                </tr>
-              </thead>
-              <tbody>
+          </Text>
+          <Box className="organization-table">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top">
+                Copy fidelity scope
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled>Aspect</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Current support</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
                 {report.fidelity.map((item) => (
-                  <tr key={item.aspect}>
-                    <td>{aspects[item.aspect]}</td>
-                    <td>{statuses[item.status]}</td>
-                  </tr>
+                  <Table.Row unstyled key={item.aspect}>
+                    <Table.Cell unstyled>{aspects[item.aspect]}</Table.Cell>
+                    <Table.Cell unstyled>{statuses[item.status]}</Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="help">
+              </Table.Body>
+            </Table.Root>
+          </Box>
+          <Text className="help">
             Observed {report.observedAt}. This report does not approve copying.
-          </p>
+          </Text>
         </>
       )}
-    </section>
+    </chakra.section>
   );
 }

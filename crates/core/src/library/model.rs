@@ -10,6 +10,23 @@ pub const DEFAULT_PHOTO_EXTENSIONS: &[&str] = &[
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
+pub enum OrganizationProtectionBlocker {
+    BackupActive,
+    SyncActive,
+    BackupRecoveryRequired,
+    SyncRecoveryRequired,
+    BackupScheduled,
+}
+
+/// A point-in-time prerequisite observation, never mutation authorization.
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OrganizationProtectionStatus {
+    pub blockers: Vec<OrganizationProtectionBlocker>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum RootMode {
     Referenced,
     Managed,
@@ -850,6 +867,20 @@ pub enum LibraryRequest {
         plan_id: String,
         asset_id: String,
     },
+    OrganizationProtectionStatus {},
+    OrganizationLibraryStart {
+        template: crate::organization::OrganizationTemplate,
+    },
+    OrganizationLibraryAdvance {
+        preview_id: String,
+    },
+    OrganizationLibraryPage {
+        preview_id: String,
+        offset: u32,
+    },
+    OrganizationLibraryDiscard {
+        preview_id: String,
+    },
     OrganizationPreview {
         asset_ids: Vec<String>,
         template: crate::organization::OrganizationTemplate,
@@ -1034,6 +1065,8 @@ pub enum LibraryResponse {
     OrganizationDestination(crate::organization::OrganizationDestinationReview),
     OrganizationCompanions(crate::organization::OrganizationCompanionReview),
     OrganizationPreview(crate::organization::OrganizationPreview),
+    OrganizationProtectionStatus(OrganizationProtectionStatus),
+    OrganizationLibraryPreview(crate::organization::LibraryOrganizationPreview),
     Changes(LibraryChangePage),
     Directory(DirectoryPage),
     MaintenancePreview(MaintenancePreview),

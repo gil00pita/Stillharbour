@@ -45,11 +45,11 @@ Duplicates distinguishes exact content, file-property candidates and the declare
 
 ## Utility scans and history
 
-Duplicates, Integrity, Storage and Backup & Sync welcome you with setup before the first scan. Returning to a scanned utility shows your previous results while a read-only background scan checks for changes. This check runs when you reopen the page; it does not continuously monitor every file. Originals stay unchanged, and background checking never starts copying, backup, restore or another baseline establishment.
+Duplicates, Integrity, Storage and Sync welcome you with setup before the first scan. Returning to a scanned utility shows your previous results while a read-only background scan checks for changes. This check runs when you reopen the page; it does not continuously monitor every file. Originals stay unchanged, and background checking never starts copying, backup, restore or another baseline establishment.
 
 Use **Scan settings** (or **Measurement details** in Storage) to change an inspection, or the **history icon** to view dated earlier results. Choosing history keeps that version on screen even when a background scan finishes. History records observations, not recoverable copies of your originals. Offline libraries keep their previous results and need reconnecting before another scan.
 
-Saved backup comparison profiles can recheck their native source/destination bindings. An unsaved destination must be chosen again after restarting; a historical path is not permission to read or write that folder. Backup comparison history saves up to 32 reports; a full history retains earlier versions and tells you when the latest report was not saved. In Versioned backup, the selected profile shows its latest recorded snapshot, with earlier snapshots behind the history icon. Merely selecting one does not read the repository or start a restore.
+Saved backup comparison profiles can recheck their native source/destination bindings. An unsaved destination must be chosen again after restarting; a historical path is not permission to read or write that folder. Backup comparison history saves up to 32 reports; a full history retains earlier versions and tells you when the latest report was not saved. On Backup, the selected profile shows its latest recorded snapshot, with earlier snapshots behind the history icon. Merely selecting one does not read the repository or start a restore.
 
 ## Integrity and storage
 
@@ -59,7 +59,7 @@ Storage distinguishes logical size, unique filesystem objects, reported allocati
 
 ## Backup, keys and recovery
 
-The default build offers read-only comparison of the bound base library and a separate destination. Quick equality is unverified; complete byte comparison has stronger evidence. Destination-only files are retained. A saved comparison profile stays bound to its original root IDs, even if the default changes. Comparison creates no readable mirror, snapshot or recovery guarantee.
+Sync offers read-only comparison of the bound base library and a separate destination in the default build. Quick equality is unverified; complete byte comparison has stronger evidence. Destination-only files are retained. A saved comparison profile stays bound to its original root IDs, even if the default changes. Comparison creates no readable mirror, snapshot or recovery guarantee.
 
 Production Safe copy, retained replacement, encrypted snapshots, restore and schedules remain disabled pending their native preservation gates. The following describes the implemented experimental workflow and its limits, not an enabled production service:
 
@@ -109,3 +109,56 @@ Open Albums / Tags to browse all your collections or search by album name. From 
 Choose New album, enter a unique name, select photos from the searchable library, then Create album. You may also create an empty album. Open a custom album and choose Add photos to add up to 500 photos per save. Right-click a photo on Photos, or use its labelled options button, then Add to album to choose an existing custom album or create one with that photo selected. Albums and memberships are saved in your catalog; the catalog does not contain the original photos.
 
 On Map, choose **Show in photos** to browse that map selection in Photos. A tag inside the search field names the active map scope; it also appears in **Filter**. Use the tag’s × to remove the map restriction while keeping any filename/date text or chosen place. The search input itself stays available for filename/date searches. Choosing **Photos** in the sidebar opens the normal Photos view without carrying over Map's location filters. **Return to map** retains the map context.
+
+## Organization, Backup and Sync — 2026-11-07
+
+Open **Structure Formater** under Utilities, set your folder and filename rules,
+then choose **Preview restructure**. It always covers the entire indexed library;
+you do not need to select photos. Filters and albums do not limit the preview.
+
+The **Backup & sync check** shows whether active jobs, unfinished recovery or an
+enabled backup schedule would block restructuring. All backup and sync work must
+finish or be resolved, and enabled backup schedules must be turned off, including
+ones due far in the future. The check refreshes automatically; **Check again**
+retries immediately. It never stops jobs or changes schedules for you. Sync
+currently runs on demand. You can continue configuring and previewing rules while
+these blockers are present. A clear check does not enable Run restructure yet.
+
+Review the proposed paths and blocked items across the result pages. A library
+change requires a fresh preview. You can save/load rules and open existing saved
+plans from this page. **Run restructure** is currently disabled until the reviewed
+whole-library execution and recovery path is available. Previewing leaves your
+originals in place.
+
+Backup is a separate page for encrypted versioned snapshots and recovery. Sync
+compares the library with a destination and exposes the existing reviewed
+one-way copy workflow. Comparison is read only and never authorizes copying by
+itself. Existing source/destination protection and recovery gates still apply.
+
+Photos, Albums, Folders and Map share aligned search and actions. The photo
+timeline stays visible at rest; dates have their own reserved lane.
+
+Choose a folder layout using the **By day**, **By month** or **Date & time** cards.
+Their diagrams show example paths. Event naming is no longer part of the rule
+form. Use the segmented choices to handle missing capture dates and filename
+case. The path template remains editable for custom rules; choosing another
+layout replaces it and invalidates the previous preview. Existing saved rules
+remain available without rewriting their stored values.
+
+Structure Formater also offers **By location**, **By tags**, **By camera** and
+**Custom**. The date group includes year/month/day and quarter folders. Location
+rules use embedded names already indexed in your catalog; GPS is not used to
+look up names. Tag rules follow the category parents you have configured. Camera
+rules use observed make/model, and camera type needs an explicit metadata value.
+A missing or ambiguous required value blocks that photo in the preview.
+
+In **Custom**, type into **Folder levels** to find a predefined part, or enter a
+literal folder name. Enter adds the highlighted part; Backspace on an empty
+input removes the last level. Each chip has controls to move it earlier/later or
+remove it. Folder levels read left to right, from outside to inside. Edit the
+filename pattern separately, then preview the actual paths. Camera → Event asks
+for one event name for this rule; Trip grouping is omitted.
+
+Older catalogs may not contain embedded naming fields that were not previously
+collected, and reader coverage differs by format/platform. Those fields remain
+missing; opening the tool does not silently rescan or rewrite the library.

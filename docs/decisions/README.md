@@ -45,3 +45,7 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 - [ADR-0092: Optional NASA satellite overview](ADR-0092-nasa-satellite-overview.md).
 
 - [ADR-0093: Tag albums and atomic custom album creation](ADR-0093-tag-albums-and-atomic-creation.md).
+
+- [ADR-0095: Whole-library structure previews](ADR-0095-whole-library-structure-preview.md).
+
+- [ADR-0096: Metadata-based structure rules and a folder chip builder](ADR-0096-metadata-structure-rules.md).

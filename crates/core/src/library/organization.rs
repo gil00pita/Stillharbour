@@ -29,7 +29,11 @@ impl Library {
         template: OrganizationTemplate,
     ) -> Result<OrganizationPreview> {
         validate_ids(&asset_ids)?;
-        let (revision, sources) = self.catalog.call(move |db| snapshot(db, asset_ids))?;
+        organization::validate_template(&template)?;
+        let rules = template.clone();
+        let (revision, sources) = self
+            .catalog
+            .call(move |db| template_snapshot(db, asset_ids, &rules))?;
         // Rendering is pure and happens outside the single database actor.
         organization::preview(revision, template, sources)
     }
@@ -54,7 +58,7 @@ fn companion_review(
         .query_row(
             "SELECT a.root_id,a.folder_native,a.stem,a.name,a.revision,a.relative_native,
          json_array(a.native_file,a.presence,r.volume,r.device,r.inode,r.availability)
-         FROM assets a JOIN roots r ON r.id=a.root_id WHERE a.id=? AND a.is_media=1",
+         FROM assets a JOIN roots r ON r.id=a.root_id WHERE a.id=?1 AND a.is_media=1",
             [&asset_id],
             |r| {
                 Ok((
@@ -168,24 +172,34 @@ fn validate_ids(ids: &[String]) -> Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn snapshot(
     db: &mut rusqlite::Connection,
     ids: Vec<String>,
 ) -> Result<(String, Vec<PreviewSource>)> {
-    snapshot_inner(db, ids, true)
+    snapshot_inner(db, ids, true, false)
+}
+
+pub(super) fn template_snapshot(
+    db: &mut rusqlite::Connection,
+    ids: Vec<String>,
+    template: &OrganizationTemplate,
+) -> Result<(String, Vec<PreviewSource>)> {
+    snapshot_inner(db, ids, true, organization::requires_metadata(template))
 }
 
 pub(super) fn source_snapshot(
     db: &mut rusqlite::Connection,
     ids: Vec<String>,
 ) -> Result<(String, Vec<PreviewSource>)> {
-    snapshot_inner(db, ids, false)
+    snapshot_inner(db, ids, false, false)
 }
 
 fn snapshot_inner(
     db: &mut rusqlite::Connection,
     ids: Vec<String>,
     count_candidates: bool,
+    with_metadata: bool,
 ) -> Result<(String, Vec<PreviewSource>)> {
     let tx = db.transaction()?;
     let revision: i64 = tx.query_row(
@@ -193,15 +207,22 @@ fn snapshot_inner(
         [],
         |r| r.get(0),
     )?;
+    let categories = if with_metadata {
+        super::catalog_metadata::categories(&tx)?
+    } else {
+        Vec::new()
+    };
     let sources = {
         let mut statement = tx.prepare(
             "SELECT a.root_id,a.relative_native,a.relative_path,a.revision,a.bytes,a.date,a.date_source,
-             a.presence,r.availability,r.volume,r.device,r.inode,a.native_file,a.stem,a.folder_native
-             FROM assets a JOIN roots r ON r.id=a.root_id WHERE a.id=? AND a.is_media=1"
+             a.presence,r.availability,r.volume,r.device,r.inode,a.native_file,a.stem,a.folder_native,
+             CASE WHEN ?2 AND length(CAST(a.raw_metadata AS BLOB))<=1048576 THEN a.raw_metadata END,
+             CASE WHEN ?2 AND length(CAST(a.tags AS BLOB))<=16384 THEN a.tags ELSE '[]' END,a.detected_format
+             FROM assets a JOIN roots r ON r.id=a.root_id WHERE a.id=?1 AND a.is_media=1"
         )?;
         let mut sources = Vec::with_capacity(ids.len());
         for id in ids {
-            let source = statement.query_row([&id], |row| {
+            let source = statement.query_row(rusqlite::params![id, with_metadata], |row| {
                 let native_path: Vec<u8> = row.get(1)?;
                 let root_id: String = row.get(0)?;
                 let stem: String = row.get(13)?;
@@ -221,6 +242,11 @@ fn snapshot_inner(
                     bytes: u64::try_from(row.get::<_, i64>(4)?).map_err(|e| rusqlite::Error::FromSqlConversionFailure(4, rusqlite::types::Type::Integer, Box::new(e)))?,
                     capture: matches!(date_source.as_str(), "embedded_original" | "embedded_created").then(|| row.get(5)).transpose()?,
                     available: presence == "present" && row.get::<_, String>(8)? == "online",
+                    metadata: if with_metadata {
+                        let raw: Option<String> = row.get(15)?;
+                        let tags: String = row.get(16)?;
+                        Some(super::organization_metadata::project(raw.as_deref(), &tags, row.get(17)?, &categories))
+                    } else { None },
                     companion_candidates: 0,
                 };
                 Ok(SnapshotEntry { source, stem, folder, counted_self: !matches!(presence.as_str(), "excluded" | "missing") })
@@ -414,6 +440,45 @@ mod tests {
             extra[key] = serde_json::json!(true);
             assert!(serde_json::from_value::<LibraryRequest>(extra).is_err());
         }
+    }
+
+    #[test]
+    fn naming_snapshot_uses_embedded_values_without_changing_legacy_inputs() {
+        let (mut db, id) = companion_fixture();
+        let rules = OrganizationTemplate {
+            pattern: "{original_stem}.{ext}".into(),
+            event: String::new(),
+            missing_date: MissingDatePolicy::Undated,
+            filename_stem_case: None,
+        };
+        let (revision, sources) = template_snapshot(&mut db, vec![id.clone()], &rules).unwrap();
+        let before = organization::preview(revision, rules.clone(), sources).unwrap();
+        db.execute(
+            "UPDATE assets SET raw_metadata=?",
+            [r#"[{"Country":"Portugal","City":"Lisbon","Make":"Sony","Model":"A7-IV"}]"#],
+        )
+        .unwrap();
+        let (revision, sources) = template_snapshot(&mut db, vec![id.clone()], &rules).unwrap();
+        assert!(sources[0].metadata.is_none());
+        assert_eq!(
+            before.fingerprint,
+            organization::preview(revision, rules, sources)
+                .unwrap()
+                .fingerprint
+        );
+        let rules = OrganizationTemplate {
+            pattern: "{country}/{city}/{camera}/{original_stem}.{ext}".into(),
+            event: String::new(),
+            missing_date: MissingDatePolicy::Undated,
+            filename_stem_case: None,
+        };
+        let (revision, sources) = template_snapshot(&mut db, vec![id], &rules).unwrap();
+        let preview = organization::preview(revision, rules, sources).unwrap();
+        assert_eq!(
+            preview.rows[0].target_relative_path.as_deref(),
+            Some("Portugal/Lisbon/Sony-A7-IV/photo.JPG")
+        );
+        assert!(!preview.execution_available);
     }
 
     #[test]

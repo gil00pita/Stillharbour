@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Heading, Text, chakra } from '@chakra-ui/react';
 import { NativeSelect } from '@/components/NativeSelect';
 import { useEffect, useRef, useState } from 'react';
 import type { LibraryRoot, RootMode, ScanFilter } from '../../bindings';
@@ -29,16 +29,19 @@ export function ScanSettingsGroup({
     if (initialRootId) heading.current?.focus();
   }, [initialRootId]);
   return (
-    <section className="settings-section settings-scan-group" aria-labelledby="scan-settings-title">
-      <h2 id="scan-settings-title" ref={heading} tabIndex={-1}>
+    <chakra.section
+      className="settings-section settings-scan-group"
+      aria-labelledby="scan-settings-title"
+    >
+      <Heading as="h2" unstyled id="scan-settings-title" ref={heading} tabIndex={-1}>
         Scan settings
-      </h2>
-      <p className="help">
+      </Heading>
+      <Text className="help">
         Saved for the selected library only. Apply changes with Save &amp; Rescan; originals stay
         unchanged.
-      </p>
+      </Text>
       {!root ? (
-        <p className="help">Add a photo folder to configure its scan settings.</p>
+        <Text className="help">Add a photo folder to configure its scan settings.</Text>
       ) : (
         <>
           <Field.Root asChild unstyled>
@@ -91,17 +94,17 @@ export function ScanSettingsGroup({
             }}
           />
           {error && (
-            <p className="error" role="alert">
+            <Text className="error" role="alert">
               {error}
-            </p>
+            </Text>
           )}
           {started && (
-            <p className="settings-saved" role="status">
+            <Text className="settings-saved" role="status">
               Scan started. Originals stay unchanged.
-            </p>
+            </Text>
           )}
         </>
       )}
-    </section>
+    </chakra.section>
   );
 }

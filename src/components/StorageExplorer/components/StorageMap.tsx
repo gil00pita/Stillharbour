@@ -1,3 +1,4 @@
+import { Box, Text } from '@chakra-ui/react';
 import type { InspectionFinding } from '../../../bindings';
 import { mapTiles } from '../../../inspection/treemap';
 import { displayBytes } from '../../../inspection/format';
@@ -31,7 +32,7 @@ export function StorageMap({
     groups.map((group) => ({ id: group.id, label: group.name, bytes: totalBytes(group.files) })),
   );
   return (
-    <div className="storage-map" aria-label="Logical-byte storage map">
+    <Box className="storage-map" aria-label="Logical-byte storage map">
       {tiles.map((tile) => {
         const group = groups.find((group) => group.id === tile.id)!;
         const visible = group.files.filter((file) => file.bytes !== '0').slice(0, 100);
@@ -49,7 +50,7 @@ export function StorageMap({
             : []),
         ]);
         return (
-          <div
+          <Box
             key={tile.id}
             className="storage-map-group"
             style={{
@@ -67,7 +68,7 @@ export function StorageMap({
             >
               {group.name} · {displayBytes(tile.bytes)}
             </Button>
-            <div className="storage-map-files">
+            <Box className="storage-map-files">
               {children.map((child) => {
                 const file = visible.find((file) => file.id === child.id);
                 return (
@@ -87,15 +88,15 @@ export function StorageMap({
                     title={`${child.label} · ${displayBytes(child.bytes)}${file ? ` · ${file.displayPath}` : ''}`}
                     onClick={() => (file ? select(file) : openGroup(group))}
                   >
-                    <span>{child.label}</span>
+                    <Text as="span">{child.label}</Text>
                     <small>{displayBytes(child.bytes)}</small>
                   </Button>
                 );
               })}
-            </div>
-          </div>
+            </Box>
+          </Box>
         );
       })}
-    </div>
+    </Box>
   );
 }

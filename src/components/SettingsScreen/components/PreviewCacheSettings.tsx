@@ -1,3 +1,4 @@
+import { Heading, Text, chakra } from '@chakra-ui/react';
 import type { LibraryStatus } from '../../../bindings';
 import { Button } from '@/components/Button';
 
@@ -11,11 +12,13 @@ export function PreviewCacheSettings({
   onReview: (opener: HTMLButtonElement) => void;
 }) {
   return (
-    <section className="settings-section" aria-labelledby="preview-cache-title">
-      <h2 id="preview-cache-title">Preview cache</h2>
-      <p className="help">
+    <chakra.section className="settings-section" aria-labelledby="preview-cache-title">
+      <Heading as="h2" unstyled id="preview-cache-title">
+        Preview cache
+      </Heading>
+      <Text className="help">
         Clears indexed previews for all libraries. Originals and catalog notes stay unchanged.
-      </p>
+      </Text>
       <Button
         type="button"
         disabled={
@@ -33,6 +36,6 @@ export function PreviewCacheSettings({
       >
         Clear preview cache
       </Button>
-    </section>
+    </chakra.section>
   );
 }

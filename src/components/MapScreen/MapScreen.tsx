@@ -1,3 +1,4 @@
+import { Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import { MapFilters } from '@/components/MapFilters';
@@ -145,37 +146,39 @@ export function MapScreen({
   }
   const activeViewer = viewer?.scope === viewerScope ? viewer.asset : null;
   return (
-    <div className="library-page map-page">
-      <div className="map-underlay" inert={Boolean(activeViewer)}>
+    <Box className="library-page map-page">
+      <Box className="map-underlay" inert={Boolean(activeViewer)}>
         <PageHeader>
-          <header className="toolbar photo-toolbar">
+          <chakra.header className="toolbar photo-toolbar">
             {navigationControl}
-            <h1>Map</h1>
-            <div className="map-search-controls">
-              <PlaceSearch
-                value={state.query.name}
-                onSearch={(name) => filter({ name })}
-                selectedId={state.query.placeId}
-                onChange={(place) => {
-                  setAllPhotosScope(null);
-                  setPlaceView(
-                    place ? { bounds: place.bounds, zoom: place.kind === 'city' ? 10 : 3 } : null,
-                  );
-                  onState({
-                    ...state,
-                    query: {
-                      ...state.query,
-                      name: place ? '' : state.query.name,
-                      placeId: place?.id ?? null,
-                    },
-                    bounds: place?.bounds ?? state.bounds,
-                    zoom: place ? (place.kind === 'city' ? 10 : 3) : state.zoom,
-                    cell: null,
-                    selectedId: null,
-                    unlocated: false,
-                  });
-                }}
-              />
+            <Heading as="h1" unstyled>
+              Map
+            </Heading>
+            <PlaceSearch
+              value={state.query.name}
+              onSearch={(name) => filter({ name })}
+              selectedId={state.query.placeId}
+              onChange={(place) => {
+                setAllPhotosScope(null);
+                setPlaceView(
+                  place ? { bounds: place.bounds, zoom: place.kind === 'city' ? 10 : 3 } : null,
+                );
+                onState({
+                  ...state,
+                  query: {
+                    ...state.query,
+                    name: place ? '' : state.query.name,
+                    placeId: place?.id ?? null,
+                  },
+                  bounds: place?.bounds ?? state.bounds,
+                  zoom: place ? (place.kind === 'city' ? 10 : 3) : state.zoom,
+                  cell: null,
+                  selectedId: null,
+                  unlocated: false,
+                });
+              }}
+            />
+            <Box className="header-actions">
               <MapFilters
                 query={state.query}
                 roots={status.roots}
@@ -187,24 +190,24 @@ export function MapScreen({
                   onState({ ...state, unlocated: !state.unlocated, cell: null, selectedId: null });
                 }}
               />
-            </div>
-            {jobsControl}
-          </header>
+              {jobsControl}
+            </Box>
+          </chakra.header>
         </PageHeader>
         {!state.unlocated && (
-          <section className="map-geography" aria-label="Geographic overview">
+          <chakra.section className="map-geography" aria-label="Geographic overview">
             {mapUnavailable ? (
-              <div className="map-fallback" role="status">
-                <p>
+              <Box className="map-fallback" role="status">
+                <Text>
                   The map could not be displayed. Your photos and location filters remain available
                   below.
-                </p>
+                </Text>
                 <Button onClick={() => onState({ ...state, bounds: WORLD, zoom: 0, cell: null })}>
                   Show all locations
                 </Button>
-              </div>
+              </Box>
             ) : (
-              <Suspense fallback={<p role="status">Loading offline map…</p>}>
+              <Suspense fallback={<Text role="status">Loading offline map…</Text>}>
                 <Basemap
                   bounds={state.bounds}
                   zoom={state.zoom}
@@ -219,23 +222,23 @@ export function MapScreen({
                 />
               </Suspense>
             )}
-          </section>
+          </chakra.section>
         )}
-        <section
+        <chakra.section
           className="map-photos"
           aria-label={state.unlocated ? 'Photos without usable location' : 'Photos in map area'}
           aria-busy={photosRequested && !current && !error}
         >
-          <div className="map-photo-heading">
-            <div>
-              <h2>
+          <Box className="map-photo-heading">
+            <Box>
+              <Heading as="h2" unstyled>
                 {state.unlocated
                   ? 'No usable location'
                   : state.cell
                     ? 'Selected location'
                     : 'Photos in view'}
-              </h2>
-              <p role="status">
+              </Heading>
+              <Text role="status">
                 {error
                   ? 'Photos could not be loaded.'
                   : current
@@ -245,8 +248,8 @@ export function MapScreen({
                     : photosRequested
                       ? 'Loading photos…'
                       : 'Click a photo marker to show photos from that location.'}
-              </p>
-            </div>
+              </Text>
+            </Box>
             <Button
               disabled={!current || current.page.total === 0}
               onClick={() => onShowLibrary(photoQuery, state.selectedId)}
@@ -267,15 +270,15 @@ export function MapScreen({
                 All photos in view
               </Button>
             )}
-          </div>
+          </Box>
           {error && (
-            <div role="alert">
-              <p>{error}</p>
+            <Box role="alert">
+              <Text>{error}</Text>
               <Button onClick={() => setAttempt((v) => v + 1)}>Retry photos</Button>
-            </div>
+            </Box>
           )}
           {previewError && (
-            <p role="alert">
+            <Text role="alert">
               Some previews could not be loaded.{' '}
               <Button
                 onClick={() => {
@@ -285,16 +288,16 @@ export function MapScreen({
               >
                 Retry previews
               </Button>
-            </p>
+            </Text>
           )}
           {current && !assets.length && (
-            <p>
+            <Text>
               {state.unlocated
                 ? 'Every photo in these filters has a usable catalog location.'
                 : 'No located photos in this area. Try another area or view photos with no usable location.'}
-            </p>
+            </Text>
           )}
-          <ul className="map-filmstrip">
+          <List.Root unstyled className="map-filmstrip">
             {assets.map((asset) => {
               const preview =
                 previews.results[
@@ -302,7 +305,7 @@ export function MapScreen({
                 ];
               const edge = preview?.state === 'ready' ? 256 : preview?.fallbackEdge;
               return (
-                <li key={asset.id}>
+                <List.Item unstyled key={asset.id}>
                   <Button
                     aria-label={`Open ${asset.name}`}
                     onClick={() => setViewer({ scope: viewerScope, asset })}
@@ -310,35 +313,35 @@ export function MapScreen({
                     {edge ? (
                       <CachedPreviewImage src={previewUrl(asset, edge)} alt="" />
                     ) : (
-                      <span className="map-photo-placeholder" aria-hidden="true">
+                      <Text as="span" className="map-photo-placeholder" aria-hidden="true">
                         ◇
-                      </span>
+                      </Text>
                     )}
-                    <span>{asset.name}</span>
+                    <Text as="span">{asset.name}</Text>
                   </Button>
-                </li>
+                </List.Item>
               );
             })}
-          </ul>
+          </List.Root>
           {current && (
-            <div className="map-paging">
+            <Box className="map-paging">
               {pageCursor && <Button onClick={() => setCursor(null)}>First photos</Button>}
               {current.page.nextCursor && (
                 <Button onClick={() => setCursor({ scope, value: current.page.nextCursor! })}>
                   More photos
                 </Button>
               )}
-            </div>
+            </Box>
           )}
-          <p className="map-disclosure">
+          <Text className="map-disclosure">
             Locations are last observed catalog metadata. Offline originals remain offline. Missing,
             invalid or unextracted coordinates appear under “No usable location”. The offline
             overview has no street detail; polar markers are shown at the map edge. Satellite is an
             online NASA overview with limited detail. Selecting it sends viewed map areas to NASA;
             your photos are not sent.
-          </p>
-        </section>
-      </div>
+          </Text>
+        </chakra.section>
+      </Box>
       {activeViewer && (
         <PhotoViewer
           key={`${activeViewer.id}:${viewerScope}`}
@@ -358,6 +361,6 @@ export function MapScreen({
           }}
         />
       )}
-    </div>
+    </Box>
   );
 }

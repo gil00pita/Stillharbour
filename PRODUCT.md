@@ -91,3 +91,27 @@ Retain Stillharbour's current photo-first brand and layouts while making shared 
 ## Utilities and search refinement — 2026-11-05
 
 Flat secondary actions, a Utilities navigation group and Jobs immediately above Settings replace the earlier outlined/header-Jobs treatment. Photos/Tags/Map place lookup is inside the main filename/date search. Duplicates becomes a cluster/evidence workspace with real cached-preview comparison modes and conservative keeper review; Integrity and Storage present their distinct results. Unmeasured visual/audio/lineage/ranking data and production cleanup remain explicitly unavailable under the preservation gates. See docs/UTILITIES_UI.md for exact delivered scope.
+
+## Consistent workspaces — owner revision, 2026-11-07
+
+Keep the dark photo-first studio identity; refine the precision of its controls
+and workflow hierarchy. Backup and Sync are individual pages. Structure Formater
+opens directly on folder/filename rules for the entire indexed library. No photo
+selection or gallery scope is required. Its paged read-only preview checks a global
+namespace; execution remains gated on reviewed plans and proven recovery. All page headers use shared title/search/action geometry. The
+chronology rail stays visible and reserves room for its date labels. Complete
+the applicable Chakra v3 presentation migration without changing native safety
+contracts. See docs/UI_WORKSPACE_AUDIT.md for the current audit and evidence.
+
+The Structure Formater rule form focuses on capture dates and times. Illustrated
+radio cards replace the preset dropdown; segmented controls replace missing-date
+and filename-case dropdowns. Event naming is removed from this form. Existing
+saved templates retain their data, and original-file execution remains gated.
+
+Structure Formater now groups Date, Location, Tags, Camera and Custom layouts.
+Custom uses predefined folder chips, explicit literals and an editable filename
+pattern. Embedded-only location, category-based tag hierarchy and observed
+camera fields have explicit missing/ambiguous states. Trip grouping is omitted;
+Camera → Event conditionally accepts an event name. Existing indexed metadata
+and reader coverage determine which values can be previewed. Execution remains
+gated, and existing saved rules retain their identities and data.

@@ -1,3 +1,4 @@
+import { Box, Heading, chakra } from '@chakra-ui/react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/Button';
 
@@ -29,11 +30,13 @@ export function ReviewDialog({
         close();
       }}
     >
-      <header>
-        <h2>{title}</h2>
+      <chakra.header>
+        <Heading as="h2" unstyled>
+          {title}
+        </Heading>
         <Button onClick={close}>Close</Button>
-      </header>
-      <div className="duplicate-dialog-body">{children}</div>
+      </chakra.header>
+      <Box className="duplicate-dialog-body">{children}</Box>
     </dialog>
   );
 }

@@ -1,3 +1,4 @@
+import { Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef } from 'react';
 import type { AssetSummary, LibraryRoot } from '../../bindings';
@@ -27,16 +28,18 @@ export function FileDetails({
         onClose();
       }}
     >
-      <header className="section-heading">
-        <h2 id="file-details-title">File details</h2>
+      <chakra.header className="section-heading">
+        <Heading as="h2" unstyled id="file-details-title">
+          File details
+        </Heading>
         <Button onClick={onClose}>Close</Button>
-      </header>
-      <h3>
+      </chakra.header>
+      <Heading as="h3" unstyled>
         <bdi>{asset.name}</bdi>
-      </h3>
-      <p className="path">
+      </Heading>
+      <Text className="path">
         <bdi>{asset.relativePath}</bdi>
-      </p>
+      </Text>
       <dl>
         <dt>Library</dt>
         <dd>{root?.label ?? 'Unavailable library'}</dd>
@@ -49,10 +52,10 @@ export function FileDetails({
         <dt>Original library</dt>
         <dd>{root?.availability.replaceAll('_', ' ') ?? 'Unavailable'}</dd>
       </dl>
-      <p className="help">
+      <Text className="help">
         This indexed file has no media preview. Browsing does not open external applications or
         change the original.
-      </p>
+      </Text>
     </dialog>
   );
 }

@@ -1,3 +1,4 @@
+import { Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import type { LibraryStatus } from '../../../bindings';
 import { Button } from '@/components/Button';
 
@@ -15,35 +16,41 @@ export function LibraryLocations({
   onRemove: (id: string, opener: HTMLButtonElement) => void;
 }) {
   return (
-    <section className="settings-section" aria-labelledby="library-locations-title">
-      <div className="settings-section-heading">
-        <div>
-          <h2 id="library-locations-title">Library locations</h2>
-          <p className="help">Photo folders indexed in place. Your photos stay where they are.</p>
-        </div>
+    <chakra.section className="settings-section" aria-labelledby="library-locations-title">
+      <Box className="settings-section-heading">
+        <Box>
+          <Heading as="h2" unstyled id="library-locations-title">
+            Library locations
+          </Heading>
+          <Text className="help">
+            Photo folders indexed in place. Your photos stay where they are.
+          </Text>
+        </Box>
         <Button disabled={busy || !status} onClick={onAddFolder}>
           Add photo folder
         </Button>
-      </div>
+      </Box>
       {!status ? (
-        <p role="status">Connecting to your libraries…</p>
+        <Text role="status">Connecting to your libraries…</Text>
       ) : (
         <>
-          {!status.roots.length && <p className="help">No photo folders added yet.</p>}
-          <ul className="settings-libraries">
+          {!status.roots.length && <Text className="help">No photo folders added yet.</Text>}
+          <List.Root unstyled className="settings-libraries">
             {status.roots.map((root) => (
-              <li key={root.id}>
-                <div>
-                  <h3>{root.label}</h3>
-                  <p className="path">
+              <List.Item unstyled key={root.id}>
+                <Box>
+                  <Heading as="h3" unstyled>
+                    {root.label}
+                  </Heading>
+                  <Text className="path">
                     <bdi>{root.displayPath}</bdi>
-                  </p>
-                  <p className="help">
+                  </Text>
+                  <Text className="help">
                     {root.availability.replaceAll('_', ' ')} · {root.fileCount.toLocaleString()}{' '}
                     indexed · {root.mode === 'managed' ? 'Managed' : 'Read only'}
-                  </p>
-                </div>
-                <div className="settings-library-actions">
+                  </Text>
+                </Box>
+                <Box className="settings-library-actions">
                   <Button
                     disabled={busy || root.availability === 'scanning'}
                     onClick={() => void onRelink(root.id)}
@@ -62,17 +69,17 @@ export function LibraryLocations({
                   >
                     Remove library
                   </Button>
-                </div>
-              </li>
+                </Box>
+              </List.Item>
             ))}
-          </ul>
-          <p className="help">
+          </List.Root>
+          <Text className="help">
             Use Change location to reconnect a moved folder, or Add photo folder for a different
             library. Stillharbour checks that a reconnected folder matches your library before
             updating its index.
-          </p>
+          </Text>
         </>
       )}
-    </section>
+    </chakra.section>
   );
 }

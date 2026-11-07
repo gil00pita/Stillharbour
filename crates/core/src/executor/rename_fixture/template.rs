@@ -18,6 +18,7 @@ pub(super) fn pairs(template: &OrganizationTemplate) -> Result<Vec<(String, Stri
                 revision: "0".repeat(64),
                 bytes: payload(index).len() as u64,
                 capture: None,
+                metadata: None,
                 available: true,
                 companion_candidates: u32::from(index == 0),
             }

@@ -1,3 +1,4 @@
+import { Box, Heading, Text } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useCallback, useState, type RefObject } from 'react';
 import { EmptyLibraryArt } from '@/components/EmptyLibraryArt';
@@ -55,8 +56,8 @@ export function PhotoCollection({
     viewportHandle.current?.scrollBy(delta, mode);
   }
   return (
-    <div className="collection-layout">
-      <div className="collection-main" data-feed-count={page?.assets.length ?? 0}>
+    <Box className="collection-layout">
+      <Box className="collection-main" data-feed-count={page?.assets.length ?? 0}>
         {page?.assets.length ? (
           <AssetBrowser
             display={display}
@@ -147,22 +148,22 @@ export function PhotoCollection({
           />
         )}
         {(feed.busy || feed.error) && (
-          <div className="feed-status" role="status">
+          <Box className="feed-status" role="status">
             {feed.error ? (
               <>
-                <span>{feed.error.message}</span>
+                <Text as="span">{feed.error.message}</Text>
                 <Button onClick={feed.retry}>Retry loading</Button>
               </>
             ) : (
-              <span>Loading photos…</span>
+              <Text as="span">Loading photos…</Text>
             )}
-          </div>
+          </Box>
         )}
-        <p className="screen-reader-status" aria-live="polite">
+        <Text className="screen-reader-status" aria-live="polite">
           {page?.total.toLocaleString() ?? 0} matching photos and videos
-        </p>
-      </div>
-    </div>
+        </Text>
+      </Box>
+    </Box>
   );
 }
 
@@ -188,10 +189,10 @@ function CollectionEmpty({
 }) {
   const showIllustration = emptyLibrary && !loading && !scanning && !preparing;
   return (
-    <div className="empty-results">
+    <Box className="empty-results">
       {(preparing || scanning) && <PhotoScanningArt active={animating} />}
       {showIllustration && <EmptyLibraryArt />}
-      <h2>
+      <Heading as="h2" unstyled>
         {preparing
           ? 'Preparing your photos'
           : scanning
@@ -201,8 +202,8 @@ function CollectionEmpty({
               : showIllustration
                 ? 'Your library is empty'
                 : 'No matching photos yet'}
-      </h2>
-      <p>
+      </Heading>
+      <Text>
         {preparing
           ? 'Photos appear as their previews become ready.'
           : scanning
@@ -210,8 +211,8 @@ function CollectionEmpty({
             : showIllustration
               ? 'No photos or videos were found. Check your scan settings or rescan your library folder.'
               : 'Check your filters or select a library to rescan its folder.'}
-      </p>
-    </div>
+      </Text>
+    </Box>
   );
 }
 function CollectionTimeline({

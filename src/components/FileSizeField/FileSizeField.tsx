@@ -1,6 +1,6 @@
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
-import { Field } from '@chakra-ui/react';
+import { Field, Box } from '@chakra-ui/react';
 import { useId, useState } from 'react';
 
 const units = [
@@ -64,7 +64,7 @@ export function FileSizeField({
         <Field.Label asChild unstyled>
           <label htmlFor={id}>{label}</label>
         </Field.Label>
-        <div className="file-size-controls">
+        <Box className="file-size-controls">
           <Input
             id={id}
             name={name}
@@ -96,7 +96,7 @@ export function FileSizeField({
               ))}
             </NativeSelect>
           </Field.Root>
-        </div>
+        </Box>
         <Field.ErrorText asChild unstyled>
           <p className="field-error">{error}</p>
         </Field.ErrorText>

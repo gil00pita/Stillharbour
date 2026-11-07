@@ -1,3 +1,4 @@
+import { Box, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useState, type FormEvent } from 'react';
 import { TagInput } from '@/components/TagInput';
@@ -49,8 +50,8 @@ export function BatchToolbar({
     }
   }
   return (
-    <div className={`selection-area ${count ? 'has-selection' : ''}`}>
-      <div
+    <Box className={`selection-area ${count ? 'has-selection' : ''}`}>
+      <Box
         className="results-heading"
         role={count ? 'toolbar' : undefined}
         aria-label={count ? 'Selected photo actions' : undefined}
@@ -67,20 +68,20 @@ export function BatchToolbar({
           ]?.focus();
         }}
       >
-        <p>
+        <Text>
           {loading ? 'Updating library…' : `${total.toLocaleString()} photos & videos`}
           {count > 0 && ` · ${count.toLocaleString()} selected`}
-        </p>
-        <div>
+        </Text>
+        <Box>
           {count === 0 ? (
             <Button disabled={!total || busy || loading} onClick={onFreeze}>
               Select all results
             </Button>
           ) : (
             <>
-              <span className="selection-scope">
+              <Text as="span" className="selection-scope">
                 {frozen ? 'All matching results' : 'Explicitly selected photos'}
-              </span>
+              </Text>
               <Button disabled={busy} onClick={() => setEditingTags((value) => !value)}>
                 Add tags
               </Button>
@@ -125,10 +126,10 @@ export function BatchToolbar({
               </Button>
             </>
           )}
-        </div>
-      </div>
+        </Box>
+      </Box>
       {editingTags && count > 0 && (
-        <form className="batch-tag-form" onSubmit={(event) => void saveTags(event)}>
+        <chakra.form className="batch-tag-form" onSubmit={(event) => void saveTags(event)}>
           <TagInput
             name="batchTags"
             label="Tags for selected photos"
@@ -137,15 +138,15 @@ export function BatchToolbar({
             disabled={busy}
             onChange={setTags}
           />
-          <p className="help">
+          <Text className="help">
             Adds to existing catalog tags. Originals and sidecars stay unchanged.
-          </p>
+          </Text>
           <Button disabled={busy} type="submit">
             Save tags to selection
           </Button>
-        </form>
+        </chakra.form>
       )}
-    </div>
+    </Box>
   );
 }
 

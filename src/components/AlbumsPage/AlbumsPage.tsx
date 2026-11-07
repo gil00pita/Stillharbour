@@ -1,7 +1,7 @@
 import { CatalogActions } from '@/components/CatalogActions';
 import { PageHeader } from '@/components/PageHeader';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Box, Field, useRecipe } from '@chakra-ui/react';
+import { Box, useRecipe, Heading, Text, chakra } from '@chakra-ui/react';
 import type {
   AlbumPage,
   AlbumSummary,
@@ -10,7 +10,7 @@ import type {
   ThumbnailResult,
 } from '../../bindings';
 import { Button } from '@/components/Button';
-import { Input } from '@/components/Input';
+import { SearchField } from '@/components/SearchField';
 import { metadata } from '../../metadata/ipc';
 import { errorMessage } from '../../ipc';
 import { AlbumEditor } from '@/components/AlbumEditor';
@@ -107,54 +107,59 @@ export function AlbumsPage({
   return (
     <Box css={styles} className="albums-page">
       <PageHeader>
-        <header className="toolbar">
-          <h1>Albums / Tags</h1>
-          <Field.Root className="album-search">
-            <Field.Label className="screen-reader-status">Search albums</Field.Label>
-            <Input
-              type="search"
-              placeholder="Search albums…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </Field.Root>
-          <div className="header-actions">
+        <chakra.header className="toolbar">
+          <Heading as="h1" unstyled>
+            Albums / Tags
+          </Heading>
+          <SearchField
+            label="Search albums"
+            placeholder="Search albums…"
+            value={search}
+            onChange={setSearch}
+          />
+          <Box className="header-actions">
             {jobsControl}
             <CatalogActions status={status} onBrowse={onBrowse} onRefresh={onRefresh} />
             <Button className="primary" aria-label="New album" onClick={() => setCreating(true)}>
-              <span aria-hidden="true">+</span>{' '}
-              <span className="toolbar-action-label">New album</span>
+              <Text as="span" aria-hidden="true">
+                +
+              </Text>{' '}
+              <Text as="span" className="toolbar-action-label">
+                New album
+              </Text>
             </Button>
-          </div>
-        </header>
+          </Box>
+        </chakra.header>
       </PageHeader>
-      <div className="albums-content">
-        <div className="albums-intro">
-          <div>
-            <h2>A place for every memory</h2>
-            <p>Your photo tags, gathered into albums. Your own collections, too.</p>
-          </div>
+      <Box className="albums-content">
+        <Box className="albums-intro">
+          <Box>
+            <Heading as="h2" unstyled>
+              A place for every memory
+            </Heading>
+            <Text>Your photo tags, gathered into albums. Your own collections, too.</Text>
+          </Box>
           {page && (
-            <span>
+            <Text as="span">
               {page.total} {page.total === 1 ? 'album' : 'albums'}
-            </span>
+            </Text>
           )}
-        </div>
+        </Box>
         {error && (
-          <div role="alert">
-            <p>{error}</p>
+          <Box role="alert">
+            <Text>{error}</Text>
             <Button onClick={() => setReload((v) => v + 1)}>Retry albums</Button>
-          </div>
+          </Box>
         )}
         {previews.error && (
-          <div role="alert">
-            <p>Album covers couldn’t be loaded. {previews.error}</p>
+          <Box role="alert">
+            <Text>Album covers couldn’t be loaded. {previews.error}</Text>
             <Button onClick={previews.retry}>Retry covers</Button>
-          </div>
+          </Box>
         )}
-        {!page && busy && <p role="status">Loading albums…</p>}
+        {!page && busy && <Text role="status">Loading albums…</Text>}
         {page && (
-          <div className="album-grid">
+          <Box className="album-grid">
             {page.items.map((album) => (
               <AlbumTile
                 key={album.id}
@@ -164,29 +169,31 @@ export function AlbumsPage({
                 onOpen={() => onOpen(album)}
               />
             ))}
-          </div>
+          </Box>
         )}
         {page && !page.items.length && (
-          <div className="albums-empty">
-            <h3>{search ? 'No albums found' : 'Your collections start here'}</h3>
-            <p>
+          <Box className="albums-empty">
+            <Heading as="h3" unstyled>
+              {search ? 'No albums found' : 'Your collections start here'}
+            </Heading>
+            <Text>
               {search
                 ? 'Try another album name.'
                 : 'Create an album, or scan photos with embedded keywords to gather them here automatically.'}
-            </p>
+            </Text>
             {!search && <Button onClick={() => setCreating(true)}>New album</Button>}
-          </div>
+          </Box>
         )}
         {page?.nextOffset != null && (
           <Button disabled={busy} onClick={() => void more()}>
             {busy ? 'Loading…' : 'More albums'}
           </Button>
         )}
-        <p className="album-footnote">
+        <Text className="album-footnote">
           Albums keep your photos together without moving or changing the originals.
-        </p>
-        <p role="status">{notice}</p>
-      </div>
+        </Text>
+        <Text role="status">{notice}</Text>
+      </Box>
       {creating && (
         <AlbumEditor
           status={status}
@@ -239,7 +246,7 @@ function AlbumTile({
       onClick={onOpen}
       aria-label={`${album.name}, ${album.photoCount} ${album.photoCount === 1 ? 'photo' : 'photos'}${album.fromTags ? ', From tags' : ''}`}
     >
-      <div className="album-cover">
+      <Box className="album-cover">
         {album.covers.length ? (
           album.covers.map((asset) => (
             <TileImage
@@ -255,18 +262,24 @@ function AlbumTile({
             />
           ))
         ) : (
-          <span className="album-no-cover">No photos yet</span>
+          <Text as="span" className="album-no-cover">
+            No photos yet
+          </Text>
         )}
-      </div>
-      <div className="album-caption">
-        <h3>
+      </Box>
+      <Box className="album-caption">
+        <Heading as="h3" unstyled>
           <bdi>{album.name}</bdi>
-        </h3>
-        {album.fromTags && <span className="tag-origin">From tags</span>}
-      </div>
-      <p>
+        </Heading>
+        {album.fromTags && (
+          <Text as="span" className="tag-origin">
+            From tags
+          </Text>
+        )}
+      </Box>
+      <Text>
         {album.photoCount} {album.photoCount === 1 ? 'photo' : 'photos'}
-      </p>
+      </Text>
     </Button>
   );
 }

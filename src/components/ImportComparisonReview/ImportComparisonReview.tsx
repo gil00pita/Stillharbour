@@ -1,3 +1,4 @@
+import { Box, Heading, List, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CopyManifest, ImportComparisonJob, LibraryRoot } from '../../bindings';
@@ -308,21 +309,23 @@ function ImportComparisonSession({
   }
   const pages = Math.max(1, Math.ceil((report?.files.length ?? 0) / 64));
   return (
-    <section aria-label="Import byte comparison" className="organization-destination">
-      <h3>Compare before importing</h3>
-      <p>
+    <chakra.section aria-label="Import byte comparison" className="organization-destination">
+      <Heading as="h3" unstyled>
+        Compare before importing
+      </Heading>
+      <Text>
         Compare selected file bytes with an explicit indexed library scope. Size and sampled/full
         BLAKE3 hashes filter candidates; every reported match requires a complete direct byte
         comparison. This review grants no copy-skipping or removal permission.
-      </p>
+      </Text>
       {!roots ? (
         <Button type="button" disabled={pending} onClick={() => void open()}>
           Choose indexed comparison scope
         </Button>
       ) : (
         <>
-          <fieldset disabled={pending || running || importActive}>
-            <legend>Existing indexed roots (choose 1–16)</legend>
+          <chakra.fieldset disabled={pending || running || importActive}>
+            <chakra.legend>Existing indexed roots (choose 1–16)</chakra.legend>
             {roots.map((root) => (
               <label key={root.id}>
                 <input
@@ -335,7 +338,7 @@ function ImportComparisonSession({
                 {sourceRoots.has(root.id) ? ' · selected source' : ''}
               </label>
             ))}
-          </fieldset>
+          </chakra.fieldset>
           <Button
             type="button"
             disabled={
@@ -351,16 +354,16 @@ function ImportComparisonSession({
             Start read-only comparison
           </Button>
           {manifest.files.length > 512 && (
-            <p>Compare at most 512 confirmed source files per review.</p>
+            <Text>Compare at most 512 confirmed source files per review.</Text>
           )}
         </>
       )}
       {job && (
-        <p role="status">
+        <Text role="status">
           Comparison: {job.state.replaceAll('_', ' ')} · {job.stage} · {job.comparedSourceFiles}/
           {job.totalSourceFiles} selected files · {job.candidateFiles} admitted candidates ·{' '}
           {BigInt(job.bytesRead).toLocaleString()} payload bytes read.
-        </p>
+        </Text>
       )}
       {job && !running && (
         <Button disabled={pending || importActive} onClick={() => void closeReport()}>
@@ -380,87 +383,87 @@ function ImportComparisonSession({
         </>
       )}
       {job?.state === 'canceled' && (
-        <p>Comparison canceled at a safe read boundary. Rerun to obtain a complete report.</p>
+        <Text>Comparison canceled at a safe read boundary. Rerun to obtain a complete report.</Text>
       )}
-      {(error || job?.error) && <p role="alert">{error ?? errorMessage(job?.error)}</p>}
+      {(error || job?.error) && <Text role="alert">{error ?? errorMessage(job?.error)}</Text>}
       {report && (
         <>
-          <h4 ref={heading} tabIndex={-1}>
+          <Heading as="h4" unstyled ref={heading} tabIndex={-1}>
             Observed file comparison
-          </h4>
-          <p>
+          </Heading>
+          <Text>
             {report.allScopeAvailable
               ? 'Selected indexed scope was accessible.'
               : 'Comparison coverage is incomplete; unknown files remain unknown.'}{' '}
             {report.excludedOrMissingFiles} missing or excluded indexed entries were omitted.
             Observed {report.observedAt}; this is not an atomic filesystem snapshot.
-          </p>
-          <p>
+          </Text>
+          <Text>
             Bundle observations keep confirmed companions together. No files were skipped, copied or
             removed by this comparison. Existing groups need fresh complete-byte verification and
             separate import approval. Reports must be rerun after restart.
-          </p>
+          </Text>
           <details>
             <summary>Whole-bundle import observations ({report.bundles.length})</summary>
             {report.bundles.map((bundle) => (
-              <div key={bundle.fileIds[0]}>
-                <p>
+              <Box key={bundle.fileIds[0]}>
+                <Text>
                   {bundle.fileIds.length} selected members ·{' '}
                   {bundle.disposition === 'review_existing_bundle'
                     ? `${bundle.existingGroups.length} complete existing groups to review`
                     : bundle.disposition === 'copy_whole_bundle'
                       ? 'Copy the whole bundle'
                       : 'Bundle needs attention'}
-                </p>
-                <p>{bundle.reason}</p>
-                <ul>
+                </Text>
+                <Text>{bundle.reason}</Text>
+                <List.Root unstyled>
                   {bundle.fileIds.map((id) => (
-                    <li key={id}>
+                    <List.Item unstyled key={id}>
                       <bdi>{manifest.files.find((file) => file.id === id)?.sourceName}</bdi>
-                    </li>
+                    </List.Item>
                   ))}
-                </ul>
-              </div>
+                </List.Root>
+              </Box>
             ))}
           </details>
-          <div className="organization-table-scroll">
-            <table>
-              <caption>
+          <Box className="organization-table-scroll">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top">
                 Compared source files, page {page + 1} of {pages}
-              </caption>
-              <thead>
-                <tr>
-                  <th>Source relative path</th>
-                  <th>Result</th>
-                  <th>Existing indexed matches</th>
-                </tr>
-              </thead>
-              <tbody>
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled>Source relative path</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Result</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Existing indexed matches</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
                 {report.files.slice(page * 64, (page + 1) * 64).map((file) => (
-                  <tr key={file.fileId}>
-                    <td>
+                  <Table.Row unstyled key={file.fileId}>
+                    <Table.Cell unstyled>
                       <bdi>{file.sourcePath}</bdi>
-                    </td>
-                    <td>{labels[file.state]}</td>
-                    <td>
+                    </Table.Cell>
+                    <Table.Cell unstyled>{labels[file.state]}</Table.Cell>
+                    <Table.Cell unstyled>
                       {file.matches.map((match) => (
-                        <p key={match.assetId}>
+                        <Text key={match.assetId}>
                           <bdi>{match.relativePath}</bdi>
                           {match.displayTruncated ? ' (display shortened)' : ''}
                           {match.sameNativeObject ? ' · same physical object' : ''}
-                        </p>
+                        </Text>
                       ))}
                       {file.furtherCandidatesUncompared && (
-                        <p>
+                        <Text>
                           Additional hash candidates were not directly compared (four-match limit).
-                        </p>
+                        </Text>
                       )}
-                    </td>
-                  </tr>
+                    </Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Table.Body>
+            </Table.Root>
+          </Box>
           <Button type="button" disabled={!page} onClick={() => setPage(page - 1)}>
             Previous comparison files
           </Button>
@@ -468,16 +471,16 @@ function ImportComparisonSession({
             Next comparison files
           </Button>
           {report.issues.length > 0 && (
-            <ul aria-label="Comparison issues">
+            <List.Root unstyled aria-label="Comparison issues">
               {report.issues.map((issue, index) => (
-                <li key={index}>
+                <List.Item unstyled key={index}>
                   <bdi>
                     {roots?.find((root) => root.id === issue.rootId)?.label ?? issue.rootId}
                   </bdi>
                   : {errorMessage(issue.error)}
-                </li>
+                </List.Item>
               ))}
-            </ul>
+            </List.Root>
           )}
         </>
       )}
@@ -487,6 +490,6 @@ function ImportComparisonSession({
         comparison={job ?? undefined}
         onActivityChange={setImportActive}
       />
-    </section>
+    </chakra.section>
   );
 }

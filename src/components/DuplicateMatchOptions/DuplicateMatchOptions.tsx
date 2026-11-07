@@ -1,3 +1,4 @@
+import { Box } from '@chakra-ui/react';
 import type { DuplicateOptions } from '../../bindings';
 import { InspectionChoiceCards, type InspectionChoice } from '@/components/InspectionChoiceCards';
 import exactContent from '../../../assets/illustrations/duplicates/exact-content.png';
@@ -45,7 +46,7 @@ export function DuplicateMatchOptions({
   disabled: boolean;
 }) {
   return (
-    <div className="duplicate-match-options">
+    <Box className="duplicate-match-options">
       <InspectionChoiceCards
         label="Match mode"
         value={options.mode}
@@ -75,6 +76,6 @@ export function DuplicateMatchOptions({
           Exclude hard-linked objects from this search
         </label>
       </details>
-    </div>
+    </Box>
   );
 }

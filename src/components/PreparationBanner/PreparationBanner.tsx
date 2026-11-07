@@ -1,3 +1,4 @@
+import { Box, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useState } from 'react';
 import type { LibraryRoot, LibraryStatus, ScanJob } from '../../bindings';
@@ -100,13 +101,13 @@ function PreparationStatus({
     }
   }
   return (
-    <section
+    <chakra.section
       className="preparation-banner"
       aria-label="Library preparation"
       title={`${root.label}${otherRoots > 0 ? ` · ${otherRoots} more folders in Jobs` : ''}`}
     >
-      <div className="preparation-row">
-        <span className="preparation-summary">
+      <Box className="preparation-row">
+        <Text as="span" className="preparation-summary">
           {job?.state === 'paused'
             ? 'Preparation paused'
             : !job
@@ -114,9 +115,9 @@ function PreparationStatus({
               : thumbnails
                 ? `${thumbnails.processed.toLocaleString()} previews processed`
                 : `${job.discovered.toLocaleString()} files scanned`}
-        </span>
-        {job ? <ScanJobProgress job={job} label={root.label} compact /> : <span />}
-        <div className="preparation-actions">
+        </Text>
+        {job ? <ScanJobProgress job={job} label={root.label} compact /> : <Text as="span" />}
+        <Box className="preparation-actions">
           {job && job.kind !== 'thumbnails' && job.state !== 'paused' && (
             <Button
               disabled={busy || stopping || job.state === 'pause_requested'}
@@ -143,22 +144,22 @@ function PreparationStatus({
                         ? 'Pause previews'
                         : 'Stop scan'}
           </Button>
-        </div>
-      </div>
+        </Box>
+      </Box>
       {thumbnails && thumbnails.processed > 0 && thumbnails.percentage !== undefined && (
-        <p className="preparation-detail">
+        <Text className="preparation-detail">
           {thumbnails.percentage}% complete
           {job?.message.includes('remaining') ? ` · ${job.message}` : ''}
-        </p>
+        </Text>
       )}
       {job && job.errors > 0 && (
-        <p className="preparation-detail">
+        <Text className="preparation-detail">
           {job.errors.toLocaleString()} {thumbnails ? 'previews unavailable' : 'scan issues'} ·
           Details in Jobs
-        </p>
+        </Text>
       )}
-      {!job && pausedMessage && <p className="preparation-detail">{pausedMessage}</p>}
-      {error && <p role="alert">{error}</p>}
-    </section>
+      {!job && pausedMessage && <Text className="preparation-detail">{pausedMessage}</Text>}
+      {error && <Text role="alert">{error}</Text>}
+    </chakra.section>
   );
 }

@@ -127,9 +127,10 @@ impl Library {
             input.destination_root_id.clone(),
         )?;
         let ids = input.asset_ids.clone();
+        let rules = input.template.clone();
         let (revision, sources) = self
             .catalog
-            .call(move |db| super::organization::snapshot(db, ids))?;
+            .call(move |db| super::organization::template_snapshot(db, ids, &rules))?;
         let preview = organization::preview(revision.clone(), input.template, sources.clone())?;
         if preview.fingerprint != input.preview_fingerprint
             || preview.catalog_revision != destination.catalog_revision
@@ -443,6 +444,7 @@ mod tests {
             revision: "1".into(),
             bytes: 42,
             capture: None,
+            metadata: None,
             available: true,
             companion_candidates: 0,
         }];
@@ -613,6 +615,7 @@ mod tests {
             samples: vec![crate::organization::TemplateSample {
                 relative_path: "Family/Photo.JPG".into(),
                 capture: None,
+                metadata: None,
                 sequence: 1,
                 expected_target: "wrong.JPG".into(),
             }],
@@ -678,6 +681,7 @@ mod tests {
             crate::organization::TemplateSample {
                 relative_path: "Family/Photo.JPG".into(),
                 capture: None,
+                metadata: None,
                 sequence: 1,
                 expected_target: format!("{folders}Photo.JPG"),
             };

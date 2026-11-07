@@ -24,7 +24,9 @@ modules. This reorganization does not introduce a state library.
 Settings owns private LibraryLocations, PreviewCacheSettings, BrowsingDefaults,
 FolderDefaults and SettingsHeading components. Its parent retains draft,
 approval, busy and focus-return ownership. OrganizationPreview similarly owns a
-private OrganizationTemplateFields child and colocated preset data.
+private OrganizationTemplateFields child. OrganizationPresets owns shared date-based
+preset data, SVG examples and its slot recipe; SegmentedControl owns the typed
+segmented radio-group adapter and recipe.
 
 ## Chakra v3
 
@@ -78,3 +80,34 @@ React Doctor diagnostics and their evidence are tracked in
 supply-chain queries; this frontend refactor does not change dependencies.
 Scanner counts do not establish native behavior, performance or preservation
 qualification.
+
+## Complete presentation migration — 2026-11-07
+
+Applicable elements throughout the component tree now use Chakra Box, Text,
+Heading, Image, Button/IconButton, List and Table compound components; semantic
+sections/forms/fieldsets use the Chakra factory. Use unstyled recipe components
+where established native CSS still owns specialized geometry. Native asChild
+children, dialog/details/summary, SVG, bidirectional filenames and checkbox/range
+controls are intentional exceptions. The retained numbered list uses List.Root
+asChild around ol to preserve its native start offset.
+
+SearchField shares the Photos/Map search frame with Albums and Folders. BackupScreen
+owns snapshots; SyncScreen owns the former combined page's comparison workflow.
+StructureFormatter owns whole-library rule configuration, cancellable paged
+native preview state and result paging. It consumes no photo IDs or gallery
+query. OrganizationTemplateFields is shared through the OrganizationPreview
+barrel; the separate selected-photo preview keeps its existing planning contract.
+The migration adds no runtime dependency or theme token. The detailed inventory
+is in [UI_WORKSPACE_AUDIT.md](UI_WORKSPACE_AUDIT.md).
+
+Chakra Table.Caption defaults to bottom independently of its recipe. Set
+captionSide="top" when migrating native captions so ordering and focused preview
+results retain their previous behavior. Native SVG image dimensions use
+htmlWidth/htmlHeight on Chakra Image.
+
+The expanded Structure Formater groups 25 choices in OrganizationPresets.
+StructurePathBuilder owns its chip vocabulary, pure path-parts helper and recipe.
+Metadata context for synthetic examples is generated from Rust's
+OrganizationMetadata schema; retainedTemplateExamples validates and preserves
+it. Native source context is catalog-owned and cannot be supplied by the rule
+form. Register the builder recipe in the theme and typegen after recipe changes.

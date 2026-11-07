@@ -1,3 +1,4 @@
+import { Image } from '@chakra-ui/react';
 import { useState, type ComponentProps } from 'react';
 
 type Props = Omit<ComponentProps<'img'>, 'src'> & { src: string };
@@ -10,7 +11,7 @@ export function CachedPreviewImage(props: Props) {
 function RetryingImage({ src, onError, ...props }: Props) {
   const [attempt, setAttempt] = useState(0);
   return (
-    <img
+    <Image
       {...props}
       src={attempt ? `${src}${src.includes('?') ? '&' : '?'}retry=1` : src}
       onError={(event) => {

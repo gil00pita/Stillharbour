@@ -1,3 +1,4 @@
+import { Text } from '@chakra-ui/react';
 import { useId, type Ref } from 'react';
 import { Button } from '@/components/Button';
 import type { LibraryStatus } from '../../bindings';
@@ -36,16 +37,18 @@ export function JobsButton({
             strokeLinejoin="round"
           />
         </svg>
-        <span className="nav-label">Jobs</span>
+        <Text as="span" className="nav-label">
+          Jobs
+        </Text>
         {count > 0 && (
-          <span className="jobs-count" aria-hidden="true">
+          <Text as="span" className="jobs-count" aria-hidden="true">
             {count}
-          </span>
+          </Text>
         )}
       </Button>
-      <span id={id} className="screen-reader-status" role="status">
+      <Text as="span" id={id} className="screen-reader-status" role="status">
         {status ? `${count} running ${count === 1 ? 'job' : 'jobs'}` : 'Connecting to jobs'}
-      </span>
+      </Text>
     </>
   );
 }

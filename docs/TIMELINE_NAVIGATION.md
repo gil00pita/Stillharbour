@@ -29,3 +29,14 @@ The reference's MIT notice is distributed at public/licenses/timeline-vertical-n
 The initial regression fails on equal-month weighting (max 3 instead of 52 for 53 photos) and absence of press-time navigation. Component/helpers cover density, preview coordinates, live pointer/keyboard operation, pending-page continuity, outside release, cancellation and single-month/Undated inputs. Feed tests verify the retained rail and one-active/latest-pending requests. Rust fixtures compare ordinal seeks, returned ranks, tied dates and filters against ordinary keyset traversal, including ranks beyond a page/window and invalid/empty scope. Wire tests validate optional ordinal metadata without changing older fixtures.
 
 Run npm test, npm run typecheck, npm run lint, npm run bindings:check, npm run rust:check, npm run build, npm run test:release, npm run release:check, format:check and git diff --check. tests/desktop/timeline-navigation.e2e.mjs seeds only generated media and a disposable 960-photo catalog. It asserts an actual seek while the pointer is down, stable rail identity, bounded retained pages, exact endpoint IDs, native line/label geometry at 1180×780 and 660×560, Escape/outside release and unchanged generated sources. Actual outcomes and failures are recorded in IMPLEMENTATION_LOG.md. Browser screenshots do not establish Windows or physical accessibility acceptance.
+
+## Persistent, contained rail — 2026-11-07
+
+The owner requests that the rail remain visible and stop covering/cropping photo
+content. Reserve 96 px at desktop and compact widths; keep the reference's dots,
+blue position/preview lines and 24 px date label, with a 12 px date font bounded
+to 92 px. Keep opacity at one at rest instead of fading after three seconds.
+The slider covers the reserved lane; its original 24 px endpoint insets and
+ordinal/keyboard/pointer semantics remain unchanged. All date output fits within
+the rail. Native timeline regression measures visibility/containment and retained
+seek behavior; browser checks remain separate from native evidence.

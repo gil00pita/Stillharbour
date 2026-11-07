@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import { useEffect, useRef, useState } from 'react';
@@ -135,12 +135,14 @@ export function OrganizationDestination({
     }
   }
   return (
-    <section
+    <chakra.section
       className="organization-destination"
       aria-label="Organization destination"
       aria-busy={busy}
     >
-      <h3>Destination for organized copies</h3>
+      <Heading as="h3" unstyled>
+        Destination for organized copies
+      </Heading>
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -185,17 +187,17 @@ export function OrganizationDestination({
         </label>
       </Field.Root>
       {preferredId && destinationRootId === preferredId && (
-        <p className="help">
+        <Text className="help">
           Saved preferred import destination for this catalog. This does not approve copying.
-        </p>
+        </Text>
       )}
-      {destinationProblem && <p role="status">{destinationProblem}</p>}
-      <p>
+      {destinationProblem && <Text role="status">{destinationProblem}</Text>}
+      <Text>
         {destinationRootId
           ? 'Choose the selected managed library’s root itself with the folder picker. Existing files are retained; new copies require a separately reviewed output namespace.'
           : 'Choose an existing folder outside every indexed library.'}{' '}
         Checking it leaves both folders unchanged.
-      </p>
+      </Text>
       <Button
         type="button"
         disabled={busy || stale || !!destinationProblem}
@@ -205,9 +207,9 @@ export function OrganizationDestination({
       </Button>
       {selection && (
         <>
-          <p>
+          <Text>
             <bdi>{review?.destinationPath ?? selection.displayPath}</bdi>
-          </p>
+          </Text>
           <Button
             type="button"
             disabled={busy || stale || !!destinationProblem}
@@ -218,40 +220,46 @@ export function OrganizationDestination({
         </>
       )}
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
       {stale && (
-        <p role="alert">
+        <Text role="alert">
           The catalog changed. Build a fresh preview before checking a destination.
-        </p>
+        </Text>
       )}
       {review && !stale && (
         <>
-          <p role="status">Destination identity and indexed-root overlap checked.</p>
-          <p>
+          <Text role="status">Destination identity and indexed-root overlap checked.</Text>
+          <Text>
             {BigInt(review.availableBytes).toLocaleString()} bytes available of{' '}
             {BigInt(review.totalBytes).toLocaleString()} total at review time. Selected photo bytes:{' '}
             {BigInt(preview.selectedBytes).toLocaleString()}. Companions, staging, retained versions
             and metadata reserves are not included; space is not reserved.
-          </p>
-          <div className="organization-table">
-            <table>
-              <caption>Existing target review</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Proposed relative path</th>
-                  <th scope="col">Observation</th>
-                </tr>
-              </thead>
-              <tbody>
+          </Text>
+          <Box className="organization-table">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top">
+                Existing target review
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled scope="col">
+                    Proposed relative path
+                  </Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled scope="col">
+                    Observation
+                  </Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
                 {review.targets.map((target) => (
-                  <tr key={target.assetId}>
-                    <td>
+                  <Table.Row unstyled key={target.assetId}>
+                    <Table.Cell unstyled>
                       <bdi>{target.targetRelativePath ?? 'No proposed target'}</bdi>
-                    </td>
-                    <td>
+                    </Table.Cell>
+                    <Table.Cell unstyled>
                       {targetLabels[target.state]}
                       {target.blockingComponent && (
                         <>
@@ -259,12 +267,12 @@ export function OrganizationDestination({
                           <bdi>{target.blockingComponent}</bdi>
                         </>
                       )}
-                    </td>
-                  </tr>
+                    </Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Table.Body>
+            </Table.Root>
+          </Box>
           <Button
             type="button"
             disabled={busy || saved !== null || !!destinationProblem}
@@ -275,16 +283,16 @@ export function OrganizationDestination({
         </>
       )}
       {saved && (
-        <p role="status">
+        <Text role="status">
           Plan draft saved. Reopen it from Saved plans. Copying remains unavailable.
-        </p>
+        </Text>
       )}
-      <p className="help">
+      <Text className="help">
         Native lookup checks existing entries without following links. Missing parent folders and
         names are observations, not reservations. Equivalence between future case/Unicode names,
         complete companions, full space requirements and metadata fidelity still need review. Saving
         retains a draft without reserving target names. Copying remains unavailable.
-      </p>
-    </section>
+      </Text>
+    </chakra.section>
   );
 }

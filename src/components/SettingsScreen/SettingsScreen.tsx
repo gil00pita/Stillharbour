@@ -1,3 +1,4 @@
+import { Box, Text, chakra } from '@chakra-ui/react';
 import { LibraryLocations } from './components/LibraryLocations';
 import { PreviewCacheSettings } from './components/PreviewCacheSettings';
 import { BrowsingDefaults } from './components/BrowsingDefaults';
@@ -92,14 +93,14 @@ export function SettingsScreen({
     }
   }
   return (
-    <div className="settings-page">
+    <Box className="settings-page">
       <SettingsHeading
         heading={heading}
         jobsControl={jobsControl}
         navigationControl={navigationControl}
       />
-      <div className="settings-content">
-        <p className="help">Choose your photo folders and the defaults for your workspace.</p>
+      <Box className="settings-content">
+        <Text className="help">Choose your photo folders and the defaults for your workspace.</Text>
         <LibraryLocations
           status={status}
           busy={formsBusy}
@@ -156,13 +157,13 @@ export function SettingsScreen({
           roots={status?.roots ?? []}
           onSave={onSaveImportDestination ?? null}
         />
-        <form
+        <chakra.form
           className="settings-defaults-form"
           aria-label="Application defaults"
           onInput={() => setSaved(false)}
           onSubmit={(event) => void save(event)}
         >
-          <fieldset disabled={formsBusy} className="settings-fields">
+          <chakra.fieldset disabled={formsBusy} className="settings-fields">
             <BrowsingDefaults draft={draft} status={status} onChange={update} />
             <FolderDefaults
               draft={draft}
@@ -171,7 +172,7 @@ export function SettingsScreen({
               onChange={update}
               onError={onError}
             />
-            <div className="settings-save">
+            <Box className="settings-save">
               <Button
                 type="button"
                 onClick={() => {
@@ -186,20 +187,20 @@ export function SettingsScreen({
               <Button type="submit" className="primary">
                 {busy ? 'Saving…' : 'Save defaults'}
               </Button>
-            </div>
-          </fieldset>
+            </Box>
+          </chakra.fieldset>
           {error && (
-            <p role="alert" className="error">
+            <Text role="alert" className="error">
               {error}
-            </p>
+            </Text>
           )}
           {saved && (
-            <p role="status" className="settings-saved">
+            <Text role="status" className="settings-saved">
               Defaults saved. Existing photo folders are unchanged.
-            </p>
+            </Text>
           )}
-        </form>
-      </div>
-    </div>
+        </chakra.form>
+      </Box>
+    </Box>
   );
 }

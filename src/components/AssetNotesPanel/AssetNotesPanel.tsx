@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Textarea } from '@/components/Textarea';
 import { useContext, useEffect, useRef, useState } from 'react';
@@ -92,14 +92,16 @@ function Notes({ assetId }: { assetId: string }) {
     }
   }
   return (
-    <section aria-label="Caption and review" className="catalog-notes">
-      <h3>Caption &amp; review</h3>
-      {error && <p role="alert">{error}</p>}
+    <chakra.section aria-label="Caption and review" className="catalog-notes">
+      <Heading as="h3" unstyled>
+        Caption &amp; review
+      </Heading>
+      {error && <Text role="alert">{error}</Text>}
       {!notes && !error ? (
-        <p role="status">Loading catalog notes…</p>
+        <Text role="status">Loading catalog notes…</Text>
       ) : (
         notes && (
-          <form
+          <chakra.form
             onSubmit={(event) => {
               event.preventDefault();
               void save();
@@ -128,9 +130,9 @@ function Notes({ assetId }: { assetId: string }) {
               />
               Mark as rejected
             </label>
-            <p className="help">
+            <Text className="help">
               This review flag stays in the catalog. Original files and sidecars stay unchanged.
-            </p>
+            </Text>
             <Button type="submit" disabled={busy || reloading || !dirty}>
               {reloading ? 'Reloading notes…' : busy ? 'Saving notes…' : 'Save caption & review'}
             </Button>
@@ -138,24 +140,26 @@ function Notes({ assetId }: { assetId: string }) {
               <summary>Embedded keywords · last observed</summary>
               {notes.keywordsAvailable ? (
                 <>
-                  <ul>
+                  <List.Root unstyled>
                     {notes.observedKeywords.map((value) => (
-                      <li key={value}>
+                      <List.Item unstyled key={value}>
                         <bdi>{value}</bdi>
-                      </li>
+                      </List.Item>
                     ))}
-                  </ul>
-                  {!notes.observedKeywords.length && <p>No keywords were recorded.</p>}
+                  </List.Root>
+                  {!notes.observedKeywords.length && <Text>No keywords were recorded.</Text>}
                   {notes.keywordsTruncated && (
-                    <p>Some metadata values exceed the display limits.</p>
+                    <Text>Some metadata values exceed the display limits.</Text>
                   )}
                 </>
               ) : (
-                <p>No keyword observation is retained for this item.</p>
+                <Text>No keyword observation is retained for this item.</Text>
               )}
-              <p className="help">These source observations are separate from your catalog tags.</p>
+              <Text className="help">
+                These source observations are separate from your catalog tags.
+              </Text>
             </details>
-          </form>
+          </chakra.form>
         )
       )}
       {(error || dirty) && (
@@ -171,14 +175,14 @@ function Notes({ assetId }: { assetId: string }) {
           >
             Reload saved notes
           </Button>
-          {dirty && <p className="help">Reload discards this notes draft.</p>}
+          {dirty && <Text className="help">Reload discards this notes draft.</Text>}
         </>
       )}
-      <p role="status">
+      <Text role="status">
         {dirty
           ? 'Unsaved notes. Your draft is kept while browsing this catalog. Save before closing the app or switching catalogs.'
           : notice}
-      </p>
-    </section>
+      </Text>
+    </chakra.section>
   );
 }

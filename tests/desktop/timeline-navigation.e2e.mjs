@@ -181,7 +181,25 @@ describe('Reference timeline navigation through bounded native pages', () => {
           overflow: document.documentElement.scrollWidth > innerWidth,
         };
       });
-      assert.equal(metrics.width, 56);
+      const idle = await browser.execute(() => {
+        document.activeElement?.blur();
+        const rail = document.querySelector('.date-rail');
+        rail.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+        const bounds = rail.getBoundingClientRect();
+        const date = rail.querySelector('.timeline-current').getBoundingClientRect();
+        const viewport = document.querySelector('.browser-photos').getBoundingClientRect();
+        return {
+          opacity: getComputedStyle(rail).opacity,
+          contained:
+            date.left >= bounds.left &&
+            date.right <= bounds.right &&
+            date.top >= bounds.top &&
+            date.bottom <= bounds.bottom,
+          separate: date.left >= viewport.right,
+        };
+      });
+      assert.deepEqual(idle, { opacity: '1', contained: true, separate: true });
+      assert.equal(metrics.width, 96);
       assert.equal(metrics.lineWidth, 40);
       assert.equal(metrics.lineHeight, 1);
       assert.equal(metrics.labelHeight, 24);
@@ -189,6 +207,9 @@ describe('Reference timeline navigation through bounded native pages', () => {
       assert.equal(metrics.overflow, false);
       await browser.saveScreenshot(`.context/timeline-reference/reference-native-${width}.png`);
     }
+    await browser.execute(() =>
+      document.querySelector('.date-scrubber').focus({ preventScroll: true }),
+    );
     await browser.keys('Home');
     await browser.waitUntil(() =>
       browser.execute(() => document.querySelector('.date-scrubber').value === '0'),

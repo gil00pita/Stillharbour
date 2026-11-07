@@ -1,3 +1,4 @@
+import { List, Text, chakra } from '@chakra-ui/react';
 import type { LibraryRoot, OrganizationRow } from '../../bindings';
 
 type Branch = { folders: Map<string, Branch>; files: OrganizationRow[] };
@@ -35,16 +36,16 @@ export function OrganizationTrees({
     node.files.push(row);
   }
   return (
-    <section className="organization-trees" aria-label="Organization path trees">
-      <p className="help">
+    <chakra.section className="organization-trees" aria-label="Organization path trees">
+      <Text className="help">
         Selected paths only. Source folders use components supplied by the backend; excluded,
         unknown and unselected files are outside this view. Proposed folders are not created here.
-      </p>
+      </Text>
       <details>
         <summary>Before · {rows.length} selected paths</summary>
-        <ul>
+        <List.Root unstyled>
           {ordered(sources).map(([id, files]) => (
-            <li key={id}>
+            <List.Item unstyled key={id}>
               <details>
                 <summary title={`Library ID: ${id}`}>
                   {roots.find((root) => root.id === id)?.label ?? `Library ${id}`} · {files.length}{' '}
@@ -53,41 +54,41 @@ export function OrganizationTrees({
                 {files.some(
                   (row) => !row.sourceComponents?.length || row.sourceComponents.length > 65,
                 ) && (
-                  <p className="help">
+                  <Text className="help">
                     Source hierarchy unavailable for some retained paths; those paths are shown
                     literally.
-                  </p>
+                  </Text>
                 )}
                 <PathBranch node={sourceBranch(files)} source />
               </details>
-            </li>
+            </List.Item>
           ))}
-        </ul>
+        </List.Root>
       </details>
       <details>
         <summary>
           After · {rows.length - unresolved.length} proposed paths · {unresolved.length} without a
           target
         </summary>
-        <p className="help">
+        <Text className="help">
           Relative to the selected destination. Paths with review issues stay blocked even when a
           proposed name is shown.
-        </p>
+        </Text>
         <PathBranch node={destination} />
         {unresolved.length > 0 && (
           <>
-            <p>No resolved target</p>
-            <ul>
+            <Text>No resolved target</Text>
+            <List.Root unstyled>
               {unresolved.map((row) => (
-                <li key={row.assetId}>
+                <List.Item unstyled key={row.assetId}>
                   <bdi>{row.sourcePath}</bdi> · blocked
-                </li>
+                </List.Item>
               ))}
-            </ul>
+            </List.Root>
           </>
         )}
       </details>
-    </section>
+    </chakra.section>
   );
 }
 
@@ -110,19 +111,19 @@ function sourceBranch(rows: OrganizationRow[]): Branch {
 
 function PathBranch({ node, source = false }: { node: Branch; source?: boolean }) {
   return (
-    <ul>
+    <List.Root unstyled>
       {ordered(node.folders).map(([name, child]) => (
-        <li key={`folder:${name}`}>
+        <List.Item unstyled key={`folder:${name}`}>
           <details>
             <summary>
               <bdi>{name}</bdi> /
             </summary>
             <PathBranch node={child} source={source} />
           </details>
-        </li>
+        </List.Item>
       ))}
       {node.files.map((row) => (
-        <li key={`file:${row.assetId}`}>
+        <List.Item unstyled key={`file:${row.assetId}`}>
           <bdi title={source ? row.sourcePath : undefined}>
             {source
               ? row.sourceComponents?.length && row.sourceComponents.length <= 65
@@ -132,8 +133,8 @@ function PathBranch({ node, source = false }: { node: Branch; source?: boolean }
           </bdi>{' '}
           · {BigInt(row.bytes).toLocaleString()} bytes
           {!source && row.issues.length > 0 && ' · blocked: review issues'}
-        </li>
+        </List.Item>
       ))}
-    </ul>
+    </List.Root>
   );
 }

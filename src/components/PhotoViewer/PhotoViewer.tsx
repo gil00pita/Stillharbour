@@ -1,3 +1,4 @@
+import { Box, Heading, Text, chakra, Button, IconButton } from '@chakra-ui/react';
 import { usePhotoMotion, type PhotoOrigin } from '../../library/viewerMotion';
 import { CachedPreviewImage } from '@/components/CachedPreviewImage';
 import {
@@ -147,17 +148,21 @@ export function PhotoViewer({
       aria-label="Photo viewer"
       onKeyDown={keyDown}
     >
-      <header className="viewer-toolbar">
-        <h2>
+      <chakra.header className="viewer-toolbar">
+        <Heading as="h2" unstyled>
           <bdi>{asset.name}</bdi>
-        </h2>
-        <button
+        </Heading>
+        <Button
+          unstyled
+          type="submit"
           disabled
           title="Editing original files is unavailable here. Catalog edit recipes require the separate editing workflow."
         >
           Edit
-        </button>
-        <button
+        </Button>
+        <IconButton
+          unstyled
+          type="submit"
           className="viewer-back"
           ref={closeButton}
           onClick={requestClose}
@@ -175,18 +180,24 @@ export function PhotoViewer({
           >
             <path d="m6 6 12 12M18 6 6 18" />
           </svg>
-        </button>
-      </header>
+        </IconButton>
+      </chakra.header>
       {notice && (
-        <div className="viewer-notice" role="alert">
+        <Box className="viewer-notice" role="alert">
           {notice}
-          {context?.error && <button onClick={retryNavigation}>Retry navigation</button>}
-        </div>
+          {context?.error && (
+            <Button unstyled type="submit" onClick={retryNavigation}>
+              Retry navigation
+            </Button>
+          )}
+        </Box>
       )}
-      <div className={`viewer-body ${info ? 'with-info' : ''}`}>
-        <div className="viewer-main">
-          <div className="viewer-photo">
-            <button
+      <Box className={`viewer-body ${info ? 'with-info' : ''}`}>
+        <Box className="viewer-main">
+          <Box className="viewer-photo">
+            <IconButton
+              unstyled
+              type="submit"
               className="viewer-previous"
               aria-label="Previous photo"
               title="Previous photo"
@@ -206,7 +217,7 @@ export function PhotoViewer({
               >
                 <path d="M19 12H5m6-6-6 6 6 6" />
               </svg>
-            </button>
+            </IconButton>
             <PhotoStage
               key={`${asset.id}:${asset.revision}`}
               asset={asset}
@@ -219,7 +230,9 @@ export function PhotoViewer({
               transportError={previews.error}
               onRetry={previews.retry}
             />
-            <button
+            <IconButton
+              unstyled
+              type="submit"
               className="viewer-next"
               aria-label="Next photo"
               title="Next photo"
@@ -239,8 +252,8 @@ export function PhotoViewer({
               >
                 <path d="M5 12h14m-6-6 6 6-6 6" />
               </svg>
-            </button>
-            <div className="viewer-actions">
+            </IconButton>
+            <Box className="viewer-actions">
               <ViewerControls
                 zoom={zoom}
                 canZoom={originalReady || ready}
@@ -261,8 +274,8 @@ export function PhotoViewer({
                   />
                 }
               />
-            </div>
-          </div>
+            </Box>
+          </Box>
           {filmstrip && (
             <ViewerFilmstrip
               assets={nearby}
@@ -271,7 +284,7 @@ export function PhotoViewer({
               onSelect={navigate}
             />
           )}
-        </div>
+        </Box>
         {info && (
           <Inspector
             key={asset.id}
@@ -282,7 +295,7 @@ export function PhotoViewer({
             onError={onError}
           />
         )}
-      </div>
+      </Box>
     </dialog>
   );
 }
@@ -324,8 +337,8 @@ function PhotoStage({
     event.currentTarget.scrollTop = drag.current.top - (event.clientY - drag.current.y);
   }
   return (
-    <div className="photo-stage">
-      <div
+    <Box className="photo-stage">
+      <Box
         className={`viewer-canvas ${zoom > 1 ? 'is-zoomed' : ''}`}
         ref={canvas}
         tabIndex={0}
@@ -348,11 +361,11 @@ function PhotoStage({
           drag.current = null;
         }}
       >
-        <div
+        <Box
           className="viewer-zoom-plane"
           style={{ width: `${zoom * 100}%`, height: `${zoom * 100}%` }}
         >
-          <div className="viewer-image-frame" ref={frame}>
+          <Box className="viewer-image-frame" ref={frame}>
             <OriginalPhoto
               onReady={onOriginalReady}
               initialSrc={origin?.src}
@@ -361,10 +374,10 @@ function PhotoStage({
               transportError={transportError}
               onRetry={onRetry}
             />
-          </div>
-        </div>
-      </div>
-    </div>
+          </Box>
+        </Box>
+      </Box>
+    </Box>
   );
 }
 
@@ -380,18 +393,20 @@ function ViewerFilmstrip({
   onSelect: (asset: AssetSummary) => void;
 }) {
   return (
-    <nav className="viewer-filmstrip" aria-label="Nearby photos">
+    <chakra.nav className="viewer-filmstrip" aria-label="Nearby photos">
       {assets.map((item) => (
-        <button
+        <Button
+          unstyled
+          type="submit"
           key={item.id}
           aria-label={`View ${item.name}`}
           aria-current={item.id === current ? 'true' : undefined}
           onClick={() => onSelect(item)}
         >
           <FilmstripImage asset={item} previews={previews} />
-        </button>
+        </Button>
       ))}
-    </nav>
+    </chakra.nav>
   );
 }
 function FilmstripImage({
@@ -406,8 +421,8 @@ function FilmstripImage({
     previews.results[previewKey({ assetId: asset.id, revision: asset.revision, edge: 256 })];
   const edge = previewEdges([result])[0];
   if (failed || (!edge && (result?.state === 'unavailable' || previews.error)))
-    return <span>Preview unavailable</span>;
-  if (!edge) return <span>Preparing preview…</span>;
+    return <Text as="span">Preview unavailable</Text>;
+  if (!edge) return <Text as="span">Preparing preview…</Text>;
   return (
     <CachedPreviewImage src={previewUrl(asset, edge)} alt="" onError={() => setFailed(true)} />
   );

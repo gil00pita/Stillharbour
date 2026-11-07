@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -64,27 +64,27 @@ export function Inspector({
   }
   const asset = detail?.asset;
   return (
-    <aside className="inspector" aria-label="Photo details">
-      <div className="section-heading">
-        <h2 ref={heading} tabIndex={-1}>
+    <chakra.aside className="inspector" aria-label="Photo details">
+      <Box className="section-heading">
+        <Heading as="h2" unstyled ref={heading} tabIndex={-1}>
           Photo details
-        </h2>
+        </Heading>
         <Button onClick={onClose}>Close</Button>
-      </div>
+      </Box>
       {asset && detail ? (
         <>
-          <h3>
+          <Heading as="h3" unstyled>
             <bdi>{asset.name}</bdi>
-          </h3>
-          <p className="path">
+          </Heading>
+          <Text className="path">
             <bdi>{asset.relativePath}</bdi>
-          </p>
+          </Text>
           <AssetFields asset={asset} root={detail.root} />
           {(asset.metadataError || asset.previewError) && (
-            <p className="help">{asset.metadataError ?? asset.previewError}</p>
+            <Text className="help">{asset.metadataError ?? asset.previewError}</Text>
           )}
-          {saveError && <p role="alert">{saveError}</p>}
-          <form
+          {saveError && <Text role="alert">{saveError}</Text>}
+          <chakra.form
             onSubmit={(event) => {
               event.preventDefault();
               void save({
@@ -97,8 +97,10 @@ export function Inspector({
               });
             }}
           >
-            <h3>Catalog notes</h3>
-            <p className="help">Saved here. Originals and sidecars stay unchanged.</p>
+            <Heading as="h3" unstyled>
+              Catalog notes
+            </Heading>
+            <Text className="help">Saved here. Originals and sidecars stay unchanged.</Text>
             <label className="check-row">
               <input
                 type="checkbox"
@@ -145,23 +147,23 @@ export function Inspector({
             <Button disabled={busy} type="submit">
               Save tags
             </Button>
-          </form>
+          </chakra.form>
           <AssetNotesPanel assetId={asset.id} />
           <KeywordImport assetId={asset.id} onImported={() => setAttempt((value) => value + 1)} />
           {detail.companions.length > 0 && (
             <details>
               <summary>Possible companions ({detail.companions.length})</summary>
-              <ul>
+              <List.Root unstyled>
                 {detail.companions.map((path) => (
-                  <li key={path}>
+                  <List.Item unstyled key={path}>
                     <bdi>{path}</bdi>
-                  </li>
+                  </List.Item>
                 ))}
-              </ul>
-              <p className="help">
+              </List.Root>
+              <Text className="help">
                 Matching names are shown for reference; files are not automatically grouped or
                 changed.
-              </p>
+              </Text>
             </details>
           )}
           <details>
@@ -170,9 +172,9 @@ export function Inspector({
           </details>
         </>
       ) : loadError ? (
-        <div>
-          <p>Photo details couldn’t be loaded.</p>
-          <p className="help">{loadError}</p>
+        <Box>
+          <Text>Photo details couldn’t be loaded.</Text>
+          <Text className="help">{loadError}</Text>
           <Button
             onClick={() => {
               setLoadError(null);
@@ -181,11 +183,11 @@ export function Inspector({
           >
             Retry details
           </Button>
-        </div>
+        </Box>
       ) : (
-        <p>Loading details…</p>
+        <Text>Loading details…</Text>
       )}
-    </aside>
+    </chakra.aside>
   );
 }
 

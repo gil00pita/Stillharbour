@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import { useEffect, useRef, useState } from 'react';
@@ -98,12 +98,14 @@ export function OldDestinationBackup({
   }
   const locked = disabled || busy || running;
   return (
-    <section className="backup-review" aria-label="Protect old destination versions">
-      <h4>Back up old destination and companions</h4>
-      <p>
+    <chakra.section className="backup-review" aria-label="Protect old destination versions">
+      <Heading as="h4" unstyled>
+        Back up old destination and companions
+      </Heading>
+      <Text>
         This protects the exact existing destination versions derived by the native comparison. It
         does not back up the newer source in their place and does not authorize replacement.
-      </p>
+      </Text>
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -129,10 +131,10 @@ export function OldDestinationBackup({
         </label>
       </Field.Root>
       {!loading && !profiles.length && (
-        <p>
+        <Text>
           Create and authorize a repository profile in Versioned backup, then return to this
           difference.
-        </p>
+        </Text>
       )}
       <Button
         disabled={locked || !profileId}
@@ -219,30 +221,30 @@ export function OldDestinationBackup({
         />
       )}
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
       {job && (
-        <div aria-label="Old destination backup job">
-          <p role="status">
+        <Box aria-label="Old destination backup job">
+          <Text role="status">
             {job.state.replaceAll('_', ' ')} · {job.message}
-          </p>
-          <p>
+          </Text>
+          <Text>
             Included: {job.included ? 'Yes' : 'Not established'} · Structural check:{' '}
             {job.structuralChecked ? 'Yes' : 'Not established'} · Stored data read:{' '}
             {job.dataReadVerified ? 'Yes' : 'Not established'} · Restored bytes compared:{' '}
             {job.restoredCompared ? 'Yes' : 'Not established'}
-          </p>
+          </Text>
           {job.snapshotId && (
-            <p>
+            <Text>
               Recorded recovery snapshot: <code>{job.snapshotId}</code>
-            </p>
+            </Text>
           )}
-          <p>
+          <Text>
             Essential metadata and independent recovery evidence are separate gates. This snapshot
             does not automatically enable replacement.
-          </p>
+          </Text>
           {job.action === 'backup' && job.state === 'needs_recovery' && (
             <SnapshotRecoveryInspection
               key={job.id}
@@ -320,8 +322,8 @@ export function OldDestinationBackup({
               Cancel old destination backup
             </Button>
           )}
-        </div>
+        </Box>
       )}
-    </section>
+    </chakra.section>
   );
 }

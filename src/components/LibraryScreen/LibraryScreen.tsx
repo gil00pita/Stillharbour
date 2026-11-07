@@ -1,3 +1,4 @@
+import { Box, Heading, Text } from '@chakra-ui/react';
 import { mapFilterLabel } from '@/utils/map-filter-label';
 import { PhotoAlbumActions } from '@/components/PhotoAlbumActions';
 import { Button } from '@/components/Button';
@@ -139,8 +140,8 @@ export function LibraryScreen({
         },
       }}
     >
-      <div className={`library-page ${selecting ? 'photo-selection-mode' : ''}`}>
-        <div
+      <Box className={`library-page ${selecting ? 'photo-selection-mode' : ''}`}>
+        <Box
           className="library-underlay"
           inert={Boolean(viewerInitial)}
           aria-hidden={Boolean(viewerInitial)}
@@ -148,25 +149,25 @@ export function LibraryScreen({
           {header}
           {albumControls}
           {!albumControls && query.albumId && (
-            <div className="catalog-collection-scope">
-              <span>Virtual album filter active</span>
+            <Box className="catalog-collection-scope">
+              <Text as="span">Virtual album filter active</Text>
               <Button onClick={() => filter({ albumId: null })}>Clear album filter</Button>
-            </div>
+            </Box>
           )}
           {mapScope && (
-            <div className="map-filters">
-              <span>
+            <Box className="map-filters">
+              <Text as="span">
                 {query.location === 'unavailable'
                   ? 'Photos with no usable location'
                   : 'Photos from the selected map area'}
-              </span>
+              </Text>
               {onReturnToMap && <Button onClick={onReturnToMap}>Return to map</Button>}
               <Button onClick={clearMapScope}>Clear location filter</Button>
-            </div>
+            </Box>
           )}
-          <div className="library-content">
+          <Box className="library-content">
             <PreparationBanner status={status} rootId={query.rootId} onRefresh={onRefresh} />
-            <div className="library-content-body">
+            <Box className="library-content-body">
               {selectionCount > 0 && (
                 <BatchToolbar
                   loading={loading}
@@ -219,12 +220,12 @@ export function LibraryScreen({
                   }}
                 />
               )}
-              <p className="screen-reader-status" role="status">
+              <Text className="screen-reader-status" role="status">
                 {notice}
-              </p>
-            </div>
-          </div>
-        </div>
+              </Text>
+            </Box>
+          </Box>
+        </Box>
         {catalogOpen && (
           <CatalogOrganizer
             roots={status.roots}
@@ -288,18 +289,20 @@ export function LibraryScreen({
             onClose={() => setOrganizationIds(null)}
           />
         )}
-      </div>
+      </Box>
     </PhotoAlbumActions>
   );
 }
 
 function QueryFailure({ loading, onRetry }: { loading: boolean; onRetry: () => void }) {
   return (
-    <div className="empty-results">
-      <h2>Library couldn’t be loaded</h2>
+    <Box className="empty-results">
+      <Heading as="h2" unstyled>
+        Library couldn’t be loaded
+      </Heading>
       <Button disabled={loading} onClick={onRetry}>
         {loading ? 'Retrying library…' : 'Retry library'}
       </Button>
-    </div>
+    </Box>
   );
 }

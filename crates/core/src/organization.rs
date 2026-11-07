@@ -1,7 +1,10 @@
 //! Pure, bounded template previews. These are catalog observations, never
 //! executable plans, approvals, destination reservations or recovery evidence.
 use crate::domain::{AppError, ErrorCode, Result};
-use chrono::NaiveDateTime;
+use chrono::{Datelike, NaiveDateTime};
+mod metadata;
+pub use metadata::OrganizationMetadata;
+pub(crate) use metadata::requires_metadata;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -32,6 +35,22 @@ pub struct OrganizationCompanionReview {
     pub candidates: Vec<OrganizationCompanion>,
     pub truncated: bool,
     pub inventory_complete: bool,
+    pub execution_available: bool,
+}
+
+/// Session-local, paged observation of the entire catalog, never an executable plan.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryOrganizationPreview {
+    pub preview_id: String,
+    pub catalog_revision: String,
+    pub total: u32,
+    pub processed: u32,
+    pub proposed: u32,
+    pub blocked: u32,
+    pub complete: bool,
+    pub offset: u32,
+    pub rows: Vec<OrganizationRow>,
     pub execution_available: bool,
 }
 
@@ -104,6 +123,9 @@ pub struct OrganizationTemplate {
 pub struct TemplateSample {
     pub relative_path: String,
     pub capture: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub metadata: Option<OrganizationMetadata>,
     pub sequence: u32,
     pub expected_target: String,
 }
@@ -123,6 +145,7 @@ pub(crate) fn validate_samples(
             || sample.expected_target.is_empty()
             || sample.expected_target.len() > 1024
             || !(1..=PREVIEW_LIMIT as u32).contains(&sample.sequence)
+            || sample.metadata.as_ref().is_some_and(|m| !m.bounded())
             || sample.capture.as_ref().is_some_and(|date| {
                 date.len() > 32
                     || NaiveDateTime::parse_from_str(date, "%Y-%m-%dT%H:%M:%S%.f").is_err()
@@ -143,6 +166,7 @@ pub(crate) fn validate_samples(
             revision: String::new(),
             bytes: 0,
             capture: sample.capture.clone(),
+            metadata: sample.metadata.clone(),
             available: true,
             companion_candidates: 0,
         };
@@ -158,6 +182,11 @@ pub(crate) fn validate_samples(
                 let reason = match issue {
                     OrganizationIssue::MissingCaptureDate => "a capture date is required",
                     OrganizationIssue::MissingValue => "a required token value is missing",
+                    OrganizationIssue::MissingLocation
+                    | OrganizationIssue::MissingTag
+                    | OrganizationIssue::MissingCameraMetadata => {
+                        "required embedded metadata or an unambiguous tag level is missing"
+                    }
                     _ => "the resolved name violates the portable naming or extension policy",
                 };
                 return Err(invalid(&format!(
@@ -175,6 +204,9 @@ pub(crate) fn validate_samples(
 pub enum OrganizationIssue {
     MissingCaptureDate,
     MissingValue,
+    MissingLocation,
+    MissingTag,
+    MissingCameraMetadata,
     InvalidPath,
     SourceUnavailable,
     NonUnicodePath,
@@ -230,6 +262,8 @@ pub(crate) struct PreviewSource {
     pub revision: String,
     pub bytes: u64,
     pub capture: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<OrganizationMetadata>,
     pub available: bool,
     pub companion_candidates: u32,
 }
@@ -241,6 +275,8 @@ enum Piece {
     Extension,
     Event,
     Capture(String),
+    Quarter,
+    Metadata(String),
     Sequence(usize),
 }
 
@@ -292,6 +328,8 @@ fn parse_token(token: &str) -> Result<Piece> {
         "original_folder" => Piece::Folder,
         "ext" => Piece::Extension,
         "event" => Piece::Event,
+        "quarter" => Piece::Quarter,
+        name if metadata::TOKENS.contains(&name) => Piece::Metadata(name.into()),
         _ if token.starts_with("capture:") => {
             let format = &token[8..];
             validate_date_format(format)?;
@@ -311,7 +349,7 @@ fn parse_token(token: &str) -> Result<Piece> {
         }
         _ => {
             return Err(invalid(
-                "Unknown template token. Use capture, original_stem, original_folder, ext, event or sequence.",
+                "Unknown template token. Use a supported date, location, tag, camera, filename or event token.",
             ));
         }
     })
@@ -400,7 +438,15 @@ fn resolve(
     let uses_date = components
         .iter()
         .flatten()
-        .any(|p| matches!(p, Piece::Capture(_)));
+        .any(|p| matches!(p, Piece::Capture(_) | Piece::Quarter));
+    for piece in components.iter().flatten() {
+        if let Piece::Metadata(name) = piece {
+            let value = metadata::value(name, source, ext)?;
+            if !valid_component(&value) {
+                return Err(InvalidPath);
+            }
+        }
+    }
     let undated = uses_date && date.is_none();
     if undated && template.missing_date == MissingDatePolicy::Block {
         return Err(MissingCaptureDate);
@@ -438,6 +484,10 @@ fn resolve(
                     Piece::Capture(format) => {
                         date.ok_or(MissingCaptureDate)?.format(format).to_string()
                     }
+                    Piece::Quarter => {
+                        format!("Q{}", date.ok_or(MissingCaptureDate)?.month0() / 3 + 1)
+                    }
+                    Piece::Metadata(name) => metadata::value(name, source, ext)?,
                     Piece::Sequence(width) => format!("{sequence:0width$}"),
                 };
                 // Validate token values before concatenation: a slash cannot
@@ -494,48 +544,20 @@ pub(crate) fn preview(
             "Choose 1–240 individual photos and an event of at most 512 bytes.",
         ));
     }
-    let components = parse(&template.pattern)?;
+    validate_template(&template)?;
     sources.sort_by(|a, b| {
         (&a.root_id, &a.native_path, &a.id).cmp(&(&b.root_id, &b.native_path, &b.id))
     });
-    let identity = serde_json::to_vec(&(POLICY, &catalog_revision, &template, &sources))
+    let policy = if requires_metadata(&template) || template.pattern.contains("{quarter}") {
+        "organization-preview-v2"
+    } else {
+        POLICY
+    };
+    let identity = serde_json::to_vec(&(policy, &catalog_revision, &template, &sources))
         .map_err(|e| invalid("Could not fingerprint the preview.").caused_by(e))?;
     let fingerprint = blake3::hash(&identity).to_hex().to_string();
     let total: u128 = sources.iter().map(|s| u128::from(s.bytes)).sum();
-    let mut rows = Vec::with_capacity(sources.len());
-    for (index, source) in sources.iter().enumerate() {
-        let sequence = index as u32 + 1;
-        let (target_relative_path, used_undated, mut issues) =
-            match resolve(&components, &template, source, sequence) {
-                Ok((path, undated)) => (Some(path), undated, Vec::new()),
-                Err(issue) => (None, false, vec![issue]),
-            };
-        if !source.available {
-            issues.push(OrganizationIssue::SourceUnavailable);
-        }
-        rows.push(OrganizationRow {
-            asset_id: source.id.clone(),
-            root_id: source.root_id.clone(),
-            source_path: source.display_path.clone(),
-            source_revision: source.revision.clone(),
-            source_components: source.relative_path.as_deref().and_then(|path| {
-                std::path::Path::new(path)
-                    .components()
-                    .map(|component| match component {
-                        std::path::Component::Normal(name) => name.to_str().map(str::to_owned),
-                        _ => None,
-                    })
-                    .collect::<Option<Vec<_>>>()
-                    .filter(|parts| !parts.is_empty() && parts.len() <= 65)
-            }),
-            target_relative_path,
-            sequence,
-            bytes: source.bytes.to_string(),
-            issues,
-            used_undated,
-            companion_candidates: source.companion_candidates,
-        });
-    }
+    let mut rows = render_rows(&template, &sources, 1)?;
     // One proposed output namespace. Equal names and file/directory conflicts
     // block every participant, including participants with another issue.
     let mut targets: BTreeMap<String, Vec<usize>> = BTreeMap::new();
@@ -587,7 +609,7 @@ pub(crate) fn preview(
     }
     let blocked = rows.iter().filter(|r| !r.issues.is_empty()).count() as u32;
     Ok(OrganizationPreview {
-        policy: POLICY.into(),
+        policy: policy.into(),
         fingerprint,
         catalog_revision,
         template,
@@ -597,6 +619,57 @@ pub(crate) fn preview(
         selected_bytes: total.to_string(),
         execution_available: false,
     })
+}
+
+/// Render a bounded page in an already established global source order.
+/// Conflict detection belongs to the caller's complete output namespace.
+pub(crate) fn render_rows(
+    template: &OrganizationTemplate,
+    sources: &[PreviewSource],
+    first_sequence: u32,
+) -> Result<Vec<OrganizationRow>> {
+    validate_template(template)?;
+    if sources.len() > PREVIEW_LIMIT || first_sequence == 0 {
+        return Err(invalid("Invalid organization render page."));
+    }
+    let components = parse(&template.pattern)?;
+    let mut rows = Vec::with_capacity(sources.len());
+    for (index, source) in sources.iter().enumerate() {
+        let sequence = first_sequence
+            .checked_add(index as u32)
+            .ok_or_else(|| invalid("The library exceeds the sequence range."))?;
+        let (target_relative_path, used_undated, mut issues) =
+            match resolve(&components, template, source, sequence) {
+                Ok((path, undated)) => (Some(path), undated, Vec::new()),
+                Err(issue) => (None, false, vec![issue]),
+            };
+        if !source.available {
+            issues.push(OrganizationIssue::SourceUnavailable);
+        }
+        rows.push(OrganizationRow {
+            asset_id: source.id.clone(),
+            root_id: source.root_id.clone(),
+            source_path: source.display_path.clone(),
+            source_revision: source.revision.clone(),
+            source_components: source.relative_path.as_deref().and_then(|path| {
+                std::path::Path::new(path)
+                    .components()
+                    .map(|component| match component {
+                        std::path::Component::Normal(name) => name.to_str().map(str::to_owned),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>()
+                    .filter(|parts| !parts.is_empty() && parts.len() <= 65)
+            }),
+            target_relative_path,
+            sequence,
+            bytes: source.bytes.to_string(),
+            issues,
+            used_undated,
+            companion_candidates: source.companion_candidates,
+        });
+    }
+    Ok(rows)
 }
 
 pub(crate) fn validate_template(template: &OrganizationTemplate) -> Result<()> {

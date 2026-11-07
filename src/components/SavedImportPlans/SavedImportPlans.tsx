@@ -1,3 +1,4 @@
+import { Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type { CopyManifest, ImportPlan, ImportPlanSummary } from '../../bindings';
@@ -96,12 +97,14 @@ export function SavedImportPlans({ planId }: { planId: string }) {
     if (epoch.current === token) setOpened({ plan, manifest: source, sourceLabel });
   }
   return (
-    <section aria-label="Retained imports" className="organization-destination">
-      <h4>Retained imports</h4>
-      <p>
+    <chakra.section aria-label="Retained imports" className="organization-destination">
+      <Heading as="h4" unstyled>
+        Retained imports
+      </Heading>
+      <Text>
         Review saved import decisions and receipts without creating a new companion decision or
         restoring approval. Any new attempt checks current files and needs fresh approval.
-      </p>
+      </Text>
       <Button
         type="button"
         disabled={pending || unavailable !== null}
@@ -109,9 +112,9 @@ export function SavedImportPlans({ planId }: { planId: string }) {
       >
         {plans ? 'Refresh retained imports' : 'Check retained import history'}
       </Button>
-      {unavailable && <p>{unavailable}</p>}
+      {unavailable && <Text>{unavailable}</Text>}
       {plans?.map((plan) => (
-        <p key={plan.id}>
+        <Text key={plan.id}>
           <Button
             type="button"
             disabled={pending}
@@ -120,16 +123,16 @@ export function SavedImportPlans({ planId }: { planId: string }) {
             Review retained import: {plan.copyFiles} copy / {plan.skipFiles} existing ·{' '}
             {plan.createdAt}
           </Button>
-        </p>
+        </Text>
       ))}
-      {plans?.length === 0 && <p>No retained imports for this saved draft.</p>}
+      {plans?.length === 0 && <Text>No retained imports for this saved draft.</Text>}
       {opened && (
         <>
           {opened.sourceLabel && (
-            <p>
+            <Text>
               Source library: <bdi>{opened.sourceLabel}</bdi> · {opened.manifest.files.length} files
               in this retained import.
-            </p>
+            </Text>
           )}
           <ImportPlanReview
             key={opened.plan.id}
@@ -138,7 +141,7 @@ export function SavedImportPlans({ planId }: { planId: string }) {
           />
         </>
       )}
-      {error && <p role="alert">{error}</p>}
-    </section>
+      {error && <Text role="alert">{error}</Text>}
+    </chakra.section>
   );
 }

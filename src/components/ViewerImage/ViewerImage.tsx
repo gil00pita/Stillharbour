@@ -1,3 +1,4 @@
+import { Box, Heading, Text, Button } from '@chakra-ui/react';
 import { useState } from 'react';
 import { useDocumentHidden } from '@/hooks/use-document-hidden';
 import { VIEWER_EDGE, type AssetSummary, type ThumbnailResult } from '../../bindings';
@@ -52,23 +53,25 @@ export function ViewerImage({
   }
   if (!high && small === undefined && !origin) {
     return loading ? (
-      <div className="viewer-loading">
+      <Box className="viewer-loading">
         <LoadingSheen />
-        <p role="status">Preparing cached preview…</p>
-      </div>
+        <Text role="status">Preparing cached preview…</Text>
+      </Box>
     ) : (
-      <div className="viewer-unavailable" role="status">
-        <h3>
+      <Box className="viewer-unavailable" role="status">
+        <Heading as="h3" unstyled>
           <bdi>{asset.name}</bdi>
-        </h3>
-        <p>{error}</p>
-        <p>The original has not been changed.</p>
-        <button onClick={retry}>Retry preview</button>
-      </div>
+        </Heading>
+        <Text>{error}</Text>
+        <Text>The original has not been changed.</Text>
+        <Button unstyled type="submit" onClick={retry}>
+          Retry preview
+        </Button>
+      </Box>
     );
   }
   return (
-    <div
+    <Box
       className={`viewer-renditions ${revealed ? 'is-revealed' : ''} ${document.visibilityState === 'hidden' ? 'without-motion' : ''}`}
       aria-busy={loading}
     >
@@ -106,24 +109,28 @@ export function ViewerImage({
       {loading ? (
         <>
           <LoadingSheen />
-          <p className="viewer-quality" role="status">
+          <Text className="viewer-quality" role="status">
             Loading photo preview…
-          </p>
+          </Text>
         </>
       ) : (
         !revealed && (
-          <p className="viewer-quality" role="status">
+          <Text className="viewer-quality" role="status">
             Smaller cached preview ·{' '}
             {failed.has(VIEWER_EDGE) ? 'Higher detail could not be loaded.' : error}{' '}
-            <button onClick={retry}>Retry higher detail</button>
-          </p>
+            <Button unstyled type="submit" onClick={retry}>
+              Retry higher detail
+            </Button>
+          </Text>
         )
       )}
-    </div>
+    </Box>
   );
 }
 
 export function LoadingSheen() {
   const hidden = useDocumentHidden();
-  return <span className="preview-loading-sheen" aria-hidden="true" data-paused={hidden} />;
+  return (
+    <Text as="span" className="preview-loading-sheen" aria-hidden="true" data-paused={hidden} />
+  );
 }

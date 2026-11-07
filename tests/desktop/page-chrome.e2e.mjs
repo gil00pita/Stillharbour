@@ -51,6 +51,9 @@ async function photoContext(atEdge = false) {
         const menu = document.querySelector('[role="menu"]');
         const positioner = menu.closest('[data-part="positioner"]');
         return {
+          hidden: document.hidden,
+          focused: document.hasFocus(),
+          state: menu.dataset.state,
           rect: menu.getBoundingClientRect().toJSON(),
           positioner: positioner?.getBoundingClientRect().toJSON(),
           style: positioner?.getAttribute('style'),
@@ -92,6 +95,10 @@ async function measureHeader(label) {
       titleContextBlocked: context.defaultPrevented,
       sidebarContextBlocked: sidebarContext.defaultPrevented,
       overflow: document.documentElement.scrollWidth > innerWidth,
+      controlHeights: [...header.querySelectorAll('button, input[type=search]')]
+        .filter((e) => e.getBoundingClientRect().height > 0)
+        .map((e) => e.getBoundingClientRect().height),
+      search: header.querySelector('.search-input-frame')?.getBoundingClientRect().toJSON(),
       actionsFit: [...header.querySelectorAll('button')]
         .filter((e) => e.getBoundingClientRect().height > 0)
         .every((e) => {
@@ -121,14 +128,19 @@ async function measureHeader(label) {
   assert.equal(measured.sidebarContextBlocked, true, label);
   assert.equal(measured.overflow, false, label);
   assert.equal(measured.actionsFit, true, `${label}: actions must fit inside the header`);
+  assert(
+    measured.controlHeights.every((height) => height >= 34 && height <= 36),
+    `${label}: header controls must share 36 px geometry ${measured.controlHeights}`,
+  );
   return { label, ...measured };
 }
 describe('Page chrome and explicit photo selection — generated native fixture', () => {
-  it('aligns every title with the brand and uses context actions without dots or browsing checkboxes', async function () {
-    this.timeout(120000);
+  const headers = [];
+  before(async function () {
+    this.timeout(90000);
     await Promise.all(
-      ['.context/chrome-selection', '.context/menu-position'].map((directory) =>
-        mkdir(directory, { recursive: true }),
+      ['.context/chrome-selection', '.context/menu-position', '.context/ui-redesign'].map(
+        (directory) => mkdir(directory, { recursive: true }),
       ),
     );
     const selection = await browser.tauri.execute(({ core }) =>
@@ -139,12 +151,15 @@ describe('Page chrome and explicit photo selection — generated native fixture'
       window.__wdio_mocks__.foundation_request = () => ({ kind: 'directory', data: selection });
     }, selection);
     await $('.welcome button.primary').waitForEnabled();
-    const headers = [await measureHeader('Setup')];
+    headers.push(await measureHeader('Setup'));
     await $('.welcome button.primary').click();
     await $('.selected-folder').waitForDisplayed();
     await $('.root-setup input[required]').setValue('Generated page chrome');
     await $('button=Save & Start scanning').click();
     await $('.asset-open', { strict: false }).waitForDisplayed({ timeout: 45000 });
+  });
+  it('uses context actions without dots or browsing checkboxes', async function () {
+    this.timeout(120000);
     assert.equal(await $('.asset-check').isExisting(), false);
     assert.equal(await $('.photo-album-menu-button').isExisting(), false);
     assert.equal(await $('button[aria-label="Catalog"]').isExisting(), false);
@@ -182,6 +197,10 @@ describe('Page chrome and explicit photo selection — generated native fixture'
     await $('[role="menuitem"][data-value="add-to-album"]').click();
     await $('dialog[open][aria-label="Add to album"]').waitForDisplayed();
     await $('dialog[open]').$('button=Close').click();
+  });
+  it('aligns titles, search and actions across every destination at both window sizes', async function () {
+    this.timeout(120000);
+    await browser.keys('Escape');
     for (const width of [1180, 660]) {
       await browser.setWindowSize(width, 780);
       for (const label of [
@@ -192,19 +211,28 @@ describe('Page chrome and explicit photo selection — generated native fixture'
         'Duplicates',
         'Integrity',
         'Storage',
-        'Backup & Sync',
+        'Backup',
+        'Sync',
+        'Structure Formater',
         'Settings',
         'Jobs',
       ]) {
         await $(`button[aria-label="${label}"]`).click();
         await browser.waitUntil(async () =>
-          browser.execute(() =>
-            [...document.querySelectorAll('.app-page-header')].some(
-              (e) => e.getBoundingClientRect().height > 0,
-            ),
+          browser.execute(
+            (label) =>
+              [...document.querySelectorAll('.app-page-header')].some(
+                (e) =>
+                  e.getBoundingClientRect().height > 0 &&
+                  e.querySelector('h1')?.textContent.trim() === label,
+              ),
+            label,
           ),
         );
         headers.push(await measureHeader(`${label} ${width}`));
+        await browser.saveScreenshot(
+          `.context/ui-redesign/${label.replaceAll(/[^a-zA-Z]/g, '-').toLowerCase()}-${width}.png`,
+        );
         if (label === 'Albums / Tags') {
           await $('button[aria-label="Saved plans"]').click();
           await $('button=Close saved plans').waitForDisplayed();

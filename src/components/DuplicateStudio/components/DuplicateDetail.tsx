@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Text, chakra } from '@chakra-ui/react';
 import type { AssetSummary, DuplicateGroup, FindingPage, LibraryStatus } from '../../../bindings';
 import { errorMessage, libraryData } from '../../../ipc';
 import { Button } from '@/components/Button';
@@ -110,46 +110,48 @@ export function DuplicateDetail({
   const media = page?.rows.filter((row) => row.isMedia && row.assetId) ?? [];
   return (
     <>
-      <header className="duplicate-detail-head">
-        <div>
-          <h3>{evidenceLabels[group.evidence]}</h3>
-          <p>
+      <chakra.header className="duplicate-detail-head">
+        <Box>
+          <Heading as="h3" unstyled>
+            {evidenceLabels[group.evidence]}
+          </Heading>
+          <Text>
             {group.memberCount} files ·{' '}
             {group.evidence === 'exact_bytes' ? Math.max(0, group.memberCount - 1) : 'Unconfirmed'}{' '}
             duplicate candidate
             {group.evidence === 'exact_bytes' && group.memberCount === 2 ? '' : 's'}
-          </p>
-        </div>
-        <span className="duplicate-evidence-badge">
+          </Text>
+        </Box>
+        <Text as="span" className="duplicate-evidence-badge">
           {group.evidence === 'exact_bytes' ? 'Byte-verified at inspection' : 'Manual review'}
-        </span>
-      </header>
+        </Text>
+      </chakra.header>
       <dl className="duplicate-detail-stats">
-        <div>
+        <Box>
           <dt>Logical duplicate bytes</dt>
           <dd>{bytes === null ? 'Unknown / not proven' : displayBytes(bytes)}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Visual confidence</dt>
           <dd>Not measured</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Recoverable storage</dt>
           <dd>Not verified</dd>
-        </div>
+        </Box>
       </dl>
       {error && (
-        <div role="alert">
-          <p>{error}</p>
+        <Box role="alert">
+          <Text>{error}</Text>
           <Button onClick={() => setAttempt((value) => value + 1)}>Retry group</Button>
-        </div>
+        </Box>
       )}
-      {!page && !error && <p role="status">Loading group members…</p>}
+      {!page && !error && <Text role="status">Loading group members…</Text>}
       {page && (
         <>
           {media.length >= 2 ? (
             <>
-              <div className="duplicate-pair-controls">
+              <Box className="duplicate-pair-controls">
                 {['First file', 'Second file'].map((label, index) => (
                   <Field.Root key={label}>
                     <Field.Label>{label}</Field.Label>
@@ -171,37 +173,39 @@ export function DuplicateDetail({
                     </NativeSelect>
                   </Field.Root>
                 ))}
-              </div>
+              </Box>
               {assets.length === 2 ? (
                 <DuplicateComparison key={pairKey} assets={assets} />
               ) : comparisonFailure?.key === pairKey ? (
-                <div role="alert">
+                <Box role="alert">
                   {comparisonFailure.message}
                   <Button onClick={() => setAttempt((value) => value + 1)}>Retry comparison</Button>
-                </div>
+                </Box>
               ) : (
-                <p role="status">Loading comparison details…</p>
+                <Text role="status">Loading comparison details…</Text>
               )}
             </>
           ) : (
-            <p>
+            <Text>
               Two indexed media files are needed for visual comparison. Non-media files and linked
               paths remain reviewable below.
-            </p>
+            </Text>
           )}
-          <section className="duplicate-signals" aria-label="Matching signals">
-            <h4>Why these files were grouped</h4>
-            <p>{group.explanation}</p>
+          <chakra.section className="duplicate-signals" aria-label="Matching signals">
+            <Heading as="h4" unstyled>
+              Why these files were grouped
+            </Heading>
+            <Text>{group.explanation}</Text>
             <dl>
-              <div>
+              <Box>
                 <dt>File bytes</dt>
                 <dd>
                   {group.evidence === 'exact_bytes'
                     ? 'Complete equality recorded at inspection; fresh verification required before removal.'
                     : 'Complete equality is not established by this evidence.'}
                 </dd>
-              </div>
-              <div>
+              </Box>
+              <Box>
                 <dt>Capture-time proximity</dt>
                 <dd>
                   {assets.length === 2 &&
@@ -209,16 +213,16 @@ export function DuplicateDetail({
                     ? `${assets[0]!.rawDate} / ${assets[1]!.rawDate} · offsets may be unknown`
                     : 'Capture-time provenance not established for this pair.'}
                 </dd>
-              </div>
-              <div>
+              </Box>
+              <Box>
                 <dt>Framing and derivative exports</dt>
                 <dd>
                   {assets.length === 2 && assets.every((asset) => asset.width && asset.height)
                     ? `${assets[0]!.width} × ${assets[0]!.height} / ${assets[1]!.width} × ${assets[1]!.height}. Different dimensions do not establish export lineage.`
                     : 'Framing and export lineage not measured.'}
                 </dd>
-              </div>
-              <div>
+              </Box>
+              <Box>
                 <dt>Changed annotations</dt>
                 <dd>
                   {assets.length === 2
@@ -230,16 +234,18 @@ export function DuplicateDetail({
                       : 'Catalog favourites, ratings and tags match. Embedded annotations have not been compared.'
                     : 'Catalog annotations not loaded.'}
                 </dd>
-              </div>
-              <div>
+              </Box>
+              <Box>
                 <dt>Audio fingerprints</dt>
                 <dd>Not measured · matching video frames never prove matching audio.</dd>
-              </div>
+              </Box>
             </dl>
-          </section>
-          <section className="duplicate-member-review" aria-label="Choose keeper files">
-            <h4>Choose what stays</h4>
-            <div className="duplicate-rule-actions">
+          </chakra.section>
+          <chakra.section className="duplicate-member-review" aria-label="Choose keeper files">
+            <Heading as="h4" unstyled>
+              Choose what stays
+            </Heading>
+            <Box className="duplicate-rule-actions">
               <Field.Root>
                 <Field.Label>Keeper suggestion</Field.Label>
                 <NativeSelect
@@ -267,12 +273,12 @@ export function DuplicateDetail({
               <Button onClick={() => setKeep(new Set(page.rows.map((row) => row.id)))}>
                 Keep all loaded files
               </Button>
-            </div>
-            <p>
+            </Box>
+            <Text>
               Suggestions keep ties and unknown resolution. They never remove files or override
               protections. Load every member before applying a group-wide rule.
-            </p>
-            <div className="duplicate-member-list">
+            </Text>
+            <Box className="duplicate-member-list">
               {page.rows.map((row) => (
                 <label key={row.id}>
                   <input
@@ -287,7 +293,7 @@ export function DuplicateDetail({
                       })
                     }
                   />
-                  <span>
+                  <Text as="span">
                     <strong>
                       <bdi>{row.name}</bdi>
                     </strong>
@@ -303,11 +309,11 @@ export function DuplicateDetail({
                       {status.roots.find((root) => root.id === row.rootId)?.availability ??
                         'Availability unknown'}
                     </small>
-                  </span>
-                  <span>{keep.has(row.id) ? 'Keep' : 'Undecided'}</span>
+                  </Text>
+                  <Text as="span">{keep.has(row.id) ? 'Keep' : 'Undecided'}</Text>
                 </label>
               ))}
-            </div>
+            </Box>
             {page.next && (
               <Button disabled={loadingMore} onClick={() => void more()}>
                 {loadingMore ? 'Loading group members…' : 'Load more group members'}
@@ -323,7 +329,7 @@ export function DuplicateDetail({
                 onKeep={setKeep}
               />
             </details>
-          </section>
+          </chakra.section>
         </>
       )}
     </>

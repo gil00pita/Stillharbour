@@ -1,3 +1,4 @@
+import { Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useState } from 'react';
 import type { InspectionJob } from '../../bindings';
@@ -26,20 +27,20 @@ export function InspectionJobProgress({
     }
   }
   return (
-    <section className="job-row" aria-label={`${job.input.task.kind} inspection job`}>
-      <h3>
+    <chakra.section className="job-row" aria-label={`${job.input.task.kind} inspection job`}>
+      <Heading as="h3" unstyled>
         {job.input.task.kind === 'duplicates'
           ? 'Duplicate'
           : job.input.task.kind === 'health'
             ? 'Integrity'
             : 'Storage'}{' '}
         inspection · {job.state.replaceAll('_', ' ')}
-      </h3>
-      <p>{job.message}</p>
-      <p>
+      </Heading>
+      <Text>{job.message}</Text>
+      <Text>
         {job.filesObserved} observed · {job.filesChecked} examined · {displayBytes(job.bytesRead)}{' '}
         read · {job.issues} issues
-      </p>
+      </Text>
       {active && (
         <>
           <progress aria-label="Inspection in progress" />
@@ -48,8 +49,8 @@ export function InspectionJobProgress({
           </Button>
         </>
       )}
-      <p>Open Duplicates, Integrity or Storage to review the retained scope and results.</p>
-      {error && <p role="alert">{error}</p>}
-    </section>
+      <Text>Open Duplicates, Integrity or Storage to review the retained scope and results.</Text>
+      {error && <Text role="alert">{error}</Text>}
+    </chakra.section>
   );
 }

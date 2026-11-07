@@ -4642,6 +4642,28 @@ fn validate_schedule_record(key: &str, record: &ScheduleRecord) -> Result<()> {
     }
     Ok(())
 }
+
+/// Configured schedules block even when their OS authority needs review, their
+/// next due time is far away, or an overdue interval has not yet been admitted.
+/// This read never authorizes a schedule or silently disables one.
+pub(super) fn has_restructure_blocking_schedule(db: &Connection) -> Result<bool> {
+    let rows = db
+        .prepare("SELECT profile_id, CASE WHEN length(CAST(record AS BLOB))<=8192 THEN record END FROM backup_snapshot_schedules LIMIT 1001")?
+        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    if rows.len() > 1000 {
+        return Err(invalid(
+            "Too many recurring records to verify restructuring prerequisites.",
+        ));
+    }
+    let mut enabled = false;
+    for (key, text) in rows {
+        let record: ScheduleRecord = decode(text)?;
+        validate_schedule_record(&key, &record)?;
+        enabled |= record.view.enabled;
+    }
+    Ok(enabled)
+}
 impl SnapshotWorkflow {
     fn instance(&self) -> Result<String> {
         self.catalog.call(|db| {

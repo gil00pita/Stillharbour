@@ -1,5 +1,5 @@
 import { Input } from '@/components/Input';
-import { Field, IconButton } from '@chakra-ui/react';
+import { Field, IconButton, Box, List } from '@chakra-ui/react';
 import { useId, useState } from 'react';
 
 export function TagInput({
@@ -30,11 +30,11 @@ export function TagInput({
         <Field.Label asChild unstyled>
           <label htmlFor={id}>{label}</label>
         </Field.Label>
-        <div className={`tag-editor ${disabled ? 'is-disabled' : ''}`}>
+        <Box className={`tag-editor ${disabled ? 'is-disabled' : ''}`}>
           {values.length > 0 && (
-            <ul className="tag-values" aria-label={`${label} values`}>
+            <List.Root unstyled className="tag-values" aria-label={`${label} values`}>
               {values.map((value) => (
-                <li key={value}>
+                <List.Item unstyled key={value}>
                   <bdi>{value}</bdi>
                   <IconButton
                     type="button"
@@ -51,9 +51,9 @@ export function TagInput({
                       />
                     </svg>
                   </IconButton>
-                </li>
+                </List.Item>
               ))}
-            </ul>
+            </List.Root>
           )}
           <Input
             id={id}
@@ -90,7 +90,7 @@ export function TagInput({
               );
             }}
           />
-        </div>
+        </Box>
       </div>
     </Field.Root>
   );

@@ -1,3 +1,6 @@
+import { structurePathBuilderRecipe } from '../components/StructurePathBuilder/StructurePathBuilder.recipe';
+import { organizationPresetsRecipe } from '../components/OrganizationPresets/OrganizationPresets.slot-recipe';
+import { segmentedControlRecipe } from '../components/SegmentedControl/SegmentedControl.slot-recipe';
 import { pageHeaderRecipe } from '../components/PageHeader/PageHeader.recipe';
 import { albumsPageRecipe } from '../components/AlbumsPage/AlbumsPage.recipe';
 import { albumEditorRecipe } from '../components/AlbumEditor/AlbumEditor.recipe';
@@ -49,12 +52,15 @@ export const system = createSystem(
       },
       semanticTokens,
       slotRecipes: {
+        organizationPresets: organizationPresetsRecipe,
+        segmentGroup: segmentedControlRecipe,
         field: defaultConfig.theme!.slotRecipes!.field!,
         radioCard: inspectionChoiceCardsRecipe,
         popover: placeSearchRecipe,
         toast: errorToastRecipe,
       },
       recipes: {
+        structurePathBuilder: structurePathBuilderRecipe,
         pageHeader: pageHeaderRecipe,
         albumsPage: albumsPageRecipe,
         albumEditor: albumEditorRecipe,

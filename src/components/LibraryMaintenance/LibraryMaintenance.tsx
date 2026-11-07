@@ -1,3 +1,4 @@
+import { Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { MaintenancePreview, MaintenanceResult, MaintenanceTarget } from '../../bindings';
@@ -62,8 +63,8 @@ export function LibraryMaintenance({
   }
   const removing = target.kind === 'library';
   return (
-    <section className="maintenance-review" aria-labelledby="maintenance-review-title">
-      <form
+    <chakra.section className="maintenance-review" aria-labelledby="maintenance-review-title">
+      <chakra.form
         aria-label="Review library maintenance"
         onSubmit={(event) => void confirm(event)}
         onKeyDown={(event) => {
@@ -73,60 +74,60 @@ export function LibraryMaintenance({
           }
         }}
       >
-        <h3 id="maintenance-review-title" tabIndex={-1} ref={heading}>
+        <Heading as="h3" unstyled id="maintenance-review-title" tabIndex={-1} ref={heading}>
           {completed ? 'Completed' : removing ? 'Remove this library?' : 'Clear preview cache?'}
-        </h3>
+        </Heading>
         {completed ? (
-          <p role="status">
+          <Text role="status">
             {removing
               ? 'Library removed. Original photos and sidecars are unchanged.'
               : 'Indexed preview cache cleared. Libraries and catalog notes are unchanged.'}
-          </p>
+          </Text>
         ) : (
           <>
             {removing && (
-              <p role={busy ? 'status' : undefined}>
+              <Text role={busy ? 'status' : undefined}>
                 {busy
                   ? 'Stopping this library’s jobs and preparing removal…'
                   : preview
                     ? 'This library’s active jobs are stopped before review. Canceling removal does not restart them.'
                     : 'Review could not be completed. Check the error before trying again.'}
-              </p>
+              </Text>
             )}
-            <p>
+            <Text>
               {removing
                 ? 'This forgets the selected folder, its indexed records, catalog favorites, ratings, tags and scan history, and clears its indexed cached previews. You can add the folder again, but its catalog notes will not return. Library change history, including previous paths, remains in this catalog.'
                 : 'Clear indexed cached previews for every library. Originals, library settings and catalog notes stay unchanged. Previews regenerate when accessible photos are viewed; offline photos need their originals reconnected.'}
-            </p>
-            <p className="help">
+            </Text>
+            <Text className="help">
               Original photos and sidecars stay unchanged. Only indexed previews are cleared;
               unexpected files are retained.
-            </p>
+            </Text>
             {preview?.rootDisplayPath && (
-              <p className="path">
+              <Text className="path">
                 <bdi>{preview.rootDisplayPath}</bdi>
-              </p>
+              </Text>
             )}
             {preview && (
-              <p className="help">
+              <Text className="help">
                 <strong>
                   <bdi>{preview.rootLabel ?? 'All libraries'}</bdi>
                 </strong>{' '}
                 · {removing ? `${preview.assetCount.toLocaleString()} catalog records · ` : ''}
                 {preview.cachedPreviews.toLocaleString()} cached previews ·{' '}
                 {BigInt(preview.cacheBytes).toLocaleString()} bytes
-              </p>
+              </Text>
             )}
           </>
         )}
         {error && (
-          <p role="alert" className="error">
+          <Text role="alert" className="error">
             {completed
               ? 'The action completed, but refreshing Settings failed. Reopen Settings to refresh.'
               : error}
-          </p>
+          </Text>
         )}
-        <div className="settings-library-actions">
+        <Box className="settings-library-actions">
           <Button type="button" disabled={busy} onClick={onClose}>
             {completed ? 'Done' : 'Cancel'}
           </Button>
@@ -157,8 +158,8 @@ export function LibraryMaintenance({
                   : 'Clear all cached previews'}
             </Button>
           )}
-        </div>
-      </form>
-    </section>
+        </Box>
+      </chakra.form>
+    </chakra.section>
   );
 }

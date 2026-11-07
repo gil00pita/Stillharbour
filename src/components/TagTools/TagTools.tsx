@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -84,13 +84,13 @@ function TagEditor({
     }
   }
   return (
-    <section aria-label="Tag changes">
-      <p className="help">
+    <chakra.section aria-label="Tag changes">
+      <Text className="help">
         These catalog-only changes affect every exact matching label, including offline media and
         category relationships. Case, Unicode and literal slashes stay distinct. Original files
         remain unchanged.
-      </p>
-      <form
+      </Text>
+      <chakra.form
         onSubmit={(event) => {
           event.preventDefault();
           void run(async () => {
@@ -146,10 +146,10 @@ function TagEditor({
         <Button type="submit" disabled={waiting}>
           Preview tag change
         </Button>
-      </form>
+      </chakra.form>
       {review && (
-        <div>
-          <p>
+        <Box>
+          <Text>
             {review.affectedCount.toLocaleString()} media ·{' '}
             {review.to === null ? 'remove' : review.merges ? 'merge' : 'rename'}{' '}
             <bdi>{review.from}</bdi>
@@ -160,7 +160,7 @@ function TagEditor({
               </>
             )}
             . Category relationships are included; incompatible cycles are blocked.
-          </p>
+          </Text>
           <Button
             disabled={waiting}
             onClick={() =>
@@ -176,12 +176,14 @@ function TagEditor({
           >
             Apply reviewed tag change
           </Button>
-        </div>
+        </Box>
       )}
-      <h4>Recent tag history</h4>
-      <ul>
+      <Heading as="h4" unstyled>
+        Recent tag history
+      </Heading>
+      <List.Root unstyled>
         {history.map((entry) => (
-          <li key={entry.id}>
+          <List.Item unstyled key={entry.id}>
             {entry.affectedCount.toLocaleString()} media · {entry.createdAt}
             <Button
               disabled={waiting || !revision}
@@ -197,12 +199,12 @@ function TagEditor({
             >
               Undo tag change {entry.id.slice(0, 8)}
             </Button>
-          </li>
+          </List.Item>
         ))}
-      </ul>
+      </List.Root>
       {error && (
         <>
-          <p role="alert">{error}</p>
+          <Text role="alert">{error}</Text>
           <Button
             disabled={waiting}
             onClick={() => {
@@ -214,7 +216,7 @@ function TagEditor({
           </Button>
         </>
       )}
-      <p role="status">{busy ? 'Updating tag review…' : notice}</p>
-    </section>
+      <Text role="status">{busy ? 'Updating tag review…' : notice}</Text>
+    </chakra.section>
   );
 }

@@ -273,3 +273,59 @@
   font-size: 13px;
   max-width: 80ch;
 }
+
+/* Labels, controls and help form stable vertical groups across both workflows. */
+.backup-workspace {
+  flex: 1;
+  min-height: 0;
+}
+.backup-workspace > * {
+  max-width: 1120px;
+}
+.backup-workspace > [aria-label='Saved comparisons'] {
+  max-width: 480px;
+  margin-bottom: 24px;
+}
+.backup-workspace > [aria-label='Saved comparisons'] label,
+.backup-controls label:not(:has(> input[type='checkbox'])) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+.backup-controls {
+  align-items: flex-end;
+}
+.backup-controls > [data-scope='field'],
+.backup-controls > label {
+  flex: 0 1 360px;
+  min-width: 0;
+}
+.backup-controls > p {
+  flex-basis: 100%;
+  margin: 0;
+  max-width: 70ch;
+  color: var(--muted);
+}
+.backup-workspace > details > summary {
+  padding-block: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.backup-workspace > details {
+  border-block: 1px solid var(--border);
+  padding-block: 4px 20px;
+}
+.backup-workspace > h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+@media (max-width: 760px) {
+  .backup-workspace {
+    padding-inline: 16px;
+  }
+  .backup-controls > [data-scope='field'],
+  .backup-controls > label {
+    flex-basis: 100%;
+  }
+}

@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useEffect, useRef, useState } from 'react';
@@ -42,21 +42,23 @@ export function CopyJobProgress({
     }
   }
   return (
-    <section
+    <chakra.section
       className="job-row"
       aria-label={job.action === 'prepare_names' ? 'Output preparation job' : 'Verified copy job'}
     >
-      <h3>{labels[job.state]}</h3>
-      <p>
+      <Heading as="h3" unstyled>
+        {labels[job.state]}
+      </Heading>
+      <Text>
         {job.action === 'prepare_names'
           ? 'Preparing native names; no source bytes copied.'
           : `${job.verifiedFiles} of ${job.totalFiles} files byte-verified.`}
-      </p>
-      <p className="help">{job.message}</p>
+      </Text>
+      <Text className="help">{job.message}</Text>
       {job.error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {job.error.message}
-        </p>
+        </Text>
       )}
       {copyJobActive(job) && (
         <Button
@@ -68,11 +70,11 @@ export function CopyJobProgress({
         </Button>
       )}
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
-    </section>
+    </chakra.section>
   );
 }
 export function CopyIoControls() {
@@ -119,8 +121,10 @@ export function CopyIoControls() {
     }
   }
   return (
-    <section aria-label="Operation I/O controls" aria-busy={pending}>
-      <h4>Operation I/O</h4>
+    <chakra.section aria-label="Operation I/O controls" aria-busy={pending}>
+      <Heading as="h4" unstyled>
+        Operation I/O
+      </Heading>
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -147,21 +151,21 @@ export function CopyIoControls() {
       >
         {status?.byteIoPaused ? 'Resume byte I/O' : 'Pause byte I/O'}
       </Button>
-      <p className="help">
+      <Text className="help">
         Reads, writes and verification share this limit. Pause takes effect at the next admitted
         byte boundary. Metadata, flushes and external helpers have separate limits.
-      </p>
+      </Text>
       {status && (
-        <p>
+        <Text>
           {BigInt(status.aggregateBytesPerSecond).toLocaleString()} bytes/s ·{' '}
           {status.byteIoPaused ? 'byte I/O pause requested' : 'byte I/O enabled'}
-        </p>
+        </Text>
       )}
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
-    </section>
+    </chakra.section>
   );
 }

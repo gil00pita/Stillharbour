@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
@@ -52,24 +52,26 @@ export function RootPartitionCopyWorkflow({
     root?.mode === 'managed' || (purpose === 'import' && root?.mode === 'referenced');
   const allowed = ids.includes(choice) && readable(root) && root?.availability === 'online';
   return (
-    <section aria-label={purpose === 'copy' ? 'Copy source libraries' : 'Import source libraries'}>
-      <h3>
+    <chakra.section
+      aria-label={purpose === 'copy' ? 'Copy source libraries' : 'Import source libraries'}
+    >
+      <Heading as="h3" unstyled>
         {purpose === 'copy'
           ? 'Copy one source library at a time'
           : 'Compare one source library at a time'}
-      </h3>
-      <p className="help">
+      </Heading>
+      <Text className="help">
         This selection spans {ids.length} libraries.{' '}
         {purpose === 'copy'
           ? 'Each library has its own output folder, native review, approval and job. A completed job covers only its reviewed files.'
           : 'Choose one source for each comparison and import plan. Close its report before switching sources. Copies and skips need separate approval.'}
-      </p>
-      {!roots && !error && <p role="status">Loading source libraries…</p>}
+      </Text>
+      {!roots && !error && <Text role="status">Loading source libraries…</Text>}
       {error && (
-        <div role="alert">
+        <Box role="alert">
           {error}{' '}
           <Button onClick={() => setRetry((value) => value + 1)}>Retry source libraries</Button>
-        </div>
+        </Box>
       )}
       {roots && (
         <Field.Root asChild unstyled>
@@ -113,13 +115,13 @@ export function RootPartitionCopyWorkflow({
         </Field.Root>
       )}
       {choice && !allowed && roots && (
-        <p role="alert">
+        <Text role="alert">
           {purpose === 'copy'
             ? 'This source library is unavailable or has no managed grant. Review its location and permissions before copying.'
             : 'This source library is unavailable. Review its location before comparing.'}
-        </p>
+        </Text>
       )}
       {allowed && children(choice, activity)}
-    </section>
+    </chakra.section>
   );
 }

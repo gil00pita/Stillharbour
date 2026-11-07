@@ -1,3 +1,4 @@
+import { Box, Text, chakra, Button } from '@chakra-ui/react';
 import { useEffect, useMemo, useState, type RefObject } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { DirectoryEntry, LibraryRoot } from '../../bindings';
@@ -113,19 +114,22 @@ export function ExplorerCanvas({
   return (
     <>
       {previews.error && (
-        <p role="status">
-          Previews could not be loaded. <button onClick={previews.retry}>Retry previews</button>
-        </p>
+        <Text role="status">
+          Previews could not be loaded.{' '}
+          <Button unstyled type="submit" onClick={previews.retry}>
+            Retry previews
+          </Button>
+        </Text>
       )}
-      <div
+      <Box
         ref={viewport}
         className={`asset-viewport explorer-viewport ${mode}`}
         tabIndex={0}
         aria-label="Indexed folder contents"
       >
-        <div className="virtual-canvas" style={{ height: virtualizer.getTotalSize() }}>
+        <Box className="virtual-canvas" style={{ height: virtualizer.getTotalSize() }}>
           {visible.map((row) => (
-            <div
+            <Box
               key={row.key}
               className="explorer-row"
               style={{
@@ -135,12 +139,14 @@ export function ExplorerCanvas({
               }}
             >
               {rows[row.index]?.map((entry) => (
-                <article
+                <chakra.article
                   key={itemId(entry)}
                   data-asset-id={itemId(entry)}
                   className="explorer-item"
                 >
-                  <button
+                  <Button
+                    unstyled
+                    type="submit"
                     className="asset-open explorer-entry"
                     aria-label={`${entry.kind === 'file' ? 'Open' : 'Open folder'} ${itemName(entry)}`}
                     title={itemName(entry)}
@@ -178,21 +184,23 @@ export function ExplorerCanvas({
                           }
                         />
                       ) : (
-                        <span className="explorer-glyph">
+                        <Text as="span" className="explorer-glyph">
                           <FolderGlyph file={entry.kind === 'file'} />
-                        </span>
+                        </Text>
                       ))}
-                    <span className="explorer-name">
+                    <Text as="span" className="explorer-name">
                       <bdi>{itemName(entry)}</bdi>
-                    </span>
-                    <span className="explorer-kind">{itemStatus(entry)}</span>
-                  </button>
-                </article>
+                    </Text>
+                    <Text as="span" className="explorer-kind">
+                      {itemStatus(entry)}
+                    </Text>
+                  </Button>
+                </chakra.article>
               ))}
-            </div>
+            </Box>
           ))}
-        </div>
-      </div>
+        </Box>
+      </Box>
     </>
   );
 }

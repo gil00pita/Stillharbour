@@ -1,3 +1,4 @@
+import { Text, IconButton } from '@chakra-ui/react';
 import { useEffect, useRef } from 'react';
 import { useDocumentHidden } from '@/hooks/use-document-hidden';
 export function FavoriteHeart({
@@ -29,7 +30,9 @@ export function FavoriteHeart({
     return () => clearTimeout(timer);
   }, [animate, favorite, hidden, onAnimationEnd]);
   return (
-    <button
+    <IconButton
+      unstyled
+      type="submit"
       ref={button}
       className={`viewer-favorite t-like ${animate && favorite ? 'is-animating' : ''} ${hidden ? 'without-motion' : ''}`}
       data-liked={favorite}
@@ -40,17 +43,18 @@ export function FavoriteHeart({
       disabled={busy}
       onClick={onClick}
     >
-      <span className="t-like-icon" aria-hidden="true">
-        <span className="t-like-ring" />
-        <span className="t-like-particles">
+      <Text as="span" className="t-like-icon" aria-hidden="true">
+        <Text as="span" className="t-like-ring" />
+        <Text as="span" className="t-like-particles">
           {Array.from({ length: 7 }, (_, index) => (
-            <span
+            <Text
+              as="span"
               key={index}
               className="t-like-spark"
               style={{ rotate: `${(index * 360) / 7}deg` }}
             />
           ))}
-        </span>
+        </Text>
         <svg
           className="t-like-heart"
           onAnimationEnd={(event) => {
@@ -68,7 +72,7 @@ export function FavoriteHeart({
         >
           <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0l-1 1-1-1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z" />
         </svg>
-      </span>
-    </button>
+      </Text>
+    </IconButton>
   );
 }

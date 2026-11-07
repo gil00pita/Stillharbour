@@ -1,3 +1,4 @@
+import { Heading, Text, chakra } from '@chakra-ui/react';
 import type { AppPreferences } from '../../../bindings';
 import { Switch } from '@/components/Switch';
 import { ScanOptions } from '@/components/ScanOptions';
@@ -16,11 +17,13 @@ export function FolderDefaults({
   onError: (error: unknown) => void;
 }) {
   return (
-    <section className="settings-section" aria-labelledby="folder-defaults-title">
-      <h2 id="folder-defaults-title">New folder defaults</h2>
-      <p className="help">
+    <chakra.section className="settings-section" aria-labelledby="folder-defaults-title">
+      <Heading as="h2" unstyled id="folder-defaults-title">
+        New folder defaults
+      </Heading>
+      <Text className="help">
         Used for folders you add next. Existing folders keep their saved mode and scan filters.
-      </p>
+      </Text>
       <Switch
         label="Read only by default"
         checked={draft.rootMode === 'referenced'}
@@ -33,6 +36,6 @@ export function FolderDefaults({
         onChange={(scanFilter) => update({ scanFilter })}
         onError={onError}
       />
-    </section>
+    </chakra.section>
   );
 }

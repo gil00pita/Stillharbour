@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -145,23 +145,25 @@ export function CatalogOrganizer({
         if (!busy) onClose();
       }}
     >
-      <header>
-        <div>
-          <h2 id="catalog-organizer-title">Albums, searches &amp; tags</h2>
-          <p>Organize your catalog. Originals stay in their folders.</p>
-          <nav className="catalog-section-links" aria-label="Organization sections">
+      <chakra.header>
+        <Box>
+          <Heading as="h2" unstyled id="catalog-organizer-title">
+            Albums, searches &amp; tags
+          </Heading>
+          <Text>Organize your catalog. Originals stay in their folders.</Text>
+          <chakra.nav className="catalog-section-links" aria-label="Organization sections">
             <Button onClick={() => focusSection('collections-title')}>Albums &amp; searches</Button>
             <Button onClick={() => focusSection('categories-title')}>Tag categories</Button>
-          </nav>
-        </div>
+          </chakra.nav>
+        </Box>
         <Button disabled={busy} onClick={onClose}>
           Close
         </Button>
-      </header>
-      <div className="catalog-organizer-scroll">
+      </chakra.header>
+      <Box className="catalog-organizer-scroll">
         {error && (
-          <div role="alert">
-            <p>{error}</p>
+          <Box role="alert">
+            <Text>{error}</Text>
             <Button
               disabled={busy}
               onClick={() =>
@@ -170,15 +172,15 @@ export function CatalogOrganizer({
             >
               Reload catalog organization
             </Button>
-          </div>
+          </Box>
         )}
-        <p role="status">{busy ? 'Updating catalog…' : notice}</p>
-        <fieldset disabled={busy} className="catalog-organizer-body">
-          <section aria-labelledby="collections-title">
-            <h3 id="collections-title" tabIndex={-1}>
+        <Text role="status">{busy ? 'Updating catalog…' : notice}</Text>
+        <chakra.fieldset disabled={busy} className="catalog-organizer-body">
+          <chakra.section aria-labelledby="collections-title">
+            <Heading as="h3" unstyled id="collections-title" tabIndex={-1}>
               Virtual albums &amp; saved searches
-            </h3>
-            <form
+            </Heading>
+            <chakra.form
               className="catalog-form"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -226,7 +228,7 @@ export function CatalogOrganizer({
                 </label>
               </Field.Root>
               <Button type="submit">Create collection</Button>
-            </form>
+            </chakra.form>
             <Field.Root asChild unstyled>
               <label>
                 <Field.Label asChild unstyled>
@@ -251,8 +253,8 @@ export function CatalogOrganizer({
               </label>
             </Field.Root>
             {current && (
-              <div className="catalog-collection-detail">
-                <div className="catalog-actions">
+              <Box className="catalog-collection-detail">
+                <Box className="catalog-actions">
                   <Button disabled={current.archived} onClick={() => openCollection(current)}>
                     View {current.kind === 'album' ? 'album' : 'saved search'}
                   </Button>
@@ -278,8 +280,8 @@ export function CatalogOrganizer({
                   >
                     {current.archived ? 'Restore collection' : 'Archive collection'}
                   </Button>
-                </div>
-                <form
+                </Box>
+                <chakra.form
                   className="catalog-form"
                   onSubmit={(event) => {
                     event.preventDefault();
@@ -311,13 +313,13 @@ export function CatalogOrganizer({
                     </label>
                   </Field.Root>
                   <Button type="submit">Save collection name</Button>
-                </form>
+                </chakra.form>
                 {current.kind === 'search' && (
                   <>
-                    <p className="help">
+                    <Text className="help">
                       Saved searches contain filter data. They grant no file permissions or
                       scheduled actions.
-                    </p>
+                    </Text>
                     <SavedSearchReview
                       key={`${current.id}:${current.version}`}
                       current={current}
@@ -343,8 +345,8 @@ export function CatalogOrganizer({
                 )}
                 {current.kind === 'album' && (
                   <>
-                    <p>{selectionCount.toLocaleString()} photos selected in the library.</p>
-                    <div className="catalog-actions">
+                    <Text>{selectionCount.toLocaleString()} photos selected in the library.</Text>
+                    <Box className="catalog-actions">
                       <Button
                         disabled={!selection || current.archived}
                         onClick={() =>
@@ -367,31 +369,33 @@ export function CatalogOrganizer({
                       >
                         Remove selection from album
                       </Button>
-                    </div>
+                    </Box>
                   </>
                 )}
-              </div>
+              </Box>
             )}
-            {loaded && !collections.length && !busy && <p>No albums or saved searches yet.</p>}
+            {loaded && !collections.length && !busy && (
+              <Text>No albums or saved searches yet.</Text>
+            )}
             <details>
               <summary>About albums &amp; saved searches</summary>
-              <p className="help">
+              <Text className="help">
                 An album groups photos without moving them. A saved search finds photos using saved
                 filters.
-              </p>
-              <p className="help">
+              </Text>
+              <Text className="help">
                 Up to 200 collections, including archived entries. An archived album keeps its
                 photos for restoration.
-              </p>
+              </Text>
             </details>
-          </section>
-          <section aria-labelledby="categories-title">
-            <h3 id="categories-title" tabIndex={-1}>
+          </chakra.section>
+          <chakra.section aria-labelledby="categories-title">
+            <Heading as="h3" unstyled id="categories-title" tabIndex={-1}>
               Tag categories
-            </h3>
-            <p className="help">
+            </Heading>
+            <Text className="help">
               Group related tags under a parent. Choosing a parent also includes its child tags.
-            </p>
+            </Text>
             <Field.Root asChild unstyled>
               <label>
                 <Field.Label asChild unstyled>
@@ -415,7 +419,7 @@ export function CatalogOrganizer({
                 </NativeSelect>
               </label>
             </Field.Root>
-            <form
+            <chakra.form
               className="catalog-form"
               onSubmit={(event) => {
                 event.preventDefault();
@@ -467,16 +471,16 @@ export function CatalogOrganizer({
               <Button type="submit">
                 {editingCategory ? 'Save category parent' : 'Create tag category'}
               </Button>
-            </form>
-            <ul className="catalog-categories">
+            </chakra.form>
+            <List.Root unstyled className="catalog-categories">
               {categories.map((node) => (
-                <li key={node.id}>
-                  <span>
+                <List.Item unstyled key={node.id}>
+                  <Text as="span">
                     {node.parentId
                       ? `${categories.find((parent) => parent.id === node.parentId)?.label ?? 'Unavailable parent'} → `
                       : ''}
                     <bdi>{node.label}</bdi>
-                  </span>
+                  </Text>
                   <Button
                     aria-label={`View category ${node.label}`}
                     onClick={() => {
@@ -486,31 +490,31 @@ export function CatalogOrganizer({
                   >
                     View category
                   </Button>
-                </li>
+                </List.Item>
               ))}
-            </ul>
+            </List.Root>
             <details>
               <summary>Tag matching &amp; limits</summary>
-              <p className="help">
+              <Text className="help">
                 Tags match exactly: case, Unicode and labels containing slashes remain distinct.
-              </p>
-              <p className="help">
+              </Text>
+              <Text className="help">
                 Up to 512 categories and sixteen levels. Renaming/merging tag labels and sidecar
                 export require their separate reviewed workflows.
-              </p>
+              </Text>
             </details>
-          </section>
+          </chakra.section>
           <TagTools
             onChanged={() => change(async () => {}, 'Tag metadata refreshed.')}
             onBusy={setBusy}
           />
-        </fieldset>
+        </chakra.fieldset>
         <MetadataExportPanel
           selection={selection}
           selectionCount={selectionCount}
           onBusy={setBusy}
         />
-      </div>
+      </Box>
     </dialog>
   );
 }

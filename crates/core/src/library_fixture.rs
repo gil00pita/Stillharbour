@@ -590,6 +590,14 @@ pub fn seed_scroll_catalog(
             let relative=format!("__catalog_fixture__/Synthetic {index:04}.jpg");
             tx.execute("INSERT INTO assets(id,root_id,relative_native,relative_path,folder_native,folder,name,stem,extension,native_file,bytes,revision,added_at,date,date_source,metadata_state,preview_state,preview_error,presence,is_media,seen_scan) VALUES(?1,?2,?3,?4,?5,'__catalog_fixture__',?6,?6,'jpg',?1,1000,'synthetic','2026-10-28T00:00:00Z','2026-10-28T00:00:00','fixture','unavailable','unavailable','Synthetic catalog fixture; no original file','placeholder',1,'synthetic')",rusqlite::params![uuid::Uuid::new_v4().to_string(),root,crate::library::native::encode_path(Path::new(&relative)),relative,crate::library::native::encode_path(Path::new("__catalog_fixture__")),format!("Synthetic {index:04}.jpg")])?;
         }
+        // Catalog-only naming observations for the structure-preview lab.
+        // Placeholder records remain unavailable originals and never decode.
+        tx.execute("UPDATE assets SET raw_metadata=?1,tags='[\"Kingfishers\"]' WHERE seen_scan='synthetic'", [r#"[{"Country":"Portugal","State":"Algarve","City":"Lagos","Sub-location":"Belem","CameraType":"Mirrorless","Make":"Sony","Model":"A7-IV"}]"#])?;
+        let nature = uuid::Uuid::new_v4().to_string();
+        let birds = uuid::Uuid::new_v4().to_string();
+        tx.execute("INSERT INTO catalog_tag_categories VALUES(?1,1,'Nature',NULL)", [&nature])?;
+        tx.execute("INSERT INTO catalog_tag_categories VALUES(?1,1,'Birds',?2)", rusqlite::params![birds,nature])?;
+        tx.execute("INSERT INTO catalog_tag_categories VALUES(?1,1,'Kingfishers',?2)", rusqlite::params![uuid::Uuid::new_v4().to_string(),birds])?;
         tx.execute("UPDATE library_state SET revision=revision+1",[])?;
         tx.commit()?; Ok(960)
     })

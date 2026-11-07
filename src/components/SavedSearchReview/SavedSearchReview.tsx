@@ -1,3 +1,4 @@
+import { Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { useEffect, useRef, useState } from 'react';
 import type { AssetQuery, CatalogCollection, LibraryRoot } from '../../bindings';
 import { Button } from '@/components/Button';
@@ -78,17 +79,17 @@ function FilterSummary({
                 } as Record<string, string>
               )[display] ?? display;
           return (
-            <div key={key}>
+            <Box key={key}>
               <dt>{labels[key as keyof AssetQuery] ?? key}</dt>
               <dd>{key === 'placeId' ? <PlaceLabel id={display} /> : <bdi>{display}</bdi>}</dd>
-            </div>
+            </Box>
           );
         })}
       {!query.rootId && (
-        <div>
+        <Box>
           <dt>Library</dt>
           <dd>All libraries</dd>
-        </div>
+        </Box>
       )}
     </dl>
   );
@@ -143,35 +144,39 @@ export function SavedSearchReview({
       </Button>
     );
   return (
-    <section
+    <chakra.section
       ref={review}
       tabIndex={-1}
       className="catalog-search-review"
       aria-label="Review saved search filters"
     >
-      <h4>
+      <Heading as="h4" unstyled>
         Replace filters for <bdi>{current.name}</bdi>?
-      </h4>
-      <p className="help">
+      </Heading>
+      <Text className="help">
         Review both sets of filters before replacing this saved search. Photos and other searches
         stay unchanged.
-      </p>
-      <div className="catalog-filter-comparison">
-        <section aria-label="Saved filters">
-          <h4>Saved filters</h4>
+      </Text>
+      <Box className="catalog-filter-comparison">
+        <chakra.section aria-label="Saved filters">
+          <Heading as="h4" unstyled>
+            Saved filters
+          </Heading>
           <FilterSummary query={current.query!} roots={roots} collections={collections} />
-        </section>
-        <section aria-label="Replacement filters">
-          <h4>Replacement filters</h4>
+        </chakra.section>
+        <chakra.section aria-label="Replacement filters">
+          <Heading as="h4" unstyled>
+            Replacement filters
+          </Heading>
           <FilterSummary query={proposed} roots={roots} collections={collections} />
-        </section>
-      </div>
-      <div className="catalog-actions">
+        </chakra.section>
+      </Box>
+      <Box className="catalog-actions">
         <Button onClick={() => setProposed(null)}>Keep saved filters</Button>
         <Button className="primary" onClick={() => void onApply(proposed)}>
           Replace saved search filters
         </Button>
-      </div>
-    </section>
+      </Box>
+    </chakra.section>
   );
 }

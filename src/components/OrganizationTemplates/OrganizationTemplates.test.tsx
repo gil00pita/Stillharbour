@@ -76,6 +76,7 @@ it('submits edited examples, keeps a rejected example for correction and restore
   const sample = {
     relativePath: 'Family/IMG.JPG',
     capture: null,
+    metadata: { country: 'Portugal', city: 'Lisbon', brand: 'Sony', model: 'A7-IV' },
     sequence: 1,
     expectedTarget: 'IMG.JPG',
   };
@@ -96,6 +97,7 @@ it('submits edited examples, keeps a rejected example for correction and restore
   await screen.findByRole('option', { name: 'Family <year> · version 1' });
   fireEvent.change(screen.getByLabelText('Saved template'), { target: { value: 'template-id' } });
   expect(screen.getByLabelText('Example 1 source name')).toHaveValue('Family/IMG.JPG');
+  expect(screen.getByLabelText('Example 1 country')).toHaveValue('Portugal');
   fireEvent.change(screen.getByLabelText('Example 1 expected target'), {
     target: { value: 'wrong.JPG' },
   });
@@ -114,6 +116,7 @@ it('submits edited examples, keeps a rejected example for correction and restore
   expect(screen.queryByLabelText('Example 1 source name')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Use retained version' }));
   expect(screen.getByLabelText('Example 1 source name')).toHaveValue('Family/IMG.JPG');
+  expect(screen.getByLabelText('Example 1 country')).toHaveValue('Portugal');
 });
 
 it('bounds examples and rejects malformed retained example text without loading it', async () => {

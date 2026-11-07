@@ -3445,3 +3445,410 @@ Add jobs-page.e2e.mjs as an independent generated native regression. Its first h
 **Main integration:** merge origin/main at 06cdd75 without rebasing or renaming the branch. Resolve five conflicts: retain both appended implementation histories; combine direct Storage containment/first-filter/version assertions and all Map frame/icon/input geometry and hit checks; restore the same two photo IDs once before annotation/viewer checks, avoiding a second selection toggle from the overlapping fix. Adopt main's viewer range/readout sizing, startup/remount waits, failure screenshots, bounded SMB startup supervision and focused-local/full-CI policy. No backend operation or preservation gate is weakened.
 
 **Merged validation/output:** strict types, ESLint, 74 affected component cases across seven files, all 24 Python supervision cases and formatting/whitespace checks pass. Seven affected native specs pass together in 201 seconds: Duplicate cards, file-size fields, full Foundation (22 passing/three existing skips), Map, Storage, Utility lifecycle and Viewer controls. Retain generated-source/output audits and distinguish these results from the pre-integration full seventeen-spec run. The merged instrumented executable remains hash-verified at `0fcd63d11d71e0964e801d5ebb9c2116ebfd452bd5a6f923c6a9784b48928403`; both build receipts and logs remain under `.context/settings-ci/`. Restore ordinary production output; frontend build and release preflight pass with pinned helpers/ExifTool and test exclusions verified, retaining the existing chunk-size advisory. No fresh local full Rust/transport suite, Windows/macOS 15 execution, signing or release acceptance is claimed. Finish the merge and publish the reviewed PR #29 update; all four fresh hosted checks and an up-to-date base remain required before merge.
+
+## 2026-11-07 — Consistent workspaces, separate tools and Chakra presentation migration
+
+**Request/base:** read the attached complete Chakra migration brief and cropped
+timeline screenshot. The owner clarifies that Stillharbour should keep its
+existing look while improving uneven controls, fields and UX. First fast-forward
+this unchanged `feat/app-ui-redesign-audit` branch to the requested
+`feat/collapsed-sidenav-alignment-fix` at `d1ddf6f`; retain its sidebar/native
+alignment repairs and do not rename the branch.
+
+**Delivered:** shared 64 px title rows, 18/24 px titles, aligned search frames and
+36 px header controls; bounded search flex sizing and right-side action groups
+keep compact Albums actions reachable. Photos, Folders, Albums and Map share
+search composition. Keep existing body/viewer target sizes. Reserve a persistent
+96 px chronology lane, contain date output and remove idle fading. Split Backup
+(snapshots/recovery) from Sync (existing comparison/reviewed one-way transfer),
+without changing profiles, native commands or capabilities. Structure Formater
+receives 1–240 explicit selected IDs and presents the real organization editor
+inline, with saved plans and clear selection guidance. Retain the hidden/inert
+source view and suspend preview demand; Change photos restores its Map query or
+album context, selection and position. Catalog identity and native revision/
+conflict/recovery guards remain authoritative.
+
+**Migration/docs:** convert applicable containers, semantic layout, headings/text,
+images, buttons, lists and tables throughout the component tree to Chakra v3;
+retain native composition children, checkboxes/ranges, dialog/disclosure behavior,
+SVG, bidirectional path text and specialized geometry. Preserve intrinsic SVG
+image dimensions with htmlWidth/htmlHeight, and explicitly place Table captions
+at the top because Chakra defaults them to the bottom even when unstyled. No
+dependency, theme-token, schema, Rust/domain, credential, persisted identity,
+original-file operation or production authority change. The page-by-page audit,
+primary market references and changed-file inventory are in
+UI_WORKSPACE_AUDIT.md; update specification, acceptance, product/design, user,
+organization, timeline, development and TypeScript guidance to match.
+
+**Fresh frontend checks:** all **580 tests in 98 files pass** after adding the
+Map/album organization-return regressions. The final affected six-file run also
+passes **33 cases**. Strict types, lint and twelve release/dependency-policy
+cases pass. Instrumented native builds pass, retaining the existing large-chunk
+advisory. React Doctor 0.9.22 uses the documented local JSON/no-telemetry/no-remote-
+score policy: zero errors/ten reviewed warnings (mostly relocated comparison
+logic); no suppression. The design detector has seventeen existing palette/
+radius advisories, not new structural findings. No theme type generation is
+needed because tokens are unchanged.
+
+**Native evidence and limits:** generated macOS checks pass for the full-page
+header case at 1180/660 px, persistent timeline/ordinal navigation, actual
+organization preview and retained selection return, Albums and Jobs. The focused
+Foundation replay passes eight scenarios covering native registration/scanning,
+collapsed navigation, Filters, selection across views, real organization paths/
+companions/destination policy, catalog annotations and viewer notes/return.
+Screenshots and receipts live under `.context/ui-redesign/`,
+`.context/chrome-selection/`, `.context/timeline-reference/` and
+`.context/ui-native-*.log`. An earlier instrumented UI checkpoint also passes the
+utility lifecycle and complete M4 backup/read/restore/catalog-preparation case
+(5m24s), with four restored files byte-compared; this is separate evidence for
+the unchanged native engine, not final UI or both-platform release qualification.
+
+**Retained failed attempts:** the first native command resolves no relative
+specs; replace its ignored configuration with absolute paths and do not count
+that zero-worker exit as a pass. Native inspection catches invalid unitless
+image dimensions, compact Albums flex overflow and captions moved below rows;
+repair them and retain later passing geometry evidence. The new idle-timeline
+check initially blurs the range before Home; restore focus before keyboard
+input. A strict selector must name the visible Structure page because Photos
+intentionally remains mounted. Initial Foundation organization scrolling times
+out through WebDriver's wheel/animation-frame path and cascades into Compare/
+Info; use native DOM reveal and focus-before-click only for review setup, retain
+all source/path/selection/focus assertions, and pass the eight-case replay. This
+does not certify physical wheel or secondary-click gestures.
+
+The complete native menu case remains unqualified locally: its failure receipt
+records document.hidden=true, hasFocus=false and uninitialized Floating UI
+position variables. The Map renderer case similarly records visibility=hidden,
+a queued animation frame that never runs, a loaded worker and no JS/worker
+errors before timing out waiting for markers. Do not weaken their assertions or
+claim GPU/interactive-map support from header screenshots. Test-only app/window
+show/focus experiments fail to establish reliable visibility and are reverted;
+no extra permission or foreground hook is retained. A superseded multi-spec run
+is stopped after recording its failures, terminating only this workspace's
+generated-fixture app. Python helper preparation first fails certificate-chain
+verification; system curl then retrieves the same manifest-pinned archives with
+normal TLS, and the existing archive/executable hash checks pass. No TLS/hash
+verification is disabled and no personal catalog/library is used.
+
+**Next gate:** final ordinary frontend restoration/preflight and formatting/
+whitespace results are recorded below. Full current-revision macOS/Windows CI,
+visible-session menu/map verification and all existing milestone, preservation
+and packaged-release gates remain required before merge/release. No Windows or
+full desktop/transport pass, Rust unit-suite rerun, release signing, new format
+certification, staging, commit, push or publication is claimed.
+
+**Final output/checks:** the last source-context fix is followed by a fresh
+580-case full frontend pass, 33 focused cases, strict types/lint, and another
+eight-case native Foundation pass in 23 seconds. Reuse the earlier session's
+passing header geometry, timeline, standalone organization, Albums and Jobs
+receipts only for their unchanged tested behavior; the final Foundation replay
+rechecks the actual current editor/return path. Ordinary production build and
+release preflight pass after native testing. Preflight verifies the pinned helper
+hashes, default dependency graph, vendored ExifTool manifest and absence of
+frontend test routes; signing/installed-package/release acceptance remain separate.
+The existing large-chunk advisory remains. Changes stay unstaged on the existing
+branch. Final changed-file formatting and whitespace checks are recorded with
+the task receipts under `.context/ui-*.log`.
+
+## 2026-11-07 — Whole-library Structure Formater scope
+
+**Request:** remove photo selection from Structure Formater; configure rules for
+the entire library before restructuring. This supersedes the preceding UI pass's
+selected-photo handoff, whose receipts above remain historical evidence.
+
+**Delivered scope:** Structure Formater opens directly on folder/filename rules
+and a fixed Entire library summary. No gallery IDs, query, album or Map scope is
+submitted. Saved templates and existing saved plans remain available. A native
+read-only adapter captures all indexed media membership in SQLite TEMP tables,
+processes at most 240 sources per advance outside the actor for rendering, and
+retains one global sequence/conflict namespace. Result pages appear after full
+processing; exact/ancestor/ASCII-case conflicts mark earlier participants too.
+Missing/excluded/offline entries remain blocked rather than dropped. Handles,
+expected cursors and catalog revisions reject superseded/racing/stale work;
+cancel/navigation/rule changes retire frontend generations and discard TEMP state.
+The separate explicit-photo name-preview/copy-plan workflow remains available.
+No page of the new preview is submitted as a complete executable plan.
+
+**Files/decisions:** new `library/organization_library.rs`, typed model/dispatcher
+and generated bindings; shared pure row renderer and rule/issue-label exports;
+StructureFormatter/App/LibraryScreen integration and focused component/native
+checks. Specifications, acceptance criteria, user/development/design guidance and
+the workspace audit now reflect whole-library scope. ADR-0095 records the
+session storage and revision contract. No main catalog migration, dependency,
+original-file command, production permission or identity change is introduced.
+The earlier hidden/inert selected-source handoff is removed.
+
+**Executed checks:** the full frontend suite passes 585 cases in 98 files at the
+first complete implementation checkpoint; final affected App/formatter/legacy
+preview/library-controller checks pass 45 cases in four files after UI cleanup.
+Strict TypeScript and lint pass. Core organization tests pass 28 cases both with
+default features and with fixture-probes/copy-workflow; they include 500-item
+global sequence, cross-batch conflict propagation, ancestor/case screening,
+unavailable/excluded scope, empty/strict IPC and stale/racing handles. Core
+Clippy (library/tests/export example, warnings denied), Rust formatting, IPC drift
+and twelve release/dependency-policy checks pass. The first compile catches and
+fixes a generated-type export omission, a test fixture type and native dispatcher
+result wrapping; Clippy catches a needless borrow. No suppression is added.
+React Doctor's documented pinned changed-scope scan has zero errors and eleven
+reviewed warnings; the added reset warning points into a guarded finally and
+has rejection/cancellation regressions.
+
+**Native evidence:** an instrumented macOS build and the generated whole-library
+smoke pass: 981 indexed items, five advances, pages bounded to 240, final global
+sequence 981, unavailable items retained, cleanup on exit and unchanged fixture
+originals. Screenshots cover rules/results at 1180/660 px under
+`.context/ui-redesign/structure-whole-library-*`; the JSON receipt records the
+native counts. The first render review removes the redundant welcome so rules
+appear earlier. A broader Foundation run passes seven scenarios including the
+legacy selected-name/destination/companion preview, annotation and viewer return,
+but fails a timeline-alignment assertion in gallery setup. Geometry diagnostics
+are added without relaxing the assertion; its follow-up outcome is below.
+
+**Limits/next gate:** Run restructure stays visibly disabled with the reason.
+Actual whole-library execution still requires an immutable reviewed plan,
+destination/companion checks, explicit approval and proven recovery/native
+failure gates. No real user library is scanned or mutated in these checks.
+Large-catalog actor latency/TEMP storage budgets remain unqualified. Full current
+macOS/Windows CI and existing native, preservation and packaged-release gates
+remain required before merge; neither Windows execution nor release acceptance
+is claimed. Changes remain unstaged on the existing branch.
+
+**Final follow-up:** the final whole-library desktop smoke passes again in six
+seconds after the rules-first layout refinement. The diagnostic Foundation
+replay passes all eight cases in 25 seconds; the earlier timeline alignment
+failure does not reproduce, and no timeline implementation or assertion is
+weakened. Its cause is not established. Preserve the failed and passing logs
+under `.context/structure-native-foundation*.log`. Final ordinary production
+build and release preflight pass; the existing large-chunk advisory remains.
+Changed-file Prettier and `git diff --check` pass. The final React Doctor receipt
+is `.context/structure-react-doctor-final.json`. Full 585-case frontend evidence
+precedes the final narrow layout/unused-prop cleanup; the final 45-case run
+rechecks every affected frontend consumer rather than claiming that earlier
+full run as a fresh execution of the final tree. Other earlier UI-task receipts
+remain separate historical evidence, including its unresolved visible-session
+menu/map qualification. No commit, push or merge is performed.
+
+## 2026-11-07 — Illustrated presets and segmented rule controls
+
+**Request/scope:** replace the preset dropdown with illustrated radio cards,
+remove event naming and replace the other rule dropdowns with segmented controls.
+Deliver By day, By month and Date & time with inline SVG example folder trees;
+use labelled Undated/block and Preserve/lowercase/UPPERCASE radio segments. Keep
+custom path editing and visible custom-template state. Historical saved templates
+load unchanged; explicit date-preset selection clears its unused event value.
+No schema, dependency, IPC or native mutation authority changes.
+
+**Implementation:** OrganizationPresets owns the moved preset data, private SVG
+renderer and colocated slot recipe. SegmentedControl owns its generic typed
+choice adapter and recipe. The shared OrganizationTemplateFields serves both
+whole-library and selected-name workflows. Register recipes and regenerate with
+Chakra CLI 3.38.0. Use static checked fills rather than animation-dependent
+indicators. Reuse existing palette/focus tokens, responsive three-column/compact
+row layouts and explicit busy/disabled states. Replace an unavailable radius
+alias with a CSS percentage for the circular radio indicator. Update spec,
+acceptance, user/development/design/structure guidance and the workspace audit.
+Primary Chakra RadioCard/SegmentGroup docs and installed 3.37.0 declarations
+were checked; no v2 API or extra dependency is introduced.
+
+**Checks:** 44 affected cases across seven files pass, covering both rule-editor
+consumers, new controls, custom/legacy rules, invalidation, busy/cancellation and
+existing inspection-card consumers. Strict types/lint and pinned Chakra typegen
+pass after final edits. Initial assertions expecting synchronous radio callbacks
+fail; wait for Ark's committed controlled state instead of weakening the
+invalidation checks. Generated macOS whole-library smoke passes with 981 media
+items/five advances/bounded pages and unchanged fixture originals. The focused
+Foundation replay passes eight scenarios in 22.5 seconds, including native
+selected-name stem-case/destination/companion review and annotation/viewer return.
+Screenshots cover rules/results at 1180/660 px. Logs and the native count receipt
+are `.context/rule-cards-*` and `.context/ui-redesign/structure-rule-cards.json`.
+
+**Input evidence limit:** the first arrow-key smoke times out because embedded
+WebDriver 1.5.1 sets radio focus/checked and emits change without the native click
+used by Ark. Source inspection confirms this driver behavior. A test-only helper
+asserts the focused checked radio and completes its activation click, then checks
+the actual updated template/request. Production keyboard handlers are unchanged.
+This is instrumented DOM input, not physical keyboard or both-platform acceptance.
+No assertion is bypassed or application behavior altered to satisfy automation.
+
+**Remaining gate:** actual restructuring remains disabled behind reviewed plan,
+destination/companion and recovery qualification. No real library is tested or
+mutated. Full current macOS/Windows CI and existing preservation/release gates
+remain required before merge. No commit, push or merge is performed. Production
+restoration/preflight, scanner and formatting outcomes follow below.
+
+**Final output/checks:** ordinary production build and release preflight pass;
+the existing large-chunk advisory remains. Changed-file Prettier and
+`git diff --check` pass. React Doctor 0.9.22 reports zero errors/eleven previously
+reviewed warnings and no findings in the new preset/segment/field implementations
+(`.context/rule-cards-react-doctor.json`). Its local scan uses the documented
+no-telemetry/no-remote-score flags. Rust/IPC/dependency code is unchanged by this
+increment, so no fresh Rust unit-suite or IPC qualification is claimed. Both-
+platform CI, physical-input/accessibility and packaged-release gates remain open.
+
+## 2026-11-07 — Expanded structure layouts, embedded metadata and Custom chips
+
+**Request/clarifications:** add the listed date/location presets and a custom
+input assembled from predefined chips; subsequently add tag and camera presets.
+The owner chooses embedded location metadata only and explicitly drops the Trip
+layout. Camera model → Event remains a separate requested option.
+
+**Delivered:** 25 illustrated choices grouped as Date (five new plus three
+retained), Location (four), Tags (six), Camera (seven), and Custom. Country is the
+location level beneath Year/Month; City is the level beneath Tag. Custom's real
+folder input supports searchable predefined parts, literal names, Enter/Backspace,
+removal/reordering, a bounded 31-level folder model and an editable filename
+pattern. Category browsing does not silently change a rule. Event name is shown
+only when an event token is used. Improve chip targets/secondary help and active
+option focus after inspecting the 1180/660 px native renders.
+
+**Native/data scope:** add quarter and explicit metadata tokens, bounded catalog
+projection and optional OrganizationMetadata context for sources and synthetic
+samples. Reuse existing tag-category parents; remove assigned ancestors as
+competing leaves and require unambiguous requested prefixes. Never infer from
+GPS or guess camera type from make/model. Preserve observed labels and original
+extensions; required missing/ambiguous values remain blocked and cannot hide
+behind Undated fallback. Context is captured consistently for preview,
+destination review and plan creation. New naming/quarter rules use preview-v2;
+old rules retain v1 and omitted optional fields, preserving legacy fingerprints
+and immutable JSON. Retained sample loading validates/preserves context. The
+macOS helper read-only tag allowlist adds naming fields/actual IPTC aliases.
+Existing catalogs are not silently rescanned, and Windows location-label reader
+coverage is not expanded or claimed. No main schema, dependency, identity,
+production permission or original-file execution gate changes.
+
+**Files/decisions:** OrganizationPresets, new StructurePathBuilder and its pure
+helpers/recipe, shared rule fields, TemplateExamples/retained loader, generated
+bindings and theme registration; Rust organization parser/metadata, catalog
+snapshot/projection, saved-plan adapter, helper arguments and generated fixture
+observations. Update spec, acceptance, M2, utility, user/development/type/design
+context and ADR-0096. The shared scroll-catalog hook contains explicit synthetic
+naming observations but still records unavailable placeholder originals. Those
+observations prove catalog projection, not decoder extraction.
+
+**Actual checks:** full frontend passes **593 cases / 102 files** at the complete
+implementation checkpoint; after the final pure-helper extraction and chip
+refinement, **40 affected cases / seven files** pass again. Strict TS, lint,
+pinned Chakra typegen and IPC drift pass. Focused organization Rust tests pass
+34 cases. The broader core library run with fixture-probes/copy-workflow passes
+**546 cases, 15 ignored**, including real generated child-exit/copy/recovery
+regressions (318.38 seconds). Ignored cases remain unqualified. Core Clippy with
+library/tests/export example and warnings denied passes. No real user library
+is used. Logs are `.context/layouts-*`.
+
+**Native evidence:** current generated whole-library smoke passes with 981 items,
+five bounded advances, exact location/tag/camera/format prefixes, all grouped
+choices and Custom chips. A fresh Custom build submits the changed actual native
+pattern and exit cleanup retires that current scope. Generated originals audit
+unchanged. An earlier same-increment Foundation replay passes eight cases and the
+shared timeline spec passes one; later changes only extract chip-choice helpers
+and strengthen the Custom test. Current standalone structure smoke passes again
+in 7.4 seconds. Native screenshots/JSON are
+`.context/ui-redesign/structure-layouts-*`. Instrumented keyboard evidence retains
+the documented driver click-completion limit; no physical-key certification.
+
+**Retained failures/fixes:** the original unknown-token test must now use a truly
+unsupported camera token. Strict TS catches an explicit undefined optional
+sample property; retain an empty context object after editing instead. Lint
+requires a Unicode control-category check rather than a literal control-range
+regex. The first native build therefore fails before launch; later builds pass.
+A full frontend run catches clicking an Ark radio before the asynchronously
+cleared disabled state; wait for committed enabled controls, retaining all
+invalidation assertions, then pass the full run. React Doctor identifies chip
+component complexity; extract pure choice/literal logic. The final pinned local
+scan returns zero errors/eleven existing reviewed warnings, with no new builder
+finding or suppression. Production build and release preflight pass, preserving
+the existing large-chunk advisory. Final formatting/whitespace results follow.
+
+**Limits/next gate:** production restructuring is still disabled pending reviewed
+whole-library execution, destination/companion and proven recovery gates.
+Location/camera-type fields may be absent in older indexes or unsupported reader
+formats/platforms; no GPS lookup, automatic metadata refresh or inferred fallback
+is claimed. Large-catalog latency, Windows native/full current CI, physical-input,
+accessibility and packaged-release qualifications remain separate. Changes stay
+unstaged on the existing branch; no commit, push or merge is performed.
+
+**Final closeout:** changed-file Prettier, Rust formatting and `git diff --check`
+pass. Final IPC drift, strict types/lint, production build and release preflight
+pass. Current native Custom submission/cleanup is rechecked after extracting the
+pure helpers; earlier same-increment Foundation/timeline receipts remain
+separate evidence for their unchanged paths. Both-platform CI remains pending.
+
+### 2026-11-07 — Backup/sync prerequisites for library restructuring
+
+**Request/scope:** require backup and sync to be idle and unscheduled before
+restructuring the whole photo library. Add a typed native prerequisite observation
+and a restrained Backup & sync check on Structure Formater. Native state includes
+snapshot/restore/recovery helpers, sync/comparison activity, all retained
+unfinished jobs (including paused/cancel-requested/interrupted work) and every
+configured enabled backup schedule, regardless of due time or current OS consent.
+Unknown, malformed or unreadable records fail closed. Sync currently has no
+recurring scheduler. This check never cancels work, disables schedules, rewrites
+history or opens originals. Read-only previews remain available.
+
+**Files/decisions:** add `library/organization_protection.rs`, the snapshot-owned
+bounded schedule reader, Rust request/response models and generated bindings,
+Tauri dispatch, StructureFormatter's private StructureProtection component/tests,
+and focused native UI assertions/screenshots. Update specification, acceptance
+criteria, preview/UI/development docs and user guidance. No migration or new
+dependency. Poll visible pages every two seconds, check on entry/focus/visibility
+changes, coalesce requests, ignore replies after exit, and offer manual retry.
+The initial entry check also runs for hidden windows.
+
+**Fresh validation:** seven native prerequisite cases pass, including the real
+Library boundary, all unfinished job states, old interrupted syncs behind 256
+terminal rows, far-future/overdue/deauthorized enabled schedules, disabled
+schedules, corrupt records and no database writes. The schedule filter passes
+three cases with two explicitly ignored OS-consent integrations; it does not
+certify those ignored gates. Twelve frontend cases pass. Strict TS, lint, Clippy
+with warnings denied, bindings drift and Rust formatting checks pass. Instrumented
+macOS build and current whole-library native smoke pass (one case, 7.8 seconds),
+covering typed prerequisite IPC, clear-but-disabled Run restructure, panel fit at
+1180/660 px, actual native previews and unchanged generated-source audits.
+Screenshots `.context/ui-redesign/structure-protection-{1180,660}.png` are visually
+reviewed. Production build restores ordinary assets and passes with the existing
+large-chunk advisory. The pinned local React Doctor scan returns zero errors and
+eleven previously reviewed warnings. Logs use `.context/restructure-guard-*`.
+
+**Retained failures/fixes:** strict types catch recipe-less Heading `size` and
+native Button style props; use supported styling/composition. Clippy catches a
+boolean comparison; an initial assertion edit targets the adjacent assertion and
+fails compilation, then is corrected and all affected checks pass. Native smoke
+first times out because the embedded hidden WebView skips the initial check;
+make entry checks unconditional while retaining background polling suspension,
+add a hidden-window regression and replay successfully. Existing instrumented
+keyboard/physical-input limitations remain unchanged.
+
+**Limits/next gate:** Run restructure remains unavailable under the original
+whole-library execution/recovery gate, even when prerequisites are clear. This
+point-in-time native observation is not mutation authorization. The future
+executor must atomically recheck and reserve admission against concurrent
+backup/sync starts and schedule activation, hold native write scopes, and pass
+review/recovery gates before enabling production restructuring. No execution
+path or sync scheduler is invented here. Earlier broad-suite and Foundation/
+timeline evidence is retained separately, not reported as fresh execution for
+this increment. Current Windows native/full both-platform CI and release gates
+remain pending. No personal library is used and no commit/push/merge is performed.
+
+### 2026-11-07 — Prepare the desktop workspace redesign pull request
+
+**Request/scope:** publish the approved workspace state as a PR from the existing
+`feat/app-ui-redesign-audit` branch to `main`, retaining the copied
+`feat/collapsed-sidenav-alignment-fix` ancestry. Review the complete staged change
+and base diff: shared Chakra presentation/page chrome, persistent unclipped photo
+timeline, separate Backup/Sync pages, whole-library structure previews, metadata
+presets/Custom chips, native protection prerequisite observations and associated
+tests/specifications. The inherited branch also includes file-size alignment and
+native desktop test repairs beyond the already merged sidebar fix.
+
+**Validation:** a fresh complete `npm test` run passes 598 cases across 103 files
+in 42.92 seconds (`.context/pr-all-ui-tests.log`). Staged whitespace checks pass.
+Reuse the unchanged-code native prerequisite/schedule, types/lint, Clippy/bindings,
+production build/release preflight, native structure smoke and visual evidence
+recorded above; the earlier 546-case Rust feature-suite receipt remains separate
+from the later seven prerequisite tests. This publication adds no product behavior
+or mutation authority. PR evidence distinguishes executed checks from pending
+Windows/interactive native/full CI qualification; production restructure execution
+and atomic admission remain unavailable under their existing review/recovery gate.
+
+**Next gate:** review the published PR and obtain passing required GitHub CI on
+both target platforms before merging. Creating the PR does not authorize a merge.

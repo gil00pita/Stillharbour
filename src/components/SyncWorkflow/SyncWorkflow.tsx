@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { NativeSelect } from '@/components/NativeSelect';
@@ -168,25 +168,29 @@ export function SyncWorkflow({
     ['different_content', 'destination_edited_since_last_run'].includes(selected.category);
   const validRate = /^\d{1,10}$/.test(rate) && BigInt(rate) >= 1024n && BigInt(rate) <= 1073741824n;
   return (
-    <section
+    <chakra.section
       aria-label="Safe-copy workflow"
       aria-busy={busy}
       className="backup-operation"
       id="safe-copy-workflow"
     >
-      <h2>Safe copy / one-way sync</h2>
-      <p>
+      <Heading as="h2" unstyled>
+        Safe copy / one-way sync
+      </Heading>
+      <Text>
         Add reviewed source-only files to the Stillharbour dataset. Source files and
         destination-only files are retained.
-      </p>
-      {!capabilities && !capabilityError && <p role="status">Checking transfer availability…</p>}
-      {capabilities && !capabilities.executionAvailable && (
-        <p role="status">{capabilities.reason}</p>
+      </Text>
+      {!capabilities && !capabilityError && (
+        <Text role="status">Checking transfer availability…</Text>
       )}
-      {capabilityError && <p role="alert">{capabilityError}</p>}
+      {capabilities && !capabilities.executionAvailable && (
+        <Text role="status">{capabilities.reason}</Text>
+      )}
+      {capabilityError && <Text role="alert">{capabilityError}</Text>}
       {difference && selected && (
-        <div className="backup-decision">
-          <p className="backup-path">Different destination: {selected.displayPath}</p>
+        <Box className="backup-decision">
+          <Text className="backup-path">Different destination: {selected.displayPath}</Text>
           <label>
             <input
               type="checkbox"
@@ -210,12 +214,12 @@ export function SyncWorkflow({
           <Button disabled aria-describedby="retained-replacement-gate">
             Replace destination and retain previous version
           </Button>
-          <p id="retained-replacement-gate">
+          <Text id="retained-replacement-gate">
             Replacement requires a separate native review proving recovery of this exact existing
             destination version and its required metadata. Back up the old version below, then
             inspect that snapshot's replacement gate. Unverified independent recovery keeps
             replacement blocked.
-          </p>
+          </Text>
           {run && (
             <OldDestinationBackup
               key={`${run.id}:${selected.id}`}
@@ -230,12 +234,12 @@ export function SyncWorkflow({
               }}
             />
           )}
-        </div>
+        </Box>
       )}
-      <p>
+      <Text>
         {keep.size} explicit keep-destination decisions. Decisions persist across pages of this
         comparison.
-      </p>
+      </Text>
       <Button
         disabled={busy || Boolean(running) || !canReview}
         onClick={() =>
@@ -255,9 +259,9 @@ export function SyncWorkflow({
         Review append plan
       </Button>
       {!canReview && (
-        <p>
+        <Text>
           A complete Verified comparison is required. Every difference needs an explicit decision.
-        </p>
+        </Text>
       )}
       {review && (
         <SyncReviewPanel
@@ -319,19 +323,19 @@ export function SyncWorkflow({
         />
       )}
       {error && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {error}
-        </p>
+        </Text>
       )}
       <details className="backup-io">
         <summary>Application I/O budget</summary>
-        <p>
+        <Text>
           {capabilities?.ioScope ??
             'The backend reports which application-owned reads and writes it can pace.'}{' '}
           This is a logical byte budget; it does not cap physical disk traffic or other
           applications.
-        </p>
-        <form
+        </Text>
+        <chakra.form
           onSubmit={(event) => {
             event.preventDefault();
             if (validRate)
@@ -382,14 +386,16 @@ export function SyncWorkflow({
           <Button type="submit" disabled={busy || !validRate}>
             Apply shared budget
           </Button>
-        </form>
-        <p>
+        </chakra.form>
+        <Text>
           Changes affect comparison, copying and verification using this shared application budget.
           Allowed range: 1 KiB/s–1 GiB/s.
-        </p>
+        </Text>
       </details>
-      <div className="backup-controls">
-        <h3>Transfer history and recovery</h3>
+      <Box className="backup-controls">
+        <Heading as="h3" unstyled>
+          Transfer history and recovery
+        </Heading>
         <Button
           disabled={busy}
           onClick={() => {
@@ -399,43 +405,43 @@ export function SyncWorkflow({
         >
           Refresh safe-copy history
         </Button>
-      </div>
+      </Box>
       {historyError && (
-        <p className="error" role="alert">
+        <Text className="error" role="alert">
           {historyError}
-        </p>
+        </Text>
       )}
-      {historyLoading && <p role="status">Loading safe-copy history…</p>}
+      {historyLoading && <Text role="status">Loading safe-copy history…</Text>}
       {!jobs.length && !historyError && !historyLoading && (
-        <p>No safe-copy jobs are recorded in this catalog.</p>
+        <Text>No safe-copy jobs are recorded in this catalog.</Text>
       )}
-      <ul className="backup-job-list">
+      <List.Root unstyled className="backup-job-list">
         {jobs.map((job) => (
-          <li key={job.id} className="backup-job">
-            <h4>
+          <List.Item unstyled key={job.id} className="backup-job">
+            <Heading as="h4" unstyled>
               {actionNames[job.action]} · {job.state.replaceAll('_', ' ')}
-            </h4>
-            <p className="backup-path">
+            </Heading>
+            <Text className="backup-path">
               {job.sourceDisplayPath} → {job.datasetDisplayPath}
-            </p>
-            <p role="status">{job.message}</p>
-            <p>
+            </Text>
+            <Text role="status">{job.message}</Text>
+            <Text>
               Phase: {job.phase.replaceAll('_', ' ')} · {job.verifiedFiles} of {job.totalFiles}{' '}
               files byte-verified · {job.copyBytes} planned bytes
-            </p>
-            <p>
+            </Text>
+            <Text>
               {job.uncopiedSourceRevisions} source revisions uncopied ·{' '}
               {job.retainedDestinationFiles} destination files retained · configured budget{' '}
               {job.bytesPerSecond} bytes/s
-            </p>
+            </Text>
             {job.uncopiedSourceRevisions > 0 && (
-              <p>
+              <Text>
                 This job does not establish complete protection of the source. Its uncopied
                 revisions remain at the source.
-              </p>
+              </Text>
             )}
             <small>Updated {job.updatedAt}</small>
-            <div className="backup-controls">
+            <Box className="backup-controls">
               {job.action === 'replace_retaining' && (
                 <Button
                   disabled={busy}
@@ -525,28 +531,30 @@ export function SyncWorkflow({
                   Inspect recovery
                 </Button>
               )}
-            </div>
+            </Box>
             {versions[job.id] && (
-              <section aria-label="Retained destination versions">
+              <chakra.section aria-label="Retained destination versions">
                 {!versions[job.id]?.length && (
-                  <p>No retained versions were returned. This does not establish recoverability.</p>
+                  <Text>
+                    No retained versions were returned. This does not establish recoverability.
+                  </Text>
                 )}
-                <ul>
+                <List.Root unstyled>
                   {versions[job.id]?.map((version) => (
-                    <li key={version.id}>
-                      <p className="backup-path">{version.displayPath}</p>
-                      <p>
+                    <List.Item unstyled key={version.id}>
+                      <Text className="backup-path">{version.displayPath}</Text>
+                      <Text>
                         {version.bytes} bytes · Full digest: {version.fullDigest}
-                      </p>
-                      <p>
+                      </Text>
+                      <Text>
                         {version.retained
                           ? 'Retained version recorded'
                           : 'Retention not established'}{' '}
                         · {version.reason}
-                      </p>
-                    </li>
+                      </Text>
+                    </List.Item>
                   ))}
-                </ul>
+                </List.Root>
                 <Button
                   disabled={
                     busy ||
@@ -572,22 +580,22 @@ export function SyncWorkflow({
                 >
                   Review retained restore to new output
                 </Button>
-                <p>
+                <Text>
                   Restore requires a separate approval and writes into a new protected output.
                   Existing originals and retained history remain untouched.
-                </p>
-              </section>
+                </Text>
+              </chakra.section>
             )}
-          </li>
+          </List.Item>
         ))}
-      </ul>
+      </List.Root>
       {running && (
-        <p>
+        <Text>
           Pause applies at safe I/O boundaries and uses the shared application budget. Cancellation
           retains sources and any staged/published objects for inspection.
-        </p>
+        </Text>
       )}
-    </section>
+    </chakra.section>
   );
 }
 
@@ -612,84 +620,90 @@ function SyncReviewPanel({
   const [offset, setOffset] = useState(0);
   const items = review.items.slice(offset, offset + 200);
   return (
-    <section className="backup-review" aria-label="Safe-copy action review">
-      <h3>{actionNames[review.action]}</h3>
-      <p className="backup-path">Source: {review.sourceDisplayPath}</p>
-      <p className="backup-path">Dataset: {review.datasetDisplayPath}</p>
+    <chakra.section className="backup-review" aria-label="Safe-copy action review">
+      <Heading as="h3" unstyled>
+        {actionNames[review.action]}
+      </Heading>
+      <Text className="backup-path">Source: {review.sourceDisplayPath}</Text>
+      <Text className="backup-path">Dataset: {review.datasetDisplayPath}</Text>
       <dl className="backup-review-totals">
-        <div>
+        <Box>
           <dt>Files proposed for copy</dt>
           <dd>{review.copyFiles}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Content bytes</dt>
           <dd>{review.copyBytes}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Estimated required space</dt>
           <dd>{review.requiredBytes} bytes</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Available space</dt>
           <dd>
             {review.availableBytes === null
               ? 'Unknown — backend review required'
               : `${review.availableBytes} bytes`}
           </dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Destination files retained</dt>
           <dd>{review.retainedDestinationFiles}</dd>
-        </div>
-        <div>
+        </Box>
+        <Box>
           <dt>Uncopied source revisions</dt>
           <dd>{review.uncopiedSourceRevisions}</dd>
-        </div>
+        </Box>
       </dl>
-      <p>{review.metadataWarning}</p>
-      <p>
+      <Text>{review.metadataWarning}</Text>
+      <Text>
         This action includes all {review.items.length} plan entries. Display pages do not change the
         approved scope.
-      </p>
-      <div className="backup-table">
-        <table>
-          <caption>Exact safe-copy plan</caption>
-          <thead>
-            <tr>
-              <th>Relative path</th>
-              <th>Action</th>
-              <th>Source bytes</th>
-            </tr>
-          </thead>
-          <tbody>
+      </Text>
+      <Box className="backup-table">
+        <Table.Root unstyled>
+          <Table.Caption unstyled captionSide="top">
+            Exact safe-copy plan
+          </Table.Caption>
+          <Table.Header unstyled>
+            <Table.Row unstyled>
+              <Table.ColumnHeader unstyled>Relative path</Table.ColumnHeader>
+              <Table.ColumnHeader unstyled>Action</Table.ColumnHeader>
+              <Table.ColumnHeader unstyled>Source bytes</Table.ColumnHeader>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body unstyled>
             {items.map((item) => (
-              <tr key={item.entryId}>
-                <td className="backup-path">{item.displayPath}</td>
-                <td>{item.action.replaceAll('_', ' ')}</td>
-                <td>{item.sourceBytes ?? 'Not applicable'}</td>
-              </tr>
+              <Table.Row unstyled key={item.entryId}>
+                <Table.Cell unstyled className="backup-path">
+                  {item.displayPath}
+                </Table.Cell>
+                <Table.Cell unstyled>{item.action.replaceAll('_', ' ')}</Table.Cell>
+                <Table.Cell unstyled>{item.sourceBytes ?? 'Not applicable'}</Table.Cell>
+              </Table.Row>
             ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="backup-controls">
+          </Table.Body>
+        </Table.Root>
+      </Box>
+      <Box className="backup-controls">
         <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
           Previous plan entries
         </Button>
-        <span>
+        <Text as="span">
           Plan entries {items.length ? offset + 1 : 0}–{offset + items.length} of{' '}
           {review.items.length}
-        </span>
+        </Text>
         <Button
           disabled={offset + 200 >= review.items.length}
           onClick={() => setOffset(offset + 200)}
         >
           Next plan entries
         </Button>
-      </div>
-      {!review.executionAvailable && <p role="status">{review.reason}</p>}
-      <fieldset disabled={busy || approved || !review.executionAvailable}>
-        <legend>Confirm this exact action</legend>
+      </Box>
+      {!review.executionAvailable && <Text role="status">{review.reason}</Text>}
+      <chakra.fieldset disabled={busy || approved || !review.executionAvailable}>
+        <chakra.legend>Confirm this exact action</chakra.legend>
         <label>
           <input
             type="checkbox"
@@ -716,12 +730,12 @@ function SyncReviewPanel({
           />
           I reviewed the metadata limits; this does not establish independent recovery
         </label>
-      </fieldset>
-      <p>
+      </chakra.fieldset>
+      <Text>
         Approval expires after {review.approvalLifetimeSeconds} seconds. Preparation, copying and
         recovery each require their own review.
-      </p>
-      <div className="backup-controls">
+      </Text>
+      <Box className="backup-controls">
         {!approved && (
           <Button
             disabled={
@@ -748,7 +762,7 @@ function SyncReviewPanel({
         <Button disabled={busy} onClick={onDismiss}>
           Close action review
         </Button>
-      </div>
-    </section>
+      </Box>
+    </chakra.section>
   );
 }

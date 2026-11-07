@@ -1261,6 +1261,30 @@ async fn library_request(
             LibraryRequest::OrganizationCompanions { asset_id } => {
                 LibraryResponse::OrganizationCompanions(library.organization_companions(asset_id)?)
             }
+            LibraryRequest::OrganizationProtectionStatus {} => {
+                LibraryResponse::OrganizationProtectionStatus(
+                    library.organization_protection_status()?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryStart { template } => {
+                LibraryResponse::OrganizationLibraryPreview(
+                    library.organization_library_start(template)?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryAdvance { preview_id } => {
+                LibraryResponse::OrganizationLibraryPreview(
+                    library.organization_library_advance(preview_id)?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryPage { preview_id, offset } => {
+                LibraryResponse::OrganizationLibraryPreview(
+                    library.organization_library_page(preview_id, offset)?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryDiscard { preview_id } => {
+                library.organization_library_discard(preview_id)?;
+                LibraryResponse::Updated(0)
+            }
             LibraryRequest::OrganizationPreview {
                 asset_ids,
                 template,

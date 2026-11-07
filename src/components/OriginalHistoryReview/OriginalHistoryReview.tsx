@@ -1,3 +1,4 @@
+import { Box, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type { OriginalOperationHistory, OriginalOperationJob } from '../../bindings';
@@ -89,27 +90,29 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
             close();
           }}
         >
-          <header className="organization-heading">
-            <h2 id="original-history-title">Retained organization plan</h2>
+          <chakra.header className="organization-heading">
+            <Heading as="h2" unstyled id="original-history-title">
+              Retained organization plan
+            </Heading>
             <Button type="button" onClick={close}>
               Close plan history
             </Button>
-          </header>
-          <div className="organization-body">
-            <p>
+          </chakra.header>
+          <Box className="organization-body">
+            <Text>
               Saved plan history. Current file locations and contents require a fresh native
               recovery inspection before any action.
-            </p>
-            <p className="help">
+            </Text>
+            <Text className="help">
               Opening this review grants no execution approval. Original-file changes remain
               unavailable under the preservation recovery gate.
-            </p>
-            {pending && <p role="status">Loading retained plan…</p>}
+            </Text>
+            {pending && <Text role="status">Loading retained plan…</Text>}
             {error && (
               <>
-                <p role="alert" className="error">
+                <Text role="alert" className="error">
                   {error}
-                </p>
+                </Text>
                 <Button type="button" onClick={() => void load()}>
                   Retry history
                 </Button>
@@ -117,52 +120,56 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
             )}
             {history && (
               <>
-                <p>
+                <Text>
                   {history.job.state === 'needs_recovery'
                     ? 'Needs recovery review'
                     : history.job.state === 'completed_verified'
                       ? 'Recorded completed and verified'
                       : 'Recorded pending attempt'}
-                </p>
-                <p>
+                </Text>
+                <Text>
                   {history.members.length} retained members · {history.job.verifiedMoves} /{' '}
                   {history.job.totalMoves} recorded verified moves
-                </p>
-                <p>
+                </Text>
+                <Text>
                   Plan digest: <bdi>{history.planDigest}</bdi>
-                </p>
+                </Text>
                 {history.reverseOf && (
-                  <p>
+                  <Text>
                     Reverse of plan <bdi>{history.reverseOf}</bdi>
-                  </p>
+                  </Text>
                 )}
-                <div className="organization-table">
-                  <table>
-                    <caption>
+                <Box className="organization-table">
+                  <Table.Root unstyled>
+                    <Table.Caption unstyled captionSide="top">
                       Saved paths for this {history.job.kind === 'undo' ? 'undo' : 'rename'} plan
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Before</th>
-                        <th scope="col">After</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                    </Table.Caption>
+                    <Table.Header unstyled>
+                      <Table.Row unstyled>
+                        <Table.ColumnHeader unstyled scope="col">
+                          Before
+                        </Table.ColumnHeader>
+                        <Table.ColumnHeader unstyled scope="col">
+                          After
+                        </Table.ColumnHeader>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body unstyled>
                       {history.members.slice(page * 64, (page + 1) * 64).map((member) => (
-                        <tr key={member.id}>
-                          <td>
+                        <Table.Row unstyled key={member.id}>
+                          <Table.Cell unstyled>
                             <bdi>{member.before}</bdi>
-                          </td>
-                          <td>
+                          </Table.Cell>
+                          <Table.Cell unstyled>
                             <bdi>{member.after}</bdi>
-                          </td>
-                        </tr>
+                          </Table.Cell>
+                        </Table.Row>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </Table.Body>
+                  </Table.Root>
+                </Box>
                 {history.members.length > 64 && (
-                  <nav aria-label="Retained plan members">
+                  <chakra.nav aria-label="Retained plan members">
                     <Button
                       type="button"
                       disabled={page === 0}
@@ -170,9 +177,9 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
                     >
                       Previous members
                     </Button>
-                    <span>
+                    <Text as="span">
                       Page {page + 1} of {Math.ceil(history.members.length / 64)}
-                    </span>
+                    </Text>
                     <Button
                       type="button"
                       disabled={(page + 1) * 64 >= history.members.length}
@@ -180,11 +187,11 @@ function HistoryForJob({ job, readHistory = readCatalogHistory }: Props) {
                     >
                       Next members
                     </Button>
-                  </nav>
+                  </chakra.nav>
                 )}
               </>
             )}
-          </div>
+          </Box>
         </dialog>
       )}
     </>

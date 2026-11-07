@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box, Heading, List, Text, chakra } from '@chakra-ui/react';
 import { ExportHistory } from '@/components/ExportHistory';
 import { useId, useState } from 'react';
 import type {
@@ -90,12 +90,14 @@ export function MetadataExportPanel({
     }
   }
   return (
-    <section aria-labelledby="metadata-export-title">
-      <h3 id="metadata-export-title">Export catalog or XMP copies</h3>
-      <p className="help">
+    <chakra.section aria-labelledby="metadata-export-title">
+      <Heading as="h3" unstyled id="metadata-export-title">
+        Export catalog or XMP copies
+      </Heading>
+      <Text className="help">
         Export into a separate folder. Original photos, sidecars and existing outputs are never
         replaced. Catalog copies contain organization and references, not your photo backup.
-      </p>
+      </Text>
       <Field.Root>
         <Field.Label htmlFor={kindId}>Export type</Field.Label>
         <NativeSelect
@@ -113,10 +115,10 @@ export function MetadataExportPanel({
         </NativeSelect>
       </Field.Root>
       {kind === 'xmp' && (
-        <p>
+        <Text>
           {selectionCount.toLocaleString()} selected · up to 200 media and 64 MiB per review.
           Ambiguous source associations require resolution before export.
-        </p>
+        </Text>
       )}
       <Button
         disabled={busy || (kind === 'xmp' && (!selection || selectionCount > 200))}
@@ -124,30 +126,30 @@ export function MetadataExportPanel({
       >
         Choose export folder & preview
       </Button>
-      {error && <p role="alert">{error}</p>}
+      {error && <Text role="alert">{error}</Text>}
       {review && (
-        <div className="metadata-export-review">
-          <h4>
+        <Box className="metadata-export-review">
+          <Heading as="h4" unstyled>
             Review {review.files.length} new export {review.files.length === 1 ? 'file' : 'files'}
-          </h4>
-          <p>
+          </Heading>
+          <Text>
             <bdi>{review.destination}</bdi>
-          </p>
-          <p>{review.message}</p>
+          </Text>
+          <Text>{review.message}</Text>
           <details>
             <summary>Files and verified byte counts</summary>
-            <ul>
+            <List.Root unstyled>
               {review.files.slice(0, 80).map((file) => (
-                <li key={file.name}>
+                <List.Item unstyled key={file.name}>
                   <bdi>{file.name}</bdi> · {file.bytes} bytes
-                </li>
+                </List.Item>
               ))}
-            </ul>
+            </List.Root>
             {review.files.length > 80 && (
-              <p>
+              <Text>
                 {review.files.length - 80} additional files are included in the association
                 manifest.
-              </p>
+              </Text>
             )}
           </details>
           <label className="check-row">
@@ -162,7 +164,7 @@ export function MetadataExportPanel({
           <Button disabled={!accepted || busy} onClick={() => void save()}>
             Save reviewed export
           </Button>
-        </div>
+        </Box>
       )}
       {busy && (
         <Button
@@ -175,8 +177,8 @@ export function MetadataExportPanel({
           Cancel export
         </Button>
       )}
-      <p role="status">{busy ? 'Preparing or verifying export…' : notice}</p>
+      <Text role="status">{busy ? 'Preparing or verifying export…' : notice}</Text>
       <ExportHistory />
-    </section>
+    </chakra.section>
   );
 }

@@ -19,6 +19,7 @@ fn source(path: &str) -> PreviewSource {
         revision: "revision".into(),
         bytes: 42,
         capture: Some("2024-02-29T23:45:12.123".into()),
+        metadata: None,
         available: true,
         companion_candidates: 1,
     }
@@ -141,7 +142,7 @@ fn rejects_general_code_unknown_tokens_and_unsafe_date_directives() {
         "",
         "/root/{ext}",
         "a//b",
-        "{camera}",
+        "{camera_model_unreviewed}",
         "{capture:%n}",
         "{capture:%t}",
         "{capture:%F}",
@@ -343,6 +344,7 @@ fn template_examples_use_the_preview_resolver_without_filesystem_access() {
     let mut sample = TemplateSample {
         relative_path: "Holiday/IMG.JPG".into(),
         capture: Some("2026-10-31T14:30:00.123".into()),
+        metadata: None,
         sequence: 12,
         expected_target: "2026/Holiday/012_IMG.JPG".into(),
     };
@@ -388,4 +390,150 @@ fn template_examples_use_the_preview_resolver_without_filesystem_access() {
     sample.sequence = 1;
     validate_samples(&template, &vec![sample.clone(); 4]).unwrap();
     assert!(validate_samples(&template, &vec![sample; 5]).is_err());
+}
+
+#[test]
+fn quarters_embedded_locations_tags_and_camera_fields_resolve_without_guessing() {
+    let mut input = source("photo.ARW");
+    input.capture = Some("2026-11-07T14:30:52".into());
+    input.metadata = Some(OrganizationMetadata {
+        country: Some("Portugal".into()),
+        region: Some("Algarve".into()),
+        city: Some("Lagos".into()),
+        place: Some("Belem".into()),
+        tag: Some("Nature".into()),
+        subcategory: Some("Birds".into()),
+        subject: Some("Kingfishers".into()),
+        camera_type: Some("Mirrorless".into()),
+        brand: Some("Sony".into()),
+        model: Some("A7-IV".into()),
+        file_format: Some("ARW".into()),
+    });
+    for (pattern, expected) in [
+        (
+            "{capture:%Y}/{quarter}/{original_stem}.{ext}",
+            "2026/Q4/photo.ARW",
+        ),
+        (
+            "{capture:%Y}/{capture:%m}/{capture:%d}/{original_stem}.{ext}",
+            "2026/11/07/photo.ARW",
+        ),
+        (
+            "{country}/{region}/{city}/{place}/{original_stem}.{ext}",
+            "Portugal/Algarve/Lagos/Belem/photo.ARW",
+        ),
+        (
+            "{tag}/{subcategory}/{subject}/{original_stem}.{ext}",
+            "Nature/Birds/Kingfishers/photo.ARW",
+        ),
+        (
+            "{camera_type}/{brand}/{model}/{original_stem}.{ext}",
+            "Mirrorless/Sony/A7-IV/photo.ARW",
+        ),
+        (
+            "{camera}/{file_format}/{original_stem}.{ext}",
+            "Sony-A7-IV/RAW/photo.ARW",
+        ),
+        (
+            "{camera}/{event}/{original_stem}.{ext}",
+            "Sony-A7-IV/Holiday/photo.ARW",
+        ),
+    ] {
+        let preview = run(pattern, vec![input.clone()]);
+        assert_eq!(preview.blocked, 0, "{pattern}");
+        assert_eq!(
+            preview.rows[0].target_relative_path.as_deref(),
+            Some(expected)
+        );
+    }
+    for (month, quarter) in [
+        (1, 1),
+        (3, 1),
+        (4, 2),
+        (6, 2),
+        (7, 3),
+        (9, 3),
+        (10, 4),
+        (12, 4),
+    ] {
+        input.capture = Some(format!("2026-{month:02}-01T00:00:00"));
+        assert_eq!(
+            run("{quarter}/{original_stem}.{ext}", vec![input.clone()]).rows[0]
+                .target_relative_path
+                .as_deref(),
+            Some(format!("Q{quarter}/photo.ARW").as_str())
+        );
+    }
+}
+#[test]
+fn missing_metadata_stays_blocked_even_with_undated_fallback_and_injected_fields_are_rejected() {
+    let mut input = source("photo.JPG");
+    input.capture = None;
+    for (pattern, issue) in [
+        (
+            "{capture:%Y}/{country}/{original_stem}.{ext}",
+            OrganizationIssue::MissingLocation,
+        ),
+        (
+            "{tag}/{subject}/{original_stem}.{ext}",
+            OrganizationIssue::MissingTag,
+        ),
+        (
+            "{camera_type}/{original_stem}.{ext}",
+            OrganizationIssue::MissingCameraMetadata,
+        ),
+    ] {
+        let preview = run(pattern, vec![input.clone()]);
+        assert!(preview.rows[0].issues.contains(&issue));
+        assert!(preview.rows[0].target_relative_path.is_none());
+    }
+    for value in ["../escape", "Portugal/Lisbon", "CON", "bad\0name", "name."] {
+        input.metadata = Some(OrganizationMetadata {
+            country: Some(value.into()),
+            ..Default::default()
+        });
+        assert!(
+            run("{country}/{original_stem}.{ext}", vec![input.clone()]).rows[0]
+                .issues
+                .contains(&OrganizationIssue::InvalidPath)
+        );
+    }
+}
+#[test]
+fn metadata_changes_bind_new_preview_identity_and_legacy_omissions_remain_identical() {
+    let input = source("photo.JPG");
+    assert!(
+        !serde_json::to_value(&input)
+            .unwrap()
+            .as_object()
+            .unwrap()
+            .contains_key("metadata")
+    );
+    let mut changed = input.clone();
+    changed.metadata = Some(OrganizationMetadata {
+        country: Some("Portugal".into()),
+        ..Default::default()
+    });
+    let first = run("{country}/{original_stem}.{ext}", vec![changed.clone()]);
+    assert_eq!(first.policy, "organization-preview-v2");
+    assert_eq!(
+        run("{original_stem}.{ext}", vec![input]).policy,
+        "organization-preview-v1"
+    );
+    changed.metadata.as_mut().unwrap().country = Some("Spain".into());
+    assert_ne!(
+        first.fingerprint,
+        run("{country}/{original_stem}.{ext}", vec![changed]).fingerprint
+    );
+    let sample = TemplateSample {
+        relative_path: "photo.JPG".into(),
+        capture: None,
+        metadata: Some(OrganizationMetadata {
+            country: Some("Portugal".into()),
+            ..Default::default()
+        }),
+        sequence: 1,
+        expected_target: "Portugal/photo.JPG".into(),
+    };
+    validate_samples(&template("{country}/{original_stem}.{ext}"), &[sample]).unwrap();
 }

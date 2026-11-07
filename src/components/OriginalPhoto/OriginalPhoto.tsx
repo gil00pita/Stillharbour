@@ -1,3 +1,4 @@
+import { Box, Text, Button } from '@chakra-ui/react';
 import { useState } from 'react';
 import { convertFileSrc } from '@tauri-apps/api/core';
 import { ORIGINAL_IMAGE_POLICY, type AssetSummary, type ThumbnailResult } from '../../bindings';
@@ -28,11 +29,11 @@ export function OriginalPhoto({
     setAttempt((value) => value + 1);
   }
   return (
-    <div
+    <Box
       className={`original-photo ${state === 'loaded' ? 'has-original' : ''} ${state === 'failed' ? 'has-failed' : ''}`}
       aria-busy={state === 'loading'}
     >
-      <div className="original-fallback" aria-hidden={state === 'loaded'}>
+      <Box className="original-fallback" aria-hidden={state === 'loaded'}>
         <ViewerImage
           asset={asset}
           results={results}
@@ -40,7 +41,7 @@ export function OriginalPhoto({
           initialSrc={initialSrc}
           onRetry={onRetry}
         />
-      </div>
+      </Box>
       {state !== 'failed' && (
         <CachedPreviewImage
           key={attempt}
@@ -62,21 +63,23 @@ export function OriginalPhoto({
       {state === 'loading' && (
         <>
           <LoadingSheen />
-          <p className="original-notice" role="status">
+          <Text className="original-notice" role="status">
             Loading original…
-          </p>
+          </Text>
         </>
       )}
       {state === 'failed' && (
-        <p
+        <Text
           className="original-notice"
           role="status"
           title="Original viewing supports static JPEG, PNG and WebP, plus HEIC/HEIF on compatible macOS webviews, up to 32 MiB and 32 megapixels. Offline originals must be reconnected."
         >
           Original unavailable · showing a preview.{' '}
-          <button onClick={retryOriginal}>Retry original</button>
-        </p>
+          <Button unstyled type="submit" onClick={retryOriginal}>
+            Retry original
+          </Button>
+        </Text>
       )}
-    </div>
+    </Box>
   );
 }

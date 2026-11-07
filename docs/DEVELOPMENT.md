@@ -952,3 +952,88 @@ Local repair logs and native captures are under `.context/menu-position/`.
 ### Explicit Map → Photos navigation regression — 2026-11-06
 
 `tests/desktop/map-photos.e2e.mjs` uses the generated geographic fixture and real scan/query commands. It checks the renamed Show in photos action, scope inside the shared search frame and in Filters, with a separate × remove control, one logical spatial filter, desktop/660 px chip hit testing, preserving filename text when clearing map scope, and repeated ordinary Photos navigation after explicit transfers. The fixture source audit must remain unchanged. Component cases cover the parent navigation boundary, search indicator, all four spatial labels and selective clearing. Use an isolated instrumented executable while development runs, restore production output afterward and retain exact platform/results in the implementation log. This smoke does not assert GPU/map-renderer capabilities or real-library access.
+
+## Workspace consistency and Chakra coverage — 2026-11-07
+
+[UI_WORKSPACE_AUDIT.md](UI_WORKSPACE_AUDIT.md) records the full page review,
+reference rationale, migration exceptions and changed-file inventory. Use the
+full frontend suite for this shared presentation pass, plus types, lint, build,
+formatting and whitespace checks. No theme token or dependency changes require
+new type generation. Native image dimensions on Chakra Image use htmlWidth/
+htmlHeight, preserving intrinsic aspect and avoiding invalid unitless CSS lengths.
+
+The shared search Field root needs a zero flex base so width:100% cannot crowd
+out compact-header actions. Map search is a direct peer of title/actions. Keep
+menu/dialog contexts and dynamic canvas geometry intact when migrating JSX.
+Structure Formater mounts independently of Photos and consumes no gallery
+selection/query. Its preview uses native TEMP membership/results and global
+conflict indexes. For changes to this path run the organization Rust tests,
+IPC drift, focused core Clippy, frontend tests/build and generated native
+`structure-formatter.e2e.mjs`. See ADR-0095 for the paging/revision contract and
+unqualified large-catalog performance limits.
+
+After an instrumented build, run the focused page-chrome, timeline-navigation,
+structure-formatter, utilities-scans and m4-application native specs sequentially
+with an exclusive driver. Page-chrome waits for the actual destination title
+before measuring/capturing and saves each page at 1180/660 px. Timeline checks
+label containment against the visible/clipping browser column; Text list's inner
+viewport intentionally spans horizontally scrollable columns. Foundation's
+organization cases retain the separate selected-photo modal planning contract.
+Structure Formater independently tests whole-library rules and bounded native pages. Restore ordinary production output after tests.
+Its protection prerequisite tests live in the `organization_protection` Rust
+module and StructureFormatter's private StructureProtection component tests.
+`cargo test --locked -p stillharbour-core --lib organization_protection` covers
+retained job/schedule blockers using disposable catalogs; the native structure
+spec verifies typed IPC, the clear-but-disabled state and panel fit at both widths.
+Recurring OS-consent integration tests remain explicit opt-ins, not evidence
+provided by these read-only prerequisite checks.
+These checks use generated fixtures; no personal catalog or library is a test.
+
+Native visibility diagnostics: retain document.hidden and document.hasFocus()
+in menu-position failures. A hidden/unfocused WKWebView can suspend floating-menu
+positioning and driver scrolling even when native screenshots are available.
+Do not treat a successful header screenshot as proof of interactive positioning.
+The attempted test-only app/window show and focus calls did not consistently
+unhide this local WebView; no new permission or foreground hook is retained.
+Chakra Table.Caption explicitly uses captionSide=top to preserve native caption
+ordering and preview-result focus/scroll behavior.
+
+The dedicated organization fixture and Foundation organization helpers reveal
+review controls through Element.scrollIntoView and activate the organization
+entry with focus before click, matching normal pointer ordering. The embedded
+driver otherwise focuses after click, and its wheel/animation-frame scroll path
+can time out before falling back to the same DOM method in an occluded WebView.
+Keep selection, focus-return, path/companion and unchanged-source assertions;
+these fixture setup calls do not establish physical wheel/secondary-click input.
+The page-chrome fixture seeds its library in a before hook so header checks run
+independently of context-menu positioning; the default suite retains both cases.
+
+Structure rule cards (2026-11-07): OrganizationPresets owns the date patterns,
+inline SVG example renderer and colocated slot recipe. SegmentedControl owns the
+shared typed radio-group adapter/recipe. Register recipes in the theme and run
+the pinned Chakra CLI typegen. Test both rule-editor consumers and existing
+inspection cards; native `structure-formatter.e2e.mjs` verifies keyboard choices,
+actual whole-library requests, window fit and unchanged generated sources.
+Foundation's selected-name case helper now operates the case segment; standard
+field geometry excludes hidden radio inputs and checks segment containment
+separately. No dependency, IPC schema or native execution gate changes.
+
+The embedded WebDriver 1.5.1 arrow-key default moves radio focus/checked state
+and dispatches change, omitting the native activation click consumed by Ark.
+The formatter's test helper asserts that focused/checked radio and completes
+its click before inspecting the application request. This is instrumented DOM
+input evidence, not physical keyboard certification; production event handling
+is unchanged. Keep this limit explicit in results.
+
+Expanded structure naming (2026-11-07): ADR-0096 covers optional metadata source/
+example context and policy-v2 naming tokens, with v1 legacy serialization retained.
+Run the organization, metadata projection and saved-plan/template consumers;
+changes to the resolver warrant the generated original/copy regressions as well.
+The actual focused/default and feature/full outcomes belong in IMPLEMENTATION_LOG.
+Check IPC drift after exporting OrganizationMetadata/TemplateSample. Run the
+whole-library native structure spec, the affected Foundation flows and timeline
+spec sequentially; the latter shares the generated scroll-catalog hook. That
+hook now adds explicit catalog-only naming observations and tag categories, while
+its placeholder originals remain unavailable. This is not decoder/extraction
+proof. The macOS helper read list adds embedded naming tags, with no silent
+reindex and no expanded Windows location-label reader claim.

@@ -1,3 +1,4 @@
+import { List, Text } from '@chakra-ui/react';
 import { useState } from 'react';
 import { Button } from '@/components/Button';
 import type { MetadataExportRecord } from '../../bindings';
@@ -21,27 +22,27 @@ export function ExportHistory() {
   return (
     <details>
       <summary>Export completion and retained partials</summary>
-      <p className="help">
+      <Text className="help">
         Only a completed receipt proves that the reviewed export finished. Interrupted outputs and
         stages are retained. Preview a new copy to retry; old approvals are never replayed after
         restart.
-      </p>
+      </Text>
       <Button disabled={busy} onClick={() => void load()}>
         Load export history
       </Button>
-      {error && <p role="alert">{error}</p>}
+      {error && <Text role="alert">{error}</Text>}
       {entries && (
-        <ul>
+        <List.Root unstyled>
           {entries.map((entry) => (
-            <li key={entry.id}>
+            <List.Item unstyled key={entry.id}>
               <bdi>{entry.id}</bdi> ·{' '}
               {entry.lastPhase === 'completed' ? 'Completed' : 'Incomplete — retained for review'} ·{' '}
               {entry.filesVerified} files verified · {entry.updatedAt}
-            </li>
+            </List.Item>
           ))}
-        </ul>
+        </List.Root>
       )}
-      {entries?.length === 0 && <p>No export receipts yet.</p>}
+      {entries?.length === 0 && <Text>No export receipts yet.</Text>}
     </details>
   );
 }

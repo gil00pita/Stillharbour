@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -77,32 +77,38 @@ export function FilterPanel({
         if (!selecting) onClose();
       }}
     >
-      <form onSubmit={submit} aria-busy={selecting}>
-        <header className="filter-panel-header">
-          <h2 id="filter-panel-title">Filters</h2>
+      <chakra.form onSubmit={submit} aria-busy={selecting}>
+        <chakra.header className="filter-panel-header">
+          <Heading as="h2" unstyled id="filter-panel-title">
+            Filters
+          </Heading>
           <Button type="button" disabled={selecting} onClick={onClose} aria-label="Close filters">
             Close
           </Button>
-        </header>
-        <fieldset className="filter-panel-body" disabled={selecting}>
-          <p className="help">
+        </chakra.header>
+        <chakra.fieldset className="filter-panel-body" disabled={selecting}>
+          <Text className="help">
             {c.page?.total.toLocaleString() ?? '…'} matching photos &amp; videos
-          </p>
+          </Text>
           <ActiveFilters
             query={draft}
             filter={(patch) => setDraft((value) => ({ ...value, ...patch }))}
           />
-          <section>
-            <h3>Library &amp; sorting</h3>
+          <chakra.section>
+            <Heading as="h3" unstyled>
+              Library &amp; sorting
+            </Heading>
             <QueryFields
               key={version}
               query={draft}
               status={status}
               filter={(patch) => setDraft((value) => ({ ...value, ...patch }))}
             />
-          </section>
-          <section>
-            <h3>Display</h3>
+          </chakra.section>
+          <chakra.section>
+            <Heading as="h3" unstyled>
+              Display
+            </Heading>
             <BrowserControls
               mode={draftMode}
               size={draftDisplay.size}
@@ -111,9 +117,11 @@ export function FilterPanel({
               onSize={(size) => setDisplay((value) => ({ ...value, size }))}
               onFit={(fit) => setDisplay((value) => ({ ...value, fit }))}
             />
-          </section>
-          <section>
-            <h3>Folders &amp; tags</h3>
+          </chakra.section>
+          <chakra.section>
+            <Heading as="h3" unstyled>
+              Folders &amp; tags
+            </Heading>
             <Field.Root asChild unstyled>
               <label>
                 <Field.Label asChild unstyled>
@@ -137,16 +145,18 @@ export function FilterPanel({
                 onFilter={(patch) => setDraft((value) => ({ ...value, ...patch }))}
               />
             )}
-          </section>
-          <section>
-            <h3>Library availability</h3>
+          </chakra.section>
+          <chakra.section>
+            <Heading as="h3" unstyled>
+              Library availability
+            </Heading>
             <RootAvailability
               status={status}
               rootId={draft.rootId}
               onSettings={onSettings}
               onRelink={onRelink}
             />
-          </section>
+          </chakra.section>
           <Button
             type="button"
             disabled={selecting || dirty || c.loading || c.selection.busy || !c.page?.total}
@@ -154,10 +164,12 @@ export function FilterPanel({
           >
             Select all results
           </Button>
-          {selectionError && <p role="alert">{selectionError}</p>}
-          {dirty && <p className="help">Apply changes before selecting all matching results.</p>}
-        </fieldset>
-        <footer className="filter-panel-actions">
+          {selectionError && <Text role="alert">{selectionError}</Text>}
+          {dirty && (
+            <Text className="help">Apply changes before selecting all matching results.</Text>
+          )}
+        </chakra.fieldset>
+        <chakra.footer className="filter-panel-actions">
           <Button
             type="button"
             disabled={selecting}
@@ -174,8 +186,8 @@ export function FilterPanel({
           <Button type="submit" className="primary" disabled={c.selection.busy || selecting}>
             Apply filters
           </Button>
-        </footer>
-      </form>
+        </chakra.footer>
+      </chakra.form>
     </dialog>
   );
 }

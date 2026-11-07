@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { IconButton } from '@chakra-ui/react';
+import { IconButton, Box, Text, Button as ChakraButton } from '@chakra-ui/react';
 import {
   Map,
   Marker,
@@ -211,7 +211,7 @@ export default function Basemap({
     }
   }
   return (
-    <div className="map-basemap" ref={container}>
+    <Box className="map-basemap" ref={container}>
       {map &&
         clusters.map((cluster) => (
           <PhotoMarker
@@ -224,13 +224,13 @@ export default function Basemap({
             onClick={() => onCluster(cluster)}
           />
         ))}
-      <p className="map-attribution">
+      <Text className="map-attribution">
         {view === 'satellite'
           ? SATELLITE_CREDIT
           : 'Made with Natural Earth · Offline world overview'}
-      </p>
+      </Text>
       {map && (
-        <div className="map-layers" role="group" aria-label="Map view">
+        <Box className="map-layers" role="group" aria-label="Map view">
           <Button type="button" aria-pressed={view === 'map'} onClick={() => changeView('map')}>
             Map
           </Button>
@@ -242,34 +242,38 @@ export default function Basemap({
           >
             Satellite
           </Button>
-        </div>
+        </Box>
       )}
       {(view === 'satellite' || satelliteFailed) && (
-        <p className="map-view-note" role="status">
+        <Text className="map-view-note" role="status">
           {satelliteFailed
             ? 'Satellite imagery could not be loaded. Map view is available; check your connection and try Satellite again.'
             : satelliteLoaded
               ? 'NASA satellite overview · limited detail · internet required'
               : 'Loading NASA satellite overview · limited detail · internet required'}
-        </p>
+        </Text>
       )}
       {map && (
-        <div className="map-zoom" role="group" aria-label="Map zoom">
-          <button
+        <Box className="map-zoom" role="group" aria-label="Map zoom">
+          <ChakraButton
+            unstyled
+            type="submit"
             aria-label="Zoom in"
             disabled={zoom >= 16}
             onClick={(event) => map.zoomIn({ duration: 0 }, { originalEvent: event.nativeEvent })}
           >
             +
-          </button>
-          <button
+          </ChakraButton>
+          <ChakraButton
+            unstyled
+            type="submit"
             aria-label="Zoom out"
             disabled={zoom <= 0}
             onClick={(event) => map.zoomOut({ duration: 0 }, { originalEvent: event.nativeEvent })}
           >
             −
-          </button>
-        </div>
+          </ChakraButton>
+        </Box>
       )}
       {map && (
         <IconButton
@@ -295,7 +299,7 @@ export default function Basemap({
           </svg>
         </IconButton>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -335,7 +339,9 @@ function PhotoMarker({
   const preview = previews[previewKey({ assetId: asset.id, revision: asset.revision, edge: 256 })];
   const edge = preview?.state === 'ready' ? 256 : preview?.fallbackEdge;
   return createPortal(
-    <button
+    <ChakraButton
+      unstyled
+      type="submit"
       className={`map-marker${selected ? ' selected' : ''}`}
       aria-pressed={selected}
       disabled={disabled}
@@ -346,15 +352,19 @@ function PhotoMarker({
       }}
       aria-label={`${cluster.count} ${cluster.count === 1 ? 'photo' : 'photos'} in this area; sample location ${cluster.latitude.toFixed(3)}, ${cluster.longitude.toFixed(3)}`}
     >
-      <span className="map-marker-image">
+      <Text as="span" className="map-marker-image">
         {edge ? (
           <CachedPreviewImage src={previewUrl(asset, edge)} alt="" />
         ) : (
-          <span aria-hidden="true">◇</span>
+          <Text as="span" aria-hidden="true">
+            ◇
+          </Text>
         )}
-      </span>
-      <span className="map-marker-count">{cluster.count}</span>
-    </button>,
+      </Text>
+      <Text as="span" className="map-marker-count">
+        {cluster.count}
+      </Text>
+    </ChakraButton>,
     element,
   );
 }

@@ -1,3 +1,4 @@
+import { Box, Heading, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type {
@@ -507,37 +508,39 @@ function CopyWorkflowSession({
     (job?.state === 'prepared' && review?.action === 'prepare_names');
   const pages = review ? Math.max(1, Math.ceil(review.files.length / 64)) : 1;
   return (
-    <section
+    <chakra.section
       className="organization-destination"
       aria-label="Verified organization copy"
       aria-busy={busy}
     >
-      <h3>Prepare a verified copy</h3>
+      <Heading as="h3" unstyled>
+        Prepare a verified copy
+      </Heading>
       {importPlan && (
-        <p>
+        <Text>
           {importPlan.copyFileIds.length} new files will be copied. Every selected existing member
           is freshly byte-compared before and after each action. Existing files and originals remain
           in place.
-        </p>
+        </Text>
       )}
-      <p>
+      <Text>
         Confirm the saved destination using the native picker. Review the new output folder before
         preparing names. Preparation creates empty staged names; copying needs a separate approval.
         Originals remain in place.
-      </p>
+      </Text>
       {!review && (
         <Button type="button" disabled={busy || !!unavailable} onClick={() => void create()}>
           {busy ? 'Reviewing native scope…' : 'Choose destination and review preparation'}
         </Button>
       )}
-      {unavailable && <p role="status">{unavailable}</p>}
+      {unavailable && <Text role="status">{unavailable}</Text>}
       {receipt && (
-        <p role="status">
+        <Text role="status">
           Import recorded: {receipt.copiedFileIds.length} new{' '}
           {receipt.copiedFileIds.length === 1 ? 'file' : 'files'} copied and{' '}
           {receipt.skippedFiles.length} existing{' '}
           {receipt.skippedFiles.length === 1 ? 'file' : 'files'} freshly verified. Sources retained.
-        </p>
+        </Text>
       )}
       {receipt && (
         <ImportOutputIndexReview receipt={receipt} sourceRootId={manifest.files[0]!.rootId} />
@@ -548,17 +551,19 @@ function CopyWorkflowSession({
         </Button>
       )}
       {existing && (
-        <section aria-label="Existing copy output history">
-          <h4>Existing output for this mapping</h4>
-          <p>
+        <chakra.section aria-label="Existing copy output history">
+          <Heading as="h4" unstyled>
+            Existing output for this mapping
+          </Heading>
+          <Text>
             This source, template and target mapping already has retained output history. Inspect
             its current bytes before deciding whether it is complete. A new draft will reuse this
             history.
-          </p>
+          </Text>
           {existing.existing.map((entry) => (
             <ExistingEffect key={entry.reviewId} entry={entry} />
           ))}
-        </section>
+        </chakra.section>
       )}
       {job?.action === 'prepare_names' && prepared && review?.action === 'copy_files' && (
         <Button type="button" disabled={busy} onClick={() => void reopen()}>
@@ -572,58 +577,58 @@ function CopyWorkflowSession({
       )}
       {review && (
         <>
-          <h4 ref={heading} tabIndex={-1}>
+          <Heading as="h4" unstyled ref={heading} tabIndex={-1}>
             {review.action === 'prepare_names'
               ? 'Output preparation review'
               : 'Prepared copy review'}
-          </h4>
-          <p>
+          </Heading>
+          <Text>
             Destination: <bdi>{review.destinationDisplayPath}</bdi>
-          </p>
-          <p>
+          </Text>
+          <Text>
             New output folder:{' '}
             <strong>
               <bdi>{review.outputFolder}</bdi>
             </strong>
-          </p>
-          <p>
+          </Text>
+          <Text>
             {review.files.length} selected {review.files.length === 1 ? 'file' : 'files'} ·{' '}
             {BigInt(review.assessment.capacity.logicalBytes).toLocaleString()} bytes. Sources
             retained; no independent backup is provided.
-          </p>
-          <p>
+          </Text>
+          <Text>
             Estimated output space:{' '}
             {BigInt(review.assessment.capacity.estimatedPeakAdditionalBytes).toLocaleString()}{' '}
             bytes. Space is not reserved. The executor also requires application-journal headroom
             before starting.
-          </p>
-          <div className="organization-table">
-            <table>
-              <caption>
+          </Text>
+          <Box className="organization-table">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top">
                 Exact output paths, page {page + 1} of {pages}
-              </caption>
-              <thead>
-                <tr>
-                  <th>Source relative path</th>
-                  <th>Output relative path</th>
-                  <th>Bytes</th>
-                </tr>
-              </thead>
-              <tbody>
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled>Source relative path</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Output relative path</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Bytes</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
                 {review.files.slice(page * 64, (page + 1) * 64).map((file) => (
-                  <tr key={file.id}>
-                    <td>
+                  <Table.Row unstyled key={file.id}>
+                    <Table.Cell unstyled>
                       <bdi>{file.sourcePath}</bdi>
-                    </td>
-                    <td>
+                    </Table.Cell>
+                    <Table.Cell unstyled>
                       <bdi>{file.targetPath}</bdi>
-                    </td>
-                    <td>{BigInt(file.bytes).toLocaleString()}</td>
-                  </tr>
+                    </Table.Cell>
+                    <Table.Cell unstyled>{BigInt(file.bytes).toLocaleString()}</Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </Table.Body>
+            </Table.Root>
+          </Box>
           <Button type="button" disabled={!page} onClick={() => setPage(page - 1)}>
             Previous output paths
           </Button>
@@ -655,7 +660,7 @@ function CopyWorkflowSession({
             </Button>
           ) : (
             <>
-              <p>Approved for one attempt in this session; expires after ten minutes.</p>
+              <Text>Approved for one attempt in this session; expires after ten minutes.</Text>
               <Button type="button" disabled={blocked} onClick={() => void start()}>
                 {review.action === 'prepare_names'
                   ? 'Start output preparation'
@@ -685,18 +690,18 @@ function CopyWorkflowSession({
       )}
       {running && job?.action === 'copy_files' && <CopyIoControls />}
       {inspection && (
-        <p role="status">
+        <Text role="status">
           {inspection.allPublishedBytesVerified
             ? 'Every selected output was freshly compared with its source.'
             : `Inspection: ${inspection.states.join(', ')}. No writes were replayed.`}
-        </p>
+        </Text>
       )}
       {error && (
-        <p role="alert" className="error">
+        <Text role="alert" className="error">
           {error}
-        </p>
+        </Text>
       )}
-    </section>
+    </chakra.section>
   );
 }
 
@@ -735,10 +740,10 @@ function ExistingEffect({ entry }: { entry: ExistingCopyEffect }) {
     }
   }
   return (
-    <article>
-      <p>
+    <chakra.article>
+      <Text>
         Retained output folder: <bdi>{entry.outputFolder}</bdi>
-      </p>
+      </Text>
       {entry.job ? (
         entry.job.action === 'prepare_names' && !entry.job.readyReviewId ? (
           <ReopenPreparedCopy job={entry.job} />
@@ -746,10 +751,10 @@ function ExistingEffect({ entry }: { entry: ExistingCopyEffect }) {
           <RetainedCopyInspection job={entry.job} />
         )
       ) : entry.preparationRecorded ? (
-        <p>
+        <Text>
           Preparation evidence exists without a linked job. Preserve the retained folder and review
           its journal; automatic replay is unavailable.
-        </p>
+        </Text>
       ) : original ? (
         <VerifiedCopyWorkflow manifest={original} />
       ) : (
@@ -757,8 +762,8 @@ function ExistingEffect({ entry }: { entry: ExistingCopyEffect }) {
           Review original saved mapping
         </Button>
       )}
-      {error && <p role="alert">{error}</p>}
-    </article>
+      {error && <Text role="alert">{error}</Text>}
+    </chakra.article>
   );
 }
 
@@ -814,12 +819,12 @@ export function ReopenPreparedCopy({ job }: { job: CopyWorkflowJob }) {
     }
   }
   return (
-    <section aria-label="Reopen retained preparation">
-      <p>
+    <chakra.section aria-label="Reopen retained preparation">
+      <Text>
         A complete retained preparation can be reopened after its original empty objects are
         validated. New fidelity acknowledgment, copy approval and start are required. Incomplete or
         changed objects remain retained and blocked.
-      </p>
+      </Text>
       {opened ? (
         <VerifiedCopyWorkflow
           key={opened.review.id}
@@ -832,7 +837,7 @@ export function ReopenPreparedCopy({ job }: { job: CopyWorkflowJob }) {
           {busy ? 'Checking retained preparation…' : 'Choose destination and reopen preparation'}
         </Button>
       )}
-      {error && <p role="alert">{error}</p>}
-    </section>
+      {error && <Text role="alert">{error}</Text>}
+    </chakra.section>
   );
 }

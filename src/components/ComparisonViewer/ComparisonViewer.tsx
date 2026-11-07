@@ -1,3 +1,4 @@
+import { Box, Heading, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { CachedPreviewImage } from '@/components/CachedPreviewImage';
 import { useEffect, useRef, useState } from 'react';
@@ -35,21 +36,23 @@ export function ComparisonViewer({
         onClose();
       }}
     >
-      <header className="viewer-toolbar">
-        <h2>Compare {assets.length} selected photos</h2>
+      <chakra.header className="viewer-toolbar">
+        <Heading as="h2" unstyled>
+          Compare {assets.length} selected photos
+        </Heading>
         <Button onClick={onClose}>{returnLabel}</Button>
-      </header>
-      <p className="viewer-status">
+      </chakra.header>
+      <Text className="viewer-status">
         Visual comparison does not establish exact duplicates. Only these explicitly selected photos
         are shown. Cached previews are limited to 512 px.
-      </p>
+      </Text>
       {previews.error && (
-        <div role="alert">
+        <Box role="alert">
           {previews.error}
           <Button onClick={previews.retry}>Retry previews</Button>
-        </div>
+        </Box>
       )}
-      <div className="comparison-images">
+      <Box className="comparison-images">
         {assets.map((asset) => {
           const preview =
             previews.results[
@@ -58,7 +61,7 @@ export function ComparisonViewer({
           const edge = previewEdges([preview])[0];
           return (
             <figure key={asset.id}>
-              <div>
+              <Box>
                 {edge ? (
                   <ComparisonImage
                     key={`${asset.id}:${asset.revision}:${edge}`}
@@ -66,9 +69,9 @@ export function ComparisonViewer({
                     edge={edge}
                   />
                 ) : (
-                  <p>{preview?.error ?? 'Preparing cached preview…'}</p>
+                  <Text>{preview?.error ?? 'Preparing cached preview…'}</Text>
                 )}
-              </div>
+              </Box>
               <figcaption>
                 <bdi>{asset.name}</bdi> · Catalog: {asset.presence} · Original library:{' '}
                 {status.roots.find((root) => root.id === asset.rootId)?.availability ??
@@ -77,7 +80,7 @@ export function ComparisonViewer({
             </figure>
           );
         })}
-      </div>
+      </Box>
     </dialog>
   );
 }
@@ -85,7 +88,9 @@ export function ComparisonViewer({
 function ComparisonImage({ asset, edge }: { asset: AssetSummary; edge: number }) {
   const [failed, setFailed] = useState(false);
   if (failed)
-    return <p role="status">Cached preview failed to load. The original has not been changed.</p>;
+    return (
+      <Text role="status">Cached preview failed to load. The original has not been changed.</Text>
+    );
   return (
     <CachedPreviewImage
       src={previewUrl(asset, edge)}

@@ -1,4 +1,4 @@
-import { Field } from '@chakra-ui/react';
+import { Field, Box } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import type { THUMBNAIL_SIZES, ViewMode } from '../../library/model';
@@ -19,7 +19,7 @@ export function BrowserControls({
   onFit: (fit: 'contain' | 'cover') => void;
 }) {
   return (
-    <div className="view-switch" aria-label="Library view">
+    <Box className="view-switch" aria-label="Library view">
       {(['gallery', 'grid', 'list'] as const).map((view) => (
         <Button type="button" key={view} aria-pressed={mode === view} onClick={() => onMode(view)}>
           {view === 'gallery' ? 'Timeline' : view === 'grid' ? 'Uniform grid' : 'Text list'}
@@ -65,6 +65,6 @@ export function BrowserControls({
           </label>
         </Field.Root>
       )}
-    </div>
+    </Box>
   );
 }

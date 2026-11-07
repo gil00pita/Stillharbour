@@ -1,3 +1,4 @@
+import { Box, Table, Text, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useRef, useState } from 'react';
 import type { InspectionIssuePage } from '../../bindings';
@@ -32,37 +33,41 @@ export function InspectionIssues({ jobId }: { jobId: string }) {
     }
   }
   return (
-    <section aria-label="Inspection issues">
+    <chakra.section aria-label="Inspection issues">
       <Button disabled={busy} onClick={() => void load()}>
         Review retained inspection issues
       </Button>
-      {error && <p role="alert">{error}</p>}
+      {error && <Text role="alert">{error}</Text>}
       {page && (
         <>
-          <div className="inspection-table-wrap">
-            <table>
-              <caption>Incomplete, missing or unreadable scope · retained observations</caption>
-              <thead>
-                <tr>
-                  <th>Entry</th>
-                  <th>Kind</th>
-                  <th>Inventory state</th>
-                  <th>Reason</th>
-                </tr>
-              </thead>
-              <tbody>
+          <Box className="inspection-table-wrap">
+            <Table.Root unstyled>
+              <Table.Caption unstyled captionSide="top">
+                Incomplete, missing or unreadable scope · retained observations
+              </Table.Caption>
+              <Table.Header unstyled>
+                <Table.Row unstyled>
+                  <Table.ColumnHeader unstyled>Entry</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Kind</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Inventory state</Table.ColumnHeader>
+                  <Table.ColumnHeader unstyled>Reason</Table.ColumnHeader>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body unstyled>
                 {page.rows.map((issue, index) => (
-                  <tr key={index}>
-                    <th scope="row">{issue.displayPath}</th>
-                    <td>{issue.entryKind}</td>
-                    <td>{issue.inventory.replaceAll('_', ' ')}</td>
-                    <td>{issue.error.message}</td>
-                  </tr>
+                  <Table.Row unstyled key={index}>
+                    <Table.ColumnHeader unstyled scope="row">
+                      {issue.displayPath}
+                    </Table.ColumnHeader>
+                    <Table.Cell unstyled>{issue.entryKind}</Table.Cell>
+                    <Table.Cell unstyled>{issue.inventory.replaceAll('_', ' ')}</Table.Cell>
+                    <Table.Cell unstyled>{issue.error.message}</Table.Cell>
+                  </Table.Row>
                 ))}
-              </tbody>
-            </table>
-          </div>
-          {page.rows.length === 0 && <p>No retained issues for this report.</p>}
+              </Table.Body>
+            </Table.Root>
+          </Box>
+          {page.rows.length === 0 && <Text>No retained issues for this report.</Text>}
           {page.next && (
             <Button disabled={busy} onClick={() => void load(page.next)}>
               Next issue page
@@ -70,6 +75,6 @@ export function InspectionIssues({ jobId }: { jobId: string }) {
           )}
         </>
       )}
-    </section>
+    </chakra.section>
   );
 }

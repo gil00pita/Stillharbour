@@ -1,3 +1,4 @@
+import { Text } from '@chakra-ui/react';
 import { useState } from 'react';
 import { Button } from '@/components/Button';
 import { CatalogOrganizer } from '@/components/CatalogOrganizer';
@@ -31,7 +32,9 @@ export function CatalogActions({
             strokeWidth="1.5"
           />
         </svg>
-        <span className="toolbar-action-label">Catalog</span>
+        <Text as="span" className="toolbar-action-label">
+          Catalog
+        </Text>
       </Button>
       <Button
         type="button"
@@ -43,7 +46,9 @@ export function CatalogActions({
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path d="M6 3h12v18l-6-4-6 4Z" stroke="currentColor" strokeWidth="1.5" />
         </svg>
-        <span className="toolbar-action-label">Saved plans</span>
+        <Text as="span" className="toolbar-action-label">
+          Saved plans
+        </Text>
       </Button>
       {open === 'catalog' && (
         <CatalogOrganizer

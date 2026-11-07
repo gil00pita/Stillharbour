@@ -1,11 +1,11 @@
-import { defaultPreset } from './presets';
+import { issueLabels } from './issue-labels';
+import { defaultPreset } from '@/components/OrganizationPresets';
 import { OrganizationTemplateFields } from './components/OrganizationTemplateFields';
-import { Field } from '@chakra-ui/react';
+import { Field, chakra, Box, Heading, Table, Text } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type {
-  OrganizationIssue,
   OrganizationPreview as Preview,
   OrganizationTemplate,
   TemplateRef,
@@ -20,17 +20,8 @@ import {
 import { OrganizationTemplates } from '@/components/OrganizationTemplates';
 import { OrganizationTrees } from '@/components/OrganizationTrees';
 
-const issueLabels: Record<OrganizationIssue, string> = {
-  missing_capture_date: 'No embedded capture date',
-  missing_value: 'A required token value is missing',
-  invalid_path: 'Name cannot be used under the portable naming policy',
-  source_unavailable: 'Source is not currently recorded as available',
-  non_unicode_path: 'Native name cannot be represented by this template',
-  collision: 'Proposed paths collide',
-  possible_case_collision: 'Proposed paths may collide on a case-insensitive destination',
-};
-
 export function OrganizationPreview({
+  inline = false,
   catalogId = null,
   preferredImportRoot = null,
   assetIds,
@@ -38,6 +29,7 @@ export function OrganizationPreview({
   roots,
   onClose,
 }: {
+  inline?: boolean;
   catalogId?: string | null;
   preferredImportRoot?: ImportDestinationPreference | null;
   assetIds: string[];
@@ -65,7 +57,7 @@ export function OrganizationPreview({
     }
   }, [preview]);
   useEffect(() => {
-    const element = dialog.current;
+    const element = inline ? null : dialog.current;
     const opener = document.activeElement;
     if (element && !element.open) element.showModal();
     return () => {
@@ -73,7 +65,7 @@ export function OrganizationPreview({
       element?.close();
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
-  }, []);
+  }, [inline]);
   function update(patch: Partial<OrganizationTemplate>) {
     setTemplateReference(null);
     setTemplate((value) => {
@@ -108,32 +100,44 @@ export function OrganizationPreview({
       .toLocaleLowerCase()
       .includes(search.toLocaleLowerCase()),
   );
+  const Surface = inline ? chakra.section : chakra.dialog;
   return (
-    <dialog
-      className="organization-preview"
-      ref={dialog}
+    <Surface
+      className={`organization-preview ${inline ? 'organization-inline' : ''}`}
+      ref={inline ? undefined : dialog}
       aria-labelledby="organization-title"
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
     >
-      <header className="organization-heading">
-        <div>
-          <h2 id="organization-title">Preview organization</h2>
-          <p className="help">
-            {assetIds.length} explicitly selected photos · Originals stay in place
-          </p>
-        </div>
-        <Button onClick={onClose} aria-label="Close organization preview">
-          Close
-        </Button>
-      </header>
-      <div className="organization-body">
-        <p>Preview folder and filename changes using indexed metadata. Originals stay in place.</p>
-        <form onSubmit={(event) => void build(event)} aria-busy={busy}>
+      <chakra.header className="organization-heading">
+        <Box>
+          <Heading as="h2" unstyled id="organization-title">
+            Folder &amp; filename template
+          </Heading>
+          {!inline && (
+            <Text className="help">
+              {assetIds.length} explicitly selected {assetIds.length === 1 ? 'photo' : 'photos'} ·
+              Originals stay in place
+            </Text>
+          )}
+        </Box>
+        {!inline && (
+          <Button onClick={onClose} aria-label="Close organization preview">
+            Close
+          </Button>
+        )}
+      </chakra.header>
+      <Box className="organization-body">
+        {!inline && (
+          <Text>
+            Preview folder and filename changes using indexed metadata. Originals stay in place.
+          </Text>
+        )}
+        <chakra.form onSubmit={(event) => void build(event)} aria-busy={busy}>
           <OrganizationTemplateFields busy={busy} template={template} onChange={update} />
-        </form>
+        </chakra.form>
         <OrganizationTemplates
           template={template}
           onLoad={(value, reference) => {
@@ -146,21 +150,21 @@ export function OrganizationPreview({
           }}
         />
         {error && (
-          <p role="alert" className="error">
+          <Text role="alert" className="error">
             {error}
-          </p>
+          </Text>
         )}
         {preview && (
-          <section aria-label="Proposed organization">
-            <p role="status">
+          <chakra.section aria-label="Proposed organization">
+            <Text role="status">
               {preview.proposed} proposed · {preview.blocked} blocked ·{' '}
               {BigInt(preview.selectedBytes).toLocaleString()} selected file bytes
-            </p>
-            <p className="help">
+            </Text>
+            <Text className="help">
               Relative paths only. Destination conflicts, native case and Unicode rules, companions,
               metadata fidelity and free space still need review. Sequence numbers follow library ID
               and native source path order.
-            </p>
+            </Text>
             <OrganizationDestination
               catalogId={catalogId}
               preferredImportRoot={preferredImportRoot}
@@ -183,41 +187,47 @@ export function OrganizationPreview({
               </label>
             </Field.Root>
             <OrganizationTrees rows={preview.rows} roots={roots} />
-            <div className="organization-table">
-              <table>
-                <caption ref={resultsCaption} tabIndex={-1}>
+            <Box className="organization-table">
+              <Table.Root unstyled>
+                <Table.Caption unstyled captionSide="top" ref={resultsCaption} tabIndex={-1}>
                   Selected photos: current path, proposed relative path and review issues
-                </caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Current path</th>
-                    <th scope="col">Proposed path</th>
-                    <th scope="col">Review</th>
-                  </tr>
-                </thead>
-                <tbody>
+                </Table.Caption>
+                <Table.Header unstyled>
+                  <Table.Row unstyled>
+                    <Table.ColumnHeader unstyled scope="col">
+                      Current path
+                    </Table.ColumnHeader>
+                    <Table.ColumnHeader unstyled scope="col">
+                      Proposed path
+                    </Table.ColumnHeader>
+                    <Table.ColumnHeader unstyled scope="col">
+                      Review
+                    </Table.ColumnHeader>
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body unstyled>
                   {rows?.map((row) => (
-                    <tr key={row.assetId}>
-                      <td>
+                    <Table.Row unstyled key={row.assetId}>
+                      <Table.Cell unstyled>
                         <bdi>{row.sourcePath}</bdi>
                         <small title={`Library ID: ${row.rootId}`}>
                           {roots.find((root) => root.id === row.rootId)?.label ??
                             'Unlisted library'}
                         </small>
-                      </td>
-                      <td>
+                      </Table.Cell>
+                      <Table.Cell unstyled>
                         <bdi>{row.targetRelativePath ?? 'No valid target'}</bdi>
-                      </td>
-                      <td>
+                      </Table.Cell>
+                      <Table.Cell unstyled>
                         {row.issues.length
-                          ? row.issues.map((issue) => <p key={issue}>{issueLabels[issue]}</p>)
+                          ? row.issues.map((issue) => <Text key={issue}>{issueLabels[issue]}</Text>)
                           : 'Destination checks pending'}
-                        {row.usedUndated && <p>Undated fallback; no embedded capture date</p>}
+                        {row.usedUndated && <Text>Undated fallback; no embedded capture date</Text>}
                         {row.companionCandidates > 0 && (
-                          <p>
+                          <Text>
                             {row.companionCandidates} indexed companion candidates; bundle review
                             required
-                          </p>
+                          </Text>
                         )}
                         <OrganizationCompanions
                           key={`${preview.fingerprint}:${row.assetId}`}
@@ -225,25 +235,25 @@ export function OrganizationPreview({
                           previewRevision={preview.catalogRevision}
                           revision={revision}
                         />
-                      </td>
-                    </tr>
+                      </Table.Cell>
+                    </Table.Row>
                   ))}
-                </tbody>
-              </table>
-              {rows?.length === 0 && <p>No paths match your search.</p>}
-            </div>
-          </section>
+                </Table.Body>
+              </Table.Root>
+              {rows?.length === 0 && <Text>No paths match your search.</Text>}
+            </Box>
+          </chakra.section>
         )}
-      </div>
-      <footer className="organization-footer">
-        <p className="help" id="organization-execution-help">
+      </Box>
+      <chakra.footer className="organization-footer">
+        <Text className="help" id="organization-execution-help">
           Copying and in-place changes are unavailable until destination planning, verification and
           recovery checks pass.
-        </p>
+        </Text>
         <Button disabled aria-describedby="organization-execution-help">
           Create organized copy
         </Button>
-      </footer>
-    </dialog>
+      </chakra.footer>
+    </Surface>
   );
 }

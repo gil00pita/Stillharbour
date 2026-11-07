@@ -1,3 +1,4 @@
+import { Box, chakra } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import {
   type CSSProperties,
@@ -221,7 +222,7 @@ export function AssetBrowser({
     if (!row) return null;
     const headingHeight = row.headings.length ? DATE_HEADING_HEIGHT : 0;
     return (
-      <div
+      <Box
         key={item.key}
         className={`asset-row ${mode}`}
         style={{
@@ -264,7 +265,7 @@ export function AssetBrowser({
             onNavigate={navigate}
           />
         ))}
-      </div>
+      </Box>
     );
   }
   const listLayout = textListLayout(columns);
@@ -276,15 +277,15 @@ export function AssetBrowser({
         } as CSSProperties)
       : undefined;
   return (
-    <div className="browser-frame" style={listStyle}>
+    <Box className="browser-frame" style={listStyle}>
       {previews.error && (
-        <div className="preview-error" role="status">
+        <Box className="preview-error" role="status">
           Previews couldn’t be loaded. <Button onClick={previews.retry}>Retry previews</Button>
-        </div>
+        </Box>
       )}
-      <div className={`browser-canvas-layout ${timeline ? '' : 'without-timeline'}`}>
+      <Box className={`browser-canvas-layout ${timeline ? '' : 'without-timeline'}`}>
         <BrowserTable mode={mode} columns={columns} sort={sort} onSort={onSort} busy={sortBusy}>
-          <div
+          <Box
             className={`asset-viewport ${mode === 'gallery' ? 'gallery-viewport' : ''} ${timeline ? 'with-timeline' : ''}`}
             ref={viewport}
             onScroll={() => {
@@ -314,7 +315,7 @@ export function AssetBrowser({
             tabIndex={0}
             aria-label={mode === 'list' ? 'Text-only library' : 'Photo library'}
           >
-            <div className="virtual-canvas" style={{ height }}>
+            <Box className="virtual-canvas" style={{ height }}>
               {sections.length
                 ? sections.map((section, index) => {
                     const endIndex = sections[index + 1]?.index ?? rows.length;
@@ -323,7 +324,7 @@ export function AssetBrowser({
                     );
                     if (!items.length) return null;
                     return (
-                      <section
+                      <chakra.section
                         className="photo-date-section"
                         key={section.key}
                         style={{ top: section.start, height: section.end - section.start }}
@@ -335,16 +336,16 @@ export function AssetBrowser({
                           onSelect={onSelectGroup}
                         />
                         {items.map((item) => renderRow(item, section.start))}
-                      </section>
+                      </chakra.section>
                     );
                   })
                 : virtual.map((item) => renderRow(item))}
-            </div>
-          </div>
+            </Box>
+          </Box>
         </BrowserTable>
         {timeline}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
 
@@ -365,15 +366,15 @@ function BrowserTable({
 }) {
   const list = mode === 'list';
   return (
-    <div className={`browser-photos ${list ? 'text-list-scroll' : ''}`}>
-      <div
+    <Box className={`browser-photos ${list ? 'text-list-scroll' : ''}`}>
+      <Box
         className={list ? 'text-list-table' : 'photo-table'}
         role={list ? 'table' : undefined}
         aria-label={list ? 'Library files' : undefined}
       >
         {list && <TextListHeader columns={columns} sort={sort} onSort={onSort} busy={busy} />}
         {children}
-      </div>
-    </div>
+      </Box>
+    </Box>
   );
 }
