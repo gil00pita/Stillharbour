@@ -30,6 +30,16 @@ The smoke saves geometry JSON and screenshots before asserting alignment so the
 scrollbar width survives failures. Do not reintroduce negative navigation margins.
 Expanded padding remains unchanged. Browser fixtures are separate from native evidence.
 
+File-size field geometry: keep the unit's `Field.Root` as a flex container. An
+inline select can contribute extra baseline descent to its wrapper, stretching
+the adjacent amount input through the shared grid row (41 px versus 36 px on
+macOS 15 CI). `tests/desktop/file-size-fields.e2e.mjs` checks both native and
+bottom-edge fallback baselines at desktop/minimum sizes in a fresh Settings
+session, without a registered library. Test-only `contain: layout` suppresses the
+select's intrinsic baseline as specified by [CSS containment](https://www.w3.org/TR/css-contain-1/#containment-layout);
+it does not set either control's height. Geometry JSON and screenshots are saved
+before assertions in `.context/screenshots/file-size-*`, already uploaded by CI.
+
 The Foundation organization workflow opens Saved plans from Albums / Tags. After
 closing the dialog it must navigate back to Photos before using the Filter panel,
 then reselect its stable fixture IDs for subsequent compare/viewer checks. Section
