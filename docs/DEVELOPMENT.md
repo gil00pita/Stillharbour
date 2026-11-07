@@ -14,6 +14,16 @@ Generated checks: `node scripts/cargo.mjs test --locked -p stillharbour-core --l
 
 # Development
 
+## Optional VS Code workspace setup
+
+`.vscode/extensions.json` recommends ESLint, Prettier and Vitest extensions.
+`.vscode/settings.json` enables Prettier on save for JavaScript/TypeScript and
+configures ESLint validation. `.vscode/mcp.json` contains the owner's optional
+MCP server definitions, including the local Vite endpoint and hosted Mobbin.
+These editor entries are separate from the pinned application toolchain;
+availability and authentication depend on the local editor and services.
+Checking them in does not start servers or establish a connection in an agent chat.
+
 ## Local validation and CI
 
 Neutral Chakra redesign (2026-11-07): [NEUTRAL_UI.md](NEUTRAL_UI.md) owns the new

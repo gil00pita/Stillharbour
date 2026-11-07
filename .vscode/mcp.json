@@ -1,0 +1,38 @@
+{
+  "servers": {
+    "chakra-ui": {
+      "command": "npx",
+      "args": ["-y", "@chakra-ui/react-mcp"],
+      "type": "stdio"
+    },
+    "Storybook": {
+      "command": "npx",
+      "args": ["-y", "@storybook/mcp@latest"],
+      "type": "stdio"
+    },
+    "next-devtools": {
+      "command": "npx",
+      "args": ["-y", "next-devtools-mcp@latest"],
+      "type": "stdio"
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": ["-y", "chrome-devtools-mcp@latest"],
+      "type": "stdio"
+    },
+    "ESLint": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@eslint/mcp@latest"]
+    },
+    "vite": {
+      "type": "http",
+      "url": "http://localhost:5173/__mcp/sse"
+    },
+    "mobbin": {
+      "url": "https://api.mobbin.com/mcp",
+      "type": "http"
+    }
+  },
+  "inputs": []
+}

@@ -4369,3 +4369,14 @@ contract and acceptance note. The 32 px lane and navigation behavior remain.
 Fresh checks: 35 DateTimeline/AssetBrowser cases, strict TypeScript, scoped ESLint,
 changed-file formatting and whitespace pass. No native visual rerun for this
 one-line styling fix; full current both-platform CI remains the PR #32 merge gate.
+
+## 2026-11-07 — Commit and push all remaining workspace changes
+
+The owner requests all changes committed and pushed. UI work through `66bc650`
+is already on the unchanged branch's upstream; include the remaining VS Code
+settings, extension recommendations and optional MCP definitions. Preserve their
+configuration values, format the JSON and document their editor-only scope in
+DEVELOPMENT. Review finds no embedded credentials. All three JSON files parse;
+changed-file formatting and whitespace pass. No application code or runtime
+dependencies change, so application tests are not rerun for this publication.
+Push this follow-up to the existing branch/PR #32; merge gates remain binding.
