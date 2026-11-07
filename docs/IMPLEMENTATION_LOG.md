@@ -4022,3 +4022,41 @@ frontend, Rust and generated native results remain unchanged-code evidence, not
 new execution; no full suite or platform qualification is repeated for this
 documentation-only resolution. Both-platform CI and existing production
 restructure/preservation/release gates remain binding before merging the PR.
+
+## 2026-11-07 — Repair native CI fixture and Map selectors
+
+**Request/evidence:** fix the attached Windows/macOS Foundation failures from
+run 42399208651 at `5ab0b3a`. Windows stops during all-target Clippy because two
+windows_library TemplateSample literals omit the new optional metadata field.
+macOS passes its Rust/native preparation and seventeen desktop specs; Map
+fails on the removed map-search-controls wrapper.
+
+**Changes:** initialize both Windows samples with `metadata: None`, retaining
+their historical expected paths and lack of naming observations. Scope both Map
+search geometry selectors to the actual shared page header. A local replay then
+exposes the next obsolete assumption: the decorative SVG now intentionally has
+pointer-events disabled. Require its explicit pointer-transparent state and
+accept only its owning search frame (or icon) as the centre hit; unrelated
+obstructions still fail. Preserve all bounds, input hit testing, Filters,
+keyboard, metadata/export and generated-original audits. Update DEVELOPMENT with
+these fixture/geometry contracts. No application behavior, dependency, native
+capability, catalog schema or production safety gate changes.
+
+**Fresh checks:** 22 affected MapScreen/PlaceSearch cases pass across two files
+(10.33 s); 28 native organization cases pass (0.11 s). The corrected macOS Map
+spec passes one complete case (15.9 s), including desktop/minimum search geometry,
+filter dismissal, real map navigation, metadata/export and byte verification of
+nine generated source/companion entries; originalMutationsEnabled remains false.
+Logs use `.context/ci-repair-*`, with the first selector-only failure retained
+separately. Native receipts/screenshots are `.context/m5-native/`.
+
+**Reused inputs/limits:** reuse the existing instrumented macOS executable
+SHA-256 `917c65b2415cfcdbc197221912b51085be58653acdcba20b3dfe27fd6b11a684`;
+application code/build inputs are unchanged, and only the external test script
+changes. No frontend rebuild or instrumentation change is needed; ordinary
+production frontend output remains intact. The Windows-only integration fixture
+is not checked or executed under macOS's cfg gate: its actual platform check and
+fresh both-platform CI remain pending. Existing preservation, release and real
+restructure gates remain unchanged. Script lint/syntax, Prettier, Rust formatting
+and whitespace checks pass. Commit/push these fixes to the existing PR branch
+for fresh hosted validation.

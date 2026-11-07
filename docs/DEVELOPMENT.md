@@ -1099,3 +1099,21 @@ are layered, while legacy `.primary` CSS is unlayered: the colocated footer/dial
 CSS module resets only its conflicting margin/height. Review actual native
 compact/desktop geometry after these changes. Run pinned Chakra CLI typegen and
 the pinned local React Doctor scope command recorded in REACT_DOCTOR_REVIEW.
+
+## Native CI fixture repairs — 2026-11-07
+
+The Map desktop spec locates its shared search frame inside
+`.map-page .app-page-header`, replacing the removed `.map-search-controls`
+wrapper. Retain desktop/minimum containment, magnifier-before-input, input hit,
+filter placement, keyboard dismissal and source-byte assertions. The decorative
+magnifier has `pointer-events: none`: its centre must hit the owning search frame,
+or the icon itself when applicable; an unrelated overlay still fails. Record the
+pointer-transparent state explicitly in the native receipt.
+
+Windows-only `TemplateSample` literals must initialize optional metadata to
+`None` when the historical fixture supplies none. Rust literals require the field
+even though serde omits absent metadata. Preserve expected paths and legacy
+fingerprints; do not invent observations to make fixtures compile. Run focused
+organization and Map/PlaceSearch tests, Rust format, script lint/format and the
+generated Map desktop spec. Windows compilation/execution remains a Windows CI
+check; a macOS run does not exercise `#![cfg(windows)]` integration tests.

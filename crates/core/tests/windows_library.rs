@@ -238,6 +238,7 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
             samples: vec![stillharbour_core::organization::TemplateSample {
                 relative_path: "Family/Photo.JPG".into(),
                 capture: None,
+                metadata: None,
                 sequence: 1,
                 expected_target: "Photo.JPG".into(),
             }],
@@ -314,6 +315,7 @@ fn local_ntfs_scan_indexes_filters_reconciles_and_preserves_generated_sources() 
             samples: vec![stillharbour_core::organization::TemplateSample {
                 relative_path: "Family/Photo.JPG".into(),
                 capture: None,
+                metadata: None,
                 sequence: 1,
                 expected_target: "new/Photo.JPG".into(),
             }],
