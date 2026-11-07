@@ -32,6 +32,16 @@ export const config = {
   connectionRetryCount: 0,
   mochaOpts: { timeout: 45000 },
   outputDir: './.context/wdio',
+  async afterTest(test, _context, { passed }) {
+    if (passed) return;
+    const { browser } = await import('@wdio/globals');
+    const name = test.title.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 100);
+    try {
+      await browser.saveScreenshot(`.context/screenshots/desktop-failure-${name}.png`);
+    } catch {
+      console.warn('Native failure screenshot unavailable; retain the original test error.');
+    }
+  },
   async after() {
     // Every default spec gets a genuinely new native process/data tree. The
     // embedded service restarts a dead app before the next worker (1.5.1).

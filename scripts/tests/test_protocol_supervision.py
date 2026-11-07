@@ -1,4 +1,5 @@
 """A timeout must stop this test's helper descendants as well as its parent."""
+import contextlib
 import importlib.util
 import os
 from pathlib import Path
@@ -14,6 +15,47 @@ SPEC.loader.exec_module(PROBE)
 
 
 class SupervisionTests(unittest.TestCase):
+    def test_cold_windows_smb_startup_can_open_after_twenty_seconds(self):
+        process = Mock()
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory(prefix='stillharbour-supervision-test-') as temporary, \
+                patch.object(PROBE.subprocess, 'Popen', return_value=process), \
+                patch.object(PROBE.time, 'monotonic', side_effect=[0, 10, 21]), \
+                patch.object(PROBE.time, 'sleep'), \
+                patch.object(PROBE.socket, 'create_connection', side_effect=[
+                    OSError('cold start'), OSError('compiling'), contextlib.nullcontext(),
+                ]):
+            with PROBE.server(['generated-server'], Path(temporary), {}, 45678,
+                              startup_timeout=PROBE.WINDOWS_SMB_STARTUP_SECONDS) as ready:
+                self.assertIs(ready, process)
+            process.terminate.assert_called_once()
+            process.wait.assert_called_once_with(timeout=5)
+
+    def test_cold_windows_smb_startup_is_still_bounded_and_stopped(self):
+        process = Mock()
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory(prefix='stillharbour-supervision-test-') as temporary, \
+                patch.object(PROBE.subprocess, 'Popen', return_value=process), \
+                patch.object(PROBE.time, 'monotonic', side_effect=[0, PROBE.WINDOWS_SMB_STARTUP_SECONDS + 1]), \
+                patch.object(PROBE.socket, 'create_connection', side_effect=OSError('not listening')):
+            with self.assertRaisesRegex(RuntimeError, 'failed to become ready'):
+                with PROBE.server(['generated-server'], Path(temporary), {}, 45678,
+                                  startup_timeout=PROBE.WINDOWS_SMB_STARTUP_SECONDS):
+                    self.fail('An unopened port must never yield a ready server.')
+            process.terminate.assert_called_once()
+            process.wait.assert_called_once_with(timeout=5)
+
+    def test_other_protocol_servers_retain_the_twenty_second_bound(self):
+        process = Mock()
+        process.poll.return_value = None
+        with tempfile.TemporaryDirectory(prefix='stillharbour-supervision-test-') as temporary, \
+                patch.object(PROBE.subprocess, 'Popen', return_value=process), \
+                patch.object(PROBE.time, 'monotonic', side_effect=[0, 21]), \
+                patch.object(PROBE.socket, 'create_connection', side_effect=OSError('not listening')):
+            with self.assertRaisesRegex(RuntimeError, 'failed to become ready'):
+                with PROBE.server(['generated-server'], Path(temporary), {}, 45678):
+                    self.fail('Non-SMB readiness must keep its existing bound.')
+
     def test_application_diagnostics_retain_only_fixed_phase_and_numeric_markers(self):
         stderr = '\n'.join([
             'private/path and password must not be included',

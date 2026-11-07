@@ -30,13 +30,15 @@ describe('Storage explorer · generated native observations', () => {
     await $('dialog[aria-label="Storage measurement"]').$('button=Close').click();
     assert.equal(await $('button[aria-label="Storage measurement"]').isFocused(), true);
     assert.equal(
-      await browser.execute(
-        () =>
-          document
-            .querySelector('.inspection-content')
-            ?.firstElementChild?.classList.contains('storage-explorer') &&
-          !document.querySelector('.inspection-setup, .inspection-job, .inspection-coverage'),
-      ),
+      await browser.execute(() => {
+        const content = document.querySelector('.inspection-content');
+        // Scan version/background status may precede the workspace; setup,
+        // job details and coverage belong in the closed measurement dialog.
+        return (
+          Boolean(content?.querySelector(':scope > .storage-explorer')) &&
+          !content.querySelector('.inspection-setup, .inspection-job, .inspection-coverage')
+        );
+      }),
       true,
     );
     const jobs = await invoke('library_request', { request: { kind: 'inspection_jobs' } });
