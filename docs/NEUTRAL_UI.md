@@ -44,7 +44,9 @@ The white glyph against the 70% backing over a white photograph computes to
 approximately 6.75:1, above the [3:1 non-text contrast threshold](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html);
 this calculation is not a full accessibility certification.
 Batch actions float within the photo workspace when a selection exists, retain
-keyboard navigation and wrap/scroll within a bounded area.
+keyboard navigation and wrap/scroll within a bounded area. The header selection
+toggle is a 36 px checkbox icon button with a labelled hover title and pressed
+state; its accessible name changes from Select to Done selecting while active.
 
 The existing Inspector continues to show actual catalog metadata, tags and notes.
 No histogram, camera/lens values, smart-album counts or additional navigation

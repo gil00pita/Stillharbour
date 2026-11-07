@@ -105,7 +105,7 @@ export async function verifyOfflinePlaceSearch(directory) {
   await $('button=Show in photos').click();
   await browser.waitUntil(async () => (await $$('.gallery .asset')).length === 1);
   // Restore one explicit selection for the metadata-review scenario.
-  await $('button=Select').click();
+  await $('button[aria-label="Select"]').click();
   const restoredPhotos = await $$('.asset-check');
   assert.equal(restoredPhotos.length, 1);
   await restoredPhotos[0].waitForEnabled();

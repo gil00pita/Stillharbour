@@ -199,14 +199,14 @@ describe('Page chrome and explicit photo selection — generated native fixture'
     assert.deepEqual(checkboxHit, { visible: true, onTop: true });
     await browser.saveScreenshot('.context/chrome-selection/selection.png');
     await browser.setWindowSize(1180, 780);
-    await $('button=Done selecting').click();
+    await $('button[aria-label="Done selecting"]').click();
     assert.equal(
       await browser.execute(() => getComputedStyle(document.querySelector('.asset-check')).opacity),
       '0',
     );
-    await $('button=Select').click();
+    await $('button[aria-label="Select"]').click();
     await $('.asset-check', { strict: false }).waitForExist();
-    await $('button=Done selecting').click();
+    await $('button[aria-label="Done selecting"]').click();
     await photoContext();
     await $('[role="menuitem"][data-value="add-to-album"]').click();
     await $('dialog[open][aria-label="Add to album"]').waitForDisplayed();

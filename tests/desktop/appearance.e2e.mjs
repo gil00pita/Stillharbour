@@ -147,7 +147,7 @@ describe('Neutral gallery appearance', () => {
     }
     // Background WKWebViews do not expose focus pseudo-classes. The ordinary
     // Select action remains available; record focus evidence separately.
-    await $('button=Select').click();
+    await $('button[aria-label="Select"]').click();
     await $('.asset-check', { strict: false }).click();
     await $('[aria-label="Selected photo actions"]').waitForDisplayed();
     const selectedCheck = await browser.execute(() => {
@@ -168,7 +168,7 @@ describe('Neutral gallery appearance', () => {
       return box.left >= 0 && box.right <= innerWidth && box.top >= 64 && box.bottom <= innerHeight;
     });
     assert.equal(selectionFits, true);
-    await $('button=Done selecting').click();
+    await $('button[aria-label="Done selecting"]').click();
     await browser.execute(() => document.querySelectorAll('.asset-open')[3].click());
     await $('button[aria-label="Info"]').waitForDisplayed();
     await $('button[aria-label="Info"]').click();

@@ -12,6 +12,7 @@ Folder structure Layout type choices pair decorative prefix icons with their
 existing text labels. Thumbnail selection and favourite controls align their
 click targets and glyphs; small dark translucent backings preserve white-icon
 contrast over both light and dark photographs without full button backgrounds.
+The gallery header uses a labelled checkbox icon button to toggle selection mode.
 Keep Tauri, actual metadata and all milestone/preservation gates; the attachment's
 Electron and synthetic production-library examples do not change architecture.
 

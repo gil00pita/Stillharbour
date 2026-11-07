@@ -45,10 +45,17 @@ it('keeps Photos focused on filtering and explicit selection, without Catalog or
   const view = render(<LibraryHeader {...props} />);
   expect(screen.queryByRole('button', { name: 'Catalog' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Saved plans' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+  const select = screen.getByRole('button', { name: 'Select', pressed: false });
+  expect(select).toHaveAttribute('title', 'Select');
+  fireEvent.click(select);
   fireEvent.click(screen.getByRole('button', { name: 'Filter (2 active)' }));
   expect(onSelect).toHaveBeenCalledOnce();
   expect(onFilter).toHaveBeenCalledOnce();
+  view.rerender(<LibraryHeader {...props} selecting />);
+  const done = screen.getByRole('button', { name: 'Done selecting', pressed: true });
+  expect(done).toHaveAttribute('title', 'Done selecting');
+  fireEvent.click(done);
+  expect(onSelect).toHaveBeenCalledTimes(2);
   view.rerender(<LibraryHeader {...props} selecting busy />);
   expect(screen.getByRole('button', { name: 'Done selecting' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Filter (2 active)' })).toBeDisabled();

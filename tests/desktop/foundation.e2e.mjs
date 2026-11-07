@@ -5052,7 +5052,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await $('button=Clear selection').click();
     // Clearing the batch leaves explicit selection mode active. Finish it
     // before clicking a photo to open the viewer.
-    await $('button=Done selecting').click();
+    await $('button[aria-label="Done selecting"]').click();
     // Inject one transport-error event; the follow-up PNG read is real native
     // owned-cache traffic and must recover without a catalog rescan.
     await browser.execute(() => {
@@ -6774,5 +6774,5 @@ async function openSavedPlans() {
   await $('button[aria-label="Saved plans"]').click();
 }
 async function enterPhotoSelection() {
-  if (await $('button=Select').isExisting()) await $('button=Select').click();
+  if (await $('button[aria-label="Select"]').isExisting()) await $('button[aria-label="Select"]').click();
 }

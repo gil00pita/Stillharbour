@@ -1,4 +1,4 @@
-import { Box, Heading, Text, chakra } from '@chakra-ui/react';
+import { Box, Heading, IconButton, Text, chakra } from '@chakra-ui/react';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/Button';
 import type { ReactNode } from 'react';
@@ -128,9 +128,32 @@ export function LibraryHeader({
           </Button>
           {jobsControl}
           {onSelect && (
-            <Button type="button" aria-pressed={selecting} disabled={busy} onClick={onSelect}>
-              {selecting ? 'Done selecting' : 'Select'}
-            </Button>
+            <IconButton
+              type="button"
+              aria-label={selecting ? 'Done selecting' : 'Select'}
+              title={selecting ? 'Done selecting' : 'Select'}
+              aria-pressed={selecting}
+              disabled={busy}
+              onClick={onSelect}
+              width="control"
+              height="control"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                focusable="false"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="3" />
+                <path d="m7 12 3 3 7-7" />
+              </svg>
+            </IconButton>
           )}
         </Box>
       </chakra.header>

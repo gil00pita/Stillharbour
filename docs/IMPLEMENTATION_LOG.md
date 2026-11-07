@@ -4316,3 +4316,16 @@ stress images are QA fixtures, not personal photos or a production demo mode.
 window; no new screen-reader, forced-colours, Windows or packaged qualification
 is claimed. Full current both-platform CI and existing preservation gates remain
 required before merge; publish on the existing PR #32 without changing branch.
+
+## 2026-11-07 — Checkbox icon for the selection toggle
+
+Replace the gallery header's Select text button with a 36 px checkbox IconButton.
+Keep the Select/Done selecting accessible names and hover titles, pressed state,
+selection handler and busy guard. Update desktop helpers to select by accessible
+label, plus NEUTRAL_UI, the specification and acceptance criteria.
+
+Fresh checks: 12 affected header/selection/controller cases, strict TypeScript,
+ESLint, changed-file formatting and whitespace pass. The header regression checks
+both toggle states and the busy guard. Native suites were not rerun for this
+small presentation change; current both-platform CI remains required before
+merging the existing PR #32.
