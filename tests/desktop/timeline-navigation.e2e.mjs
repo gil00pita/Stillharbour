@@ -24,12 +24,12 @@ describe('Reference timeline navigation through bounded native pages', () => {
     await $('.asset-open', { strict: false }).waitForDisplayed({ timeout: 45000 });
     // This hook creates catalog-only placeholder records with no preview bytes.
     // Use the real Text list control so the test never requests fake thumbnails.
-    await $('button[aria-controls="library-filter-panel"]').click();
-    await $('#library-filter-panel[open]').waitForDisplayed();
-    await $('#library-filter-panel').$('button=Text list').click();
-    await $('button=Apply filters').click();
+    await $('button[aria-controls="library-display-panel"]').click();
+    await $('#library-display-panel[open]').waitForDisplayed();
+    await $('#library-display-panel').$('button=Text list').click();
+    await $('button=Apply display').click();
     await browser.waitUntil(() =>
-      browser.execute(() => !document.querySelector('#library-filter-panel[open]')),
+      browser.execute(() => !document.querySelector('#library-display-panel[open]')),
     );
     assert.equal(await invoke('test_scroll_catalog'), 960);
     await browser.execute(() => {

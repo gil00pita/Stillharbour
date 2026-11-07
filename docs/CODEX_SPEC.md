@@ -12,7 +12,9 @@ Folder structure Layout type choices pair decorative prefix icons with their
 existing text labels. Thumbnail selection and favourite controls align their
 click targets and glyphs; small dark translucent backings preserve white-icon
 contrast over both light and dark photographs without full button backgrounds.
-The gallery header uses a labelled checkbox icon button to toggle selection mode.
+The gallery header uses labelled icon buttons for selection, Filter and Display
+options. A separate panel owns view mode, thumbnail-size slider and grid image
+fit, with draft Apply/Cancel behavior independent of query filters.
 Keep Tauri, actual metadata and all milestone/preservation gates; the attachment's
 Electron and synthetic production-library examples do not change architecture.
 

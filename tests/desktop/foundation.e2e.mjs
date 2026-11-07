@@ -1943,11 +1943,12 @@ async function openFilters() {
   await $('#library-filter-panel[open]').waitForDisplayed();
 }
 async function galleryView(label) {
-  await openFilters();
-  await (await $('#library-filter-panel')).$(`button=${label}`).click();
-  await $('button=Apply filters').click();
+  await $('button[aria-controls="library-display-panel"]').click();
+  await $('#library-display-panel[open]').waitForDisplayed();
+  await $('#library-display-panel').$(`button=${label}`).click();
+  await $('button=Apply display').click();
   await browser.waitUntil(async () =>
-    browser.execute(() => !document.querySelector('#library-filter-panel[open]')),
+    browser.execute(() => !document.querySelector('#library-display-panel[open]')),
   );
 }
 async function explorerLayoutReady() {

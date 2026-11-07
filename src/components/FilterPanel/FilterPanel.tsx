@@ -3,7 +3,7 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AssetQuery, AppPreferences, LibraryStatus } from '../../bindings';
-import type { Section, ViewMode } from '../../library/model';
+import type { Section } from '../../library/model';
 import { defaultQuery } from '../../library/model';
 import {
   QueryFields,
@@ -11,7 +11,6 @@ import {
   RootAvailability,
   ActiveFilters,
 } from '@/components/FilterFields';
-import { BrowserControls } from '@/components/BrowserControls';
 import type { LibraryController } from '@/hooks/use-library-controller';
 export type GalleryDisplay = {
   size: AppPreferences['thumbnailSize'];
@@ -21,8 +20,6 @@ export function FilterPanel({
   controller: c,
   status,
   section,
-  mode,
-  display,
   onApply,
   onClose,
   onSettings,
@@ -31,17 +28,13 @@ export function FilterPanel({
   controller: LibraryController;
   status: LibraryStatus;
   section: Section;
-  mode: ViewMode;
-  display: GalleryDisplay;
-  onApply: (query: AssetQuery, mode: ViewMode, display: GalleryDisplay) => void;
+  onApply: (query: AssetQuery) => void;
   onClose: () => void;
   onSettings: (id: string) => void;
   onRelink: (id: string) => Promise<void>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState(c.query);
-  const [draftMode, setMode] = useState(mode);
-  const [draftDisplay, setDisplay] = useState(display);
   const [version, resetFields] = useState(0);
   const [selecting, setSelecting] = useState(false);
   const [selectionError, setSelectionError] = useState<string | null>(null);
@@ -62,7 +55,7 @@ export function FilterPanel({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (event.currentTarget.reportValidity()) {
-      onApply(draft, draftMode, draftDisplay);
+      onApply(draft);
       onClose();
     }
   }
@@ -95,8 +88,6 @@ export function FilterPanel({
         '& label': { minWidth: '0', maxWidth: '100%' },
         '& select': { minWidth: '0', maxWidth: '100%' },
         '& input': { minWidth: '0', maxWidth: '100%' },
-        '& .view-switch': { display: 'flex', flexWrap: 'wrap', gap: '6px' },
-        '& .thumbnail-control': { width: '100%', margin: '8px 0 0' },
         '& .root-status': { flexWrap: 'wrap' },
         '& .folder-strip': { flexWrap: 'wrap' },
         '& .availability-note': { marginTop: '10px' },
@@ -166,19 +157,6 @@ export function FilterPanel({
               query={draft}
               status={status}
               filter={(patch) => setDraft((value) => ({ ...value, ...patch }))}
-            />
-          </chakra.section>
-          <chakra.section>
-            <Heading as="h3" unstyled>
-              Display
-            </Heading>
-            <BrowserControls
-              mode={draftMode}
-              size={draftDisplay.size}
-              fit={draftDisplay.fit}
-              onMode={setMode}
-              onSize={(size) => setDisplay((value) => ({ ...value, size }))}
-              onFit={(fit) => setDisplay((value) => ({ ...value, fit }))}
             />
           </chakra.section>
           <chakra.section>

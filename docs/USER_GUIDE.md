@@ -2,8 +2,11 @@
 
 Appearance follows your system by default and responds to OS appearance changes.
 The header's sun/moon button saves an explicit light or dark choice on this device;
-that saved choice takes precedence over the system. At desktop widths, Photos also has a thumbnail-scale slider;
-use Filter → Thumbnail size at narrow widths. Hover or focus a thumbnail to reveal
+that saved choice takes precedence over the system. Use Photos’ **Display options** icon for Timeline, Uniform grid or Text list,
+thumbnail size and grid image fit. The thumbnail slider is available at desktop
+and compact widths. **Apply display** commits those choices; Cancel, Close or
+Escape discards them. The **Filter** icon opens query filters and shows their
+active count. Hover or focus a thumbnail to reveal
 its favourite heart. It changes only catalog notes, fills after a confirmed save,
 and shows an error if saving fails. Selection actions float over the lower canvas
 and remain keyboard accessible. The neutral workspace keeps the owner logo and
@@ -19,7 +22,7 @@ New folders default to **Managed**. Turning on **Read only** saves a referenced 
 
 Advanced settings control hidden files, hidden folders, exclusions, extensions and size limits. Hidden-folder traversal and hidden-file inclusion are independent. The 34-extension preset includes MP4 for discovery; this does not establish video playback or every RAW decoder. Existing saved filters keep their scope. Scan filters affect the catalog view, not a promise of full-folder backup coverage.
 
-Use Photos for timeline/grid/text views, Folders for immediate indexed children, filename search and Filter for query choices. Apply commits filter drafts; Close discards them. Text list does not start image-preview work. Choose **Select**, or right-click a photo and choose **Select**, to show selection checkboxes. **Done selecting** clears the selection and hides them. Right-click (or Shift+F10 on a focused photo) also offers **Add to album**; the photo dots button is removed. Explicit Select all results includes unloaded matches through a backend selection; day selection covers only the displayed group. Jobs, above Settings in the sidebar, opens a full page with actual work, cancellation requests, retained outcomes and issues. Use Back to return to your previous screen, or choose another sidebar destination. A running discovery has no known total, so its activity bar is not a completion percentage.
+Use Photos’ Display options for timeline/grid/text views, Folders for immediate indexed children, filename search and the Filter icon for query choices. Apply commits filter drafts; Close discards them. Text list does not start image-preview work. Choose the **Select** checkbox icon, or right-click a photo and choose **Select**, to show selection checkboxes. The same icon, labelled **Done selecting**, clears the selection and hides them. Right-click (or Shift+F10 on a focused photo) also offers **Add to album**; the photo dots button is removed. Explicit Select all results includes unloaded matches through a backend selection; day selection covers only the displayed group. Jobs, above Settings in the sidebar, opens a full page with actual work, cancellation requests, retained outcomes and issues. Use Back to return to your previous screen, or choose another sidebar destination. A running discovery has no known total, so its activity bar is not a completion percentage.
 
 In Photos and Map, search a filename or enter a full date as **DD-MM-YYYY** or **YYYY-MM-DD**. For example, **10-10-2025** shows photos dated **10 October 2025**, using the timeline's capture-local date and its existing fallback when capture metadata is unavailable. Other active filters still apply, including date ranges, and sorting does not change which day is searched. Clear the search to restore the remaining filters. Invalid or incomplete dates stay filename searches; a full filename such as `10-10-2025.jpg` also searches by filename. Folders continues to search immediate child names.
 

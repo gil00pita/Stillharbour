@@ -2,8 +2,8 @@ import { expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '../../test/render';
 import { LibraryHeader } from '@/components/LibraryHeader';
 
-it('changes thumbnail scale without changing search or selection', () => {
-  const onThumbnailSize = vi.fn();
+it('opens display options without changing search or selection', () => {
+  const onDisplay = vi.fn();
   const onSearch = vi.fn();
   const onSelect = vi.fn();
   render(
@@ -17,12 +17,14 @@ it('changes thumbnail scale without changing search or selection', () => {
       filterOpen={false}
       activeCount={0}
       onSelect={onSelect}
-      thumbnailSize="comfortable"
-      onThumbnailSize={onThumbnailSize}
+      onDisplay={onDisplay}
     />,
   );
-  fireEvent.change(screen.getByLabelText('Thumbnail scale'), { target: { value: '2' } });
-  expect(onThumbnailSize).toHaveBeenCalledWith('large');
+  const display = screen.getByRole('button', { name: 'Display options' });
+  expect(display).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(display);
+  expect(onDisplay).toHaveBeenCalledOnce();
+  expect(screen.queryByRole('slider')).not.toBeInTheDocument();
   expect(screen.getByRole('searchbox')).toHaveValue('Summer');
   expect(onSelect).not.toHaveBeenCalled();
   expect(onSearch).not.toHaveBeenCalled();
@@ -31,6 +33,7 @@ it('changes thumbnail scale without changing search or selection', () => {
 it('keeps Photos focused on filtering and explicit selection, without Catalog or Saved plans', () => {
   const onSelect = vi.fn();
   const onFilter = vi.fn();
+  const onDisplay = vi.fn();
   const props = {
     section: 'Photos' as const,
     value: '',
@@ -38,6 +41,7 @@ it('keeps Photos focused on filtering and explicit selection, without Catalog or
     onPlace: vi.fn(),
     busy: false,
     onFilter,
+    onDisplay,
     filterOpen: false,
     activeCount: 2,
     onSelect,
@@ -51,6 +55,7 @@ it('keeps Photos focused on filtering and explicit selection, without Catalog or
   fireEvent.click(screen.getByRole('button', { name: 'Filter (2 active)' }));
   expect(onSelect).toHaveBeenCalledOnce();
   expect(onFilter).toHaveBeenCalledOnce();
+  expect(screen.queryByText('Filter')).not.toBeInTheDocument();
   view.rerender(<LibraryHeader {...props} selecting />);
   const done = screen.getByRole('button', { name: 'Done selecting', pressed: true });
   expect(done).toHaveAttribute('title', 'Done selecting');
@@ -59,6 +64,7 @@ it('keeps Photos focused on filtering and explicit selection, without Catalog or
   view.rerender(<LibraryHeader {...props} selecting busy />);
   expect(screen.getByRole('button', { name: 'Done selecting' })).toBeDisabled();
   expect(screen.getByRole('button', { name: 'Filter (2 active)' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: 'Display options' })).toBeDisabled();
   expect(screen.getByRole('searchbox')).toBeDisabled();
 });
 

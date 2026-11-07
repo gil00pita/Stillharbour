@@ -3,6 +3,7 @@ import { Field, Box } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { NativeSelect } from '@/components/NativeSelect';
 import type { THUMBNAIL_SIZES, ViewMode } from '../../library/model';
+import type { ReactNode } from 'react';
 
 export function BrowserControls({
   mode,
@@ -11,6 +12,7 @@ export function BrowserControls({
   onMode,
   onSize,
   onFit,
+  sizeControl,
 }: {
   mode: ViewMode;
   size: keyof typeof THUMBNAIL_SIZES;
@@ -18,6 +20,7 @@ export function BrowserControls({
   onMode: (mode: ViewMode) => void;
   onSize: (size: keyof typeof THUMBNAIL_SIZES) => void;
   onFit: (fit: 'contain' | 'cover') => void;
+  sizeControl?: ReactNode;
 }) {
   return (
     <Box
@@ -41,45 +44,49 @@ export function BrowserControls({
           {view === 'gallery' ? 'Timeline' : view === 'grid' ? 'Uniform grid' : 'Text list'}
         </Button>
       ))}
-      {mode !== 'list' && (
-        <Field.Root asChild unstyled>
-          <chakra.label
-            className="thumbnail-control"
-            css={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              fontSize: '12px',
-              gap: '8px',
-              marginLeft: 'auto',
-              '& select': {
-                width: 'auto',
-                maxWidth: '160px',
-                padding: '7px 36px 7px 12px',
-                fontSize: '13px',
-              },
-              '@media (max-width: 760px)': { fontSize: '10px', '& select': { maxWidth: '160px' } },
-            }}
-          >
-            <Field.Label asChild unstyled>
-              <span>Thumbnail size</span>
-            </Field.Label>
-            <NativeSelect
-              aria-label="Thumbnail size"
-              value={size}
-              onChange={(event) => {
-                const value = event.target.value;
-                if (value === 'compact' || value === 'comfortable' || value === 'large') {
-                  onSize(value);
-                }
+      {mode !== 'list' &&
+        (sizeControl ?? (
+          <Field.Root asChild unstyled>
+            <chakra.label
+              className="thumbnail-control"
+              css={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                fontSize: '12px',
+                gap: '8px',
+                marginLeft: 'auto',
+                '& select': {
+                  width: 'auto',
+                  maxWidth: '160px',
+                  padding: '7px 36px 7px 12px',
+                  fontSize: '13px',
+                },
+                '@media (max-width: 760px)': {
+                  fontSize: '10px',
+                  '& select': { maxWidth: '160px' },
+                },
               }}
             >
-              <option value="compact">Compact</option>
-              <option value="comfortable">Comfortable</option>
-              <option value="large">Large</option>
-            </NativeSelect>
-          </chakra.label>
-        </Field.Root>
-      )}
+              <Field.Label asChild unstyled>
+                <span>Thumbnail size</span>
+              </Field.Label>
+              <NativeSelect
+                aria-label="Thumbnail size"
+                value={size}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  if (value === 'compact' || value === 'comfortable' || value === 'large') {
+                    onSize(value);
+                  }
+                }}
+              >
+                <option value="compact">Compact</option>
+                <option value="comfortable">Comfortable</option>
+                <option value="large">Large</option>
+              </NativeSelect>
+            </chakra.label>
+          </Field.Root>
+        ))}
       {mode === 'grid' && (
         <Field.Root asChild unstyled>
           <chakra.label

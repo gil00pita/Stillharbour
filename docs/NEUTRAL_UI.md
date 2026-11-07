@@ -24,10 +24,17 @@ the provider effect applies appearance without allowing inline executable script
 or weakening Tauri CSP. Unset appearance follows later OS changes; a saved manual
 choice takes precedence. The header retains its two-state light/dark toggle.
 
-Photo rows and virtual extents share a 6 px gutter. The header's thumbnail scale
-uses the existing compact/comfortable/large display state and remembers the
-visible anchor. At widths below 1024 px it hides to protect search space; the
-existing Filter controls remain available. Hover/focus reveals selection and
+Photo rows and virtual extents share a 6 px gutter. The header uses separate
+36 px icon buttons for Display options, Filter and selection. Filter keeps an
+active-count badge, accessible name and hover title. Display options opens a
+right-side panel matching Filters, with Timeline/Uniform grid/Text list choices,
+the thumbnail-size slider and grid image fit. Display changes remain a draft
+until Apply display; Cancel, Close and Escape discard them and restore focus.
+The slider stays available at compact widths and hides with image fit in Text
+list. Applying display changes remembers the visible anchor and leaves the query
+and selection intact. Filters contains only query/sort, folder/tag, availability
+and all-results selection controls; its reset/apply behavior stays independent.
+Hover/focus reveals selection and
 catalog-favourite actions without moving thumbnails. A favourite fills only
 after native catalog confirmation; failed writes remain visible and retryable.
 The thumbnail checkbox and heart share a 36 px invisible click target and top

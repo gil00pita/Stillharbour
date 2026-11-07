@@ -4329,3 +4329,33 @@ ESLint, changed-file formatting and whitespace pass. The header regression check
 both toggle states and the busy guard. Native suites were not rerun for this
 small presentation change; current both-platform CI remains required before
 merging the existing PR #32.
+
+## 2026-11-07 — Separate Display options from Filters
+
+**Request/change:** make Filter icon-only and move display options and thumbnail
+zoom into their own matching menu. LibraryHeader now has labelled 36 px Display,
+Filter and selection icon buttons; active filters retain a visible count badge.
+DisplayPanel uses the existing right-side native-dialog pattern, with draft
+Timeline/Uniform grid/Text list, a compact-width thumbnail slider and grid fit.
+Apply commits only presentation state and remembers the visible anchor;
+Cancel/Close/Escape discard drafts and restore the opener. Image controls hide
+in Text list. Busy guards remain; previews pause while either panel is open.
+FilterPanel now applies query state only, preserving reset, availability and
+all-results selection. BrowserControls retains its existing Settings defaults
+and accepts the shared slider in Display. Update component/consumer tests, native
+view-switch helpers, NEUTRAL_UI, specification, acceptance criteria and user guide.
+
+**Fresh checks:** 46 affected DisplayPanel, FilterPanel, LibraryHeader, Settings,
+AssetBrowser and controller cases pass, including draft Apply/Cancel, Text list,
+busy state and DOM focus return. Strict TypeScript, ESLint, production frontend
+build, changed-file formatting and whitespace pass; Vite retains its existing
+large-chunk advisory. The generated native display-menu scenario passes draft
+cancellation, applied zoom/fit persistence, unchanged filename query, DOM opener
+restoration, both app appearances at 1180×780/660×560, contained controls and no
+nonempty thumbnail requests in Text list. An initial harness attempt used the
+embedded driver's ineffective option.click(); the existing select-change event
+pattern fixes the harness without weakening the fit assertion. Receipt and
+screenshots are under `.context/display-menu/`; source audit verifies 32
+unchanged generated entries. Physical window focus was not observed, so DOM
+restoration is not a physical keyboard/OS qualification. Full native/platform
+and preservation gates remain; publish to existing PR #32 with CI still required.

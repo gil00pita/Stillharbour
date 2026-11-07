@@ -12,6 +12,12 @@ sidecars unchanged. Selection actions wrap inside their bounded floating toolbar
 existing approvals, disabled controls, focus return and native form tests remain.
 The header selection toggle is a checkbox icon button with Select/Done selecting
 accessible names and hover titles, a correct pressed state and the existing busy guard.
+Filter is icon-only with an accessible active count and visible badge. Display
+options has its own labelled icon and panel containing view mode, thumbnail-size
+slider and grid fit, absent from Filters. Verify Apply commits only display
+state, Cancel/Close/Escape discard edits and return focus, compact-width slider
+visibility, busy guards, retained query/selection/visible anchor and no nonempty
+thumbnail requests in Text list.
 Also verify shared 36 px button geometry and minimum icon width, aligned footer
 buttons, visible sidebar icons, soft fields and legible switch thumbs in both
 modes. Each size amount contains its labelled unit dropdown with no overlap of

@@ -1,4 +1,5 @@
-import { Field, Flex, chakra } from '@chakra-ui/react';
+import { Field, Flex } from '@chakra-ui/react';
+import { Input } from '@/components/Input';
 import type { GalleryDisplay } from '@/components/FilterPanel';
 
 const sizes = ['compact', 'comfortable', 'large'] as const;
@@ -6,21 +7,24 @@ const sizes = ['compact', 'comfortable', 'large'] as const;
 export function ThumbnailScale({
   size,
   onChange,
+  disabled = false,
 }: {
   size: GalleryDisplay['size'];
   onChange: (size: GalleryDisplay['size']) => void;
+  disabled?: boolean;
 }) {
   return (
-    <Field.Root width="24" flexShrink="0" hideBelow="lg">
-      <Field.Label srOnly>Thumbnail scale</Field.Label>
+    <Field.Root width="full" disabled={disabled}>
+      <Field.Label>Thumbnail size</Field.Label>
       <Flex align="center" gap="2" width="full" color="fg.muted">
         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M2 2h4v4H2Zm8 0h4v4h-4ZM2 10h4v4H2Zm8 0h4v4h-4Z" stroke="currentColor" />
         </svg>
-        <chakra.input
+        <Input
           type="range"
           aria-label="Thumbnail scale"
           aria-valuetext={size}
+          disabled={disabled}
           min={0}
           max={2}
           step={1}
@@ -38,6 +42,7 @@ export function ThumbnailScale({
           }}
         />
       </Flex>
+      <Field.HelperText>{size.charAt(0).toUpperCase() + size.slice(1)}</Field.HelperText>
     </Field.Root>
   );
 }

@@ -5,6 +5,7 @@ import { Button } from '@/components/Button';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { AssetSummary, AssetQuery, LibraryStatus } from '../../bindings';
 import { FilterPanel, type GalleryDisplay } from '@/components/FilterPanel';
+import { DisplayPanel } from '@/components/DisplayPanel';
 import type { PhotoViewportHandle } from '@/components/AssetBrowser';
 import { PhotoCollection } from '@/components/PhotoCollection';
 import { useLibraryController } from '@/hooks/use-library-controller';
@@ -72,6 +73,7 @@ export function LibraryScreen({
   const { ids: selected, frozen, busy: batchBusy, count: selectionCount } = c.selection;
   const [columns, setColumns] = useState([...DEFAULT_TEXT_COLUMNS]);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [displayOpen, setDisplayOpen] = useState(false);
   const [displayOverride, setDisplay] = useState<Partial<GalleryDisplay>>({});
   const display: GalleryDisplay = {
     size: displayOverride.size ?? defaults.thumbnailSize,
@@ -103,10 +105,10 @@ export function LibraryScreen({
       jobsControl={jobsControl}
       navigationControl={navigationControl}
       section={section}
-      thumbnailSize={mode === 'list' ? undefined : display.size}
-      onThumbnailSize={(size) => {
-        viewportHandle.current?.remember();
-        setDisplay((previous) => ({ ...previous, size }));
+      displayOpen={displayOpen}
+      onDisplay={() => {
+        setFilterOpen(false);
+        setDisplayOpen(true);
       }}
       value={query.name}
       onSearch={(name) => filter({ name })}
@@ -121,7 +123,10 @@ export function LibraryScreen({
           setSelectionMode(false);
         } else setSelectionMode(true);
       }}
-      onFilter={() => setFilterOpen(true)}
+      onFilter={() => {
+        setDisplayOpen(false);
+        setFilterOpen(true);
+      }}
       filterOpen={filterOpen}
       activeCount={
         Object.entries(query).filter(
@@ -264,7 +269,12 @@ export function LibraryScreen({
                   status={status}
                   mode={mode}
                   viewerOpen={Boolean(
-                    viewerInitial || comparison || filterOpen || organizationIds || catalogOpen,
+                    viewerInitial ||
+                    comparison ||
+                    filterOpen ||
+                    displayOpen ||
+                    organizationIds ||
+                    catalogOpen,
                   )}
                   onOpen={(id, opener) => {
                     const asset = page?.assets.find((asset) => asset.id === id);
@@ -309,14 +319,23 @@ export function LibraryScreen({
             controller={c}
             status={status}
             section={section}
-            mode={mode}
-            display={display}
             onClose={() => setFilterOpen(false)}
             onSettings={onSettings}
             onRelink={onRelink}
-            onApply={(draft, nextMode, nextDisplay) => {
+            onApply={(draft) => {
               viewportHandle.current?.remember();
               if (JSON.stringify(draft) !== JSON.stringify(query)) filter(draft);
+            }}
+          />
+        )}
+        {displayOpen && (
+          <DisplayPanel
+            mode={mode}
+            display={display}
+            busy={batchBusy}
+            onClose={() => setDisplayOpen(false)}
+            onApply={(nextMode, nextDisplay) => {
+              viewportHandle.current?.remember();
               setMode(nextMode);
               setDisplay(nextDisplay);
             }}
