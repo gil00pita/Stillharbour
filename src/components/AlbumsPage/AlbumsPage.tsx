@@ -137,25 +137,7 @@ export function AlbumsPage({
           >
             {jobsControl}
             <CatalogActions status={status} onBrowse={onBrowse} onRefresh={onRefresh} />
-            <Button
-              className="primary"
-              css={{
-                marginTop: '28px',
-                border: '0',
-                background: '{colors.brand.solid}',
-                color: '{colors.brand.contrast}',
-                fontWeight: '600',
-                fontSize: '13px',
-                lineHeight: '20px',
-                borderRadius: 'var(--control-radius)',
-                padding: '12px 24px',
-                minHeight: '44px',
-                transition: 'background-color 140ms var(--ui-ease)',
-                '&:hover:enabled': { background: '{colors.brand.hover}' },
-              }}
-              aria-label="New album"
-              onClick={() => setCreating(true)}
-            >
+            <Button className="primary" aria-label="New album" onClick={() => setCreating(true)}>
               <Text as="span" aria-hidden="true">
                 +
               </Text>{' '}

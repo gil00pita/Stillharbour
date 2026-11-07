@@ -1824,6 +1824,8 @@ async function assertPhotoScanningArt() {
       active: image?.getAttribute('data-active'),
       decorative: image?.getAttribute('aria-hidden'),
       fits: box?.width > 0 && box.left >= 0 && box.right <= window.innerWidth,
+      width: box?.width,
+      height: box?.height,
       animation: lens && getComputedStyle(lens).animationName,
       expectedAnimation: matchMedia('(prefers-reduced-motion: reduce)').matches
         ? 'none'
@@ -1833,6 +1835,8 @@ async function assertPhotoScanningArt() {
   assert.equal(art.active, 'true');
   assert.equal(art.decorative, 'true');
   assert.equal(art.fits, true);
+  assert.equal(art.width, 160);
+  assert.ok(art.height > 0 && art.height <= 120);
   assert.equal(art.animation, art.expectedAnimation);
   const palettes = await browser.execute(() => {
     const root = document.documentElement;

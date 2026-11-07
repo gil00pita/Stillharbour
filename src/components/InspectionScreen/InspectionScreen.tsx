@@ -103,28 +103,36 @@ export function InspectionScreen({
   const resultEpoch = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failedResults, setFailedResults] = useState<InspectionJob | null>(null);
+  const [reload, setReload] = useState(0);
   const epoch = useRef(0);
   const running = active(job);
   const jobId = job?.id ?? null;
   const loadResults = useCallback(async (record: InspectionJob, token: number) => {
-    const [summary, rows, matches] = await Promise.all([
-      libraryData({ kind: 'inspection_report', job_id: record.id }, 'inspection_report'),
-      libraryData(
-        { kind: 'inspection_findings', job_id: record.id, after: null },
-        'inspection_findings',
-      ),
-      record.input.task.kind === 'duplicates'
-        ? libraryData(
-            { kind: 'inspection_groups', job_id: record.id, after: null },
-            'inspection_groups',
-          )
-        : Promise.resolve(null),
-    ]);
-    if (token !== resultEpoch.current) return;
-    setViewedJob(record);
-    setReport(summary);
-    setFiles(rows);
-    setGroups(matches);
+    try {
+      const [summary, rows, matches] = await Promise.all([
+        libraryData({ kind: 'inspection_report', job_id: record.id }, 'inspection_report'),
+        libraryData(
+          { kind: 'inspection_findings', job_id: record.id, after: null },
+          'inspection_findings',
+        ),
+        record.input.task.kind === 'duplicates'
+          ? libraryData(
+              { kind: 'inspection_groups', job_id: record.id, after: null },
+              'inspection_groups',
+            )
+          : Promise.resolve(null),
+      ]);
+      if (token !== resultEpoch.current) return;
+      setViewedJob(record);
+      setReport(summary);
+      setFiles(rows);
+      setGroups(matches);
+      setFailedResults(null);
+    } catch (failure) {
+      if (token === resultEpoch.current) setFailedResults(record);
+      throw failure;
+    }
   }, []);
   useEffect(() => {
     let disposed = false;
@@ -150,6 +158,7 @@ export function InspectionScreen({
           matching.find((record) => !active(record));
         if (retained) await loadResults(retained, ++resultEpoch.current);
         if (disposed || active(latest)) return;
+        if (latest.state === 'failed' || latest.state === 'canceled') return;
         if (jobs.some(active)) {
           setNotice(
             'Another inspection is running. Saved results remain available; scan again when it finishes.',
@@ -195,7 +204,7 @@ export function InspectionScreen({
     };
     // Opening a utility restores its scope once; changing draft settings must not restart a scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, loadResults]);
+  }, [section, loadResults, reload]);
   useEffect(() => {
     if (!jobId || !running) return;
     const id = jobId;
@@ -241,6 +250,7 @@ export function InspectionScreen({
     const token = ++epoch.current;
     setBusy(true);
     setError(null);
+    setFailedResults(null);
     pinnedHistory.current = false;
     setHistorical(false);
     setNotice(null);
@@ -270,6 +280,18 @@ export function InspectionScreen({
       if (token === epoch.current) setError(errorMessage(failure));
     } finally {
       if (token === epoch.current) setBusy(false);
+    }
+  }
+  async function retryResults() {
+    if (!failedResults) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await loadResults(failedResults, ++resultEpoch.current);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
     }
   }
   async function selectJob(record: InspectionJob) {
@@ -569,20 +591,6 @@ export function InspectionScreen({
           {
             <Button
               className="primary"
-              css={{
-                marginTop: '28px',
-                border: '0',
-                background: '{colors.brand.solid}',
-                color: '{colors.brand.contrast}',
-                fontWeight: '600',
-                fontSize: '13px',
-                lineHeight: '20px',
-                borderRadius: 'var(--control-radius)',
-                padding: '12px 24px',
-                minHeight: '44px',
-                transition: 'background-color 140ms var(--ui-ease)',
-                '&:hover:enabled': { background: '{colors.brand.hover}' },
-              }}
               disabled={
                 loading ||
                 !rootIds.length ||
@@ -638,6 +646,21 @@ export function InspectionScreen({
                 Cancel inspection
               </Button>
             </>
+          )}
+          {!running && (job.state === 'failed' || job.state === 'canceled') && (
+            <Button
+              disabled={busy || loading || rootIds.length === 0 || unavailable || invalidRules}
+              onClick={() => {
+                if (section === 'Integrity' && healthMode === 'establish_baseline') {
+                  setBaselineAcknowledged(false);
+                  setSetupOpen(true);
+                } else {
+                  void start();
+                }
+              }}
+            >
+              {section === 'Integrity' ? 'Retry integrity check' : 'Retry inspection'}
+            </Button>
           )}
           {job.limited && (
             <Text>
@@ -858,7 +881,7 @@ export function InspectionScreen({
           </>
         )}
         {error && (section !== 'Storage' || !storageDetailsOpen) && (
-          <Text
+          <Box
             role="alert"
             className="error"
             css={{
@@ -881,8 +904,25 @@ export function InspectionScreen({
               },
             }}
           >
-            {error}
-          </Text>
+            <Text>{error}</Text>
+            {failedResults && (
+              <Button disabled={busy || loading} onClick={() => void retryResults()}>
+                Retry loading results
+              </Button>
+            )}
+            {!history.length && !loading && (
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setLoading(true);
+                  setError(null);
+                  setReload((value) => value + 1);
+                }}
+              >
+                Retry loading scans
+              </Button>
+            )}
+          </Box>
         )}
         {section === 'Duplicates' && viewedJob && (
           <DuplicateStudio

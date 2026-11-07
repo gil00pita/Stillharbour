@@ -38,9 +38,13 @@ export function PageHeader({ children }: { children: ReactElement<{ children?: R
             paddingBlock: '0',
           },
           '& .primary': { margin: '0' },
+          '& > .appearance-action:only-child': { marginInlineStart: 'auto' },
           '&:has(.fixed-search) > h1': { flex: '0 0 136px' },
           '& > .header-actions': { marginInlineStart: 'auto' },
           '& > .explorer-views': { marginInlineStart: 'auto' },
+          '& > .appearance-action:last-child': { marginInlineStart: '0' },
+          '& > :first-child:not(button):not(.fixed-search)': { marginInlineEnd: 'auto' },
+          '&:has(.fixed-search) > :first-child': { marginInlineEnd: '0' },
           '& .header-actions': {
             minWidth: '0',
             gap: '8px',
@@ -77,7 +81,7 @@ export function PageHeader({ children }: { children: ReactElement<{ children?: R
         {},
         <>
           {children.props.children}
-          <Box display="flex" flexShrink="0" marginInlineStart="auto">
+          <Box display="flex" flexShrink="0" className="appearance-action">
             <AppearanceToggle />
           </Box>
         </>,

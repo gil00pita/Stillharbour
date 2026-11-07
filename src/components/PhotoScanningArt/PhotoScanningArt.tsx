@@ -13,7 +13,9 @@ export function PhotoScanningArt({ active }: { active: boolean }) {
         '--scan-art-sky': '{colors.bg.hover}',
         '--scan-art-accent': '{colors.brand.solid}',
         display: 'block',
-        width: 'min(302px, 100%)',
+        width: '160px',
+        maxWidth: '100%',
+        flexShrink: 0,
         height: 'auto',
         margin: '0 auto 24px',
         '--photo-scan-cycle': '3s',
@@ -31,8 +33,6 @@ export function PhotoScanningArt({ active }: { active: boolean }) {
       data-active={active}
       aria-hidden="true"
       focusable="false"
-      width="302"
-      height="215"
       viewBox="0 0 302 215"
       fill="none"
     >

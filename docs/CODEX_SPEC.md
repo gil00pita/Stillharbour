@@ -4,6 +4,10 @@ Owner UI revision (2026-11-07): [Neutral gallery workspace](NEUTRAL_UI.md) and
 ADR-0098 supersede earlier warm/sage presentation guidance. Use local Chakra v3
 styles, semantic light/dark neutrals, self-hosted Inter, 6 px photo gutters,
 appearance and thumbnail-scale controls, and confirmed catalog favourites.
+Owner screenshot refinements require consistent shared control sizing, embedded
+size-unit dropdowns, visible navigation icons, bounded scanning art, a 32 px date
+rail, grouped header actions and explicit failed-inspection/result-load retries;
+see NEUTRAL_UI.md for behavior and preserved baseline acknowledgement.
 Keep Tauri, actual metadata and all milestone/preservation gates; the attachment's
 Electron and synthetic production-library examples do not change architecture.
 

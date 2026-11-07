@@ -10,6 +10,15 @@ keyboard-reachable hover actions. A thumbnail favourite must save by stable asse
 ID through the catalog, remain unconfirmed on failure, and leave originals and
 sidecars unchanged. Selection actions wrap inside their bounded floating toolbar;
 existing approvals, disabled controls, focus return and native form tests remain.
+Also verify shared 36 px button geometry and minimum icon width, aligned footer
+buttons, visible sidebar icons, soft fields and legible switch thumbs in both
+modes. Each size amount contains its labelled unit dropdown with no overlap of
+editable text; exact bytes, validation and disabled states remain intact. Bound
+scanning art to 160 px width and reserve a 32 px timeline lane at both window
+sizes; retain drag/keyboard seeks and hide the overlaid month label at rest.
+Failed Integrity runs offer explicit retry without automatic replay on opening;
+offline roots remain blocked and baseline establishment requires a fresh
+acknowledgement. Retrying failed report reads must not create a new scan.
 No histogram, unsupported EXIF, smart-album counts or production sample media may
 be fabricated. Generated native scenarios and both-platform CI retain their gates.
 

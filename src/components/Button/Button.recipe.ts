@@ -18,6 +18,7 @@ export const buttonRecipe = defineRecipe({
     py: 'controlY',
     px: '3',
     minHeight: 'control',
+    minWidth: 'control',
     cursor: 'pointer',
     transition: 'background-color 140ms var(--ui-ease), border-color 140ms var(--ui-ease)',
     _focusVisible: { ...focusRing, outlineOffset: '5px' },

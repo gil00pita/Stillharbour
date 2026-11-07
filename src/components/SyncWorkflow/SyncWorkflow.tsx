@@ -1099,20 +1099,6 @@ function SyncReviewPanel({
         {approved && (
           <Button
             className="primary"
-            css={{
-              marginTop: '28px',
-              border: '0',
-              background: '{colors.brand.solid}',
-              color: '{colors.brand.contrast}',
-              fontWeight: '600',
-              fontSize: '13px',
-              lineHeight: '20px',
-              borderRadius: 'var(--control-radius)',
-              padding: '12px 24px',
-              minHeight: '44px',
-              transition: 'background-color 140ms var(--ui-ease)',
-              '&:hover:enabled': { background: '{colors.brand.hover}' },
-            }}
             disabled={busy || !review.executionAvailable}
             onClick={onStart}
           >

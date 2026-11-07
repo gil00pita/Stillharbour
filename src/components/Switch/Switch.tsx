@@ -35,10 +35,11 @@ export function Switch({
             padding: '0',
             margin: '0',
             flex: '0 0 36px',
-            border: '1px solid {colors.border.control}',
+            border: '1px solid transparent',
             borderRadius: '12px',
-            background: '{colors.border.button}',
+            background: '{colors.switch.track}',
             cursor: 'pointer',
+            transition: 'background-color 140ms var(--ui-ease)',
           },
           'input&::before': {
             content: "''",
@@ -48,17 +49,20 @@ export function Switch({
             width: '14px',
             height: '14px',
             borderRadius: '50%',
-            background: 'var(--stillharbour-colors-fg, {colors.fg})',
+            background: '{colors.switch.thumb}',
+            transition: 'transform 140ms var(--ui-ease)',
           },
           'input&:checked': {
-            borderColor: '{colors.brand.solid}',
-            background: '{colors.brand.solid}',
+            background: '{colors.switch.checked}',
           },
           'input&:checked::before': {
             transform: 'translateX(14px)',
-            background: '{colors.brand.contrast}',
+            background: '{colors.switch.checkedThumb}',
           },
           'input&:disabled': { opacity: '0.55', cursor: 'default' },
+          '@media (prefers-reduced-motion: reduce)': {
+            'input&, input&::before': { transition: 'none' },
+          },
           '@media (forced-colors: active)': {
             'input&': { background: 'Canvas', borderColor: 'CanvasText' },
             'input&:checked': { background: 'Highlight' },

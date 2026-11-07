@@ -39,6 +39,35 @@ destinations are fabricated to imitate the example. Production has no sample
 photo collection. Native visual checks use the existing disposable generated
 media, including explicit unavailable/unsupported cases.
 
+## Control refinements from owner screenshots
+
+Shared button recipes own the 36 px control minimum, including at least 36 px
+width for icon buttons; primary actions no longer carry per-screen 44 px sizing
+or 28 px top margins. Intentional viewer targets retain their larger geometry.
+Header action groups sit together beside the appearance button, with one title/
+search spacer. Fields use a softer neutral border and filled input surface;
+keyboard focus retains a strong separate ring. Switches share a light thumb,
+muted off track and distinct checked track in both appearances. Onboarding's
+Library icon explicitly strokes its paths, matching the remaining navigation.
+
+Minimum and maximum file sizes each use Chakra's [InputGroup with an embedded
+NativeSelect](https://chakra-ui.com/docs/components/input#select), following the
+owner's example. The dropdown sits inside the amount field with its own labelled,
+keyboard-operable control and visible indicator. Existing exact-byte conversion,
+validation, unlimited blank, zero and disabled behavior remain unchanged.
+
+The scanning artwork is bounded to 160 px wide, retains its aspect ratio, and
+respects reduced motion. The date rail reserves exactly 32 px at desktop and
+compact widths. Year markers and the full-height range target remain in that
+lane; the month label appears as an overlay to its left while hovering, focusing,
+dragging or scrolling, and hides at rest so photos retain their space.
+
+Failed/canceled inspections expose an explicit retry. Reopening a failed run
+does not automatically repeat it. Draft scope validation and offline-root blocks
+still apply; retrying baseline establishment opens settings and resets its
+acknowledgement. Failed saved-report reads have a separate reload action that
+does not start a scan, and failed history reads can be retried in place.
+
 ## Style ownership
 
 All five owned application stylesheets and the StructureFormatter CSS-module
@@ -62,7 +91,8 @@ and next-themes' MIT notices ship under `public/licenses/`.
 Run strict types, ESLint, the frontend component/consumer suite, pinned Chakra
 typegen, frontend build and release policy checks. The shared migration affects
 all UI consumers, so run the generated native desktop suite, including
-`tests/desktop/appearance.e2e.mjs`, page chrome, Foundation, viewer, utilities,
+`tests/desktop/appearance.e2e.mjs`, control consistency, embedded size fields,
+timeline navigation, page chrome, Foundation, viewer, utilities,
 metadata and structure flows. The appearance case records both modes at
 1180×780 and 660×560, checks native favourite persistence, header containment,
 the real font/gutter and unchanged generated originals. Run native drivers and

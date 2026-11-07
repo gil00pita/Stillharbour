@@ -583,7 +583,15 @@ function Sidebar({
             onClick={() => onNavigate('Photos')}
             aria-current={!jobsOpen && section === 'Photos' ? 'page' : undefined}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
               <rect x="3" y="3" width="7" height="7" rx="1" />
               <rect x="14" y="3" width="7" height="7" rx="1" />
               <rect x="3" y="14" width="7" height="7" rx="1" />
@@ -680,25 +688,7 @@ function LibraryWelcome({
       >
         Choose your photo library folder. Your originals stay in place.
       </Text>
-      <Button
-        className="primary"
-        css={{
-          marginTop: '28px',
-          border: '0',
-          background: '{colors.brand.solid}',
-          color: '{colors.brand.contrast}',
-          fontWeight: '600',
-          fontSize: '13px',
-          lineHeight: '20px',
-          borderRadius: 'var(--control-radius)',
-          padding: '12px 24px',
-          minHeight: '44px',
-          transition: 'background-color 140ms var(--ui-ease)',
-          '&:hover:enabled': { background: '{colors.brand.hover}' },
-        }}
-        onClick={onChoose}
-        disabled={disabled}
-      >
+      <Button className="primary" mt="8" onClick={onChoose} disabled={disabled}>
         {busy ? 'Please wait…' : 'Choose a folder'}
       </Button>
     </chakra.section>

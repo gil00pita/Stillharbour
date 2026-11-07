@@ -45,7 +45,7 @@ export const semanticTokens = {
       },
       input: {
         value: {
-          base: '{colors.neutral.50}',
+          base: '{colors.neutral.100}',
           _dark: '{colors.neutral.900}',
         },
       },
@@ -103,8 +103,8 @@ export const semanticTokens = {
       },
       control: {
         value: {
-          base: '{colors.neutral.500}',
-          _dark: '{colors.neutral.500}',
+          base: '{colors.neutral.300}',
+          _dark: '{colors.neutral.600}',
         },
       },
       button: {
@@ -145,6 +145,12 @@ export const semanticTokens = {
           _dark: '{colors.neutral.700}',
         },
       },
+    },
+    switch: {
+      track: { value: { base: '{colors.neutral.300}', _dark: '{colors.neutral.600}' } },
+      checked: { value: { base: '{colors.neutral.600}', _dark: '{colors.neutral.300}' } },
+      thumb: { value: '{colors.neutral.50}' },
+      checkedThumb: { value: { base: '{colors.neutral.50}', _dark: '{colors.neutral.850}' } },
     },
     text: {
       primary: {

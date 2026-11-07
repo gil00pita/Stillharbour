@@ -328,12 +328,12 @@ export function AssetBrowser({
         className={`browser-canvas-layout ${timeline ? '' : 'without-timeline'}`}
         css={{
           display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) 96px',
+          gridTemplateColumns: 'minmax(0, 1fr) 32px',
           gap: '16px',
           flex: '1',
           minHeight: '0',
           '&.without-timeline': { gridTemplateColumns: 'minmax(0, 1fr)' },
-          '@media (max-width: 760px)': { gridTemplateColumns: 'minmax(0, 1fr) 96px', gap: '8px' },
+          '@media (max-width: 760px)': { gridTemplateColumns: 'minmax(0, 1fr) 32px', gap: '8px' },
         }}
       >
         <BrowserTable mode={mode} columns={columns} sort={sort} onSort={onSort} busy={sortBusy}>

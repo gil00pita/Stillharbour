@@ -185,7 +185,7 @@ export function DateTimeline({
       css={{
         '--timeline-line': '{colors.brand.solid}',
         position: 'relative',
-        width: '96px',
+        width: '32px',
         minHeight: '0',
         margin: '0',
         isolation: 'isolate',
@@ -196,22 +196,23 @@ export function DateTimeline({
         '&.is-scrolling': { opacity: '1', transition: 'none' },
         '& button': {
           position: 'absolute',
-          right: '-8px',
+          right: '0',
           border: '0 !important',
           background: '{colors.bg.subtle} !important',
-          padding: '0 8px !important',
+          padding: '0 !important',
+          width: '32px',
           minHeight: '20px !important',
           borderRadius: '10px',
           color: '{colors.fg} !important',
           fontSize: '11px !important',
           lineHeight: '20px !important',
-          letterSpacing: '0.072em',
+          letterSpacing: '0',
           fontWeight: '500',
           fontVariantNumeric: 'tabular-nums',
           whiteSpace: 'nowrap',
         },
         '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
-        '@media (max-width: 760px)': { width: '96px' },
+        '@media (max-width: 760px)': { width: '32px' },
       }}
       aria-label="Photo timeline"
       data-dragging={dragging}
@@ -234,7 +235,7 @@ export function DateTimeline({
       </Text>
       <Box
         className="timeline-year-labels"
-        css={{ position: 'absolute', inset: '24px 10px', zIndex: '1' }}
+        css={{ position: 'absolute', inset: '24px 0', zIndex: '1' }}
       >
         {timelineYears(buckets, periods, current.year, height).map(({ bucket, top }) => (
           <Button
@@ -363,7 +364,7 @@ export function DateTimeline({
           '& i': {
             position: 'absolute',
             right: '0',
-            width: '40px',
+            width: '24px',
             height: '1px',
             background: 'var(--timeline-line)',
           },
@@ -392,7 +393,7 @@ export function DateTimeline({
           css={{
             position: 'absolute',
             right: '0',
-            width: '72px',
+            width: '24px',
             height: '2px',
             zIndex: '3',
             background: 'var(--timeline-line)',
@@ -404,12 +405,13 @@ export function DateTimeline({
         />
         <chakra.output
           className="timeline-current"
+          opacity={hovered !== null || dragging || focused || scrolling ? 1 : 0}
           css={{
             maxWidth: '92px',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             position: 'absolute',
-            right: '0',
+            right: '32px',
             zIndex: '2',
             height: '24px',
             padding: '2px 10px',

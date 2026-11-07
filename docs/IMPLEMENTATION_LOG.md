@@ -4199,3 +4199,64 @@ supported-file Prettier, staged/complete-PR whitespace review and authenticated
 publication succeed. Record this outcome in a documentation follow-up; leave
 the PR unmerged and the same branch checked out. Hosted CI remains pending;
 none of the earlier scoped evidence is relabelled as a new full native pass.
+
+## 2026-11-07 — Refine controls from owner screenshots
+
+**Request/scope:** address the five attached screenshots: stark field borders,
+inconsistent button sizes and spacing, black switch thumbs, missing navigation
+icons, oversized scanning art, a narrower date rail, failed Integrity retries
+and scattered header actions. Follow the owner's clarified Chakra InputGroup
+example with an embedded unit dropdown inside each minimum/maximum text field.
+Keep system appearance, existing features and all native preservation gates.
+
+**Changes:** soften semantic input surfaces/borders and give switches dedicated
+track/thumb roles with reduced-motion support. Shared button sizing supplies
+36 px minimum icon targets; remove duplicated primary-button margins/padding
+from consumers, preserving intentional viewer targets and welcome spacing.
+PageHeader keeps actions beside appearance rather than adding a second spacer.
+Onboarding's Library SVG explicitly strokes its geometry. Bound scanning art to
+160 px without ambiguous numeric SVG style props. Reserve a 32 px date lane,
+24 px position marks and a transient month overlay outside the lane. FileSizeField
+uses InputGroup with compound NativeSelect and its indicator, preserves exact
+bytes and validity, and fixes the native select wrapper to the control height.
+Failed/canceled inspections expose explicit retry, with offline/invalid scope
+blocks and fresh baseline acknowledgement; reopening failures does not silently
+replay them. Saved-report and history-load failures have separate reload paths.
+Update NEUTRAL_UI, the specification and acceptance criteria; retain component
+and generated-native regression coverage.
+
+**Actual checks:** `npm test` passes 629 cases/106 files during development;
+after the final embedded-select changes, 51 affected cases in FileSizeField,
+RootSetup, SettingsScreen, FilterPanel and DateTimeline pass again. The full run
+includes the three new failed-run/report/baseline retry regressions; all 15
+InspectionScreen cases pass again after clearing stale report retry state on a
+new scan. Native visual evidence remains applicable to this state-only follow-up. Pinned
+Chakra CLI 3.38.0 typegen, ESLint, strict types through the production build,
+`npm run build`, 12 release/dependency policy cases, supported-file formatting
+and `git diff --check` pass. jsdom emits its existing stylesheet parse warnings;
+Vite retains its existing large-chunk advisory.
+
+**Native evidence:** serialized Mac WKWebView checks use backend-owned generated
+fixtures and an exclusive copied test executable. Control consistency passes
+both appearances for the setup controls and seven headers at 1180×780/660×560,
+checks aligned footer buttons, embedded dropdown containment, visible Library
+stroke, switch dimensions/thumb colour, 160 px scanning bounds and 32 px rail;
+source audit verifies 32 unchanged generated entries. The existing size-field
+spec passes native/bottom-edge baseline cases at both sizes. It first caught a
+real 2.5 px Settings offset and 41.015625 px select wrapper; explicit flex/36 px
+wrapper sizing fixes it. Early exploratory harness attempts used a wrong Albums
+label or measured the rail while Settings was open; correct the harness before
+recording the passing result. Evidence is under `.context/control-polish/` and
+`.context/screenshots/file-size-*`; final controls executable SHA-256 is
+`ccac398f3b0f66e99b640442912b7f672ca946af9907553d296b628baef356b3`.
+The scoped native timeline test also passes captured drag, bounded seeks,
+keyboard Home/End, wheel and idle-label checks at both sizes on the preceding
+executable; its relevant timeline code is unchanged by the final select-wrapper
+fix. Reuse that evidence explicitly rather than claiming another full run.
+
+**Limits/next gate:** retry failures are exercised with mocked typed IPC in
+component tests, not an induced native catalog failure. No full native matrix,
+Windows, physical focus or packaged-release qualification is claimed. Earlier
+broad-driver/focus limitations remain recorded above. Publish this follow-up to
+the existing PR #32 on the unchanged branch; both-platform CI must pass before
+merge, and production restructuring/mutation authorities remain unchanged.
