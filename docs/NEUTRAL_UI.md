@@ -30,6 +30,19 @@ visible anchor. At widths below 1024 px it hides to protect search space; the
 existing Filter controls remain available. Hover/focus reveals selection and
 catalog-favourite actions without moving thumbnails. A favourite fills only
 after native catalog confirmation; failed writes remain visible and retryable.
+The thumbnail checkbox and heart share a 36 px invisible click target and top
+inset, with centred 18 px glyphs on 28 px dark translucent discs. The outer button
+has no visible background, including when favourited. Portrait tiles narrower
+than 86 px stack the controls along their left edge to keep targets separate. Photo-specific semantic
+roles keep white glyphs and a 70% dark backing in both app appearances, increasing
+to 85% on hover; contrast therefore follows the photograph rather than the app
+surface. A checked box gains a fill and tick; a confirmed favourite gains a fill.
+The native checkbox retains its accessible name, keyboard behavior and busy
+blocks; its decorative mark ignores pointer events. Keyboard focus has a light
+ring with a dark outer edge, and forced-colour styles use system colours.
+The white glyph against the 70% backing over a white photograph computes to
+approximately 6.75:1, above the [3:1 non-text contrast threshold](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html);
+this calculation is not a full accessibility certification.
 Batch actions float within the photo workspace when a selection exists, retain
 keyboard navigation and wrap/scroll within a bounded area.
 

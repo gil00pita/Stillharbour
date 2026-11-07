@@ -66,6 +66,13 @@ describe('Neutral gallery appearance', () => {
           const rail = document.querySelector('.sidebar');
           const row = document.querySelector('.asset-row');
           const bounds = header.getBoundingClientRect();
+          const tile = document.querySelector('.asset');
+          const check = tile.querySelector('.asset-check').getBoundingClientRect();
+          const heart = tile.querySelector('.photo-favorite').getBoundingClientRect();
+          const checkMark = tile
+            .querySelector('.thumbnail-selection > span')
+            .getBoundingClientRect();
+          const heartMark = tile.querySelector('.photo-favorite > span').getBoundingClientRect();
           return {
             width: innerWidth,
             height: innerHeight,
@@ -88,6 +95,23 @@ describe('Neutral gallery appearance', () => {
             executableInlineScripts: document.querySelectorAll(
               'script:not([src]):not([type="application/json"])',
             ).length,
+            thumbnailControls: {
+              checkboxSize: [check.width, check.height],
+              heartSize: [heart.width, heart.height],
+              checkboxMark: [checkMark.width, checkMark.height],
+              heartMark: [heartMark.width, heartMark.height],
+              centreError: tile.hasAttribute('data-narrow-controls')
+                ? Math.abs(check.left + check.width / 2 - heart.left - heart.width / 2)
+                : Math.abs(check.top + check.height / 2 - heart.top - heart.height / 2),
+              buttonBackground: getComputedStyle(tile.querySelector('.photo-favorite'))
+                .backgroundColor,
+              foreground: getComputedStyle(tile.querySelector('.photo-favorite > span')).color,
+              targetsSeparate: [...document.querySelectorAll('.asset')].every((asset) => {
+                const check = asset.querySelector('.asset-check').getBoundingClientRect();
+                const heart = asset.querySelector('.photo-favorite').getBoundingClientRect();
+                return check.right <= heart.left + 1 || check.bottom <= heart.top + 1;
+              }),
+            },
           };
         });
         measurements.push(geometry);
@@ -99,6 +123,14 @@ describe('Neutral gallery appearance', () => {
         assert.equal(geometry.controlsFit, true, JSON.stringify(geometry));
         assert.ok(geometry.font.includes('Inter Variable'));
         assert.equal(geometry.executableInlineScripts, 0);
+        assert.deepEqual(geometry.thumbnailControls.checkboxSize, [36, 36]);
+        assert.deepEqual(geometry.thumbnailControls.heartSize, [36, 36]);
+        assert.deepEqual(geometry.thumbnailControls.checkboxMark, [28, 28]);
+        assert.deepEqual(geometry.thumbnailControls.heartMark, [28, 28]);
+        assert.ok(geometry.thumbnailControls.centreError <= 1);
+        assert.equal(geometry.thumbnailControls.buttonBackground, 'rgba(0, 0, 0, 0)');
+        assert.equal(geometry.thumbnailControls.foreground, 'rgb(248, 248, 250)');
+        assert.equal(geometry.thumbnailControls.targetsSeparate, true);
       }
     }
     await browser.setWindowSize(1180, 780);
@@ -123,12 +155,13 @@ describe('Neutral gallery appearance', () => {
       const box = checkbox.getBoundingClientRect();
       return {
         opacity: getComputedStyle(checkbox).opacity,
+        markOpacity: getComputedStyle(checkbox.nextElementSibling).opacity,
         onTop:
           document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2) ===
           checkbox,
       };
     });
-    assert.deepEqual(selectedCheck, { opacity: '1', onTop: true });
+    assert.deepEqual(selectedCheck, { opacity: '1', markOpacity: '1', onTop: true });
     await browser.saveScreenshot('.context/redesign-native/screenshots/selection-dark-1180.png');
     const selectionFits = await browser.execute(() => {
       const box = document.querySelector('.selection-area').getBoundingClientRect();

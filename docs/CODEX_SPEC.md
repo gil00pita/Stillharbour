@@ -9,7 +9,9 @@ size-unit dropdowns, visible navigation icons, bounded scanning art, a 32 px dat
 rail, grouped header actions and explicit failed-inspection/result-load retries;
 see NEUTRAL_UI.md for behavior and preserved baseline acknowledgement.
 Folder structure Layout type choices pair decorative prefix icons with their
-existing text labels.
+existing text labels. Thumbnail selection and favourite controls align their
+click targets and glyphs; small dark translucent backings preserve white-icon
+contrast over both light and dark photographs without full button backgrounds.
 Keep Tauri, actual metadata and all milestone/preservation gates; the attachment's
 Electron and synthetic production-library examples do not change architecture.
 

@@ -22,6 +22,12 @@ acknowledgement. Retrying failed report reads must not create a new scan.
 Layout type choices show calendar, pin, tag, camera and adjustment prefix icons;
 keep icons decorative, existing radio names/disabled behavior, and both-size
 label/icon containment in light and dark appearances.
+Thumbnail checkbox and heart targets measure 36 px, share a centre line and inset,
+and centre equal 28 px translucent dark marks with white 18 px glyphs in both
+app appearances. Check white, dark and busy image backdrops, checked/unselected
+states, transparent favourited-button backgrounds, native hit testing and
+keyboard focus. Selection marks remain visible after selection; favourites fill
+only after successful catalog confirmation, with save failures still retryable.
 No histogram, unsupported EXIF, smart-album counts or production sample media may
 be fabricated. Generated native scenarios and both-platform CI retain their gates.
 

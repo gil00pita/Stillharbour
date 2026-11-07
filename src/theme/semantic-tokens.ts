@@ -1,5 +1,11 @@
 export const semanticTokens = {
   colors: {
+    photo: {
+      controlBg: { value: 'rgba(14, 16, 20, 0.70)' },
+      controlHover: { value: 'rgba(14, 16, 20, 0.85)' },
+      controlFg: { value: '{colors.neutral.50}' },
+      controlInk: { value: '{colors.neutral.950}' },
+    },
     bg: {
       DEFAULT: {
         value: {

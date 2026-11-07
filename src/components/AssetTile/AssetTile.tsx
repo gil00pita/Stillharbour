@@ -1,4 +1,4 @@
-import { Text, chakra, Button } from '@chakra-ui/react';
+import { Box, Text, chakra, Button } from '@chakra-ui/react';
 import {
   usePhotoAlbumMenu,
   usePhotoAlbumKeys,
@@ -12,6 +12,7 @@ import { previewEdges, previewUrl } from '../../library/previews';
 import { TextListRow } from '@/components/TextList';
 import { ThumbnailFavorite } from './components/ThumbnailFavorite';
 import type { TextColumn } from '../../library/textColumns';
+import { thumbnailControlStyles, thumbnailMarkStyles } from './AssetTile.recipe';
 
 type AssetTileProps = {
   asset: AssetSummary;
@@ -74,6 +75,7 @@ function ImageTile({
       onKeyDown={contextKeys}
       data-asset-id={asset.id}
       data-date={asset.date}
+      data-narrow-controls={(width !== undefined && width < 86) || undefined}
       className={`asset ${selected ? 'is-selected' : ''}`}
       css={{
         position: 'relative',
@@ -81,16 +83,27 @@ function ImageTile({
         minWidth: '0',
         flexShrink: '0',
         '& .photo-favorite': { opacity: asset.favorite ? 1 : 0 },
-        '& .asset-check': { opacity: selecting || selected ? 1 : 0, transition: 'none' },
-        '&:hover .asset-check': {
+        '& .asset-check, & .thumbnail-selection': {
+          opacity: selecting || selected ? 1 : 0,
+          transition: 'none',
+        },
+        '&:hover .asset-check, &:hover .thumbnail-selection': {
           opacity: 1,
           transition:
             selecting || selected ? 'none' : 'opacity 150ms cubic-bezier(0.16, 1, 0.3, 1)',
         },
-        '&:focus-within .asset-check': { opacity: 1, transition: 'none' },
-        _motionReduce: { '& .asset-check': { transition: 'none' } },
+        '&:focus-within .asset-check, &:focus-within .thumbnail-selection': {
+          opacity: 1,
+          transition: 'none',
+        },
+        _motionReduce: { '& .asset-check, & .thumbnail-selection': { transition: 'none' } },
         '& .favorite-badge': { display: onFavorite ? 'none' : 'grid' },
         '&:hover .photo-favorite, &:focus-within .photo-favorite': { opacity: 1 },
+        '&[data-narrow-controls] .photo-favorite': {
+          top: 'calc({sizes.control} + {spacing.2})',
+          left: '2',
+          right: 'auto',
+        },
         '&.is-selected': {
           outline: '2px solid {colors.brand.solid}',
           outlineOffset: '-2px',
@@ -102,7 +115,21 @@ function ImageTile({
     >
       <chakra.input
         className="asset-check"
-        css={{ position: 'absolute', top: '9px', left: '9px', zIndex: '1', margin: '0' }}
+        css={[
+          thumbnailControlStyles,
+          {
+            left: '2',
+            'input&': {
+              appearance: 'none',
+              width: 'control',
+              height: 'control',
+              border: 0,
+              background: 'transparent',
+            },
+            '&:hover + .thumbnail-selection > span': { background: 'photo.controlHover' },
+            '&:disabled + .thumbnail-selection > span': { opacity: 0.55 },
+          },
+        ]}
         type="checkbox"
         aria-label={`Select ${asset.name}`}
         checked={selected}
@@ -118,6 +145,36 @@ function ImageTile({
         }}
         onKeyDown={onNavigate}
       />
+      <Box
+        as="span"
+        className="thumbnail-selection"
+        aria-hidden="true"
+        css={[thumbnailControlStyles, { left: '2', pointerEvents: 'none' }]}
+      >
+        <Box as="span" className="thumbnail-control-mark" css={thumbnailMarkStyles}>
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" focusable="false">
+            <rect
+              x="3"
+              y="3"
+              width="18"
+              height="18"
+              rx="3"
+              stroke="currentColor"
+              strokeWidth="2"
+              fill={selected ? 'currentColor' : 'none'}
+            />
+            {selected && (
+              <path
+                className="selection-tick"
+                d="m7 12 3 3 7-7"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            )}
+          </svg>
+        </Box>
+      </Box>
       <Button
         unstyled
         type="submit"

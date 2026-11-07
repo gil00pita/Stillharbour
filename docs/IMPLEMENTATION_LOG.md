@@ -4281,3 +4281,38 @@ Initial QA caught wrapping, then compact overflow; the final run passes both.
 Screenshots, geometry and source receipt are under `.context/layout-icons/`.
 No full native/Windows/package qualification is claimed; both-platform CI remains
 the next merge gate, with production mutation authorities unchanged.
+
+## 2026-11-07 — Align thumbnail actions and preserve photo contrast
+
+**Request/change:** align thumbnail selection and favourite controls, remove the
+full button background and compare visibility over light/dark photographs.
+AssetTile owns shared inline Chakra styles for 36 px transparent targets, equal
+top/corner insets, 28 px dark translucent discs and centred white 18 px glyphs.
+Narrow portrait tiles stack the controls along one edge to avoid target overlap.
+Photo-specific semantic roles stay constant across app appearances: 70% backing,
+85% hover, white glyph and dark check/focus ink. Retain the real native checkbox
+with a pointer-inert decorative mark, its labels/keyboard/disabled behavior and
+existing reveal rules. A checked box fills and ticks; the heart fills only after
+catalog confirmation. Scope the global pressed-button rule away from thumbnail
+hearts; an initial native run caught its important-layer background overriding
+the transparent button. White/dark keyboard focus rings and system-colour
+fallback styles remain available. Update the specification, acceptance criteria
+and NEUTRAL_UI, including the 6.75:1 calculated worst-case white-photo contrast.
+
+**Actual checks:** 36 affected AssetTile/AssetBrowser/PhotoAlbumActions/controller
+cases pass, including selection busy guards and failed favourite-save retry.
+Pinned Chakra CLI 3.38.0 typegen, strict types, ESLint, frontend build, supported
+formatting and whitespace pass; Vite retains its large-chunk advisory. The
+updated native appearance scenario passes 1180×780/660×560 in both app modes:
+36 px targets, equal 28 px marks, aligned centres, transparent favourited button,
+constant white foreground, persisted native favourite and checked mark/hit test.
+Its independent audit verifies 32 unchanged generated entries. A separate native
+contrast preview passes both app modes with temporary white, dark and patterned
+renderer backgrounds and exposed hearts simulating hover; backed/bare captures
+and its second 32-entry audit live under `.context/thumbnail-controls/`. These
+stress images are QA fixtures, not personal photos or a production demo mode.
+
+**Limits/next gate:** physical focus was not observed in the occluded native
+window; no new screen-reader, forced-colours, Windows or packaged qualification
+is claimed. Full current both-platform CI and existing preservation gates remain
+required before merge; publish on the existing PR #32 without changing branch.

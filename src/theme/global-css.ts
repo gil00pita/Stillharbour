@@ -218,7 +218,7 @@ export const globalCss: Record<string, SystemStyleObject> = {
   'button:not(.primary):not(.asset-open):not(.chakra-button):hover:enabled': {
     background: '{colors.bg.hover}',
   },
-  "button[aria-pressed='true']": {
+  "button[aria-pressed='true']:not(.photo-favorite)": {
     background: '{colors.brand.selected} !important',
     color: '{colors.fg}',
   },
