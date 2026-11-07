@@ -19,6 +19,9 @@ sizes; retain drag/keyboard seeks and hide the overlaid month label at rest.
 Failed Integrity runs offer explicit retry without automatic replay on opening;
 offline roots remain blocked and baseline establishment requires a fresh
 acknowledgement. Retrying failed report reads must not create a new scan.
+Layout type choices show calendar, pin, tag, camera and adjustment prefix icons;
+keep icons decorative, existing radio names/disabled behavior, and both-size
+label/icon containment in light and dark appearances.
 No histogram, unsupported EXIF, smart-album counts or production sample media may
 be fabricated. Generated native scenarios and both-platform CI retain their gates.
 

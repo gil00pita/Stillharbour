@@ -49,6 +49,10 @@ search spacer. Fields use a softer neutral border and filled input surface;
 keyboard focus retains a strong separate ring. Switches share a light thumb,
 muted off track and distinct checked track in both appearances. Onboarding's
 Library icon explicitly strokes its paths, matching the remaining navigation.
+The Folder structure Layout type segments prefix their labels with 16 px
+calendar, location-pin, tag, camera and adjustment icons. Icons inherit the
+segment's semantic colour and remain decorative; text labels, radio semantics
+and keyboard/disabled behavior stay authoritative.
 
 Minimum and maximum file sizes each use Chakra's [InputGroup with an embedded
 NativeSelect](https://chakra-ui.com/docs/components/input#select), following the

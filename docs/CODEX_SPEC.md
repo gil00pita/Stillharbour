@@ -8,6 +8,8 @@ Owner screenshot refinements require consistent shared control sizing, embedded
 size-unit dropdowns, visible navigation icons, bounded scanning art, a 32 px date
 rail, grouped header actions and explicit failed-inspection/result-load retries;
 see NEUTRAL_UI.md for behavior and preserved baseline acknowledgement.
+Folder structure Layout type choices pair decorative prefix icons with their
+existing text labels.
 Keep Tauri, actual metadata and all milestone/preservation gates; the attachment's
 Electron and synthetic production-library examples do not change architecture.
 

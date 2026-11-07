@@ -4260,3 +4260,24 @@ Windows, physical focus or packaged-release qualification is claimed. Earlier
 broad-driver/focus limitations remain recorded above. Publish this follow-up to
 the existing PR #32 on the unchanged branch; both-platform CI must pass before
 merge, and production restructuring/mutation authorities remain unchanged.
+
+## 2026-11-07 — Prefix icons for folder-layout segments
+
+**Request/change:** add prefix icons to Folder structure's Layout type control.
+SegmentedControl accepts an optional decorative icon without changing text-only
+choices; OrganizationPresets supplies a private 16 px calendar, pin, tag, camera
+and adjustment SVG. Content-sized segments and compact spacing retain one-line
+labels. Existing semantic colours, radio names, selection and disabled behavior
+remain intact. Update NEUTRAL_UI, the specification and acceptance criteria.
+
+**Checks:** 29 affected cases across SegmentedControl, OrganizationPresets,
+OrganizationPreview/template fields and StructureFormatter/examples pass after
+the final spacing change. ESLint, strict TypeScript through desktop/production
+builds, changed-file formatting and whitespace pass; Vite retains its existing
+large-chunk advisory. Native generated-fixture QA at 1180×780 and 660×560 in both
+appearances verifies all five 16 px decorative prefix icons, single-line labels
+and segment/viewport containment; 32 generated source entries remain unchanged.
+Initial QA caught wrapping, then compact overflow; the final run passes both.
+Screenshots, geometry and source receipt are under `.context/layout-icons/`.
+No full native/Windows/package qualification is claimed; both-platform CI remains
+the next merge gate, with production mutation authorities unchanged.
