@@ -1051,3 +1051,51 @@ hook now adds explicit catalog-only naming observations and tag categories, whil
 its placeholder originals remain unavailable. This is not decoder/extraction
 proof. The macOS helper read list adds embedded naming tags, with no silent
 reindex and no expanded Windows location-label reader claim.
+
+## Structure review workflow — 2026-11-07
+
+[ADR-0097](decisions/ADR-0097-structure-review-and-session-presets.md) defines
+native illustrative examples, Skip compatibility, cached TEMP global summaries
+and bounded typed full-scope review queries. Test `organization` and saved Skip
+policy cases, plus the affected selected-photo planning consumers; for this
+native planning change the full core feature suite was also selected:
+
+```sh
+node scripts/cargo.mjs test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow
+npm test
+npm run bindings:check
+npm run lint
+npm run typecheck
+```
+
+Frontend tests cover filename transforms, session scope/limits, live example
+error/stale states, complete review/search/skip flow, cancellation and simulation
+revalidation. App navigation tests open Advanced path rule before inspecting the
+raw pattern; the naming controls remain immediately visible. Use focused tests
+while iterating, then the whole frontend suite for these shared consumers.
+
+The generated native case exercises real global paging beyond 240 rows, literal
+search outside page one, Needs attention/missing-date filters, save/load across
+navigation, confirmation/cancellation/simulated completion, custom dragging and
+unchanged source audits. It records all organization request kinds and refuses
+mutation commands. Run sequentially with a current instrumented executable:
+
+```sh
+npm run desktop:test:build
+npm run desktop:test -- --spec tests/desktop/structure-formatter.e2e.mjs
+npm run build
+npm run release:check
+```
+
+Restore ordinary production assets after instrumentation. Receipts/screenshots
+are `.context/ui-redesign/structure-flow*`; they are local macOS evidence, not
+Windows, physical input, source metadata extraction, packaged native release or
+production mutation qualification. Keep actual Run restructure disabled.
+
+The base-only theme requires explicit spacing/size/font/overlay tokens and a
+registered Dialog slot recipe; compose its controlled Root and Portal using the
+[Chakra v3 Dialog API](https://chakra-ui.com/docs/components/dialog). Recipe styles
+are layered, while legacy `.primary` CSS is unlayered: the colocated footer/dialog
+CSS module resets only its conflicting margin/height. Review actual native
+compact/desktop geometry after these changes. Run pinned Chakra CLI typegen and
+the pinned local React Doctor scope command recorded in REACT_DOCTOR_REVIEW.

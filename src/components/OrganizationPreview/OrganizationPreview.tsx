@@ -165,15 +165,22 @@ export function OrganizationPreview({
               metadata fidelity and free space still need review. Sequence numbers follow library ID
               and native source path order.
             </Text>
-            <OrganizationDestination
-              catalogId={catalogId}
-              preferredImportRoot={preferredImportRoot}
-              key={preview.fingerprint}
-              preview={preview}
-              revision={revision}
-              templateReference={templateReference}
-              roots={roots}
-            />
+            {template.missingDate === 'skip' ? (
+              <Text className="help">
+                Skipping missing dates is supported in Structure Formater’s whole-library preview.
+                Destination and copy planning are unavailable for this saved rule.
+              </Text>
+            ) : (
+              <OrganizationDestination
+                catalogId={catalogId}
+                preferredImportRoot={preferredImportRoot}
+                key={preview.fingerprint}
+                preview={preview}
+                revision={revision}
+                templateReference={templateReference}
+                roots={roots}
+              />
+            )}
             <Field.Root asChild unstyled>
               <label>
                 <Field.Label asChild unstyled>
@@ -219,9 +226,13 @@ export function OrganizationPreview({
                         <bdi>{row.targetRelativePath ?? 'No valid target'}</bdi>
                       </Table.Cell>
                       <Table.Cell unstyled>
-                        {row.issues.length
-                          ? row.issues.map((issue) => <Text key={issue}>{issueLabels[issue]}</Text>)
-                          : 'Destination checks pending'}
+                        {row.skipReason
+                          ? 'Skipped · missing capture date; selected-photo plans do not support skipping'
+                          : row.issues.length
+                            ? row.issues.map((issue) => (
+                                <Text key={issue}>{issueLabels[issue]}</Text>
+                              ))
+                            : 'Destination checks pending'}
                         {row.usedUndated && <Text>Undated fallback; no embedded capture date</Text>}
                         {row.companionCandidates > 0 && (
                           <Text>

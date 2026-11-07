@@ -28,6 +28,12 @@ describe('Structure Formater — entire generated library', () => {
     await $('button=Preview restructure').waitForDisplayed();
     assert.equal(await $('button=Choose photos').isExisting(), false);
     assert.equal(await $('.asset-check:checked').isExisting(), false);
+    await browser.execute(() => {
+      window.__structureAllRequests = [];
+      window.addEventListener('stillharbour:test-library-request', (event) =>
+        window.__structureAllRequests.push(event.detail.kind),
+      );
+    });
     const controls = await browser.execute(() => ({
       cards: document.querySelectorAll('.organization-presets input[type="radio"]').length,
       illustrations: document.querySelectorAll('.organization-presets svg[aria-hidden="true"]')
@@ -73,17 +79,15 @@ describe('Structure Formater — entire generated library', () => {
     await radioKey('ArrowRight');
     await browser.waitUntil(() =>
       browser.execute(() =>
-        document
-          .querySelector('input[aria-describedby="organization-token-help"]')
-          .value.includes('{capture:%m}'),
+        document.querySelector('input[name="structure-pattern"]').value.includes('{capture:%m}'),
       ),
     );
     await radioKey('ArrowRight');
     await browser.waitUntil(() =>
       browser.execute(
         () =>
-          document.querySelector('input[aria-describedby="organization-token-help"]').value ===
-          '{capture:%Y-%m-%d}/{capture:%H%M%S}_{original_stem}.{ext}',
+          document.querySelector('input[name="structure-pattern"]').value ===
+          '{capture:%Y-%m-%d}/{original_stem}.{ext}',
       ),
     );
     const focusSegment = (label) =>
@@ -102,10 +106,15 @@ describe('Structure Formater — entire generated library', () => {
         );
         return group.querySelector('[data-part="item"][data-state="checked"] input')?.value;
       }, label);
+    await focusSegment('Filename format');
+    await radioKey('ArrowRight');
+    await browser.waitUntil(
+      async () => (await segmentValue('Filename format')) === 'date_original',
+    );
     await focusSegment('When capture date is missing');
     await radioKey('ArrowRight');
     await browser.waitUntil(
-      async () => (await segmentValue('When capture date is missing')) === 'block',
+      async () => (await segmentValue('When capture date is missing')) === 'skip',
     );
     await radioKey('ArrowLeft');
     await browser.waitUntil(
@@ -116,6 +125,22 @@ describe('Structure Formater — entire generated library', () => {
     await browser.waitUntil(async () => (await segmentValue('Filename stem case')) === 'lowercase');
     await radioKey('ArrowRight');
     await browser.waitUntil(async () => (await segmentValue('Filename stem case')) === 'uppercase');
+    const savedPattern = await browser.execute(
+      () => document.querySelector('input[name="structure-pattern"]').value,
+    );
+    await $('button=Save preset').click();
+    await $('[role="dialog"] input').waitForDisplayed();
+    await $('[role="dialog"] input').setValue('Native session preset');
+    await $('[role="dialog"] button.primary').click();
+    await $('[role="dialog"]').waitForExist({ reverse: true });
+    await $('button[aria-label="Saved presets"]').click();
+    await $('button[aria-label="Load preset Native session preset"]').waitForDisplayed();
+    await $('button[aria-label="Load preset Native session preset"]').click();
+    await $('[role="dialog"]').waitForExist({ reverse: true });
+    assert.equal(
+      await browser.execute(() => document.querySelector('input[name="structure-pattern"]').value),
+      savedPattern,
+    );
     assert.equal(await invoke('test_scroll_catalog'), 960);
     // Native status must settle before the read-only revision-bound preview.
     await browser.waitUntil(async () =>
@@ -165,7 +190,7 @@ describe('Structure Formater — entire generated library', () => {
     assert.equal(requests[0].template.filenameStemCase, 'uppercase');
     assert.equal(
       requests[0].template.pattern,
-      '{capture:%Y-%m-%d}/{capture:%H%M%S}_{original_stem}.{ext}',
+      '{capture:%Y-%m-%d}/{capture:%Y%m%d_%H%M%S}_{original_stem}.{ext}',
     );
     assert(
       requests.filter((request) => request.kind === 'organization_library_advance').length >= 4,
@@ -194,7 +219,7 @@ describe('Structure Formater — entire generated library', () => {
         browser.execute(
           (expectedOffset) =>
             document
-              .querySelector('.organization-table caption')
+              .querySelector('.structure-review-table caption')
               ?.textContent.includes(`items ${expectedOffset + 1}–`),
           expectedOffset,
         ),
@@ -206,8 +231,8 @@ describe('Structure Formater — entire generated library', () => {
     assert.equal(current.rows.at(-1).sequence, first.total);
     assert.equal(await $('button=Next page').isEnabled(), false);
     const rendered = await browser.execute(() =>
-      [...document.querySelectorAll('.organization-table tbody tr')].map(
-        (row) => row.cells[0].querySelector('bdi').textContent,
+      [...document.querySelectorAll('.structure-review-table tbody tr')].map(
+        (row) => row.cells[1].querySelector('bdi').textContent,
       ),
     );
     assert.deepEqual(
@@ -227,7 +252,7 @@ describe('Structure Formater — entire generated library', () => {
       assert.deepEqual(layout, { overflow: false, scrollable: true });
       await browser.execute(() =>
         document
-          .querySelector('.organization-table caption')
+          .querySelector('.structure-review-table caption')
           .scrollIntoView({ block: 'start', behavior: 'instant' }),
       );
       await browser.saveScreenshot(`.context/ui-redesign/structure-layouts-results-${width}.png`);
@@ -248,6 +273,89 @@ describe('Structure Formater — entire generated library', () => {
         executionAvailable: false,
       }),
     );
+    // Search a real native result that was outside the first 240-row page.
+    const beyond = (
+      await native({ kind: 'organization_library_page', preview_id: id, offset: 240 })
+    ).data.rows[0].sourcePath;
+    await $('.structure-review-search input').setValue(beyond);
+    await browser.waitUntil(() =>
+      browser.execute(() =>
+        document
+          .querySelector('.structure-review-table caption')
+          .textContent.includes('of 1 matching'),
+      ),
+    );
+    await $('button=Needs attention').click();
+    await browser.waitUntil(() =>
+      browser.execute(() =>
+        window.__structureRequests.some(
+          (request) =>
+            request.kind === 'organization_library_query' &&
+            request.query.filter === 'needs_attention',
+        ),
+      ),
+    );
+    await $('.structure-review-search input').setValue('');
+    await $('button=Show affected').click();
+    await browser.waitUntil(() =>
+      browser.execute(() =>
+        window.__structureRequests.some(
+          (request) =>
+            request.kind === 'organization_library_query' &&
+            request.query.filter === 'missing_dates',
+        ),
+      ),
+    );
+    assert(first.summary.missingDates > 0);
+    assert(first.summary.moves + first.summary.renames > 0);
+    for (const [width, height] of [
+      [1180, 780],
+      [660, 560],
+    ]) {
+      await browser.setWindowSize(width, height);
+      await browser.execute(() => (document.querySelector('.structure-content').scrollTop = 0));
+      await browser.saveScreenshot(`.context/ui-redesign/structure-flow-review-${width}.png`);
+    }
+    await $('button=Simulate plan').waitForEnabled();
+    await $('button=Simulate plan').click();
+    await $('[role="dialog"]').waitForDisplayed();
+    await browser.saveScreenshot('.context/ui-redesign/structure-flow-confirm-660.png');
+    await $('button=Keep reviewing').click();
+    await $('[role="dialog"]').waitForExist({ reverse: true });
+    await $('button=Simulate plan').click();
+    await $('button=Run simulation').waitForDisplayed();
+    await $('button=Run simulation').click();
+    await $('h2=Simulation complete').waitForDisplayed();
+    assert.equal(await $('button=Run restructure').isEnabled(), false);
+    for (const [width, height] of [
+      [1180, 780],
+      [660, 560],
+    ]) {
+      await browser.setWindowSize(width, height);
+      await browser.saveScreenshot(`.context/ui-redesign/structure-flow-complete-${width}.png`);
+      const geometry = await browser.execute(() => ({
+        controlHeight: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue('--control-height'),
+        ),
+        buttons: Array.from(document.querySelectorAll('.structure-completion button'), (button) => {
+          const { top, height } = button.getBoundingClientRect();
+          return { top, height };
+        }),
+      }));
+      const { buttons, controlHeight } = geometry;
+      assert.equal(buttons.length, 3);
+      assert(controlHeight >= 36, JSON.stringify(geometry));
+      assert(
+        buttons.every((button) => Math.abs(button.height - controlHeight) <= 1),
+        JSON.stringify(buttons),
+      );
+      assert(
+        buttons.every((button) => Math.abs(button.top - buttons[0].top) <= 1),
+        JSON.stringify(buttons),
+      );
+    }
+    await $('button=Back to editing').click();
+    await $('button=Preview restructure').waitForDisplayed();
     // Test-owned catalog placeholders carry explicit naming observations. They
     // remain unavailable originals; this tests resolution, not source decoding.
     const observations = [];
@@ -334,9 +442,7 @@ describe('Structure Formater — entire generated library', () => {
     await browser.keys('Enter');
     await browser.waitUntil(() =>
       browser.execute(() =>
-        document
-          .querySelector('input[aria-describedby="organization-token-help"]')
-          .value.includes('/{country}/'),
+        document.querySelector('input[name="structure-pattern"]').value.includes('/{country}/'),
       ),
     );
     for (const part of ['City', 'Model']) {
@@ -351,9 +457,7 @@ describe('Structure Formater — entire generated library', () => {
       const handles = [...document.querySelectorAll('[data-folder-index]')];
       const from = handles[0].getBoundingClientRect();
       const to = handles.at(-1).getBoundingClientRect();
-      const pattern = document.querySelector(
-        'input[aria-describedby="organization-token-help"]',
-      ).value;
+      const pattern = document.querySelector('input[name="structure-pattern"]').value;
       const parts = pattern.split('/');
       const filename = parts.pop();
       parts.push(parts.shift());
@@ -383,9 +487,7 @@ describe('Structure Formater — entire generated library', () => {
     ]);
     await $('[data-folder-drag-preview]').waitForExist();
     assert.equal(
-      await browser.execute(
-        () => document.querySelector('input[aria-describedby="organization-token-help"]').value,
-      ),
+      await browser.execute(() => document.querySelector('input[name="structure-pattern"]').value),
       drag.pattern,
       'Dragging must not submit intermediate rules',
     );
@@ -401,9 +503,7 @@ describe('Structure Formater — entire generated library', () => {
     await browser.releaseActions();
     await browser.waitUntil(() =>
       browser.execute(
-        (expected) =>
-          document.querySelector('input[aria-describedby="organization-token-help"]').value ===
-          expected,
+        (expected) => document.querySelector('input[name="structure-pattern"]').value === expected,
         drag.expected,
       ),
     );
@@ -472,6 +572,45 @@ describe('Structure Formater — entire generated library', () => {
         return true;
       }
     });
+    const mutationRequests = await browser.execute(() =>
+      window.__structureAllRequests.filter(
+        (kind) =>
+          kind.startsWith('organization_') &&
+          ![
+            'organization_template_examples',
+            'organization_protection_status',
+            'organization_library_start',
+            'organization_library_advance',
+            'organization_library_page',
+            'organization_library_query',
+            'organization_library_discard',
+          ].includes(kind),
+      ),
+    );
+    assert.deepEqual(mutationRequests, []);
+    await $('button[aria-label="Structure Formater"]').click();
+    await $('button[aria-label="Saved presets"]').click();
+    await $('button[aria-label="Load preset Native session preset"]').waitForDisplayed();
+    await $('button[aria-label="Load preset Native session preset"]').click();
+    await $('[role="dialog"]').waitForExist({ reverse: true });
+    assert.equal(
+      await browser.execute(() => document.querySelector('input[name="structure-pattern"]').value),
+      savedPattern,
+    );
+    await writeFile(
+      '.context/ui-redesign/structure-flow.json',
+      JSON.stringify(
+        {
+          summary: first.summary,
+          total: first.total,
+          sessionPresetRestored: true,
+          simulationOnly: true,
+          mutationRequests,
+        },
+        null,
+        2,
+      ),
+    );
     await invoke('test_library_fixture', { verify: true });
   });
 });

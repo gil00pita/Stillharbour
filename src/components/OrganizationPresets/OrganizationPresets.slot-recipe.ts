@@ -22,6 +22,10 @@ export const organizationPresetsRecipe = defineSlotRecipe({
       gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
       gap: '3',
       '@container (max-width: 640px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+      '&[data-compact=true]': {
+        gridTemplateColumns: 'repeat(2,minmax(0,1fr))',
+        '@container (max-width: 420px)': { gridTemplateColumns: 'minmax(0,1fr)' },
+      },
     },
     item: {
       position: 'relative',
@@ -46,6 +50,12 @@ export const organizationPresetsRecipe = defineSlotRecipe({
       _hover: { bg: 'bg.hover' },
       _focus: { ...focusRing, outlineOffset: '3px' },
       '@container (max-width: 640px)': { flexDirection: 'row', alignItems: 'center', gap: '4' },
+      '&[data-compact=true]': {
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        padding: '3',
+        gap: '2',
+      },
     },
     illustration: {
       display: 'block',
@@ -53,6 +63,7 @@ export const organizationPresetsRecipe = defineSlotRecipe({
       height: 'auto',
       color: 'fg.secondary',
       '@container (max-width: 640px)': { width: '8rem', flexShrink: 0 },
+      '&[data-compact=true]': { width: 'full', maxHeight: '24' },
     },
     content: { display: 'flex', flexDirection: 'column', gap: '2', minWidth: 0 },
     text: { display: 'block', color: 'fg', fontSize: 'sm', fontWeight: 600, paddingRight: '5' },

@@ -179,3 +179,33 @@ preview policy v2; previous patterns and absent optional context retain v1 and
 legacy serialization. Template examples can carry explicit naming observations.
 Read [ADR-0096](decisions/ADR-0096-metadata-structure-rules.md) for exact context,
 reader coverage, compatibility and unchanged execution limits.
+
+## Rules-to-review flow — 2026-11-07
+
+The latest owner refinement separates the five folder categories from Original /
+Date + original / Sequence filename choices. Folder tree and sample-path views
+are explicitly illustrative, resolved natively from four fixed examples without
+catalog or source-file access. Advanced path editing, stem case, draggable Custom
+chips and existing immutable catalog templates remain available.
+
+Missing dates can use the existing whole-path Undated/original-name fallback or
+the new typed Skip policy. Skip retains rows and global sequence positions;
+non-date rules do not skip them. Historical Block rules still load. New optional
+whole-library observations are absent from legacy row serialization. Skip uses
+preview v2 and saved template schema 2, and is refused by executable selected-photo
+plan creation. It supplies no execution authority.
+
+Completed TEMP previews provide cached global move/folder/rename/attention/date/
+skip/unchanged totals. Native queries apply bounded literal path search and typed
+filters across the entire namespace before 240-row paging. Global summaries and
+sequence values do not change under filters. Errors/stale catalog revisions
+require fresh review. Session presets are catalog-scoped process memory, distinct
+from persistent catalog templates and approved plans.
+
+The dedicated review screen supports missing-date inspection and return to
+editing. Confirmation invokes fresh read-only native validation before an
+explicit simulated completion screen; no approval, operation or job is created.
+Actual Run restructure remains disabled, including when backup/sync prerequisites
+are clear. [ADR-0097](decisions/ADR-0097-structure-review-and-session-presets.md)
+records query, compatibility and simulation boundaries. This increment does not
+close M2 or authorize production original-file operations.

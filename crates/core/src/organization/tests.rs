@@ -27,6 +27,89 @@ fn source(path: &str) -> PreviewSource {
 fn run(pattern: &str, sources: Vec<PreviewSource>) -> OrganizationPreview {
     preview("1".into(), template(pattern), sources).unwrap()
 }
+
+#[test]
+fn skip_missing_dates_retains_rows_without_proposing_a_target_or_renumbering() {
+    let mut rules = template("{capture:%Y}/{sequence:04}.{ext}");
+    rules.missing_date = MissingDatePolicy::Skip;
+    let mut missing = source("a.JPG");
+    missing.capture = None;
+    let preview = preview("1".into(), rules, vec![missing, source("b.JPG")]).unwrap();
+    assert_eq!(preview.proposed, 1);
+    assert_eq!(preview.blocked, 0);
+    assert_eq!(
+        preview.rows[0].skip_reason,
+        Some(OrganizationSkipReason::MissingCaptureDate)
+    );
+    assert!(preview.rows[0].target_relative_path.is_none());
+    assert_eq!(
+        preview.rows[1].target_relative_path.as_deref(),
+        Some("2024/0002.JPG")
+    );
+    assert!(!preview.execution_available);
+}
+
+#[test]
+fn missing_dates_do_not_skip_date_independent_layouts_and_legacy_rows_omit_new_context() {
+    let mut missing = source("Keep/Photo.JPG");
+    missing.capture = None;
+    let mut rules = template("{original_stem}.{ext}");
+    rules.missing_date = MissingDatePolicy::Skip;
+    let rows = render_library_rows(&rules, &[missing.clone()], 1).unwrap();
+    assert_eq!(rows[0].capture_missing, Some(true));
+    assert!(rows[0].skip_reason.is_none());
+    assert_eq!(rows[0].target_relative_path.as_deref(), Some("Photo.JPG"));
+    let legacy = run("{original_stem}.{ext}", vec![missing]);
+    let encoded = serde_json::to_value(&legacy.rows[0]).unwrap();
+    assert!(encoded.get("captureMissing").is_none());
+    assert!(encoded.get("skipReason").is_none());
+}
+
+#[test]
+fn illustrative_examples_use_native_filename_case_fallback_and_skip_policies() {
+    let mut rules = template("{capture:%Y}/{sequence:04}.{ext}");
+    let examples = template_examples(rules.clone()).unwrap();
+    assert!(examples.sample_only);
+    assert_eq!(examples.rows.len(), 4);
+    assert_eq!(
+        examples.rows[0].target_relative_path.as_deref(),
+        Some("2026/0001.JPG")
+    );
+    assert_eq!(
+        examples.rows[3].target_relative_path.as_deref(),
+        Some("Undated/IMG_0424.JPG")
+    );
+    rules.missing_date = MissingDatePolicy::Skip;
+    let examples = template_examples(rules.clone()).unwrap();
+    assert!(examples.rows[3].skip_reason.is_some());
+    rules.pattern = "{country}/{city}/{original_stem}.{ext}".into();
+    rules.filename_stem_case = Some(FilenameStemCase::Lowercase);
+    let examples = template_examples(rules).unwrap();
+    assert_eq!(
+        examples.rows[0].target_relative_path.as_deref(),
+        Some("Portugal/Lagos/img_0421.JPG")
+    );
+    assert!(examples.rows.iter().all(|r| r.skip_reason.is_none()));
+}
+
+#[test]
+fn saved_skip_examples_cannot_claim_a_resolved_missing_date_target() {
+    let mut rules = template("{capture:%Y}/{original_stem}.{ext}");
+    rules.missing_date = MissingDatePolicy::Skip;
+    assert!(
+        validate_samples(
+            &rules,
+            &[TemplateSample {
+                relative_path: "sample.JPG".into(),
+                capture: None,
+                metadata: None,
+                sequence: 1,
+                expected_target: "Undated/sample.JPG".into()
+            }]
+        )
+        .is_err()
+    );
+}
 #[test]
 fn filename_stem_case_preserve_keeps_legacy_template_serialization_and_preview_identity() {
     let original = template("{original_stem}.{ext}");

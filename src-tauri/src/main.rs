@@ -1271,6 +1271,18 @@ async fn library_request(
                     library.organization_library_start(template)?,
                 )
             }
+            LibraryRequest::OrganizationTemplateExamples { template } => {
+                LibraryResponse::OrganizationTemplateExamples(
+                    stillharbour_core::organization::template_examples(template)?,
+                )
+            }
+            LibraryRequest::OrganizationLibraryQuery {
+                preview_id,
+                offset,
+                query,
+            } => LibraryResponse::OrganizationLibraryPreview(
+                library.organization_library_query(preview_id, offset, query)?,
+            ),
             LibraryRequest::OrganizationLibraryAdvance { preview_id } => {
                 LibraryResponse::OrganizationLibraryPreview(
                     library.organization_library_advance(preview_id)?,

@@ -2,7 +2,9 @@
 //! executable plans, approvals, destination reservations or recovery evidence.
 use crate::domain::{AppError, ErrorCode, Result};
 use chrono::{Datelike, NaiveDateTime};
+mod examples;
 mod metadata;
+pub use examples::template_examples;
 pub use metadata::OrganizationMetadata;
 pub(crate) use metadata::requires_metadata;
 use serde::{Deserialize, Serialize};
@@ -50,8 +52,55 @@ pub struct LibraryOrganizationPreview {
     pub blocked: u32,
     pub complete: bool,
     pub offset: u32,
+    pub matching: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub summary: Option<LibraryOrganizationSummary>,
     pub rows: Vec<OrganizationRow>,
     pub execution_available: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LibraryOrganizationSummary {
+    pub moves: u32,
+    pub folders: u32,
+    pub renames: u32,
+    pub unchanged: u32,
+    pub attention: u32,
+    pub missing_dates: u32,
+    pub skipped: u32,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OrganizationPreviewFilter {
+    #[default]
+    All,
+    Changes,
+    NeedsAttention,
+    MissingDates,
+    Skipped,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OrganizationPreviewQuery {
+    pub search: String,
+    pub filter: OrganizationPreviewFilter,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct OrganizationExamplePreview {
+    pub sample_only: bool,
+    pub rows: Vec<OrganizationRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OrganizationSkipReason {
+    MissingCaptureDate,
 }
 
 /// Read-only observation, never an approval or a persisted execution plan.
@@ -93,6 +142,7 @@ pub struct OrganizationTargetReview {
 pub enum MissingDatePolicy {
     Undated,
     Block,
+    Skip,
 }
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, TS, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -170,6 +220,17 @@ pub(crate) fn validate_samples(
             available: true,
             companion_candidates: 0,
         };
+        if template.missing_date == MissingDatePolicy::Skip
+            && capture_missing(&source)
+            && components
+                .iter()
+                .flatten()
+                .any(|p| matches!(p, Piece::Capture(_) | Piece::Quarter))
+        {
+            return Err(invalid(
+                "An example skipped for a missing capture date cannot assert a target path.",
+            ));
+        }
         match resolve(&components, template, &source, sample.sequence) {
             Ok((target, _)) if target == sample.expected_target => {}
             Ok((target, _)) => {
@@ -231,6 +292,13 @@ pub struct OrganizationRow {
     pub bytes: String,
     pub issues: Vec<OrganizationIssue>,
     pub used_undated: bool,
+    /// Whole-library observations only; absent legacy fields retain old digests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub capture_missing: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub skip_reason: Option<OrganizationSkipReason>,
     /// Same-stem indexed candidates are not confirmed bundles.
     pub companion_candidates: u32,
 }
@@ -548,7 +616,10 @@ pub(crate) fn preview(
     sources.sort_by(|a, b| {
         (&a.root_id, &a.native_path, &a.id).cmp(&(&b.root_id, &b.native_path, &b.id))
     });
-    let policy = if requires_metadata(&template) || template.pattern.contains("{quarter}") {
+    let policy = if requires_metadata(&template)
+        || template.pattern.contains("{quarter}")
+        || template.missing_date == MissingDatePolicy::Skip
+    {
         "organization-preview-v2"
     } else {
         POLICY
@@ -607,13 +678,17 @@ pub(crate) fn preview(
             }
         }
     }
-    let blocked = rows.iter().filter(|r| !r.issues.is_empty()).count() as u32;
+    let blocked = rows
+        .iter()
+        .filter(|r| !r.issues.is_empty() && r.skip_reason.is_none())
+        .count() as u32;
+    let skipped = rows.iter().filter(|r| r.skip_reason.is_some()).count() as u32;
     Ok(OrganizationPreview {
         policy: policy.into(),
         fingerprint,
         catalog_revision,
         template,
-        proposed: rows.len() as u32 - blocked,
+        proposed: rows.len() as u32 - blocked - skipped,
         blocked,
         rows,
         selected_bytes: total.to_string(),
@@ -633,16 +708,27 @@ pub(crate) fn render_rows(
         return Err(invalid("Invalid organization render page."));
     }
     let components = parse(&template.pattern)?;
+    let needs_date = components
+        .iter()
+        .flatten()
+        .any(|p| matches!(p, Piece::Capture(_) | Piece::Quarter));
     let mut rows = Vec::with_capacity(sources.len());
     for (index, source) in sources.iter().enumerate() {
         let sequence = first_sequence
             .checked_add(index as u32)
             .ok_or_else(|| invalid("The library exceeds the sequence range."))?;
-        let (target_relative_path, used_undated, mut issues) =
+        let skip_reason = (template.missing_date == MissingDatePolicy::Skip
+            && needs_date
+            && capture_missing(source))
+        .then_some(OrganizationSkipReason::MissingCaptureDate);
+        let (target_relative_path, used_undated, mut issues) = if skip_reason.is_some() {
+            (None, false, Vec::new())
+        } else {
             match resolve(&components, template, source, sequence) {
                 Ok((path, undated)) => (Some(path), undated, Vec::new()),
                 Err(issue) => (None, false, vec![issue]),
-            };
+            }
+        };
         if !source.available {
             issues.push(OrganizationIssue::SourceUnavailable);
         }
@@ -666,8 +752,30 @@ pub(crate) fn render_rows(
             bytes: source.bytes.to_string(),
             issues,
             used_undated,
+            capture_missing: None,
+            skip_reason,
             companion_candidates: source.companion_candidates,
         });
+    }
+    Ok(rows)
+}
+
+fn capture_missing(source: &PreviewSource) -> bool {
+    source
+        .capture
+        .as_deref()
+        .and_then(|date| NaiveDateTime::parse_from_str(date, "%Y-%m-%dT%H:%M:%S%.f").ok())
+        .is_none()
+}
+
+pub(crate) fn render_library_rows(
+    template: &OrganizationTemplate,
+    sources: &[PreviewSource],
+    first_sequence: u32,
+) -> Result<Vec<OrganizationRow>> {
+    let mut rows = render_rows(template, sources, first_sequence)?;
+    for (row, source) in rows.iter_mut().zip(sources) {
+        row.capture_missing = Some(capture_missing(source));
     }
     Ok(rows)
 }

@@ -111,3 +111,22 @@ Metadata context for synthetic examples is generated from Rust's
 OrganizationMetadata schema; retainedTemplateExamples validates and preserves
 it. Native source context is catalog-owned and cannot be supplied by the rule
 form. Register the builder recipe in the theme and typegen after recipe changes.
+
+## Structure workflow — 2026-11-07
+
+StructureFormatter owns edit/review/simulated-complete stage state. Its private
+components separate rule editing, native illustrative examples, report/table,
+summary, feedback, footer, session preset dialog and simulation confirmation.
+`use-structure-preview.ts` owns generation-fenced native batching, query responses,
+discard and fresh read-only validation. `structure-rules.ts` owns pure filename
+transforms and bounded catalog-scoped session memory. All remain in the component
+folder, with colocated tests, recipes and the local CSS bridge for legacy primary
+button margins. Public consumers use its barrel; StructurePathBuilder also exports
+its existing pure path-parts helpers through its barrel.
+
+Register StructureFormatter's recipe and the Chakra v3 Dialog slot recipe in
+`theme/index.ts`; this theme starts from defaultBaseConfig, so required spacing,
+font, size and overlay tokens must actually be declared. Regenerate Chakra types
+with the pinned CLI after theme changes. Native generated IPC types include
+illustrative examples, typed review queries, summaries and optional skip/date
+observations; renderer display paths never become execution inputs.

@@ -10,6 +10,7 @@ use crate::{
     },
 };
 use rusqlite::{Connection, OptionalExtension, params};
+mod review;
 
 struct Session {
     id: String,
@@ -33,7 +34,7 @@ impl Library {
         preview_id: String,
     ) -> Result<LibraryOrganizationPreview> {
         let (session, sources) = self.catalog.call(move |db| load_page(db, &preview_id))?;
-        let rows = organization::render_rows(
+        let rows = organization::render_library_rows(
             &session.template,
             &sources,
             session.processed.saturating_add(1),
@@ -63,8 +64,24 @@ impl Library {
             if db.execute("DELETE FROM structure_session WHERE id=?", [&preview_id])? > 0 {
                 db.execute("DELETE FROM structure_members", [])?;
                 db.execute("DELETE FROM structure_rows", [])?;
+                db.execute("DELETE FROM structure_summary", [])?;
             }
             Ok(())
+        })
+    }
+
+    pub fn organization_library_query(
+        &self,
+        preview_id: String,
+        offset: u32,
+        query: organization::OrganizationPreviewQuery,
+    ) -> Result<LibraryOrganizationPreview> {
+        self.catalog.call(move |db| {
+            let session = session(db, &preview_id)?;
+            if session.processed != session.total {
+                return Err(invalid("Wait for the whole-library preview to finish."));
+            }
+            review::report(db, &session, offset, query)
         })
     }
 }
@@ -96,10 +113,11 @@ fn initialize(db: &Connection) -> Result<()> {
     db.execute_batch(
         "CREATE TEMP TABLE IF NOT EXISTS structure_session(id TEXT PRIMARY KEY,revision TEXT NOT NULL,template TEXT NOT NULL,processed INTEGER NOT NULL,total INTEGER NOT NULL);
          CREATE TEMP TABLE IF NOT EXISTS structure_members(sequence INTEGER PRIMARY KEY,asset_id TEXT NOT NULL UNIQUE);
-         CREATE TEMP TABLE IF NOT EXISTS structure_rows(sequence INTEGER PRIMARY KEY,target TEXT,folded TEXT,data TEXT NOT NULL,blocked INTEGER NOT NULL,collision INTEGER NOT NULL DEFAULT 0,case_collision INTEGER NOT NULL DEFAULT 0);
+         CREATE TEMP TABLE IF NOT EXISTS structure_rows(sequence INTEGER PRIMARY KEY,target TEXT,folded TEXT,data TEXT NOT NULL,blocked INTEGER NOT NULL,collision INTEGER NOT NULL DEFAULT 0,case_collision INTEGER NOT NULL DEFAULT 0,folder TEXT,moved INTEGER NOT NULL,renamed INTEGER NOT NULL,missing_date INTEGER NOT NULL,skipped INTEGER NOT NULL,search_text TEXT NOT NULL);
          CREATE INDEX IF NOT EXISTS structure_target ON structure_rows(target);
          CREATE INDEX IF NOT EXISTS structure_folded ON structure_rows(folded);"
     )?;
+    db.execute_batch("CREATE TEMP TABLE IF NOT EXISTS structure_summary(preview_id TEXT PRIMARY KEY,data TEXT NOT NULL);")?;
     Ok(())
 }
 
@@ -163,6 +181,7 @@ fn start(
     tx.execute("DELETE FROM structure_session", [])?;
     tx.execute("DELETE FROM structure_members", [])?;
     tx.execute("DELETE FROM structure_rows", [])?;
+    tx.execute("DELETE FROM structure_summary", [])?;
     // No gallery query, album, selection, availability or pagination filter.
     tx.execute("INSERT INTO structure_members(sequence,asset_id) SELECT row_number() OVER (ORDER BY root_id,relative_native,id),id FROM assets WHERE is_media=1", [])?;
     let total = tx.query_row("SELECT count(*) FROM structure_members", [], |r| {
@@ -247,46 +266,28 @@ fn insert_row(db: &Connection, row: &OrganizationRow) -> Result<()> {
             params![target.to_ascii_lowercase(), target],
         )? > 0;
     }
-    db.execute("INSERT INTO structure_rows(sequence,target,folded,data,blocked,collision,case_collision) VALUES(?,?,?,?,?,?,?)", params![row.sequence, row.target_relative_path, row.target_relative_path.as_ref().map(|s| s.to_ascii_lowercase()), serde_json::to_string(row).map_err(|e| invalid("Could not encode preview row.").caused_by(e))?, !row.issues.is_empty(), collision, case_collision])?;
+    let source = row.source_components.as_deref().unwrap_or_default();
+    let (folder, filename) = row
+        .target_relative_path
+        .as_deref()
+        .map(|p| p.rsplit_once('/').unwrap_or(("", p)))
+        .unzip();
+    let source_folder = source[..source.len().saturating_sub(1)].join("/");
+    let moved = folder.is_some_and(|folder| folder != source_folder);
+    let renamed =
+        filename.is_some_and(|filename| source.last().is_none_or(|name| name != filename));
+    let search = format!(
+        "{}\n{}",
+        row.source_path,
+        row.target_relative_path.as_deref().unwrap_or_default()
+    )
+    .to_lowercase();
+    db.execute("INSERT INTO structure_rows(sequence,target,folded,data,blocked,collision,case_collision,folder,moved,renamed,missing_date,skipped,search_text) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", params![row.sequence, row.target_relative_path, row.target_relative_path.as_ref().map(|s| s.to_ascii_lowercase()), serde_json::to_string(row).map_err(|e| invalid("Could not encode preview row.").caused_by(e))?, !row.issues.is_empty(), collision, case_collision, folder,moved,renamed,row.capture_missing.unwrap_or(row.used_undated),row.skip_reason.is_some(),search])?;
     Ok(())
 }
 
 fn report(db: &Connection, session: &Session, offset: u32) -> Result<LibraryOrganizationPreview> {
-    let complete = session.processed == session.total;
-    if offset > session.total || (!complete && offset != 0) {
-        return Err(invalid("Invalid whole-library preview offset."));
-    }
-    let mut rows = Vec::new();
-    let mut blocked = 0;
-    if complete {
-        blocked = db.query_row("SELECT count(*) FROM structure_rows WHERE blocked=1 OR collision=1 OR case_collision=1", [], |r| r.get::<_, u32>(0))?;
-        let mut statement = db.prepare("SELECT data,collision,case_collision FROM structure_rows WHERE sequence>? ORDER BY sequence LIMIT ?")?;
-        let mut records = statement.query(params![offset, PREVIEW_LIMIT as u32])?;
-        while let Some(record) = records.next()? {
-            let data: String = record.get(0)?;
-            let mut row: OrganizationRow = serde_json::from_str(&data)
-                .map_err(|e| invalid("Invalid preview row.").caused_by(e))?;
-            if record.get::<_, bool>(1)? {
-                row.issues.push(OrganizationIssue::Collision);
-            }
-            if record.get::<_, bool>(2)? {
-                row.issues.push(OrganizationIssue::PossibleCaseCollision);
-            }
-            rows.push(row);
-        }
-    }
-    Ok(LibraryOrganizationPreview {
-        preview_id: session.id.clone(),
-        catalog_revision: session.revision.clone(),
-        total: session.total,
-        processed: session.processed,
-        proposed: if complete { session.total - blocked } else { 0 },
-        blocked,
-        complete,
-        offset,
-        rows,
-        execution_available: false,
-    })
+    review::report(db, session, offset, Default::default())
 }
 
 #[cfg(test)]
@@ -317,7 +318,8 @@ mod tests {
     fn advance(db: &mut Connection, id: &str) -> LibraryOrganizationPreview {
         let (session, sources) = load_page(db, id).unwrap();
         let rows =
-            organization::render_rows(&session.template, &sources, session.processed + 1).unwrap();
+            organization::render_library_rows(&session.template, &sources, session.processed + 1)
+                .unwrap();
         commit_page(db, session, rows).unwrap()
     }
     fn finish(
@@ -412,6 +414,8 @@ mod tests {
                 bytes: "42".into(),
                 issues: vec![OrganizationIssue::SourceUnavailable],
                 used_undated: false,
+                capture_missing: None,
+                skip_reason: None,
                 companion_candidates: 0,
             };
             insert_row(&db, &row).unwrap();
@@ -501,5 +505,163 @@ mod tests {
             extra[key] = serde_json::json!(true);
             assert!(serde_json::from_value::<super::super::model::LibraryRequest>(extra).is_err());
         }
+    }
+
+    #[test]
+    fn complete_summary_distinguishes_moves_renames_unchanged_skips_and_attention() {
+        use organization::{
+            OrganizationPreviewFilter as Filter, OrganizationPreviewQuery as Query,
+        };
+        let names = [
+            "2024/Same.JPG",
+            "Imports/Rename.JPG",
+            "Imports/Skipped.JPG",
+            "Imports/Broken.JPG",
+        ]
+        .map(String::from);
+        let mut db = fixture(&names);
+        db.execute(
+            "UPDATE assets SET date_source='filesystem_modified' WHERE name='Skipped.JPG'",
+            [],
+        )
+        .unwrap();
+        db.execute(
+            "UPDATE assets SET presence='missing' WHERE name='Broken.JPG'",
+            [],
+        )
+        .unwrap();
+        let mut rules = template("{capture:%Y}/{original_stem}.{ext}");
+        rules.missing_date = MissingDatePolicy::Skip;
+        let first = start(&mut db, rules).unwrap();
+        let done = finish(&mut db, first);
+        assert_eq!((done.total, done.proposed, done.blocked), (4, 2, 1));
+        let summary = done.summary.as_ref().unwrap();
+        assert_eq!(
+            (
+                summary.moves,
+                summary.folders,
+                summary.renames,
+                summary.unchanged
+            ),
+            (1, 1, 0, 1)
+        );
+        assert_eq!(
+            (summary.missing_dates, summary.skipped, summary.attention),
+            (1, 1, 2)
+        );
+        let scope = session(&db, &done.preview_id).unwrap();
+        for (filter, count) in [
+            (Filter::Changes, 1),
+            (Filter::NeedsAttention, 2),
+            (Filter::Skipped, 1),
+            (Filter::MissingDates, 1),
+        ] {
+            let page = review::report(
+                &db,
+                &scope,
+                0,
+                Query {
+                    search: String::new(),
+                    filter,
+                },
+            )
+            .unwrap();
+            assert_eq!(page.matching, count);
+            assert_eq!(page.rows.len(), count as usize);
+            assert_eq!(
+                page.summary.unwrap().moves,
+                1,
+                "Filtering must not change global summaries"
+            );
+        }
+        let skipped = review::report(
+            &db,
+            &scope,
+            0,
+            Query {
+                search: "SKIPPED".into(),
+                filter: Filter::All,
+            },
+        )
+        .unwrap();
+        assert!(skipped.rows[0].skip_reason.is_some());
+        assert!(skipped.rows[0].target_relative_path.is_none());
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM scans", [], |r| r.get::<_, u32>(0))
+                .unwrap(),
+            0
+        );
+    }
+
+    #[test]
+    fn literal_unicode_search_and_filtering_cover_rows_beyond_the_first_page() {
+        use organization::{
+            OrganizationPreviewFilter as Filter, OrganizationPreviewQuery as Query,
+        };
+        let mut names = (0..500)
+            .map(|n| format!("source_{n:04}.JPG"))
+            .collect::<Vec<_>>();
+        names.push("Ωmega_%Photo.JPG".into());
+        let mut db = fixture(&names);
+        let first = start(&mut db, template("New/{sequence:04}.{ext}")).unwrap();
+        let done = finish(&mut db, first);
+        let scope = session(&db, &done.preview_id).unwrap();
+        let before = serde_json::to_string(done.summary.as_ref().unwrap()).unwrap();
+        for search in ["ωMEGA", "_%"] {
+            let page = review::report(
+                &db,
+                &scope,
+                0,
+                Query {
+                    search: search.into(),
+                    filter: Filter::All,
+                },
+            )
+            .unwrap();
+            assert_eq!(page.matching, 1);
+            assert_eq!(page.rows[0].source_path, "Ωmega_%Photo.JPG");
+            assert!(page.rows[0].sequence > 240);
+            assert_eq!(
+                serde_json::to_string(page.summary.as_ref().unwrap()).unwrap(),
+                before
+            );
+        }
+        assert!(
+            review::report(
+                &db,
+                &scope,
+                2,
+                Query {
+                    search: "_%".into(),
+                    filter: Filter::All
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            review::report(
+                &db,
+                &scope,
+                0,
+                Query {
+                    search: "x".repeat(257),
+                    filter: Filter::All
+                }
+            )
+            .is_err()
+        );
+        let cached: u32 = db
+            .query_row("SELECT count(*) FROM structure_summary", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cached, 1);
+        let next = start(&mut db, template("Other/{original_stem}.{ext}")).unwrap();
+        assert_ne!(next.preview_id, done.preview_id);
+        assert!(session(&db, &done.preview_id).is_err());
+        assert_eq!(
+            db.query_row("SELECT count(*) FROM structure_summary", [], |r| r
+                .get::<_, u32>(0))
+                .unwrap(),
+            0
+        );
     }
 }

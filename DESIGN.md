@@ -448,3 +448,22 @@ clear insertion line. Keep their original positions until release; wrapped rows
 remain drop targets. Click-to-pick/place and keyboard pickup/arrows/Enter/Escape
 share the same controls, with announcements and restored focus. Remove the old
 earlier/later arrow buttons; retain the existing flat surfaces and focus treatment.
+
+## Structure editor and review — 2026-11-07
+
+Retain the existing dark studio identity. Use a divided editing pane and sticky
+illustrative tree/path pane, stacking below 760 px of content width. Five category
+tabs lead to compact illustrated folder cards; filename, missing-date and case
+segments are separate, with the complete path under Advanced. Examples clearly
+label their invented source data. Preserve Custom chip dragging and alternatives.
+
+Review replaces editing with four restrained global metrics, an actionable
+missing-indexed-date notice, full-scope search/filter controls and a before/after
+path table. Keep one footer with Back to editing, Save preset, an explicitly named
+simulation action and disabled actual Run restructure. Stage headings receive
+focus; loading/error/stale states stay explicit. Use portalled Chakra v3 dialogs,
+initial cancellation focus, named session presets and existing focus treatments.
+Completion uses a compact confirmation mark, simulated totals and explicit
+unchanged-library text, with a return to editing/review and disabled actual run.
+Do not repeat the editing introduction or global footer on completion. Shared
+control geometry remains aligned at desktop and minimum window sizes.

@@ -398,3 +398,15 @@ quarter policies use v2; earlier patterns stay v1. Read-only metadata helper
 allowlist additions do not silently rescan catalogs, extend original-write
 authority or establish all-format/platform field extraction. No main catalog
 migration or dependency change is needed; all execution/recovery gates remain.
+
+
+## Structure review and session presets — 2026-11-07
+
+[ADR-0097](decisions/ADR-0097-structure-review-and-session-presets.md) separates
+folder/naming controls, pure native illustrative examples and catalog-scoped
+session presets from actual catalog-wide read-only review. Typed Skip retains
+rows/global sequences; legacy serialization stays stable and executable
+selected-photo plans reject this policy. Native TEMP summaries and bounded
+full-scope literal filtering precede pagination. Explicit simulation revalidates
+read-only state without approving or executing anything; original-file mutation
+and future atomic backup/sync admission remain gated.

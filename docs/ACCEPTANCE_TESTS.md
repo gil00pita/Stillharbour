@@ -1010,3 +1010,39 @@ or release acceptance. Actual outcomes belong in IMPLEMENTATION_LOG.
   verify exact location, tag and camera target prefixes, the Custom builder and
   unchanged fixture originals. This is not extraction coverage for all embedded
   formats/platforms or a waiver of execution/recovery/physical-input gates.
+
+
+### Structure editor, review and simulation — 2026-11-07
+
+- Verify all five folder categories work; changing folders preserves filename
+  settings, and Original / Date + original / Sequence preserves folder levels.
+  Stem case leaves extensions unchanged; Advanced path rule exposes the raw rule.
+- Live Folder tree / Sample paths must be explicitly illustrative, rendered by
+  the native pure resolver. Reject invalid rules, hide stale examples and show
+  failures. Never inspect original files to generate illustrative examples.
+- Undated retains its documented whole-path/original-name fallback. Skip retains
+  date-dependent missing-date rows without targets and does not renumber following
+  rows; non-date layouts do not skip them. Keep historical Block readable, old
+  row serialization/digests stable and saved Skip policies versioned. Executable
+  selected-photo plan creation must reject Skip before destination work.
+- Save, load, remove and validate session preset names; reject duplicates and
+  explicit limits without eviction. Navigation preserves catalog-scoped values;
+  another catalog cannot see them, and reload clears them. Preserve distinct
+  durable Catalog templates and Saved plans workflows.
+- Native global summaries classify moves, destination folders, renames, unchanged,
+  attention, missing indexed dates and skipped rows; blocked/colliding/skipped
+  outputs must not inflate eligible actions. Verify filters/search outside the
+  first 240 rows, literal Unicode and SQL wildcard characters, query bounds,
+  stable sequences/global summary, cached complete membership and revision/session
+  invalidation. Needs attention may include handled missing-date rows.
+- Review retains before/after paths and per-row status, missing-date notice,
+  pagination, no-results/error/stale states and Back to editing. Debounce queries,
+  retire stale responses, restore stage focus and keep compact layouts usable.
+- Cancel confirmation without completion; revalidate natively before simulated
+  completion, refuse changed/unavailable previews and retire late responses.
+  Clearly state that no originals changed. Assert no organization approval,
+  execution, backup/sync or mutation request occurs; actual Run restructure stays
+  disabled in every stage. Generated-source bytes remain unchanged.
+- These local generated/native checks do not establish Windows/physical input,
+  packaged releases, metadata extraction across formats or production recovery.
+  Existing preservation and both-platform CI gates remain binding (ADR-0097).

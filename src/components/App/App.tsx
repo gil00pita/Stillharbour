@@ -640,7 +640,11 @@ function WorkspaceContent({
     );
   if (section === 'Structure Formater')
     return status ? (
-      <StructureFormatter key={foundation?.catalogId ?? 'catalog'} status={status} />
+      <StructureFormatter
+        key={foundation?.catalogId ?? 'catalog'}
+        status={status}
+        catalogId={foundation?.catalogId ?? null}
+      />
     ) : null;
   if (section === 'Sync')
     return status ? (

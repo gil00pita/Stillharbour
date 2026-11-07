@@ -125,8 +125,8 @@ currently runs on demand. You can continue configuring and previewing rules whil
 these blockers are present. A clear check does not enable Run restructure yet.
 
 Review the proposed paths and blocked items across the result pages. A library
-change requires a fresh preview. You can save/load rules and open existing saved
-plans from this page. **Run restructure** is currently disabled until the reviewed
+change requires a fresh preview. Existing catalog templates and saved plans remain
+available. **Run restructure** is currently disabled until the reviewed
 whole-library execution and recovery path is available. Previewing leaves your
 originals in place.
 
@@ -138,12 +138,12 @@ itself. Existing source/destination protection and recovery gates still apply.
 Photos, Albums, Folders and Map share aligned search and actions. The photo
 timeline stays visible at rest; dates have their own reserved lane.
 
-Choose a folder layout using the **By day**, **By month** or **Date & time** cards.
-Their diagrams show example paths. Event naming is no longer part of the rule
-form. Use the segmented choices to handle missing capture dates and filename
-case. The path template remains editable for custom rules; choosing another
-layout replaces it and invalidates the previous preview. Existing saved rules
-remain available without rewriting their stored values.
+Choose a category and an illustrated folder-layout card. Folder choices preserve
+your filename settings. **Filename format** offers Original, Date + original and
+Sequence number; **Filename case** changes the stem while preserving the original
+extension. **Advanced path rule** exposes the complete editable pattern. Changing
+a rule invalidates the previous library preview. Existing saved rules load without
+rewriting their stored values.
 
 Structure Formater also offers **By location**, **By tags**, **By camera** and
 **Custom**. The date group includes year/month/day and quarter folders. Location
@@ -166,3 +166,35 @@ for one event name for this rule; Trip grouping is omitted.
 Older catalogs may not contain embedded naming fields that were not previously
 collected, and reader coverage differs by format/platform. Those fields remain
 missing; opening the tool does not silently rescan or rewrite the library.
+
+### Examples, session presets and review
+
+The right-hand **Illustrative preview** updates its Folder tree or Sample paths
+when you change a rule. It uses four invented photos, including one without a
+date; it does not inspect your library. Choose **Preview restructure** to build
+the actual catalog-wide read-only report.
+
+Missing-date handling offers **Undated folder** or **Skip photo**. These apply
+when your rule needs a date: Undated keeps the original filename in `Undated/`,
+while Skip keeps that photo in place and visible as skipped. Missing dates do not
+skip photos under rules that require no date. Sequence numbering stays global,
+so skipped rows can leave gaps. A loaded historical Block policy remains visible.
+
+**Save preset** names the current rules for this app session; **Presets** loads or
+removes them. Presets survive navigation and are scoped to the open catalog, but
+clear when the app reloads. Names must be unique within that catalog; up to 20 can
+be saved. Use the separate **Catalog templates** disclosure for existing durable
+templates; saving either kind of rule never approves a file operation.
+
+The review screen counts proposed moves, destination folders, renames and photos
+without an indexed capture date across the whole result. Destination folders are
+proposed paths, not a count of folders newly created on disk. Search matches
+literal before/after path text across all pages. **Changes**, **Needs attention**,
+**Skipped** and the missing-date notice help narrow the report; summary counts
+remain global. Needs attention can include missing dates even when Undated or
+Skip handles them. Each row retains its before/after paths and status.
+
+**Edit structure** returns to editing with your rules retained. **Simulate plan** opens a
+confirmation dialog and rechecks the preview before showing **Simulation complete**.
+It changes no files, creates no folders and starts no backup or sync job. Actual
+restructuring remains disabled pending the preservation and recovery gates.

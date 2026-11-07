@@ -71,6 +71,9 @@ export function OrganizationTemplateFields({
           choices={[
             { value: 'undated', label: 'Use Undated folder' },
             { value: 'block', label: 'Block photo' },
+            ...(template.missingDate === 'skip'
+              ? [{ value: 'skip' as const, label: 'Skip photo (preview only)' }]
+              : []),
           ]}
           onChange={(missingDate) => update({ missingDate })}
         />

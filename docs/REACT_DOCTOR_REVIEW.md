@@ -140,3 +140,15 @@ no suppression (`.context/layouts-react-doctor-final.json`). Component behavior
 and the actual native Custom request are rechecked after extraction. Scanner
 coverage is source evidence, not physical input, metadata extraction or release
 qualification.
+
+## Structure review flow — 2026-11-07
+
+The final pinned changed-scope scan reports zero errors/ten reviewed presentation
+warnings (`.context/structure-flow-react-doctor-final.json`). The new structure
+workflow has no findings. Extract preset matching/description helpers and replace
+repeated metadata-category help branches with a typed lookup after an intermediate
+complexity finding. Generation-tagged build/validation state makes stale-request
+cleanup explicit and removes the preceding formatter loading-reset diagnostic.
+The existing selected-photo callback warning remains the previously documented
+synchronous reset, not an unhandled rejected await. No suppressions or remote
+score are introduced; source scans do not establish native/release qualification.

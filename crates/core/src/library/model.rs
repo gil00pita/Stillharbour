@@ -871,6 +871,14 @@ pub enum LibraryRequest {
     OrganizationLibraryStart {
         template: crate::organization::OrganizationTemplate,
     },
+    OrganizationTemplateExamples {
+        template: crate::organization::OrganizationTemplate,
+    },
+    OrganizationLibraryQuery {
+        preview_id: String,
+        offset: u32,
+        query: crate::organization::OrganizationPreviewQuery,
+    },
     OrganizationLibraryAdvance {
         preview_id: String,
     },
@@ -1067,6 +1075,7 @@ pub enum LibraryResponse {
     OrganizationPreview(crate::organization::OrganizationPreview),
     OrganizationProtectionStatus(OrganizationProtectionStatus),
     OrganizationLibraryPreview(crate::organization::LibraryOrganizationPreview),
+    OrganizationTemplateExamples(crate::organization::OrganizationExamplePreview),
     Changes(LibraryChangePage),
     Directory(DirectoryPage),
     MaintenancePreview(MaintenancePreview),

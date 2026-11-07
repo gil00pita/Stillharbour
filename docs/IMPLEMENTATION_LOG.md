@@ -3902,3 +3902,102 @@ execution for this refinement; no Rust/native safety behavior changed. Embedded
 pointer/keyboard tests do not certify physical input, assistive technology or
 Windows behavior. Both-platform CI and the existing production restructure and
 recovery qualification gates remain pending; no originals are moved or renamed.
+
+## 2026-11-07 — Structure editor, review and explicit simulation
+
+**Request/scope:** use the owner-supplied local HTML prototype to complete the
+five-category Structure Formater workflow: live folder-tree/sample-path examples,
+independent filename/missing-date/case settings, session presets, full-library
+review/search/filters, confirmation and simulated completion. Retain the existing
+studio identity and original-file preservation gates. The HTML is inspected
+read-only; no personal photo library is scanned or modified.
+
+**Implementation:** split StructureFormatter into focused private editing,
+examples, review/table, summary, session preset, feedback/footer and simulation
+components, plus a generation-fenced native preview hook and pure rule helpers.
+Folder cards now preserve filename choice; three filename formats preserve folder
+levels. Advanced path editing and Custom dragging remain. Session presets clone
+rules/category in bounded catalog-scoped memory and survive navigation, with
+explicit name/duplicate/capacity errors and no silent eviction. Durable Catalog
+templates and Saved plans remain separate. Register the formatter and portalled
+Chakra v3 Dialog recipes, required base-theme tokens and local legacy-button CSS
+bridge; restore focus on stage changes and cancellation. Native desktop screenshots
+catch and correct missing base-theme tokens, legacy primary margins and an
+unequal completion-button height; add actual geometry assertions.
+
+**Native/contracts:** add pure illustrative examples with mandatory sample-only
+labelling, typed Skip/date observations and a bounded full-scope query endpoint.
+Skip keeps date-dependent rows without targets and preserves sequence gaps;
+non-date rules remain eligible. Undated retains its existing whole-path/original
+filename fallback. Legacy optional fields remain omitted from selected previews,
+protecting prior serialization/digests; Skip uses preview v2 and saved policy
+schema 2, and executable selected-photo plan creation refuses it before destination
+access. TEMP report columns support literal Unicode-lowered before/after search,
+typed filters, matching counts and cached complete global move/folder/rename/
+unchanged/attention/date/skip totals. Bound search to 256 characters/1024 bytes;
+return at most 240 rows. Summary counts exclude blocked/colliding/skipped actions
+and remain global under filtering. Destination folder totals describe proposed
+paths, not new on-disk directories. Native revision/session validation remains
+required. Export and check IPC bindings. Simulation freshly reads the native page
+before showing explicitly simulated results; no approval, operation or job is
+created. Actual Run restructure stays disabled throughout.
+
+**Documentation/files:** ADR-0097 records these semantics and compatibility;
+update specification, acceptance criteria, M2 preview guidance, user/development
+instructions, TypeScript ownership, DESIGN, decisions index and workspace audit.
+Extend colocated tests and the existing generated desktop structure spec rather
+than adding a second harness or dependencies.
+
+**Fresh checks:** full frontend suite passes 620 cases across 105 files (37.74 s;
+repeat after flow/layout changes: 55.46 s). Full core library with
+`fixture-probes,copy-workflow` passes 560 cases / 15 ignored in 316.62 s. A later
+added boundary regression independently passes one case in 0.07 s, proving Skip
+refusal occurs before nonexistent destination access and leaves plan/journal
+counts zero; production native code is unchanged after the full run. Pinned
+React Doctor 0.9.22 reports zero errors/ten previously reviewed presentation
+warnings; the new workflow has no diagnostics. No suppressions are added. Strict
+types, lint, generated bindings, Rust format and workspace/all-targets feature
+Clippy pass; final build/desktop/publication receipts follow below. Logs use
+`.context/structure-flow-*`.
+
+**Retained failures/fixes:** new Rust source fixtures initially omit required
+identity/optional row fields; update constructors. Summary tests expose caching
+of an empty manually seeded session; bind cached totals to complete membership
+count. A fixture cannot set NOT NULL date to NULL; model missing indexed capture
+provenance with its actual filesystem-date source. A Vitest beforeEach returns a
+mock function that is mistakenly invoked as teardown; use a void block. Two App
+navigation tests expect the raw path to remain expanded; open Advanced while
+retaining whole-library/no-selection assertions. Extract simple preset matching,
+description and category help to resolve a new complexity warning. Scanner
+conditional-finally false positives are avoided with actual request-generation
+state, preserving cleanup and stale-response protection.
+
+**Limits/next gate:** local generated/native evidence is not Windows, physical
+input, accessibility certification, format-wide metadata extraction or packaged
+release qualification. Missing indexed capture provenance is not proof an
+original has no date. Existing backup/sync activity, unresolved recovery and
+all enabled schedules remain prerequisites; future atomic execution admission,
+companion/destination/recovery qualification, M2/M4 gates and both-platform CI
+remain required before real whole-library changes or merge. Update existing PR
+#31 on the same branch; no original-file execution is enabled.
+
+**Final native/check closeout:** the generated macOS structure spec passes one
+case in 9.7 seconds, including 981 indexed observations, global search outside
+page one, missing-date/attention filters, session preset restoration across
+navigation, cancellation/revalidation/simulated completion, wrapped custom-chip
+dragging and unchanged source-byte verification. The request audit records no
+organization mutation commands. Inspect editor, review, confirmation and compact
+completion screenshots under `.context/ui-redesign/structure-*`; native completion
+buttons align at both tested widths. The first geometry assertion incorrectly
+assumes 44 px; measure the actual shared control-height token (36 px), preserving
+equal-height/top and minimum-size assertions, then rerun successfully. This is a
+test expectation correction, not a relaxation of source or execution guards.
+After the last preset-help extraction, 17 affected preset/formatter tests pass
+across two files (5.62 s); the full 620-case run above is separately retained.
+Clippy on the affected core lib/tests also passes after the new boundary test.
+
+Production build and release preflight pass after native automation, restoring
+ordinary frontend assets and retaining the existing large-chunk advisory. Changed
+file formatting and whitespace checks pass. The preflight excludes test routes
+and desktop-test dependencies; it does not certify signing or installed packages.
+Publish this refinement to existing PR #31; both-platform CI remains pending.

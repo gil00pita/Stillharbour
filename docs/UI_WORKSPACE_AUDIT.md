@@ -273,3 +273,21 @@ Native organization metadata projection, optional sample data and policy-v2
 resolution make the options actual read-only previews. Existing rules and
 original-file gates remain. ADR-0096 documents field/reader limitations. Native
 screenshots and count/prefix receipts are under `.context/ui-redesign/structure-layouts-*`.
+
+## Rules-to-review refinement — 2026-11-07
+
+The owner-supplied local Stillharbour.html prototype informs the editing/review
+composition; its identity assets and simulated file operations are not shipped
+as native capabilities. The existing studio palette and selected SVG remain.
+Separate folder cards from naming settings, pair editing with explicitly
+illustrative native tree/path examples, and move actual library results to a
+focused review with global counts, full-scope search/filters and missing-date
+inspection. Native cached TEMP summaries avoid shipping the entire report to
+React. Session presets are transient and distinct from catalog templates/plans.
+
+Confirmation rechecks a native read-only preview before explicitly simulated
+completion. Native automation verifies no organization mutation requests and
+unchanged generated sources; actual execution stays gated. Screenshots/receipts
+use `.context/ui-redesign/structure-flow-*`. ADR-0097 and the implementation log
+record bounds, tests and qualification limits, including missing indexed metadata
+and unqualified physical-input/Windows behavior.

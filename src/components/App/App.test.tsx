@@ -371,6 +371,8 @@ it.each(['map', 'album'] as const)(
     fireEvent.click(screen.getByRole('button', { name: 'Structure Formater' }));
     expect(screen.getByRole('heading', { name: 'Structure Formater' })).toBeVisible();
     expect(screen.getByRole('heading', { name: 'Entire library' })).toBeVisible();
+    expect(screen.getByRole('radiogroup', { name: 'Filename format' })).toBeVisible();
+    fireEvent.click(screen.getByText('Advanced path rule'));
     expect(screen.getByRole('textbox', { name: 'Path template' })).toBeVisible();
     expect(screen.queryByLabelText('Photo query')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Choose photos' })).not.toBeInTheDocument();

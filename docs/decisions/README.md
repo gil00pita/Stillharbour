@@ -49,3 +49,6 @@ Do not mark an untested dependency or OS as verified merely because it appears i
 - [ADR-0095: Whole-library structure previews](ADR-0095-whole-library-structure-preview.md).
 
 - [ADR-0096: Metadata-based structure rules and a folder chip builder](ADR-0096-metadata-structure-rules.md).
+
+
+- [ADR-0097: Structure review and session presets](ADR-0097-structure-review-and-session-presets.md).

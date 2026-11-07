@@ -1124,3 +1124,33 @@ revision checks remain authoritative. See ADR-0096 for observation limits,
 backward-compatible optional data, metadata-reader/platform limitations and the
 unchanged production execution/recovery gate. Existing catalogs are not silently
 rescanned to collect new fields.
+
+
+### Structure editing and review — owner refinement, 2026-11-07
+
+Keep the five working folder categories and draggable custom levels. Separate
+folder layouts from Original / Date + original / Sequence filename formats, stem
+case and missing-date policy. Provide live Folder tree and Sample paths from
+explicit native illustrative examples; actual library inspection begins only on
+Preview restructure. Advanced path editing remains available.
+
+Add Skip photo alongside Undated. For date-dependent rules, keep missing-date rows
+in place with typed skipped status, no target and unchanged global sequence;
+Undated preserves its existing original-filename fallback. Non-date rules do not
+skip simply because a date is missing; loaded historical Block rules remain
+readable. New Skip policy is preview v2, saved template schema 2 and explicitly
+unsupported for executable selected-photo plans. Legacy absent fields/digests
+remain unchanged.
+
+Save/load named presets in catalog-scoped session memory, distinct from durable
+catalog templates and saved plans. Review includes complete global move,
+destination-folder, rename and missing-date totals; native full-scope literal
+before/after search; All, Changes, Needs attention, Missing dates and Skipped
+filters; and at most 240 rows per page. Missing-date notices describe indexed
+capture provenance. Preserve stale/error/cancel states and return to editing.
+
+Confirmation freshly revalidates the native report and presents an explicitly
+simulated completion screen without source I/O, approval or job creation. Actual
+Run restructure stays disabled, irrespective of clear prerequisite observations.
+ADR-0097 defines bounds and semantics; whole-library atomic admission, recovery,
+companion/destination qualification and both-platform gates remain required.

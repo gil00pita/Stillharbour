@@ -221,6 +221,8 @@ mod tests {
             bytes: "5".into(),
             issues: Vec::new(),
             used_undated: false,
+            capture_missing: None,
+            skip_reason: None,
             companion_candidates: 0,
         }
     }
