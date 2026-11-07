@@ -6774,5 +6774,6 @@ async function openSavedPlans() {
   await $('button[aria-label="Saved plans"]').click();
 }
 async function enterPhotoSelection() {
-  if (await $('button[aria-label="Select"]').isExisting()) await $('button[aria-label="Select"]').click();
+  if (await $('button[aria-label="Select"]').isExisting())
+    await $('button[aria-label="Select"]').click();
 }

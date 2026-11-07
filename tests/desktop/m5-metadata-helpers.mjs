@@ -261,7 +261,8 @@ export async function reviewCatalogMetadata(directory) {
   };
 }
 export async function finishMetadataExports(directory) {
-  if (await $('button[aria-label="Select"]').isExisting()) await $('button[aria-label="Select"]').click();
+  if (await $('button[aria-label="Select"]').isExisting())
+    await $('button[aria-label="Select"]').click();
   await browser.waitUntil(async () => $('.asset-check').isExisting());
   await browser.execute(() => {
     const checkbox = document.querySelector('.asset-check');
