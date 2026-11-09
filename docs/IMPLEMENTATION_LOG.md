@@ -4493,3 +4493,62 @@ remain. This preflight does not qualify signed or installed packages.
 **Next gate:** commit/push on the existing PR branch. Full current macOS and
 Windows CI, including transport checks, remains required before merge; Windows
 cannot be executed on this Mac. No real user library is accessed by these tests.
+
+## 2026-11-09 — Stabilize Windows destination and selection fixtures
+
+**Request/evidence:** repair Windows native job 129089419241, run 42596230017
+at e646c67. Hosted macOS native and both transport jobs pass that revision;
+Windows has 19 passing desktop specs, with Foundation and page-chrome failures.
+Download the generated Windows artifact under .context/windows-ci-repair/artifacts.
+Its windows-library-failure.json reports the actual stale-preview alert. The
+chooser is correctly disabled; the fixture waited for discovery but omitted the
+separate initial-preview job, enqueued afterward by Library's scan handoff.
+Page-chrome observes opacity 0.991106 while expecting a resting checkbox: a new
+tile can appear beneath the setup pointer and legitimately start hover reveal.
+
+**Changes:** add a fixture-only readiness predicate requiring the online root,
+completed discovery and the exact root's completed initial-preview job, no pending
+root preparation and no active scan/thumbnail jobs. Foundation builds only after
+that state and records its revision/job states. Preserve the 15-second bounds,
+explicit policy/identity review, stale-plan guard, neighbor/source audits and
+mutation gates. Page-chrome moves focus to search and pointer to the sidebar,
+then waits for exact resting opacity before testing focus reveal or re-entering
+selection. Keep transitions and exact opacity/hit/menu-coordinate assertions.
+No application, Rust, IPC, dependency, build or production behavior changes.
+Update DEVELOPMENT's fixture workflow.
+
+**Regression evidence:** the old discovery-only predicate fails seven of eight
+initial cases. All nine final readiness cases pass, including other-root job
+identity and pending work. The 31 existing OrganizationDestination,
+OrganizationPreview and AssetTile cases pass, preserving stale/unsafe guards.
+The unmodified page-chrome test fails with 1 != 0 when an ignored beforeTest
+hook deliberately parks the pointer over the first tile; native-red.log retains
+that reproduction. Local lint, supported-file formatting, syntax and whitespace
+checks pass for the harness changes.
+
+**Native scope:** reuse the unchanged e646c67 instrumented macOS executable
+.context/redesign-native/target/debug/stillharbour-ci-repair-v1, SHA-256
+73da6dbbfcf6ed19c035b8683d5a3cdcfe78f41ba38949b1090740e54fc779a8.
+Foundation freshly passes 22 cases / 3 platform skips with independent unchanged
+source manifests. Its managed-destination receipt confirms scan and thumbnails
+completed before review, then destination-only/neighbor preservation and scoped
+registration removal. The first combined run's page-chrome before hook times
+out waiting for the initial gallery, before the changed assertion; retain that
+attempt under native.log. Production assets are untouched; the prior production
+build/preflight retain their unchanged-input scope rather than being rerun.
+
+The separate page-chrome attempt passes the corrected exact resting-state
+assertion and all header/containment/source-audit cases, but its existing focus
+reveal assertion times out. The diagnostic records containsActive=true,
+focusWithin=false, focused=false, hidden=false and opacity=0: the correct photo
+is active in the DOM but the local WKWebView lacks OS focus. A verified-PID,
+ignored foreground-only probe does not obtain OS focus; do not add foreground
+permissions or weaken the production/test assertion. native-page.log,
+native-page-focused.log, native-diagnostic.log and focus-diagnostic.json retain
+these attempts. This is not a full local page-chrome pass or Windows native
+qualification. No physical-input qualification is claimed.
+
+**Next gate:** commit/push the fixture-only changes on the unchanged PR branch.
+Full current Windows/macOS native and transport CI remains required before merge.
+The production build/preflight and hosted green platform evidence cited above
+are reused prior results for unchanged application inputs, not new-head CI passes.

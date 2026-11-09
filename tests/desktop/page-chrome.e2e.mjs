@@ -2,6 +2,35 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { browser, $ } from '@wdio/globals';
 
+async function restPhotoControls() {
+  // Scan completion can put a new tile under the pointer left by setup. Move
+  // both hover and keyboard focus away before measuring the browsing state.
+  await browser.execute(() =>
+    document
+      .querySelector('input[aria-label="Search filenames, dates or places"]')
+      .focus({ preventScroll: true }),
+  );
+  await browser.performActions([
+    {
+      type: 'pointer',
+      id: 'photo-controls-rest',
+      parameters: { pointerType: 'mouse' },
+      actions: [{ type: 'pointerMove', duration: 0, x: 20, y: 20 }],
+    },
+  ]);
+  await browser.releaseActions();
+  await browser.waitUntil(
+    () =>
+      browser.execute(
+        () => getComputedStyle(document.querySelector('.asset-check')).opacity === '0',
+      ),
+    {
+      timeout: 3000,
+      timeoutMsg: 'Unselected photo controls did not hide after hover and focus left',
+    },
+  );
+}
+
 async function photoContext(atEdge = false) {
   const anchor = await browser.execute((atEdge) => {
     const photo = document.querySelector('.asset-open');
@@ -160,6 +189,7 @@ describe('Page chrome and explicit photo selection — generated native fixture'
   });
   it('reveals hover/focus selection and retains context actions without dots', async function () {
     this.timeout(120000);
+    await restPhotoControls();
     const resting = await browser.execute(() => {
       const checkbox = document.querySelector('.asset-check');
       const resting = getComputedStyle(checkbox).opacity;
@@ -200,6 +230,7 @@ describe('Page chrome and explicit photo selection — generated native fixture'
     await browser.saveScreenshot('.context/chrome-selection/selection.png');
     await browser.setWindowSize(1180, 780);
     await $('button[aria-label="Done selecting"]').click();
+    await restPhotoControls();
     assert.equal(
       await browser.execute(() => getComputedStyle(document.querySelector('.asset-check')).opacity),
       '0',

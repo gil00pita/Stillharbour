@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { warmPhotoForScroll } from './warmPhoto.mjs';
 import { assertViewerControlsOverlay } from './viewer-controls.mjs';
 import { createEvidenceDirectory } from './evidence.mjs';
+import { managedDestinationReady } from './managed-destination.mjs';
 
 // Prepare viewport/focus through the same native DOM operations used by the
 // instrumented Jobs tests. WebDriver's wheel/animation-frame scrolling stalls
@@ -625,16 +626,17 @@ async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
   const picker = existingPicker ?? (await browser.tauri.mock('foundation_request'));
   try {
     await picker.mockReturnValue({ kind: 'directory', data: generated.selection });
+    let readyStatus;
     await browser.waitUntil(
       async () => {
-        const status = (await native({ kind: 'status' })).data;
-        return (
-          status.roots.some(
-            (root) => root.id === generated.rootId && root.availability === 'online',
-          ) && status.jobs.some((job) => job.id === generated.jobId && job.state === 'completed')
-        );
+        readyStatus = (await native({ kind: 'status' })).data;
+        return managedDestinationReady(readyStatus, generated);
       },
-      { timeout: 15000, timeoutMsg: 'Generated managed root scan did not settle' },
+      {
+        timeout: 15000,
+        timeoutMsg:
+          'Generated managed destination discovery and preview preparation did not settle',
+      },
     );
     await $('button=Build preview').click();
     const policy = await $('select[aria-label="Destination library policy"]');
@@ -712,6 +714,10 @@ async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
       `${evidence}/managed-destination-${process.platform}.json`,
       JSON.stringify({
         rootId: generated.rootId,
+        readyRevision: readyStatus.revision,
+        readyJobs: readyStatus.jobs
+          .filter((job) => job.rootId === generated.rootId)
+          .map(({ kind, state }) => ({ kind, state })),
         reviewed: true,
         policyChangeRetiredReview: true,
         audit,

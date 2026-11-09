@@ -1127,6 +1127,23 @@ the pinned local React Doctor scope command recorded in REACT_DOCTOR_REVIEW.
 
 ## Native CI fixture repairs — 2026-11-07
 
+Windows timing follow-up (2026-11-09): the generated managed destination must
+finish both discovery and `thumbnail:initial:<rootId>` before building an
+organization preview. Discovery completion precedes enqueueing that second
+worker; its later catalog publication correctly invalidates an earlier preview.
+`tests/desktop/managed-destination.mjs` checks both jobs, online/root preparation
+state and absence of active scan/thumbnail work. Its regression cases cover the
+handoff gap and unfinished/failed preparation. The native receipt records the
+ready revision and job states. Retain the destination's stale/identity/overlap
+guards and the original 15-second wait; never force-enable or repeatedly rebuild
+to hide the race.
+
+The page-chrome fixture explicitly moves keyboard focus to search and the
+pointer to the sidebar before polling the unselected checkbox's resting opacity.
+A tile may have appeared underneath the pointer left by setup, especially in
+WebView2. Keep exact resting/visible values, focus reveal, hit testing and menu
+geometry assertions; do not disable transitions or accept partial opacity.
+
 Neutral UI follow-up (2026-11-09): Foundation measures 6 px rendered horizontal
 and vertical gallery gutters and the Display options / Filter / Select /
 appearance toolbar. Keep named controls, containment and keyboard checks;
