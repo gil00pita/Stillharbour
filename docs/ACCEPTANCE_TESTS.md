@@ -24,6 +24,9 @@ record actual outcomes in [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md).
 
 ## Scope of a pass
 
+- Windows page-chrome selection checks deliberately establish native cursor hover and
+  then require exact hidden controls after moving both cursor and focus away.
+  Synthetic DOM pointer events alone do not establish CSS hover coverage.
 - Component/browser cases do not establish native OS behavior. Instrumented native
   cases do not certify installed/signed packages or authorize real-library mutations.
 - Generated source manifests and native fixture audits must remain unchanged.

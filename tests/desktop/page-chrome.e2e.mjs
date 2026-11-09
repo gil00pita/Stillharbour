@@ -2,6 +2,34 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { browser, $ } from '@wdio/globals';
 
+async function movePhotoPointer(point) {
+  if (process.platform !== 'win32') {
+    // Retain the established non-Windows embedded-driver setup. macOS cursor
+    // warping alone does not deliver a native mouse-moved event to WKWebView.
+    await browser.performActions([
+      {
+        type: 'pointer',
+        id: 'photo-controls-rest',
+        parameters: { pointerType: 'mouse' },
+        actions: [{ type: 'pointerMove', duration: 0, ...point }],
+      },
+    ]);
+    await browser.releaseActions();
+    return;
+  }
+  // The embedded driver's pointerMove dispatches DOM events; it does not move
+  // the OS cursor or reliably update CSS :hover. Use the instrumented window's
+  // native cursor API, with logical coordinates so this also works at high DPI.
+  await browser.tauri.execute(
+    ({ core }, point) =>
+      core.invoke('plugin:window|set_cursor_position', {
+        label: 'main',
+        value: { Logical: point },
+      }),
+    point,
+  );
+}
+
 async function restPhotoControls() {
   // Scan completion can put a new tile under the pointer left by setup. Move
   // both hover and keyboard focus away before measuring the browsing state.
@@ -10,20 +38,18 @@ async function restPhotoControls() {
       .querySelector('input[aria-label="Search filenames, dates or places"]')
       .focus({ preventScroll: true }),
   );
-  await browser.performActions([
-    {
-      type: 'pointer',
-      id: 'photo-controls-rest',
-      parameters: { pointerType: 'mouse' },
-      actions: [{ type: 'pointerMove', duration: 0, x: 20, y: 20 }],
-    },
-  ]);
-  await browser.releaseActions();
+  await movePhotoPointer({ x: 20, y: 20 });
   await browser.waitUntil(
     () =>
-      browser.execute(
-        () => getComputedStyle(document.querySelector('.asset-check')).opacity === '0',
-      ),
+      browser.execute(() => {
+        const checkbox = document.querySelector('.asset-check');
+        const tile = checkbox.closest('.asset');
+        return (
+          !tile.matches(':hover') &&
+          !tile.contains(document.activeElement) &&
+          getComputedStyle(checkbox).opacity === '0'
+        );
+      }),
     {
       timeout: 3000,
       timeoutMsg: 'Unselected photo controls did not hide after hover and focus left',
@@ -186,9 +212,49 @@ describe('Page chrome and explicit photo selection — generated native fixture'
     await $('.root-setup input[required]').setValue('Generated page chrome');
     await $('button=Save & Start scanning').click();
     await $('.asset-open', { strict: false }).waitForDisplayed({ timeout: 45000 });
+    // Preparation can replace/reorder the first tile while focus is being
+    // measured. Wait for this fixture's real background work to settle.
+    await browser.waitUntil(
+      async () => {
+        const status = await browser.tauri.execute(({ core }) =>
+          core.invoke('library_request', { request: { kind: 'status' } }),
+        );
+        return (
+          status.data.roots.length === 1 &&
+          !status.data.roots[0].preparingPreviews &&
+          status.data.jobs.some((job) => job.kind === 'scan' && job.state === 'completed') &&
+          status.data.jobs.every((job) =>
+            job.kind === 'thumbnails'
+              ? ['completed', 'partial'].includes(job.state)
+              : job.state === 'completed',
+          )
+        );
+      },
+      { timeout: 45000, timeoutMsg: 'Generated page-chrome preparation did not complete' },
+    );
   });
   it('reveals hover/focus selection and retains context actions without dots', async function () {
     this.timeout(120000);
+    // Reproduce the CI precondition deliberately: controls must first reveal
+    // under native hover, then fully hide when that actual pointer leaves.
+    if (process.platform === 'win32') {
+      await movePhotoPointer({ x: 20, y: 20 });
+      await movePhotoPointer(
+        await browser.execute(() => {
+          const bounds = document.querySelector('.asset').getBoundingClientRect();
+          return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+        }),
+      );
+      await browser.waitUntil(() =>
+        browser.execute(() => {
+          const checkbox = document.querySelector('.asset-check');
+          return (
+            checkbox.closest('.asset').matches(':hover') &&
+            getComputedStyle(checkbox).opacity === '1'
+          );
+        }),
+      );
+    }
     await restPhotoControls();
     const resting = await browser.execute(() => {
       const checkbox = document.querySelector('.asset-check');
@@ -300,8 +366,9 @@ describe('Page chrome and explicit photo selection — generated native fixture'
         {
           headers,
           audit,
-          contextInput: 'DOM contextmenu dispatched inside native WKWebView',
-          nativePointerGestureAsserted: false,
+          contextInput: 'DOM contextmenu dispatched inside the native WebView',
+          nativePointerHoverAsserted: process.platform === 'win32',
+          nativeContextMenuGestureAsserted: false,
         },
         null,
         2,

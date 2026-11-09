@@ -125,8 +125,17 @@ prove ownership of the exact directory and preserve failed-session evidence.
   stale-preview, identity, overlap and neighbor/source checks; do not force-enable
   the chooser or loop through approvals to hide invalidation.
 - Move hover and keyboard focus away from thumbnails before checking resting
-  opacity. Keep exact visible/resting states and menu/hit geometry; do not disable
-  animation or accept partial opacity to pass a test.
+  opacity. The pinned embedded driver's `pointerMove` dispatches DOM events and
+  does not move the OS cursor. On Windows the page-chrome fixture uses Tauri's
+  native cursor API with logical window coordinates and deliberately asserts
+  hover before leaving. Non-Windows hosts retain the embedded-driver setup;
+  macOS cursor warping alone does not deliver a mouse-moved event to WKWebView.
+  Wait for generated preparation to settle before measuring stable tiles;
+  intentional corrupt fixtures can finish thumbnails in the `partial` state.
+  Cursor movement is permitted only by `tauri.test.conf.json` instrumentation;
+  production capabilities are unchanged. Keep exact visible/resting states and
+  menu/hit geometry; do not disable animation or accept partial opacity to pass
+  a test. CI retains page-chrome selection and menu-position receipts/screenshots.
 - A hidden/unfocused WKWebView can suspend floating-menu positioning and physical
   focus styles. Record `document.hidden`, `document.hasFocus()` and actual DOM
   focus separately. DOM activation is not proof of physical keyboard/pointer input.

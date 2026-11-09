@@ -17,6 +17,7 @@
             "allow-test-generated-rename-history",
             "allow-test-generated-rename-worker",
             "core:default",
+            "core:window:allow-set-cursor-position",
             "wdio:default",
             "wdio-webdriver:default"
           ]

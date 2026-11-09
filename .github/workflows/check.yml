@@ -64,6 +64,8 @@ jobs:
           name: native-evidence-${{ matrix.os }}
           path: |
             .context/screenshots
+            .context/chrome-selection
+            .context/menu-position
             .context/m4b-append/**/m4b-append.json
             .context/m4c-retained/**/m4c-retained.json
             .context/m4-application
