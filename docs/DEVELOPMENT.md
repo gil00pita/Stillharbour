@@ -130,8 +130,13 @@ prove ownership of the exact directory and preserve failed-session evidence.
   native cursor API with logical window coordinates and deliberately asserts
   hover before leaving. Non-Windows hosts retain the embedded-driver setup;
   macOS cursor warping alone does not deliver a mouse-moved event to WKWebView.
-  Wait for generated preparation to settle before measuring stable tiles;
-  intentional corrupt fixtures can finish thumbnails in the `partial` state.
+  Wait for generated preparation to settle before measuring stable tiles. The
+  page-chrome readiness helper accepts `completed` or `partial` for both discovery
+  and the exact root's initial-thumbnail job: intentionally invalid media can make
+  both jobs partial on Windows. Require an online, prepared root and no unfinished
+  or failed jobs. This UI fixture rule grants no integrity or mutation authority
+  and does not relax the stricter managed-destination checks above. Setup writes
+  a path-free root/job receipt even when its readiness wait times out.
   Cursor movement is permitted only by `tauri.test.conf.json` instrumentation;
   production capabilities are unchanged. Keep exact visible/resting states and
   menu/hit geometry; do not disable animation or accept partial opacity to pass

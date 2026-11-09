@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { browser, $ } from '@wdio/globals';
+import { photoControlsReady } from './photo-controls-ready.mjs';
 
 async function movePhotoPointer(point) {
   if (process.platform !== 'win32') {
@@ -214,24 +215,46 @@ describe('Page chrome and explicit photo selection — generated native fixture'
     await $('.asset-open', { strict: false }).waitForDisplayed({ timeout: 45000 });
     // Preparation can replace/reorder the first tile while focus is being
     // measured. Wait for this fixture's real background work to settle.
-    await browser.waitUntil(
-      async () => {
-        const status = await browser.tauri.execute(({ core }) =>
-          core.invoke('library_request', { request: { kind: 'status' } }),
+    let preparation;
+    try {
+      await browser.waitUntil(
+        async () => {
+          preparation = (
+            await browser.tauri.execute(({ core }) =>
+              core.invoke('library_request', { request: { kind: 'status' } }),
+            )
+          ).data;
+          return photoControlsReady(preparation);
+        },
+        { timeout: 45000, timeoutMsg: 'Generated page-chrome preparation did not complete' },
+      );
+    } finally {
+      if (preparation) {
+        await writeFile(
+          '.context/chrome-selection/preparation.json',
+          JSON.stringify(
+            {
+              ready: photoControlsReady(preparation),
+              revision: preparation.revision,
+              roots: preparation.roots.map(({ id, availability, preparingPreviews }) => ({
+                id,
+                availability,
+                preparingPreviews,
+              })),
+              jobs: preparation.jobs.map(({ id, rootId, kind, state, errors }) => ({
+                id,
+                rootId,
+                kind,
+                state,
+                errors,
+              })),
+            },
+            null,
+            2,
+          ),
         );
-        return (
-          status.data.roots.length === 1 &&
-          !status.data.roots[0].preparingPreviews &&
-          status.data.jobs.some((job) => job.kind === 'scan' && job.state === 'completed') &&
-          status.data.jobs.every((job) =>
-            job.kind === 'thumbnails'
-              ? ['completed', 'partial'].includes(job.state)
-              : job.state === 'completed',
-          )
-        );
-      },
-      { timeout: 45000, timeoutMsg: 'Generated page-chrome preparation did not complete' },
-    );
+      }
+    }
   });
   it('reveals hover/focus selection and retains context actions without dots', async function () {
     this.timeout(120000);

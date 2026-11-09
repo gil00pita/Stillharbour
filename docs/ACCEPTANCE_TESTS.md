@@ -27,6 +27,10 @@ record actual outcomes in [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md).
 - Windows page-chrome selection checks deliberately establish native cursor hover and
   then require exact hidden controls after moving both cursor and focus away.
   Synthetic DOM pointer events alone do not establish CSS hover coverage.
+  The [readiness regressions](../tests/desktop/photo-controls-ready.test.mjs)
+  cover partial discovery/previews from invalid generated media and reject missing,
+  unfinished, failed or mismatched preparation jobs. A settled partial fixture is
+  not a successful integrity check.
 - Component/browser cases do not establish native OS behavior. Instrumented native
   cases do not certify installed/signed packages or authorize real-library mutations.
 - Generated source manifests and native fixture audits must remain unchanged.
