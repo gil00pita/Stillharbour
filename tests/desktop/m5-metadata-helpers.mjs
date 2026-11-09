@@ -58,7 +58,7 @@ export async function reviewCatalogMetadata(directory) {
   });
   assert.equal(theme.canvas, theme.dark ? '#121419' : '#f8f8fa');
   assert.equal(theme.button.fontSize, '13px');
-  assert.equal(theme.input.background, theme.dark ? 'rgb(18, 20, 25)' : 'rgb(248, 248, 250)');
+  assert.equal(theme.input.background, theme.dark ? 'rgb(18, 20, 25)' : 'rgb(241, 242, 245)');
   assert.equal(theme.input.minHeight, '36px');
   assert.equal(theme.selectHasArrow, true);
   const setField = async (label, value) => {

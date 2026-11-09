@@ -67,7 +67,7 @@ function ImageTile({
   const contextMenu = usePhotoAlbumMenu(asset);
   const contextKeys = usePhotoAlbumKeys(asset);
   const selection = usePhotoSelection();
-  const selecting = selection?.active ?? selectionActive;
+  const selecting = selectionActive || Boolean(selection?.active);
   const [imageFailure, setImageFailure] = useState(false);
   return (
     <chakra.article

@@ -3886,14 +3886,14 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             );
             return tiles
               .slice(1)
-              .every((tile, index) => Math.abs(tile.left - tiles[index].right - 4) < 1);
+              .every((tile, index) => Math.abs(tile.left - tiles[index].right - 6) < 1);
           }),
           noVerticalGaps: rows
             .slice(1)
             .every(
               (row, index) =>
                 Math.abs(
-                  row.getBoundingClientRect().top - rows[index].getBoundingClientRect().bottom - 4,
+                  row.getBoundingClientRect().top - rows[index].getBoundingClientRect().bottom - 6,
                 ) < 1,
             ),
         };
@@ -4480,17 +4480,19 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     if (await $('button[aria-label="Expand navigation"]').isExisting())
       await $('button[aria-label="Expand navigation"]').click();
   });
-  it('puts query and display controls in a keyboard-accessible side panel', async () => {
+  it('keeps query and display controls in separate keyboard-accessible side panels', async () => {
     assert.equal((await $$('.filter-bar')).length, 0);
     assert.deepEqual(
       await browser.execute(() =>
         [...document.querySelectorAll('.photo-toolbar button')].map((button) =>
           button.getAttribute('aria-controls') === 'library-filter-panel'
             ? 'Filter'
-            : (button.getAttribute('aria-label') ?? button.textContent.trim()),
+            : /^Switch to (light|dark) appearance$/.test(button.getAttribute('aria-label') ?? '')
+              ? 'Appearance'
+              : (button.getAttribute('aria-label') ?? button.textContent.trim()),
         ),
       ),
-      ['Filter', 'Select'],
+      ['Display options', 'Filter', 'Select', 'Appearance'],
     );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);

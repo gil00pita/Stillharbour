@@ -1127,6 +1127,16 @@ the pinned local React Doctor scope command recorded in REACT_DOCTOR_REVIEW.
 
 ## Native CI fixture repairs — 2026-11-07
 
+Neutral UI follow-up (2026-11-09): Foundation measures 6 px rendered horizontal
+and vertical gallery gutters and the Display options / Filter / Select /
+appearance toolbar. Keep named controls, containment and keyboard checks;
+do not restore older 4 px or two-action expectations. Catalog metadata's light
+input uses the shared `bg.input` surface (#f1f2f5), not the canvas (#f8f8fa).
+The Albums native case checks visible picker marks before any photo is selected.
+Basemap's component regression rejects non-color token expressions at the
+MapLibre boundary. Rerun Albums, Map and Foundation native specs serially using
+generated sources, alongside affected selection and Map component tests.
+
 The Map desktop spec locates its shared search frame inside
 `.map-page .app-page-header`, replacing the removed `.map-search-controls`
 wrapper. Retain desktop/minimum containment, magnifier-before-input, input hit,

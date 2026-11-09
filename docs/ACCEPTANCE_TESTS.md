@@ -39,6 +39,10 @@ keyboard focus. Selection marks remain visible after selection; favourites fill
 only after successful catalog confirmation, with save failures still retryable.
 No histogram, unsupported EXIF, smart-album counts or production sample media may
 be fabricated. Generated native scenarios and both-platform CI retain their gates.
+Album pickers show checkbox marks before any selection, after deselecting the
+last photo and when opened from an inactive Photos context menu. Selection stays
+local to the picker. MapLibre receives valid concrete colors and loads actual
+offline markers; token-expression strings must never reach its style parser.
 
 Owner offline place-search refinement (2026-11-05, AC-017–020/075): see [PLACE_SEARCH.md](PLACE_SEARCH.md) and ADR-0089. Choose a known city/country from bounded suggestions with disambiguating region/country labels. Cover London UK/Canada, alternate names, case/accents, unknown/oversized/policy-mismatched IDs, exact city radius beyond candidate-box corners, country holes/islands/neighbor exclusions, antimeridian/poles and conservative double-precision bounds. Invalid/missing/unextracted GPS cannot match; numeric zero remains valid and offline observations remain indexed. Existing filters, pages/totals/buckets, viewer neighbors, map clusters and frozen selections must agree. Saved searches retain meaningful place labels/IDs. Test loading, no-match, failure/retry, late responses, explicit choose/clear/cancel, keyboard focus and narrow-width access. Native generated EXIF checks cover city/country lookup and unchanged sources, with no online geocoding or automatic rescan. Data/notice pins and production exclusions must pass; unrun platform/performance/release gates remain open.
 

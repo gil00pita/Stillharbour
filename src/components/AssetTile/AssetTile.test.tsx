@@ -4,6 +4,7 @@ import type { ThumbnailResult } from '../../bindings';
 import { fixtureAsset } from '../../library/__tests__/fixtures';
 import { AssetTile, TileImage } from '@/components/AssetTile';
 import { PhotoAlbumActions } from '@/components/PhotoAlbumActions';
+import { cloneElement } from 'react';
 
 it('provides hover and keyboard selection in the actual inactive selection context and respects its busy guard', () => {
   const choose = vi.fn();
@@ -58,6 +59,19 @@ it('provides hover and keyboard selection in the actual inactive selection conte
     </PhotoAlbumActions>,
   );
   expect(screen.getByRole('checkbox', { name: 'Select Generated hover.jpg' })).toBeDisabled();
+  view.rerender(
+    <PhotoAlbumActions
+      status={status}
+      onChanged={async () => {}}
+      selection={{ active: false, disabled: false, onSelect: choose }}
+    >
+      {cloneElement(tile, { selectionActive: true })}
+    </PhotoAlbumActions>,
+  );
+  expect(getComputedStyle(document.querySelector('.thumbnail-selection')!).opacity).toBe('1');
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Generated hover.jpg' }));
+  expect(onSelect).toHaveBeenCalledWith(asset.id, false);
+  expect(choose).toHaveBeenCalledTimes(1);
 });
 
 it('saves a thumbnail favorite through its asset ID and reports a failed save without opening the photo', async () => {

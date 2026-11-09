@@ -4446,3 +4446,50 @@ scope; no native catalog restore or full desktop suite is rerun for this
 navigation-helper integration. Complete the two-parent merge and push the same
 branch. Main now contains the structure feature, so update PR #32's title/body
 around its remaining Chakra/UI diff; current both-platform CI remains required.
+
+## 2026-11-09 — Repair redesign native CI failures
+
+**Request:** fix the attached macOS/Windows native failures from run 42421529341. Both platforms time out on the empty album picker and Map markers;
+macOS additionally retains 4 px gallery and two-action toolbar expectations.
+
+**Changes:** AlbumEditor explicitly activates its AssetBrowser selection mode,
+including with zero photos selected. AssetTile honors that mode ahead of an
+inactive surrounding Photos context, keeping picker clicks local and busy
+checks intact. Basemap passes concrete neutral palette colors to MapLibre,
+whose style parser cannot interpret Chakra token expressions. Add component
+regressions at both boundaries; both fail before the fixes and pass afterward.
+The Albums native spec checks visible marks before the first selection.
+Foundation asserts the approved 6 px gutters and Display/Filter/Select/appearance
+header. Map's later metadata assertion now expects the shared light input
+surface (#f1f2f5); the old canvas-color expectation was exposed after rendering
+was repaired. Update the specification, acceptance, Albums, neutral UI and
+validation documentation. No Rust, IPC, schema or mutation authority changes.
+
+**Fresh checks:** 130 affected component/consumer cases across 18 files, strict
+TypeScript, full ESLint plus final native-script lint, syntax, changed-file
+formatting and whitespace pass. Build an isolated instrumented macOS executable
+at .context/redesign-native/target/debug/stillharbour-ci-repair-v1, SHA-256
+73da6dbbfcf6ed19c035b8683d5a3cdcfe78f41ba38949b1090740e54fc779a8.
+Albums passes through restart/membership/menu checks and verifies 32 unchanged
+generated files. Map initially reaches the stale light-input assertion after
+loading markers; its complete rerun passes and verifies 9 unchanged generated
+files. Both reported Foundation assertions pass; the broader first run has
+21 passing cases and one separate dense-timeline target-visibility timeout
+(foundation.e2e.mjs:5836). Retain that attempt under .context/ci-repair/native.log.
+
+The identical executable's Map/Foundation rerun exits successfully: Map passes;
+Foundation has 22 passing / 3 platform-skipped cases, including the dense drag
+case. No timeline code, assertions or timeouts were changed to obtain the pass.
+Foundation's independent generated-source manifests agree. Logs are
+.context/ci-repair/native-final.log; native captures/receipts remain under
+.context/albums-native, .context/m5-native and .context/gallery/native-*.
+Driver hook/teardown warnings remain in the raw logs; this is instrumented
+native DOM evidence, not physical-input or packaged-release qualification.
+
+The ordinary production frontend build and release preflight pass; production
+output excludes desktop-test instrumentation. Existing bundle-size warnings
+remain. This preflight does not qualify signed or installed packages.
+
+**Next gate:** commit/push on the existing PR branch. Full current macOS and
+Windows CI, including transport checks, remains required before merge; Windows
+cannot be executed on this Mac. No real user library is accessed by these tests.

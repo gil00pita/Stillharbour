@@ -50,6 +50,14 @@ describe('Albums and photo menus · generated library only', () => {
     await $('button[aria-label="New album"]').click();
     await $('dialog[open] input[required]').setValue('Weekends');
     await $('dialog[open] .asset-check', { strict: false }).waitForDisplayed();
+    assert(
+      await browser.execute(() =>
+        [...document.querySelectorAll('dialog[open] .thumbnail-selection')].every(
+          (mark) => getComputedStyle(mark).opacity === '1',
+        ),
+      ),
+      'Album picker selection marks must be visible before choosing any photo.',
+    );
     const checks = await $$('dialog[open] .asset-check');
     await checks[0].click();
     await checks[1].click();

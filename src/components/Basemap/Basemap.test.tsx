@@ -106,6 +106,20 @@ function mount() {
   return { onViewport, onUnavailable, instance, ...view };
 }
 describe('map view controls', () => {
+  it('passes concrete CSS colors to the map renderer rather than Chakra token expressions', () => {
+    const { instance } = mount();
+    const style = instance.options.style;
+    if (!style || typeof style === 'string') throw new Error('Expected bundled map style');
+    for (const layer of style.layers) {
+      if (!('paint' in layer)) continue;
+      for (const [property, value] of Object.entries(layer.paint ?? {})) {
+        if (!property.endsWith('color')) continue;
+        const probe = document.createElement('span');
+        probe.style.color = String(value);
+        expect(probe.style.color, `${layer.id}.${property}: ${value}`).not.toBe('');
+      }
+    }
+  });
   it('releases event subscriptions, resize observation and the map on unmount', () => {
     const { unmount, instance } = mount();
     expect(Object.keys(instance.events)).toHaveLength(5);

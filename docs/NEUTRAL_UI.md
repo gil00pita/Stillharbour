@@ -37,6 +37,9 @@ and all-results selection controls; its reset/apply behavior stays independent.
 Hover/focus reveals selection and
 catalog-favourite actions without moving thumbnails. A favourite fills only
 after native catalog confirmation; failed writes remain visible and retryable.
+Album creation and Add photos are explicit pickers: their selection controls
+remain visible even with no selected photos, including when opened from a
+photo context menu. Ordinary Photos retains its hover/focus reveal behavior.
 The thumbnail checkbox and heart share a 36 px invisible click target and top
 inset, with centred 18 px glyphs on 28 px dark translucent discs. The outer button
 has no visible background, including when favourited. Portrait tiles narrower
@@ -114,6 +117,11 @@ timeline's MIT attribution moves with its styles into DateTimeline. Inter's OFL
 and next-themes' MIT notices ship under `public/licenses/`.
 
 ## Validation and limits
+
+MapLibre's bundled basemap uses concrete neutral palette values for ocean,
+land and outlines. Its style parser does not resolve Chakra token expressions
+or CSS variables; Chakra continues to own the surrounding controls and surfaces.
+See [MapLibre color types](https://maplibre.org/maplibre-style-spec/types/#color).
 
 Run strict types, ESLint, the frontend component/consumer suite, pinned Chakra
 typegen, frontend build and release policy checks. The shared migration affects

@@ -45,6 +45,7 @@ interface AssetBrowserProps {
   startIndex?: number;
   mode: ViewMode;
   selected: ReadonlySet<string>;
+  selectionActive?: boolean;
   selectionFrozen: boolean;
   activeId: string | null;
   onSelect: (id: string, range: boolean) => void;
@@ -83,6 +84,7 @@ export function AssetBrowser({
   startIndex = 0,
   mode,
   selected,
+  selectionActive = false,
   selectionFrozen,
   onSelect,
   onInspect,
@@ -275,7 +277,7 @@ export function AssetBrowser({
             width={row.widths[index]}
             imageHeight={row.imageHeight}
             selected={selected.has(asset.id)}
-            selectionActive={selected.size > 0 || selectionFrozen}
+            selectionActive={selectionActive || selected.size > 0 || selectionFrozen}
             frozen={selectionFrozen}
             offline={unavailableRoots.has(asset.rootId)}
             edge={tiers.get(asset.id) ?? 256}

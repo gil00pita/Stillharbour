@@ -18,6 +18,7 @@ import { CachedPreviewImage } from '@/components/CachedPreviewImage';
 import { previewKey, previewUrl } from '../../library/previews';
 import { normalizeViewport } from '../../map/state';
 import { Button } from '@/components/Button';
+import { colors } from '../../theme/colors';
 import {
   SATELLITE_SOURCE,
   SATELLITE_CREDIT,
@@ -85,13 +86,17 @@ export default function Basemap({
             {
               id: 'ocean',
               type: 'background',
-              paint: { 'background-color': '{colors.bg.sidebar}' },
+              // MapLibre parses color literals itself, outside Chakra's CSS system.
+              paint: { 'background-color': colors.neutral[900].value },
             },
             {
               id: 'land',
               type: 'fill',
               source: 'land',
-              paint: { 'fill-color': '{colors.border.control}', 'fill-outline-color': '#5b6a65' },
+              paint: {
+                'fill-color': colors.neutral[700].value,
+                'fill-outline-color': colors.neutral[500].value,
+              },
             },
           ],
         },

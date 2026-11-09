@@ -15,6 +15,10 @@ contrast over both light and dark photographs without full button backgrounds.
 The gallery header uses labelled icon buttons for selection, Filter and Display
 options. A separate panel owns view mode, thumbnail-size slider and grid image
 fit, with draft Apply/Cancel behavior independent of query filters.
+Album pickers keep selection checkboxes visible even when empty; the picker's
+selection mode takes precedence over the surrounding Photos browsing context.
+MapLibre styles receive concrete palette colors, since its renderer cannot
+resolve Chakra token expressions.
 Keep Tauri, actual metadata and all milestone/preservation gates; the attachment's
 Electron and synthetic production-library examples do not change architecture.
 

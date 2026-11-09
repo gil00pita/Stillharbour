@@ -78,6 +78,14 @@ it('renders quiet Timeline captions with separate hover selection and photo cont
   expect(callbacks.onInspect).toHaveBeenCalledWith('0', photo);
   await waitFor(() => expect(libraryData).toHaveBeenCalled());
 });
+it('keeps an empty picker in selection mode before the first photo is chosen', () => {
+  const callbacks = props();
+  const { container } = render(<AssetBrowser {...callbacks} selectionActive />);
+  const mark = container.querySelector('.thumbnail-selection')!;
+  expect(getComputedStyle(mark).opacity).toBe('1');
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select Generated 0.jpg' }));
+  expect(callbacks.onSelect).toHaveBeenCalledWith('0', false);
+});
 it('reports the first actually visible row rather than an overscan row', async () => {
   const callbacks = props();
   render(<AssetBrowser {...callbacks} />);
