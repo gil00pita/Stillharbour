@@ -12,18 +12,8 @@ assets
 src-tauri/gen
 src/bindings.ts
 AGENTS.md
-docs/CODEX*.md
-docs/ACCEPTANCE_TESTS.md
-docs/BACKUP_SYNC*.md
-docs/DECISIONS.md
-docs/LIBRARY_FEATURES*.md
-docs/PRESERVATION*.md
-docs/PRODUCT_IDENTITY.md
-docs/RESEARCH.md
-docs/SOURCES.md
-docs/SPEC*.md
-docs/reference
-docs/decisions/README.md
-tasks
 templates
 vendor
+
+# Historical snapshots retain their original formatting.
+docs/changelog/

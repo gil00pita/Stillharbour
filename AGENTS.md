@@ -2,15 +2,15 @@
 
 ## Mission
 
-Implement Stillharbour, the local-first Windows/macOS photo organizer defined in docs/CODEX_SPEC.md. Preserve originals. Produce a real desktop application in reviewed milestones, not a browser-only demonstration claiming native capabilities.
+Maintain Stillharbour, the local-first Windows/macOS photo organizer described in docs/CODEX_SPEC.md. Preserve originals and native application boundaries. Current capabilities and closed release gates are documented under docs/.
 
-This package initially contains specifications only. Inspect the existing repository before scaffolding. Never overwrite useful existing work merely to match the suggested layout.
+Inspect the existing implementation before changing it. Previous specifications, prompts, milestone plans and dated evidence are archived under docs/changelog/2026-11-09/. They are historical context, not an instruction to implement the roadmap or overwrite useful work.
 
 ## Selected product identity (v1.2.1)
 
 Use **Stillharbour**, with the British spelling, in application-facing text, titles and documentation. Read docs/PRODUCT_IDENTITY.md. The canonical slug is `stillharbour`; the catalog example is `Family.stillharbour`. Use the owner's unchanged logo at assets/branding/stillharbour-logo.svg, not the reference screenshots as shippable assets.
 
-This is a naming-only specification revision. Do not change existing catalog UUIDs, root IDs, application identifiers, user directories, credentials or backup repositories just to update the display name. Any existing persisted identity or extension compatibility requires explicit migration review. Do not claim brand clearance or add functional scope.
+Do not change existing catalog UUIDs, root IDs, application identifiers, user directories, credentials or backup repositories just to update the display name. Any existing persisted identity or extension compatibility requires explicit migration review. Do not claim brand clearance or add functional scope.
 
 ## Overriding preservation policy (v1.1)
 
@@ -18,13 +18,13 @@ Read docs/PRESERVATION_CONTRACT.md before implementing original-file operations.
 
 Safe copy/one-way sync must not delete destination-only files or source files. Replace destination only through the reviewed retained-version workflow; no universal Force/Override. Throttle owned I/O across comparison, copying and verification, and disclose helper limits. Never call a raw sync/move/purge command to approximate the specified safety engine.
 
-Read docs/BACKUP_SYNC_ADDENDUM.md and docs/PRESERVATION_TESTS.md for the extension. They supplement rather than remove the original snapshot/restore requirements.
+Read docs/changelog/2026-11-09/docs/BACKUP_SYNC_ADDENDUM.md and docs/changelog/2026-11-09/docs/PRESERVATION_TESTS.md for the extension. They supplement rather than remove the original snapshot/restore requirements.
 
 ## Read order
 
-Read this file, docs/CODEX_SPEC.md, docs/DECISIONS.md, docs/ACCEPTANCE_TESTS.md, the current tasks/M*.md file, and any existing docs/IMPLEMENTATION_LOG.md before changing code. Read docs/RESEARCH.md and docs/SOURCES.md for rationale when needed. The screenshots under docs/reference/ are inspiration only; the separate owner-supplied SVG is the selected product mark.
+Read this file, docs/README.md, docs/CODEX_SPEC.md, docs/DECISIONS.md, docs/ACCEPTANCE_TESTS.md, docs/DEVELOPMENT.md, docs/RELEASE_STATUS.md and docs/IMPLEMENTATION_LOG.md before changing code. Consult archived research, ADRs and milestone tasks only when relevant to the authorized work. Archived stop instructions and status claims are historical; unresolved preservation and release obligations remain binding. Archived reference screenshots are inspiration only; the owner-supplied SVG is the selected product mark.
 
-A user task authorizes its named milestone. Do not implement the entire roadmap in one uncontrolled change. Complete the milestone's checks, record results, then stop at the gate. An unsafe simplification is not an acceptable way to make a milestone appear complete.
+A user task authorizes its named scope. Archived milestone plans do not authorize additional work. Do not implement the entire roadmap in one uncontrolled change. Complete the milestone's checks, record results, then stop at the gate. An unsafe simplification is not an acceptable way to make a milestone appear complete.
 
 ## Architecture boundaries
 
@@ -70,7 +70,7 @@ Documentation claims must match behavior. Hide or clearly disable unfinished pro
 
 ## Validation and reporting
 
-Use focused local validation during development and full GitHub CI before merging. Follow the change/risk table and commands in [Development](docs/DEVELOPMENT.md#local-validation-and-ci). Select tests for affected behavior and its consumers, including shared dependencies; file proximity alone does not define coverage. Run `git diff --check` for every change. Run the relevant preservation, failure/recovery and native checks locally when changing safety-sensitive behavior.
+Use focused local validation during development and full GitHub CI before merging. Follow the change/risk table and commands in [Development](docs/DEVELOPMENT.md#validation-and-ci). Select tests for affected behavior and its consumers, including shared dependencies; file proximity alone does not define coverage. Run `git diff --check` for every change. Run the relevant preservation, failure/recovery and native checks locally when changing safety-sensitive behavior.
 
 Reserve `npm run check` and the complete desktop/transport suites for CI, broad changes or explicit milestone/release qualification rather than every small edit. Reuse recorded passing checks only while their relevant code, dependencies, configuration and build inputs remain unchanged. Rerun affected checks after edits or failures; report reused evidence separately from fresh execution. Full passing CI on both target platforms is required before merge; local completion may be reported with CI pending. Milestone, preservation and packaged-release gates remain binding.
 
@@ -86,7 +86,7 @@ A feature is complete only when its backend behavior, frontend states, error han
 
 ## Version 1.2 extension rules
 
-Read docs/LIBRARY_FEATURES_ADDENDUM.md and its data model/tests before implementing these additions. N1-N5 are bounded extension slices; inspect prerequisite implementation and do not assume an app or cloud integration exists.
+Read docs/changelog/2026-11-09/docs/LIBRARY_FEATURES_ADDENDUM.md and its data model/tests before implementing these additions. N1-N5 are bounded extension slices; inspect prerequisite implementation and do not assume an app or cloud integration exists.
 
 Never confuse missing with offline/inaccessible, checksum mismatch with proven damage, or local copy verification with provider-original fidelity. Retain baseline history. Save edits/tags to the catalog; render/export into new protected outputs only. No embedded metadata rewrite as a default tag action.
 
@@ -713,7 +713,7 @@ src/
 
 ## 13. Testing and validation patterns
 
-Use the local validation policy above and the risk table in [Development](docs/DEVELOPMENT.md#local-validation-and-ci). Use the pinned npm toolchain and scripts present in `package.json`.
+Use the local validation policy above and the risk table in [Development](docs/DEVELOPMENT.md#validation-and-ci). Use the pinned npm toolchain and scripts present in `package.json`.
 
 ### Commands
 
@@ -722,7 +722,7 @@ Use the local validation policy above and the risk table in [Development](docs/D
 - `npm test -- <test-file-or-directory>` — run affected component behavior and consumer tests; `npm run test:watch -- <test-file-or-directory>` supports iteration.
 - `npm exec -- prettier --check <changed-files>` — verify formatting without writing files.
 - `npm run build` — validate frontend output when changing theme setup, build configuration, package versions or shared TypeScript types.
-- For React Doctor, follow [the recorded local workflow](docs/REACT_DOCTOR_REVIEW.md); there is no `doctor` npm script.
+- For React Doctor, follow [the recorded local workflow](docs/changelog/2026-11-09/docs/REACT_DOCTOR_REVIEW.md); there is no `doctor` npm script.
 
 ### Patterns
 

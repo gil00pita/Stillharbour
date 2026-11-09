@@ -1,0 +1,27 @@
+> Archived 2026-11-09 from `4f293da`. This is historical material; use the
+> [current documentation](../../../../README.md) for implemented behavior and active instructions.
+> Earlier failures, limitations and unmet safety/release obligations remain preserved.
+
+# ADR-0006 — Forget an indexed library and clear owned previews
+
+Date: 2026-10-28. Status: accepted for the owner-requested M1 Settings extension.
+
+## Decision
+
+Provide per-root Remove library and a separate all-library Clear preview cache action. The former intentionally forgets indexed records, catalog annotations and scan history with an explicit warning; the latter removes only regenerable indexed previews. Neither touches original folders or sidecars. User confirmation follows a native label/path/count review. Cache counts are observations; the approved scope is one fixed root UUID or all index-owned previews.
+
+Hold one opaque native plan for at most five minutes, bound to the catalog revision. Execution consumes it and rejects stale/replayed/invented approvals. Owner revision, 2026-10-31: clicking Remove library cancels that root's scan and queued/running thumbnail jobs, including queued initial preparation, and waits up to 30 seconds for admission to drain before producing a fresh review. Block new scan/registration/relink/thumbnail admission while stopping. Keep the publication flag separate from stopping admission so unrelated work cannot be counted as generated without being built. Other roots' durable jobs are not canceled and retain the existing global maintenance conflict. A timeout/error retains the root/cache, releases admission and permits retry. Canceling review does not restart stopped work or forget/delete anything; changed job statuses remain visible. Cache-only review still rejects active jobs without canceling them.
+
+Validate the opaque ID/expiry before further cancellation at confirmation, then revalidate expiry and revision after draining. Changed inventory requires fresh review, never silently rebased approval. Actual cleanup still cancels pending preview work and holds the publication/read write barrier. Queue workers retain the read barrier throughout build/publication. All commands run off the native async/UI executor. No dependency, schema or Windows cleanup authorization changes.
+
+Centralize file deletion in CacheCleanup. Open the private thumbnails directory without following a link; hold its descriptor. Only 64-hex keys obtained from the catalog's cache index may form relative PNG names. Open with no-follow/nonblocking flags, require a regular single-link file with bounded PNG signature, check its current identity, then unlinkat without directory recursion and sync the directory. A replaced path/ancestor does not redirect the held descriptor. Unknown/unindexed cache content stays retained. Checks detect ordinary replacement; this does not claim race-proof authorization against a hostile process writing the private directory.
+
+Stream at most 256 keys per SQL request. Keep index rows until cleanup/sync succeed, making them the existing durable retry list. On partial cleanup, metadata stays registered and already cleared previews can regenerate; a new review can retry missing files idempotently. Recheck catalog revision inside the final foreign-key-enforced transaction. Remove the target's selection tokens, cache rows, issues, scans, directory observations, assets and root in dependency order. Promote a remaining base root without replacing any surviving UUID. Cache-only cleanup removes index rows and marks ready previews pending without changing notes. A crash around commit is recovered by SQLite; no schema migration is needed.
+
+The separate preferences file is not part of the catalog transaction. Effective native preference reads map a no-longer-registered default root to All libraries without silently rewriting the file. Future explicit Save defaults persists that neutral value. Original absence/offline state does not prevent forgetting a root; this operation does not open its original files. Re-adding is a new registration, without automatic annotation recovery. No secure erasure, catalog snapshot/Undo, backup repository or M2 mutation engine is implied.
+
+## Validation and sources
+
+Generated fixtures cover per-root cache isolation, surviving notes/base UUID, foreign keys, stale/replayed plans, scan admission, partial failure/retry, offline removal, last-root reopen, cache regeneration and unchanged source manifests. Descriptor tests cover traversal, link/hardlink/invalid content and directory replacement. Native Settings tests cover confirmation/cancel, real Rust cleanup, effective default fallback and minimum-window layout. Actual results/remaining gates are recorded in IMPLEMENTATION_LOG.md.
+
+Primary references checked: the installed macOS open(2)/unlink(2) manuals (captured under .context/evidence/remove-library-*-man.txt) and [SQLite foreign-key support](https://www.sqlite.org/foreignkeys.html). Open Group online openat/unlinkat requests returned403; no successful read of those pages is claimed. Windows/Linux behavior is not established by macOS fixture results.

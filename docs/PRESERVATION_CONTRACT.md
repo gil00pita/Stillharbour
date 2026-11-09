@@ -1,12 +1,12 @@
 # Stillharbour - Preservation contract - highest-priority product requirement
 
-Version 1.1 supplement | 2026-10-23 | Normative design, not implemented behavior
+Binding safety policy for the implemented build and any separately authorized execution.
 
 Owner requirement: the most important outcome is not losing or damaging any file while discovering, organizing, backing up, or synchronizing photos.
 
 Priority: preservation > recoverability > truthful status > responsiveness > speed > storage savings. When safety cannot be established, stop the affected operation and retain every existing version. No user-interface convenience, deadline, performance target, or conflict override may bypass this contract.
 
-This document strengthens docs/CODEX_SPEC.md sections 5, 9-13 and the M2-M4 gates. Where the original specification permits weaker defaults, this contract wins. Unrelated original requirements remain in force. The owner-selected product name is Stillharbour. Trademark/domain clearance has not been established; naming never weakens the preservation contract.
+This contract takes precedence over convenience and weaker historical defaults. The [build capability reference](CODEX_SPEC.md) identifies enabled behavior; [release status](RELEASE_STATUS.md) records the closed execution gates. Rules for gated operations remain mandatory prerequisites, not claims that those operations are enabled. The full earlier specification and failure catalog remain preserved in the [changelog](changelog/README.md). Branding never weakens preservation.
 
 ## P-01. Read-only means no intentional source changes
 
@@ -90,8 +90,8 @@ This is an engineering objective and a release gate, not a promise that software
 
 For actual upstream behavior, consult BACKUP_SYNC_SOURCES.md: verification may be served from caches [SB04], ordinary restore defaults may overwrite existing files [SB08], and snapshot structural checks differ from full data verification [SB07]. The application must enforce this stricter contract rather than inherit unsafe defaults.
 
-## Version 1.2 clarification - 2026-10-26
+## Catalog metadata and provider boundaries
 
 The full contract above remains binding. Integrity audits cannot auto-repair or erase old hash evidence. Crop/rotate/mirror and tags default to catalog-only revisions; no original or sidecar rewriting is implicit. Catalog snapshots protect organization/recipe/baseline data but do not themselves contain or independently protect original media.
 
-Provider archives, source folders/accounts, raw metadata artifacts and all related media resources remain preserved. Verified local copying proves only the bytes available through that route; it does not establish whole-cloud coverage, camera-original fidelity or preservation of metadata/resources the provider did not supply. Opening an old/imported catalog cannot replay stale operations or reuse stale approval/recovery evidence. See LIBRARY_FEATURES_ADDENDUM.md for the normative extension.
+Provider archives, source folders/accounts, raw metadata artifacts and all related media resources remain preserved. Verified local copying proves only the bytes available through that route; it does not establish whole-cloud coverage, camera-original fidelity or preservation of metadata/resources the provider did not supply. Opening an old/imported catalog cannot replay stale operations or reuse stale approval/recovery evidence. See the [preserved extension requirements](changelog/2026-11-09/docs/LIBRARY_FEATURES_ADDENDUM.md) for their original scope; [build capabilities](CODEX_SPEC.md) identifies what is implemented.
