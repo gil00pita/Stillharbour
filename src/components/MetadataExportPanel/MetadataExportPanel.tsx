@@ -94,7 +94,10 @@ export function MetadataExportPanel({
       <Heading as="h3" unstyled id="metadata-export-title">
         Export catalog or XMP copies
       </Heading>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Export into a separate folder. Original photos, sidecars and existing outputs are never
         replaced. Catalog copies contain organization and references, not your photo backup.
       </Text>
@@ -128,7 +131,7 @@ export function MetadataExportPanel({
       </Button>
       {error && <Text role="alert">{error}</Text>}
       {review && (
-        <Box className="metadata-export-review">
+        <Box className="metadata-export-review" css={{ '& bdi': { overflowWrap: 'anywhere' } }}>
           <Heading as="h4" unstyled>
             Review {review.files.length} new export {review.files.length === 1 ? 'file' : 'files'}
           </Heading>
@@ -152,7 +155,17 @@ export function MetadataExportPanel({
               </Text>
             )}
           </details>
-          <label className="check-row">
+          <chakra.label
+            className="check-row"
+            css={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: '10px',
+              margin: '12px 0',
+              '& label': { flexDirection: 'row', alignItems: 'center' },
+            }}
+          >
             <input
               type="checkbox"
               checked={accepted}
@@ -160,7 +173,7 @@ export function MetadataExportPanel({
               onChange={(event) => setAccepted(event.target.checked)}
             />
             I reviewed these new outputs and their privacy/association warning.
-          </label>
+          </chakra.label>
           <Button disabled={!accepted || busy} onClick={() => void save()}>
             Save reviewed export
           </Button>

@@ -14,15 +14,46 @@ export function BrowsingDefaults({
   onChange: (patch: Partial<AppPreferences>) => void;
 }) {
   return (
-    <chakra.section className="settings-section" aria-labelledby="browsing-defaults-title">
+    <chakra.section
+      className="settings-section"
+      css={{
+        padding: '32px 0',
+        borderBottom: '1px solid {colors.border}',
+        '& h2': {
+          fontSize: '16px',
+          fontWeight: '600',
+          letterSpacing: '-0.01em',
+          margin: '0 0 8px',
+        },
+        '& h3': { fontSize: '14px', margin: '0 0 8px' },
+        '& > .help': { maxWidth: '72ch' },
+        '& .view-switch': { margin: '16px 0', flexWrap: 'wrap', gap: '8px' },
+        '& .view-switch > button': { fontSize: '13px !important' },
+        '& .thumbnail-control': { fontSize: '13px' },
+        '& .scan-options': { marginTop: '20px' },
+      }}
+      aria-labelledby="browsing-defaults-title"
+    >
       <Heading as="h2" unstyled id="browsing-defaults-title">
         Browsing defaults
       </Heading>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Applied when you open Photos. Changes here do not alter your catalog notes or scan existing
         folders.
       </Text>
-      <Box className="form-grid">
+      <Box
+        className="form-grid"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '16px',
+          width: '100%',
+          '@media (max-width: 600px)': { gridTemplateColumns: '1fr' },
+        }}
+      >
         <Field.Root asChild unstyled>
           <label>
             <Field.Label asChild unstyled>

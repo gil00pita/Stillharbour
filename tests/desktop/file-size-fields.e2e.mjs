@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { browser, $ } from '@wdio/globals';
 
 describe('Settings file size field layout', () => {
-  it('aligns amount and unit controls with native and bottom-edge select baselines', async () => {
+  it('embeds the unit selector inside each amount field at both window sizes', async () => {
     await $('button[aria-label="Settings"]').click();
     await $('.settings-defaults-form').waitForDisplayed();
     await $('.settings-defaults-form .scan-options summary').click();
@@ -36,7 +36,12 @@ describe('Settings file size field layout', () => {
               unitHeight: unit.height,
               wrapperHeight: wrapper.height,
               topOffset: amount.top - unit.top,
-              fits: amount.left >= 0 && unit.right <= innerWidth && amount.right <= unit.left,
+              fits:
+                amount.left >= 0 &&
+                unit.right <= innerWidth &&
+                unit.right <= amount.right &&
+                unit.left >= amount.left &&
+                amount.right - parseFloat(getComputedStyle(input).paddingRight) <= unit.left,
             };
           });
         }, fallback);

@@ -1,3 +1,26 @@
+/*! Timeline geometry adapted from relyfe/timeline-vertical-navigation.
+MIT License
+
+Copyright (c) 2018
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+*/
 import { Box, Text, chakra, Button } from '@chakra-ui/react';
 import { useEffect, useEffectEvent, useId, useMemo, useRef, useState } from 'react';
 import type { DateBucket } from '../../bindings';
@@ -159,15 +182,62 @@ export function DateTimeline({
     <chakra.nav
       ref={rail}
       className={`date-rail ${scrolling || dragging || focused ? 'is-scrolling' : ''}`}
+      css={{
+        '--timeline-line': '{colors.brand.solid}',
+        position: 'relative',
+        zIndex: 4,
+        width: '32px',
+        minHeight: '0',
+        margin: '0',
+        isolation: 'isolate',
+        userSelect: 'none',
+        opacity: '1',
+        '&:hover': { opacity: '1', transition: 'none' },
+        '&:focus-within': { opacity: '1', transition: 'none' },
+        '&.is-scrolling': { opacity: '1', transition: 'none' },
+        '& button': {
+          position: 'absolute',
+          right: '0',
+          border: '0 !important',
+          background: '{colors.bg.subtle} !important',
+          padding: '0 !important',
+          width: '32px',
+          minHeight: '20px !important',
+          borderRadius: '10px',
+          color: '{colors.fg} !important',
+          fontSize: '11px !important',
+          lineHeight: '20px !important',
+          letterSpacing: '0',
+          fontWeight: '500',
+          fontVariantNumeric: 'tabular-nums',
+          whiteSpace: 'nowrap',
+        },
+        '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+        '@media (max-width: 760px)': { width: '32px' },
+      }}
       aria-label="Photo timeline"
       data-dragging={dragging}
       onPointerLeave={() => setHovered(null)}
     >
-      <Text as="span" id={instructions} className="screen-reader-status">
+      <Text
+        as="span"
+        id={instructions}
+        className="screen-reader-status"
+        css={{
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          clipPath: 'inset(50%)',
+        }}
+      >
         Drag to navigate through photos. Arrow keys move one photo; Home and End go to the newest
         and oldest photos. Escape stops dragging.
       </Text>
-      <Box className="timeline-year-labels">
+      <Box
+        className="timeline-year-labels"
+        css={{ position: 'absolute', inset: '24px 0', zIndex: '1' }}
+      >
         {timelineYears(buckets, periods, current.year, height).map(({ bucket, top }) => (
           <Button
             unstyled
@@ -185,9 +255,31 @@ export function DateTimeline({
           </Button>
         ))}
       </Box>
-      <input
+      <chakra.input
         ref={slider}
         className="date-scrubber"
+        css={{
+          position: 'absolute',
+          top: '24px',
+          right: '0',
+          width: '100% !important',
+          height: 'calc(100% - 48px)',
+          minHeight: '0',
+          padding: '0 !important',
+          margin: '0',
+          border: '0 !important',
+          background: 'transparent !important',
+          writingMode: 'vertical-lr',
+          direction: 'ltr',
+          touchAction: 'none',
+          cursor: 'row-resize',
+          opacity: '0',
+          zIndex: '2',
+          '&:focus-visible + .date-scrubber-track i': {
+            outline: '2px solid var(--timeline-line)',
+            outlineOffset: '3px',
+          },
+        }}
         type="range"
         aria-label="Jump to year or month"
         aria-describedby={instructions}
@@ -261,12 +353,37 @@ export function DateTimeline({
         }}
         onPointerLeave={() => setHovered(null)}
       />
-      <Box className="date-scrubber-track">
+      <Box
+        className="date-scrubber-track"
+        css={{
+          position: 'absolute',
+          top: '24px',
+          bottom: '24px',
+          right: '4px',
+          width: '0',
+          pointerEvents: 'none',
+          '& i': {
+            position: 'absolute',
+            right: '0',
+            width: '24px',
+            height: '1px',
+            background: 'var(--timeline-line)',
+          },
+        }}
+      >
         {timelineTicks(periods, height).map((tick) => (
           <Text
             as="span"
             key={tick.period}
             className="timeline-tick"
+            css={{
+              position: 'absolute',
+              width: '4px',
+              height: '4px',
+              borderRadius: '50%',
+              background: '{colors.fg.secondary}',
+              transform: 'translateX(-14px)',
+            }}
             style={{ top: `${tick.position * 100}%` }}
           />
         ))}
@@ -274,11 +391,44 @@ export function DateTimeline({
         <Text
           as="span"
           className="timeline-preview-marker"
+          css={{
+            position: 'absolute',
+            right: '0',
+            width: '24px',
+            height: '2px',
+            zIndex: '3',
+            background: 'var(--timeline-line)',
+            boxShadow: '0 1px 2px rgb(60 64 67 / 30%),\n    0 2px 6px 2px rgb(60 64 67 / 15%)',
+            pointerEvents: 'none',
+          }}
           aria-hidden="true"
           style={{ top: `${(labelIndex / denominator) * 100}%` }}
         />
-        <output
+        <chakra.output
           className="timeline-current"
+          opacity={hovered !== null || dragging || focused || scrolling ? 1 : 0}
+          css={{
+            maxWidth: '92px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            position: 'absolute',
+            right: '32px',
+            zIndex: '2',
+            height: '24px',
+            padding: '2px 10px',
+            border: '0',
+            borderRadius: '2px',
+            background: 'bg.subtle',
+            color: '{colors.fg}',
+            fontSize: '12px',
+            fontWeight: '500',
+            lineHeight: '20px',
+            letterSpacing: '0',
+            fontVariantNumeric: 'tabular-nums',
+            whiteSpace: 'nowrap',
+            pointerEvents: 'none',
+            transform: 'translateY(-100%)',
+          }}
           aria-live="off"
           aria-label={
             hovered !== null || dragging || editing
@@ -288,7 +438,7 @@ export function DateTimeline({
           style={{ top: `${(labelIndex / denominator) * 100}%` }}
         >
           {label}
-        </output>
+        </chakra.output>
       </Box>
     </chakra.nav>
   );

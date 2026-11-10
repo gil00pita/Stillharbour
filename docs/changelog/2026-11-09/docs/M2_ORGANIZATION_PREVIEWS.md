@@ -1,0 +1,215 @@
+> Archived 2026-11-09 from `4f293da`. This is historical material; use the
+> [current documentation](../../../README.md) for implemented behavior and active instructions.
+> Earlier failures, limitations and unmet safety/release obligations remain preserved.
+
+# M2 — organization template previews
+
+Date: 2026-10-30. The owner requested the next stage and selected **Organization templates and previews** as the priority. M2 is now in progress. This first slice is a read-only catalog template preview; it does not complete M2 or authorize production original-file mutations. The outstanding P4-06 evidence remains in [the P4 ledger](PERFORMANCE_P4_STATUS.md).
+
+Select 1–240 individual photos in Photos, then **Preview organization**. Choose an editable preset or enter a custom path template, optional event name and missing-capture-date policy. **Build preview** shows the exact proposed relative names, current paths, source-library names (stable IDs remain available in a tooltip), proposed/blocked counts, losslessly grouped selected file-byte total and review issues. Successful builds reveal and focus the per-file results table; the form and table share the bounded dialog scroll area. Search filters only these preview rows. Changes to the template clear the old result; catalog revision changes visibly mark it stale. Closing returns focus to the selection action. Query-wide selections and larger selections have a disabled action with an explanation.
+
+## Implemented contract
+
+- Rust owns the DSL, validation and generated IPC. Supported tokens are original_stem, original_folder (immediate parent), ext, event, capture with %Y/%m/%d/%H/%M/%S directives, and sequence:01 through sequence:06. Date-format literals allow hyphens, underscores and periods. No evaluator, shell, network lookup or renderer filesystem path is accepted.
+- Three presets cover year/date/original name, year/month/date-and-sequence, and event/date/original name. The retained-planning continuation below adds immutable saved versions alongside the session editor.
+- Capture tokens use embedded_original or embedded_created catalog dates, preserving their local wall time. Filesystem timestamps are never substituted. The explicit default fallback replaces the whole pattern with Undated/original_stem.ext; the alternative blocks the photo. Other missing token values block their row. The original extension and its case must be preserved.
+- Validation rejects unsafe values rather than silently sanitizing them: traversal, absolute/empty components, separators inside tokens, controls, reserved Windows device names (including superscript variants), illegal trailing dots/spaces, changed extensions and oversized components. Preview bounds are 1,024 template/relative-path bytes, 32 components, 255 bytes and 255 UTF-16 units per component, and 512 event bytes. These conservative lexical limits do not establish destination filesystem support.
+- The native adapter accepts only distinct validated catalog UUIDs. One SQLite read transaction snapshots catalog revision, root/file identities, original native path bytes, revisions, metadata and availability. The pure renderer runs outside the DB actor. It never opens a photo root, destination or helper. Non-Unicode native names are blocked; lossy display strings are never reconstructed into execution inputs.
+- Sequences start at one, ordered by root ID, native relative-path bytes, then asset ID, regardless of request ordering. A versioned BLAKE3 fingerprint binds those snapshots and template settings. It is neither a persisted immutable execution plan nor an approval token. Changed selections may change sequences; allocations are not reused for execution.
+- Every participant in an exact target or file/directory collision is blocked; ASCII case-equivalent target names receive an additional advisory block. No universal lowercasing or Unicode normalization is used to authorize paths. Native case, Unicode and existing-destination conflicts remain unchecked. Catalog availability is an observation, not a live identity preflight.
+- Same-stem indexed entries are counted as **companion candidates**, never confirmed bundles or complete inventories. Count queries are grouped by selected native directory with bounded requested stems/results; a directory is not queried separately for each selected photo. Large-folder latency is not established by the small fixtures. Unknown/excluded/unindexed files remain untouched. The selected byte total excludes staging, metadata, companions and recovery reserves and is not a destination-space estimate.
+
+Portable-name policy follows [Microsoft's naming documentation](https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file). Date formatting uses the pinned chrono implementation with an explicit directive allowlist. The initial preview slice changed no schema; the retained-planning continuation below introduces schema 3 while preserving persisted identity and production original-file guards.
+
+## Indexed companion review continuation — 2026-10-30
+
+The next-phase request starts the companion-review prerequisite. Each preview row now offers **Review indexed companions**, including rows whose earlier same-stem count is zero. The backend accepts one validated photo UUID and reads one catalog transaction; no original or destination filesystem is opened. It returns at most 64 candidates plus an explicit truncation flag. Matching is exact, within the same root/native directory: same catalog stem, or XMP/AAE whose catalog stem equals the selected photo's complete filename. This is a conservative name heuristic, not case/Unicode equivalence, provider pairing or bundle confirmation.
+
+Unlike the earlier count, detail review includes indexed missing and excluded entries and shows each candidate's recorded presence, root availability, media classification and lossless byte total. Missing and offline remain separate observations. An empty result never proves that companions are absent; unindexed/unknown entries, other naming conventions and incomplete inventory remain unverified. Candidates have no resolved destinations and are excluded from selected-file byte totals. The earlier count retains its original narrower meaning.
+
+The separate versioned review fingerprint binds source/candidate native locators, revisions, identities, root state, catalog revision and returned scope/truncation; it is neither approval nor a persisted plan. The UI loads only on explicit request, exposes loading/error/retry, flags responses from a different preview/current catalog revision, and discards late results after preview replacement or close. Refresh does not silently rebase the organization preview. Both inventoryComplete and executionAvailable remain false.
+
+Rust in-memory regressions cover candidate scope, filename-sidecars, excluded/missing/offline states, source/candidate identity binding, unknown/non-media IDs and the exact 64/65 truncation boundary. Component tests cover safe literal rendering, large byte counts, errors/retry, empty/truncated responses, stale revisions and unmount. The generated-library native scenario now compares rendered candidate paths to actual IPC and retains its independent source inventories. The focused Rust companion regressions and generated-binding comparison pass on Windows after the pinned toolchain/dependencies become available. The generated-library native scenario remains macOS-gated; see the implementation log for actual full-check/native results. No migration, dependency or production mutation permission is added.
+
+## Destination preflight continuation — 2026-10-31
+
+After building a preview, **Choose destination** selects an existing native folder and checks its identity, volume and overlap against every indexed root and app-data folder. The command carries only native picker session ID, selected UUIDs, typed template and exact preview fingerprint. It rebuilds catalog snapshots before/after native work, bounds concurrent review to one, and holds directory chains while comparing native ancestor identities in both directions. Picker path spelling may resolve an alias; the resolved chain is independently opened without following links, and final identity/volume must still match the picker. Missing, inaccessible and replaced roots block review rather than proving nonoverlap. No original or destination files are opened for content, written, created or reserved.
+
+The UI shows the checked destination and explicit pending target-name/case/Unicode, complete-companion, capacity/fidelity and persistence requirements. Cancellation keeps the previous observation; failed checks clear prior success and allow retry. Catalog changes mark the review stale; replaced/closed previews discard late responses. The fingerprint is temporary observation evidence, with persisted=false and executionAvailable=false. It cannot approve copying or authorize any future path access. Existing target entries are retained without enumeration or modification.
+
+The initial destination slice kept persistence pending behind retained Windows migration snapshots. [ADR-0023](decisions/ADR-0023-retained-organization-drafts.md) now supplies a scoped application-snapshot adapter and schema-3 migration rather than bypassing that protection. The preflight response still has persisted=false; only explicit Save plan draft retains a separate record.
+
+## Retained planning continuation — 2026-10-31
+
+**Load saved templates** loads the latest retained version of each template on demand. Select one to load its settings into the editor. Save template creates a new ID; Save new version appends using the selected version as a compare-and-swap prerequisite; Save as new template forks an independent ID. Saves do not silently replace an editor changed while awaiting IPC. Use retained version explicitly loads the saved settings into a new preview. Editing any setting clears the version reference and previous preview. Earlier versions and plans stay immutable. Limits are 100 templates, 100 versions per template and bounded names/descriptions. Supported token, date, collision, filename-case and sequence policies are stored; selectable new policies remain unfinished. The next continuation adds representative examples as described below.
+
+After a successful destination check, **Save plan draft** rebuilds and fingerprints catalog inputs, rechecks native destination identity/overlap and atomically retains the draft plus its creation journal entry. A selected saved-template reference must match the exact submitted template version. Limits are 1,000 retained plans and 240 photos per plan. Native locators remain private backend evidence, never renderer execution inputs. Every saved draft has executionAvailable=false and explicit unresolved native-target, complete-companion, capacity/fidelity and execution/recovery blockers.
+
+**Saved plans** in the library toolbar opens retained history without selecting photos. Pages contain at most 50 summaries. Opening a plan verifies its immutable digest/catalog identity and compares current catalog observations; changed inputs show a stale warning while keeping the old rows. Destination identity was checked at creation and is not revalidated or reserved by reopening. View JSON export / View CSV export displays selectable backend-generated review text. CSV quotes fields and protects spreadsheet formula prefixes; JSON preserves exact display strings. The original text-only slice did not save native files; the continuation below adds explicit new-file saves. Neither route imports executable plans or authorizes original-file operations.
+
+Schema 3 adds immutable template versions/draft payloads and an append-only planning journal. Existing catalogs first receive retained, independently read SQLite snapshots; failures prevent migration. Windows publication is scoped to an owned snapshot, uses directory-relative no-replace rename and data/metadata flushing, and leaves generic original mutation primitives unavailable. Tests cover migration rollback/process exits and retained backup identity; they do not establish physical power-loss or remote-filesystem durability. See ADR-0023 for architecture, bounds and native limitations.
+
+## Template example validation — 2026-10-31
+
+Saved-template editing supports zero to four independent synthetic examples: portable slash-separated source name, optional capture-local date, explicit sequence (1–240) and expected target. Saving uses the same pure Rust resolver as catalog previews, including exact extension case, event/date behavior and whole-pattern Undated fallback. A blocked example or unequal expected output rejects the entire save before appending any version. Errors identify the example; the editor retains it for correction. Examples do not participate in catalog sequence allocation or establish cross-example/native destination collision, companion, capacity or fidelity evidence. Empty example lists remain supported for existing templates.
+
+Source names are limited to 256 UTF-8 bytes and 32 safe components; capture dates to 32 bytes in the existing local timestamp format (no offset), expected targets to 1,024 bytes. The final serialized retained payload must fit 8,192 UTF-8 bytes, including JSON escaping. Accepted examples are JSON strings in the existing policy sampleInputs array with paired exact sampleOutputs, preserving schema 3 and older immutable versions. No database migration or native-path reconstruction is introduced. The optional request field defaults to an empty list for older callers. Selecting a saved template or explicitly using its retained version restores examples; malformed stored examples show an error without loading that template. Presets and supported policy choices are unchanged.
+
+## Remaining M2 gate
+
+Native file-save continuation, 2026-10-31: Save JSON file / Save CSV file chooses an output folder outside every indexed root and app-data, then saves the fixed backend-generated review filename through an explicit metadata adapter. [ADR-0025](decisions/ADR-0025-review-file-exports.md) owns native containment, append-only export intent/completion, exclusive UUID staging, flush/full-byte verification and no-replace publication. The 16-MiB review-text limit and original-file guards remain. Existing output files are retained and failed partial stages are retained; there is no overwrite or automatic cleanup/replay. The UI reports actual saved path and verified byte count only after completion, and handles cancellation/unsupported selection/native errors without fabricating a file. Native tests use a separate generated export folder, actual UI/IPC, source/destination preservation receipts and exclude OS chooser automation claims.
+
+Continuous M2/M3 continuation, 2026-10-31: [ADR-0024](decisions/ADR-0024-native-target-observations.md) extends destination review with existing-target observations and observed available/total bytes. Each selected row reports unoccupied-observed, occupied (retained), parent-not-directory, unsupported ancestor/package or preview-blocked. Only native no-match means absent; permissions and other errors fail the review. Lookups use held native parent handles, reject links/placeholders in ancestor positions, check identities/revisions and cap existing directories at 1,024. No target contents, probe file, directory creation, reservation or write test is used. Missing ancestors and equivalence between future case/Unicode names remain unverified. Space figures explicitly exclude companion, staging, retained-version and fidelity reserves.
+
+New preview rows also carry optional display-only source components derived by Rust from exact native relative paths. Before now groups those components by library into the selected folder hierarchy; Unix backslashes remain literal names and Windows separators are handled by the native backend. Non-Unicode/unavailable hierarchy and older retained rows keep their literal display paths with an explicit notice. Omitted legacy fields reserialize without changing old immutable digests. These trees still omit unselected/unknown/excluded files and unconfirmed companions. The earlier flat-tree descriptions below are historical; current bounds and preservation gates remain unchanged.
+
+Conditional M3 continuation, 2026-10-31: M2 is unfinished, so M3 remains gated. Live previews and retained drafts now include expandable Before/After path review. Before groups the exact source display paths by stable library ID (labels when available); it deliberately does not infer native source folder components from display text. After groups the DSL's slash-delimited relative targets into proposed folders. Colliding files and file/folder conflicts remain separate visible entries, blocked targets keep their review warning, and unresolved rows stay listed with their source path. Counts cover only the frozen selected photos. Unselected/excluded/unknown files and companion candidates are not added to the trees. Opening them creates no directories, filesystem requests, approval or execution authority. The per-file table remains the exact-path review. Full native source-folder hierarchy and other M2 acceptance requirements remain open.
+
+Create organized copy stays disabled with a visible explanation. No approval/start/import/undo/quarantine command is introduced. M2 still needs executable destination authorization and equivalence between future native target names, confirmed bundle inventory, selectable additional template policies, immutable ready-plan validation and approvals, full capacity/fidelity evidence, centrally locked executor, journaled original-copy staging, full byte verification, no-replace publication, cancellation/restart/fault injection, reverse-plan undo and folder import. Selected-source hierarchy and new review-file saves address review only. Existing M0 copy and review-export fixtures are not that executor.
+
+Real-library in-place mutation also needs exact-version independent recovery evidence and native Windows/macOS preservation gates. M4 may provide recovery later. Do not waive these gates or claim AC-023–AC-039 complete after this slice. The immediate next gate is executable-plan preconditions and confirmed companion inventory, still without production execution.
+
+## Complete folder-name and companion confirmation continuation — 2026-10-31
+
+Saved rows offer **Review all companion filenames**, then explicit **Read all filenames**. This observes the direct folder including hidden/unindexed entries. Pages show 64 entries, native-bound IDs, kinds and hints. Acknowledge reviewing all pages before confirmation. Every possible hinted companion must be included; unsupported hints/incomplete observations block confirmation. Additional regular portable files can be selected. No content is read or original written.
+
+[ADR-0026](decisions/ADR-0026-confirmed-companion-review.md) defines native/indexed limits of 4,096, private locator limit 8 MiB, selection limit 64 and freshness checks. Confirmation retains reviewed inventory, exact selected native locators and proposed targets, separately from the draft. Identical retries are idempotent; at most 16 different decisions per photo/draft are retained. History is explicitly unrevalidated. Stale/late responses never rebase a draft.
+
+The remaining gate now requires explicit companion decision IDs integrated into executable plans, overlapping-bundle reconciliation and all target/capacity/fidelity/executor/recovery requirements above. Draft exports still cover primary rows. Filename completeness does not establish content integrity, provider relationships or recoverability. M2/M3 remain unfinished.
+
+## Compiled copy-manifest continuation — 2026-10-31
+
+Retaining a companion decision chooses it for that photo's current copy review; historical choices require an explicit **Use this decision in copy review**. Choose one decision for every selected photo, then **Compile copy review**. Rust revalidates the exact retained decisions and live folder inventories and reconciles all proposed file mappings. Identical source-to-target mappings combine memberships; conflicting sources/targets and file/folder relationships remain visible, never silently renamed. The UI pages 64 proposed outputs, preserves exact byte counts and marks changed choices stale.
+
+[ADR-0027](decisions/ADR-0027-compiled-copy-manifests.md) records aggregate evidence/manifest bounds, retained append-only manifests, idempotent fresh retries and validated history opening. Compilation takes IDs only. The original draft/export remains unchanged; the compiled view includes companion outputs. All manifests remain executionAvailable=false. Native target equivalence, full destination preconditions, capacity/fidelity/content checks, approval and executor/recovery/import/undo gates remain open.
+
+## Validation
+
+Focused Rust coverage tests the token allowlist, hostile values, missing-date/value policies, extension retention, sequence/fingerprint determinism and invalidation, collisions, offline/non-Unicode sources, selection bounds and exact byte totals. Catalog tests use in-memory SQLite only. Component tests cover native request shape, literal rendering, failure/retry, draft invalidation, pending-request revision changes, conflicts and focus return. The native regression uses only the existing generated library, real Rust IPC, desktop/minimum layouts and independent before/after source manifests. Actual final command outcomes are recorded in [the implementation log](IMPLEMENTATION_LOG.md); unrun target-platform and executor scenarios remain open.
+
+## Native preparation and capacity/fidelity review — 2026-10-31
+
+ADR-0029 validates future names through exclusive creation only in constructor-owned disposable pending namespaces. Its test-only native receipt retains empty stages and conflict/identity evidence, rejects unexpected entries and grants no production authority. It is not invoked by ordinary manifest review.
+
+After compiling a current manifest, Check copy space and fidelity runs ADR-0030's ID-only read-only assessment. Revalidate the explicit decisions and saved destination, then report a single native filesystem-statistics observation with exact allocation/free/total bytes. Per-file rounded data, metadata/journal allowances and headroom are separately visible. Sufficient for estimate is not a reservation or a capacity guarantee; insufficient observed space blocks future copying. Explicit fidelity rows distinguish pending byte verification/selected companion files from timestamps, permissions, xattrs/resource forks, alternate streams and sparse/compression layout that the current engine does not preserve or verify. Original retention is not independent backup. Reports are discarded on scope changes and never enable execution. Production ready-plan/approval/catalog jobs/locks, full capacity checks, import, undo and native recovery acceptance remain open.
+
+## Catalog stream and current schema — 2026-10-31
+
+At ADR-0032 the catalog schema became 4. ADR-0032 adds journal indexes with a consistent pre-migration snapshot and atomic rollback; historical schema-3 drafts/manifests keep their unchanged identity/digest semantics. The fixture-only engine can bind those retained records to actual catalog-actor copy streams, with explicit payload/phase/ordinal checks. This does not enable copying from the planning UI or authorize imported histories. Native catalog receipts and actual checks are recorded separately from production user-flow acceptance. Complete nested/multi-root ready plans, approvals/job controls, capacity/fidelity checks, import and undo remain pending.
+
+Copy effect history, 2026-10-31: current catalog schema is 6 (ADR-0043). A fresh draft or session UUID cannot allocate a second folder for an identical native source/template/target mapping. Reopen untouched same-draft reviews or explicitly inspect prior output bytes and recover through retained jobs. Mapping identity and recorded completion are not fresh content proof. Legacy output candidates remain preserved; ambiguous/oversized histories block allocation. Default copying/original mutations remain unavailable pending their gates.
+
+Complete-preparation reopening, 2026-10-31: after loss of live authority or a failed ready-binding write, explicitly select the original destination and reopen the stopped preparation. Only complete immutable facts plus unchanged original empty-stage inventory can produce a fresh copy review. The backend may reconstruct catalog planning metadata; it never recreates/adopts files or restores approval. A fresh acknowledgment, copy approval and start follow. Incomplete/changed/unknown objects remain retained with an explicit error (ADR-0044).
+
+Import comparison prerequisite, 2026-10-31: compiled source manifests can be compared with an explicit indexed existing-library scope under ADR-0045. Reports distinguish byte equality, shared native objects, no indexed match and unknown coverage; hashes alone are never equality authority. All work is read-only and paced, with cancellation and bounded report retention. No report changes a copy manifest, skips a bundle or authorizes removal. Default experimental/mutation gates remain unchanged.
+
+ADR-0046 extends comparison reports with connected whole-bundle observations. All selected members must map to distinct directly compared indexed keepers in one native folder with coherent renamed stems and exact suffixes; primary matches must be indexed media. Partial/ambiguous layouts need attention, incomplete existing bundles retain all members for copying. The UI shows this evidence without an execution action. Actual import plans/skip execution remain subsequent work.
+
+ADR-0047 adds explicit saved import choices and retained history. A completed comparison can seed a bounded immutable decision plan; each connected bundle is copied whole or bound to a chosen complete native existing group. All-existing plans support separate acknowledgment, one-use approval and start, fresh complete-byte verification, cancellation and a durable skipped-import receipt. They create no output folder. Historical/failed attempts never replay or restore approval. Mixed copy/skip plans remain non-executable until their source-retaining copy integration passes.
+
+Saved drafts expose a separate retained-import history entry. It opens the original retained manifest and decision record directly; a new companion choice/compilation is not a prerequisite for viewing history, and no approval is restored.
+
+ADR-0048 develops an exact private new-copy projection from saved import decisions. It preserves manifest IDs/targets/bundles and observed read-source grants, while excluding skipped members from namespace preparation/copy streams. Existing serializers remain unchanged when no import reference exists. Construction is test-only; mixed import execution and fresh keeper/copy/receipt integration are still unavailable.
+
+ADR-0050 connects saved mixed-import decisions to exact new-only capacity and native copy reviews under the existing experimental capability. Existing selections are freshly byte-compared before/after work; final bounded verification evidence precedes successful job state. A completed receipt requires both. UI decisions/targets/receipt identities are validated; reopening history restores no approval. This does not implement folder-import indexing, original mutations or remaining M2 gates.
+
+ADR-0051 adds an explicit output-indexing action to live and retained import receipts. A fresh original-parent selection plus unchanged completed publication proofs authorizes a referenced-root discovery scan. Registration is not scan completion, content rehashing or independent backup. Changed versions, foreign scopes and unknown namespace entries are blocked. Existing root overlap guards remain intact; an indexed output protects its ancestor from future destination selection.
+
+ADR-0055 adds explicit proposed filename-stem Preserve/Lowercase/Uppercase. It applies to the final stem after template resolution, including Undated fallback; folder components and original extension case remain exact. Final Unicode byte limits, portability and collisions are rechecked after transformation. Missing or explicit Preserve retains legacy serialization/fingerprints; nondefault choices are saved with immutable policy metadata schema 2. This changes no original path or execution/recovery permission. Native source audits and actual UI/backend target comparison remain required.
+
+ADR-0056 adds typed instrumented-only generated rename/undo review controls over the closed native engine. Actual full-byte/native-position inspection binds each one-use approval, and undo requires a distinct immutable plan. Close discards UI grants; fresh inspection never restores one. This fixture UI remains separate from application catalog path updates, durable jobs and restart adoption; no production mutation support is claimed.
+
+ADR-0057 adds actual catalog path commits to the generated rename lab. Observe native names and catalog paths side by side; preserve stable asset IDs and catalog annotations in forward/reverse cycles. Native movement without a committed receipt is incomplete, requires fresh approval and cannot enable undo. This remains a constructor-owned private catalog, not general application library organization or durable jobs/restart adoption.
+
+Explicit managed destination (2026-11-01, ADR-0062): the default still requires an external folder outside every indexed root. A separate policy can bind a different existing managed root, with the native picker selecting that exact root object. Source/referenced/unavailable/overlapping roots and pending original recovery remain blocked. Optional destinationRootId is retained in immutable plans and fresh scope validation; absent fields preserve legacy identity/schema 7. Existing-root import output discovery reuses its filters and reports whether it started or joined a scan. Production copying/original mutation remains gated; local generated/native Windows evidence does not establish all-target acceptance. Preferred-root persistence and multiple-source execution remain open.
+
+## Dedicated workspace — 2026-11-07
+
+Open Structure Formater from Utilities and configure folder/filename rules. Its
+scope is every indexed photo/video in the catalog; selection, filters and albums
+are irrelevant. Preview restructure processes bounded native batches and displays
+240-row pages only after the complete global output namespace has been checked.
+Missing, excluded and offline media remain in scope as blocked. Source ordering
+and sequence are global. Catalog changes require rebuilding; cancel/unmount/new
+rules discard TEMP state. Saved templates and saved plans remain accessible.
+The separate explicit-photo preview still supports existing reviewed copy-plan
+consumers; a whole-library result page cannot be submitted as a complete plan.
+Run restructure remains disabled pending whole-library execution and recovery
+qualification. [ADR-0095](decisions/ADR-0095-whole-library-structure-preview.md)
+records the read-only adapter and limits.
+
+The native `organization_protection_status` read exposes backup/sync prerequisites
+separately from naming observations. Active backup/restore/recovery helpers,
+sync/comparison workers, all retained unfinished jobs and every enabled backup
+schedule block restructuring; errors fail closed. Schedule timing and OS authority
+do not waive the block. The page checks on entry (including hidden windows), on
+focus/visibility changes and every two visible seconds, with a manual retry. It
+does not alter jobs, schedule consent or originals. Sync currently has no recurring
+scheduler. These observations do not invalidate or prohibit read-only previews and
+do not grant execution authority. Atomic admission against concurrent work and
+schedule changes remains required for the future whole-library executor.
+
+## Date-based rule choices — 2026-11-07
+
+The shared rule editor uses three illustrated radio cards: By day (year/date/
+original filename), By month (year/month/timestamp and sequence), and Date & time
+(date/time and original filename). Inline SVG folder trees are clearly examples,
+not catalog observations. The event-name field and event preset are removed.
+Missing capture date uses a two-option segmented control (Undated folder or
+block); filename stem case uses Preserve/lowercase/UPPERCASE segments. These keep
+the existing typed policies, preview invalidation and original-extension handling.
+Custom paths remain editable and visibly unmatched to a preset. Stored templates,
+including historical event values, are loaded unchanged; selecting a new date
+preset clears the now-unused event value. There is no persisted schema migration
+or new execution authority.
+
+## Expanded naming layouts — 2026-11-07
+
+The later owner request supersedes the three-choice-only form. Layout groups
+cover Date (five requested plus three retained presets), Location (four), Tags
+(six), Camera (seven), and Custom. Trip grouping is omitted. Location uses only
+embedded indexed labels; tag levels follow the existing category parent graph;
+camera type requires an explicit observation. Camera → Event conditionally asks
+for an event name. Missing required context blocks the photo instead of choosing
+an arbitrary label, guessing from GPS or dropping it from scope.
+
+Custom assembles real path components with searchable predefined chips and
+literal folders, draggable grip/label handles, separate removal and a filename
+pattern. Click-to-pick/place and keyboard pickup/arrows/Enter/Escape provide
+alternatives without the old earlier/later arrow buttons. Drop commits once;
+canceled, interrupted or stale gestures leave the rule untouched. All native
+path/conflict/global sequence checks remain. New quarter/metadata patterns use
+preview policy v2; previous patterns and absent optional context retain v1 and
+legacy serialization. Template examples can carry explicit naming observations.
+Read [ADR-0096](decisions/ADR-0096-metadata-structure-rules.md) for exact context,
+reader coverage, compatibility and unchanged execution limits.
+
+## Rules-to-review flow — 2026-11-07
+
+The latest owner refinement separates the five folder categories from Original /
+Date + original / Sequence filename choices. Folder tree and sample-path views
+are explicitly illustrative, resolved natively from four fixed examples without
+catalog or source-file access. Advanced path editing, stem case, draggable Custom
+chips and existing immutable catalog templates remain available.
+
+Missing dates can use the existing whole-path Undated/original-name fallback or
+the new typed Skip policy. Skip retains rows and global sequence positions;
+non-date rules do not skip them. Historical Block rules still load. New optional
+whole-library observations are absent from legacy row serialization. Skip uses
+preview v2 and saved template schema 2, and is refused by executable selected-photo
+plan creation. It supplies no execution authority.
+
+Completed TEMP previews provide cached global move/folder/rename/attention/date/
+skip/unchanged totals. Native queries apply bounded literal path search and typed
+filters across the entire namespace before 240-row paging. Global summaries and
+sequence values do not change under filters. Errors/stale catalog revisions
+require fresh review. Session presets are catalog-scoped process memory, distinct
+from persistent catalog templates and approved plans.
+
+The dedicated review screen supports missing-date inspection and return to
+editing. Confirmation invokes fresh read-only native validation before an
+explicit simulated completion screen; no approval, operation or job is created.
+Actual Run restructure remains disabled, including when backup/sync prerequisites
+are clear. [ADR-0097](decisions/ADR-0097-structure-review-and-session-presets.md)
+records query, compatibility and simulation boundaries. This increment does not
+close M2 or authorize production original-file operations.

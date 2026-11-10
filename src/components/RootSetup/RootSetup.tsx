@@ -54,28 +54,68 @@ export function RootSetup({
   return (
     <chakra.form
       className={`root-setup ${embedded ? 'inline-scan-settings' : 'selected-folder'}`}
+      css={{
+        '&.selected-folder': {
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '12px 24px',
+          border: '1px solid {colors.border}',
+          borderRadius: '8px',
+          padding: '20px',
+          marginTop: '32px',
+        },
+        marginTop: '0',
+        '& > .help': { flexBasis: '100%' },
+        '& .form-grid': { margin: '12px 0' },
+        '&.inline-scan-settings': { minWidth: '0', '& .folder-actions': { marginTop: '20px' } },
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         if (!busy && !scanRunning && !identityUnavailable && event.currentTarget.reportValidity())
           void onSave(label, mode, scanFilterFromForm(filter, event.currentTarget));
       }}
     >
-      <Box className="folder-information">
+      <Box className="folder-information" css={{ minWidth: '0', flex: '1' }}>
         {!embedded && (
           <Heading as="h3" unstyled>
             {root ? 'Scan settings' : 'Selected folder'}
           </Heading>
         )}
-        <Text className="path">
+        <Text
+          className="path"
+          css={{
+            fontSize: '13px',
+            lineHeight: '1.6',
+            overflowWrap: 'anywhere',
+            whiteSpace: 'pre-wrap',
+            margin: '8px 0 0',
+            color: '{colors.fg.muted}',
+          }}
+        >
           <bdi>{selected?.displayPath ?? root?.displayPath}</bdi>
         </Text>
       </Box>
       {!root && (
-        <Text as="span" className="selection-state">
+        <Text
+          as="span"
+          className="selection-state"
+          css={{ color: '{colors.brand.solid}', fontSize: '12px' }}
+        >
           Not scanned
         </Text>
       )}
-      <Box className="form-grid">
+      <Box
+        className="form-grid"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '16px',
+          width: '100%',
+          '@media (max-width: 600px)': { gridTemplateColumns: '1fr' },
+        }}
+      >
         <Field.Root asChild unstyled>
           <label>
             <Field.Label asChild unstyled>
@@ -92,8 +132,15 @@ export function RootSetup({
             />
           </label>
         </Field.Root>
-        <Box className="mode-field">
-          <Text as="span" className="field-label">
+        <Box
+          className="mode-field"
+          css={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '0' }}
+        >
+          <Text
+            as="span"
+            className="field-label"
+            css={{ fontSize: '12px', color: '{colors.fg.secondary}' }}
+          >
             Folder mode · {mode === 'managed' ? 'Managed' : 'Read only'}
           </Text>
           <Switch
@@ -104,13 +151,39 @@ export function RootSetup({
           />
         </Box>
       </Box>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         {mode === 'referenced'
           ? 'Originals stay in this folder. Scanning only reads them.'
           : 'Managed permission is saved for future approved operations. This version only reads originals.'}
       </Text>
       {identityUnavailable && (
-        <Box className="error" role="alert" id={identityAlertId}>
+        <Box
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+          id={identityAlertId}
+        >
           <strong>Scanning is unavailable for this folder</strong>
           <Text>
             Stillharbour cannot verify folder identity on this platform or volume. Save &amp; Start
@@ -121,7 +194,19 @@ export function RootSetup({
         </Box>
       )}
       <ScanOptions filter={filter} disabled={busy} onChange={setFilter} onError={onError} />
-      <Box className="folder-actions">
+      <Box
+        className="folder-actions"
+        css={{
+          flexBasis: '100%',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px 20px',
+          '& p': { fontSize: '13px', color: '{colors.fg.muted}', margin: '0', lineHeight: '1.6' },
+          '& .primary': { marginTop: '0', marginLeft: 'auto' },
+        }}
+      >
         <Button type="button" onClick={onCancel} disabled={busy}>
           {embedded ? 'Discard scan changes' : 'Cancel'}
         </Button>

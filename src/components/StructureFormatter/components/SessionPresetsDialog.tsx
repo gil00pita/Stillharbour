@@ -7,7 +7,6 @@ import type { LayoutTab } from '@/components/OrganizationPresets';
 import { removeSessionPreset, saveSessionPreset, type SessionPreset } from '../structure-rules';
 import { filenameChoice } from '../structure-rules';
 import { structureDialogStyle } from '../StructureFormatter.recipe';
-import classes from '../StructureFormatter.module.css';
 
 function description(preset: SessionPreset) {
   const category = {
@@ -65,7 +64,7 @@ export function SessionPresetsDialog({
       <Portal>
         <Dialog.Backdrop />
         <Dialog.Positioner>
-          <Dialog.Content css={structureDialogStyle} className={classes.dialog}>
+          <Dialog.Content css={structureDialogStyle}>
             <Dialog.Header>
               <Dialog.Title>
                 {mode === 'save' ? 'Save session preset' : 'Saved presets'}

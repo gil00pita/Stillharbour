@@ -135,10 +135,45 @@ export function FolderExplorer({
   }
   const parent = page?.ancestors.at(-1);
   return (
-    <Box className="library-page">
-      <Box className="library-underlay" inert={Boolean(viewer)} aria-hidden={Boolean(viewer)}>
+    <Box
+      className="library-page"
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: '1',
+        minWidth: '0',
+        minHeight: '0',
+        position: 'relative',
+        overflow: 'hidden',
+        isolation: 'isolate',
+      }}
+    >
+      <Box
+        className="library-underlay"
+        css={{ display: 'flex', flexDirection: 'column', flex: '1', minWidth: '0', minHeight: '0' }}
+        inert={Boolean(viewer)}
+        aria-hidden={Boolean(viewer)}
+      >
         <PageHeader>
-          <chakra.header className="toolbar explorer-toolbar">
+          <chakra.header
+            className="toolbar explorer-toolbar"
+            css={{
+              flexShrink: '0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              minHeight: '64px',
+              padding: '12px 24px',
+              borderBottom: '1px solid {colors.border}',
+              background: '{colors.bg.toolbar}',
+              '@media (max-width: 600px)': { minHeight: '64px', padding: '18px 24px' },
+              '@media (max-width: 760px)': {
+                flexWrap: 'wrap',
+                '& .fixed-search': { minWidth: '140px' },
+              },
+            }}
+          >
             {navigationControl}
             <Heading as="h1" unstyled>
               Folders
@@ -153,7 +188,11 @@ export function FolderExplorer({
                 setLocation({ ...location, cursor: null, search });
               }}
             />
-            <Box className="explorer-views" aria-label="Folder view">
+            <Box
+              className="explorer-views"
+              css={{ display: 'flex', gap: '6px' }}
+              aria-label="Folder view"
+            >
               <Button aria-pressed={mode === 'icons'} onClick={() => setMode('icons')}>
                 Icons
               </Button>
@@ -164,8 +203,61 @@ export function FolderExplorer({
             {jobsControl}
           </chakra.header>
         </PageHeader>
-        <Box className="folder-explorer">
-          <Box className="explorer-navigation">
+        <Box
+          className="folder-explorer"
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: '1',
+            minHeight: '0',
+            minWidth: '0',
+            padding: '16px 24px 12px',
+            '@media (max-width: 760px)': { padding: '12px 16px' },
+          }}
+        >
+          <Box
+            className="explorer-navigation"
+            css={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              flexWrap: 'wrap',
+              '& nav': {
+                margin: '0',
+                padding: '0',
+                display: 'flex',
+                alignItems: 'center',
+                flexWrap: 'nowrap',
+                overflowX: 'auto',
+                maxWidth: '100%',
+                whiteSpace: 'nowrap',
+                gap: '6px',
+                minWidth: '0',
+                fontSize: '12px',
+              },
+              '& nav > span': {
+                flexShrink: '0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                minWidth: '0',
+              },
+              '& bdi': { overflowWrap: 'anywhere' },
+              '@media (max-width: 760px)': { '& nav': { flexBasis: '100%' } },
+              '& nav button': {
+                maxWidth: '200px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                flexShrink: '0',
+              },
+              "& [aria-current='location'] bdi": {
+                maxWidth: '260px',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              },
+            }}
+          >
             <Button onClick={back} disabled={!history.length}>
               Back
             </Button>
@@ -217,14 +309,46 @@ export function FolderExplorer({
           </Box>
           <FolderStatus root={root} page={page} libraryCount={status.roots.length} />
           {browse.error && (
-            <Text role="alert" className="error">
+            <Text
+              role="alert"
+              className="error"
+              css={{
+                border: '1px solid {colors.border.control}',
+                borderRadius: 'var(--control-radius)',
+                background: '{colors.danger.bg}',
+                color: '{colors.danger.fg}',
+                padding: '16px 20px',
+                margin: '24px 0 0',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                '& p': { margin: '0' },
+                '& button': {
+                  marginTop: '12px',
+                  border: '1px solid currentColor',
+                  background: 'transparent',
+                  color: 'inherit',
+                  borderRadius: '4px',
+                  padding: '7px 12px',
+                },
+              }}
+            >
               {browse.error} <Button onClick={browse.retry}>Retry folder</Button>
             </Text>
           )}
           {browse.loading && !page ? (
             <Text role="status">Loading indexed contents…</Text>
           ) : browse.error && !page ? (
-            <Box className="empty-results">
+            <Box
+              className="empty-results"
+              css={{
+                flex: '1',
+                textAlign: 'center',
+                alignContent: 'center',
+                padding: '50px 20px',
+                '& h2': { fontSize: '22px' },
+                '& p': { fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '1.6' },
+              }}
+            >
               <Heading as="h2" unstyled>
                 Folder could not be loaded
               </Heading>
@@ -241,7 +365,17 @@ export function FolderExplorer({
               onError={onError}
             />
           ) : (
-            <Box className="empty-results">
+            <Box
+              className="empty-results"
+              css={{
+                flex: '1',
+                textAlign: 'center',
+                alignContent: 'center',
+                padding: '50px 20px',
+                '& h2': { fontSize: '22px' },
+                '& p': { fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '1.6' },
+              }}
+            >
               <Heading as="h2" unstyled>
                 {root
                   ? location.search
@@ -259,7 +393,19 @@ export function FolderExplorer({
             </Box>
           )}
           {root && page && (
-            <Box className="explorer-pagination">
+            <Box
+              className="explorer-pagination"
+              css={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                paddingTop: '12px',
+                fontSize: '11px',
+                color: '{colors.fg.muted}',
+                flexWrap: 'wrap',
+                '& > span': { marginRight: 'auto' },
+              }}
+            >
               <Text as="span">
                 {page.entries.length.toLocaleString()} shown · {page.total.toLocaleString()} indexed
                 items
@@ -326,32 +472,80 @@ function FolderStatus({
 }) {
   return (
     <>
-      <Text className="explorer-status" role="status">
+      <Text
+        className="explorer-status"
+        css={{ fontSize: '12px', color: '{colors.fg.muted}', margin: '14px 0 4px' }}
+        role="status"
+      >
         {root
           ? `${root.label} · ${root.availability.replaceAll('_', ' ')} · ${page?.total.toLocaleString() ?? '…'} indexed items in this folder`
           : `${libraryCount} indexed libraries`}
       </Text>
       {root && !['online', 'scanning'].includes(root.availability) && (
-        <Text className="availability-note">
+        <Text
+          className="availability-note"
+          css={{
+            background: '{colors.bg.subtle}',
+            color: '{colors.fg.secondary}',
+            padding: '12px',
+            fontSize: '12px',
+            lineHeight: '1.5',
+          }}
+        >
           Originals are {root.availability.replaceAll('_', ' ')}. Showing retained catalog contents
           and available cached previews.
         </Text>
       )}
       {root && (root.availability === 'scanning' || page?.directory.state === 'incomplete') && (
-        <Text className="help">Indexing is incomplete. These catalog contents may be partial.</Text>
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
+          Indexing is incomplete. These catalog contents may be partial.
+        </Text>
       )}
       {page?.directory.state === 'missing' && (
-        <Text className="availability-note">
+        <Text
+          className="availability-note"
+          css={{
+            background: '{colors.bg.subtle}',
+            color: '{colors.fg.secondary}',
+            padding: '12px',
+            fontSize: '12px',
+            lineHeight: '1.5',
+          }}
+        >
           This folder is no longer at this location. Go Up to see current folders; its changes
           remain in Jobs.
         </Text>
       )}
       {page?.directory.state === 'retained' && (
-        <Text className="help">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           This folder was not seen in the latest scan. Showing retained catalog contents.
         </Text>
       )}
-      <Text className="explorer-help help">
+      <Text
+        className="explorer-help help"
+        css={{
+          fontSize: '13px',
+          color: '{colors.fg.muted}',
+          lineHeight: '20px',
+          margin: '4px 0 12px',
+        }}
+      >
         Only items allowed by your scan settings are indexed. Filename filtering keeps folders
         visible.
       </Text>

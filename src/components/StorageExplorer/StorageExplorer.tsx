@@ -226,7 +226,15 @@ export function StorageExplorer({
   );
   return (
     <Box
-      css={styles}
+      css={[
+        styles,
+        {
+          '& .inspection-table-wrap :is(th, td):not(:first-child)': {
+            textAlign: 'right',
+            fontVariantNumeric: 'tabular-nums',
+          },
+        },
+      ]}
       className={`inspection-storage storage-explorer ${expanded ? 'storage-expanded' : ''}`}
     >
       <chakra.section className="storage-filters" aria-label="Storage filters">

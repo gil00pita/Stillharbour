@@ -51,17 +51,85 @@ export function TextListControls({
     };
   }, []);
   return (
-    <Box className="text-list-controls">
+    <Box
+      className="text-list-controls"
+      css={{
+        display: 'flex',
+        alignItems: 'end',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '12px',
+        marginBottom: '12px',
+        flexShrink: '0',
+        '& > label': { flexDirection: 'row', alignItems: 'center' },
+      }}
+    >
       <SortControl value={sort} onChange={onSort} label="Text list sort" disabled={busy} />
-      <details ref={menu} className="text-list-columns">
+      <chakra.details
+        ref={menu}
+        className="text-list-columns"
+        css={{
+          position: 'relative',
+          '& summary': {
+            padding: '8px 12px',
+            border: '1px solid {colors.border}',
+            borderRadius: 'var(--control-radius)',
+          },
+          '& fieldset': {
+            position: 'absolute',
+            top: '100%',
+            right: '0',
+            zIndex: '5',
+            width: '240px',
+            maxWidth: 'calc(100vw - 48px)',
+            maxHeight: 'min(350px, 55vh)',
+            overflowY: 'auto',
+            margin: '6px 0 0',
+            padding: '12px',
+            background: '{colors.bg.panel}',
+            border: '1px solid {colors.border}',
+            borderRadius: 'var(--control-radius)',
+          },
+          '& legend': {
+            float: 'left',
+            width: '100%',
+            marginBottom: '8px',
+            fontSize: '12px',
+            fontWeight: '600',
+          },
+          '& .check-row': { clear: 'both', margin: '0', padding: '6px 0' },
+          '& button': { marginTop: '8px' },
+        }}
+      >
         <summary>Columns</summary>
         <chakra.fieldset>
           <chakra.legend>Visible columns</chakra.legend>
-          <label className="check-row">
+          <chakra.label
+            className="check-row"
+            css={{
+              display: 'flex',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: '10px',
+              margin: '12px 0',
+              '& label': { flexDirection: 'row', alignItems: 'center' },
+            }}
+          >
             <input type="checkbox" checked disabled /> Name (always shown)
-          </label>
+          </chakra.label>
           {TEXT_COLUMNS.map((column) => (
-            <label className="check-row" key={column.id}>
+            <chakra.label
+              className="check-row"
+              css={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: '10px',
+                margin: '12px 0',
+                '& label': { flexDirection: 'row', alignItems: 'center' },
+              }}
+              key={column.id}
+            >
               <input
                 type="checkbox"
                 name={`text-column-${column.id}`}
@@ -75,13 +143,13 @@ export function TextListControls({
                 }
               />
               {column.label}
-            </label>
+            </chakra.label>
           ))}
           <Button unstyled type="button" onClick={() => onColumns([...DEFAULT_TEXT_COLUMNS])}>
             Reset columns
           </Button>
         </chakra.fieldset>
-      </details>
+      </chakra.details>
     </Box>
   );
 }
@@ -99,7 +167,35 @@ export function TextListHeader({
 }) {
   const fields = [{ id: 'name', label: 'Name', sort: 'name' }, ...textListLayout(columns).visible];
   return (
-    <Box className="text-list-head" role="row">
+    <Box
+      className="text-list-head"
+      css={{
+        display: 'grid',
+        gridTemplateColumns: 'var(--text-list-grid)',
+        alignItems: 'center',
+        fontSize: '12px',
+        borderBottom: '1px solid {colors.border}',
+        minHeight: '40px',
+        color: '{colors.fg.muted}',
+        overflowY: 'hidden',
+        scrollbarGutter: 'stable',
+        flexShrink: '0',
+        '& > span': { minWidth: '0', paddingRight: '12px' },
+        '& button:not(.primary):not(.asset-open):not(.chakra-button)': {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          border: '0',
+          padding: '0',
+          background: 'transparent',
+          color: 'inherit',
+          textAlign: 'left',
+          minHeight: '36px',
+        },
+        '& [aria-sort]': { color: '{colors.brand.solid}' },
+      }}
+      role="row"
+    >
       <Text as="span" role="columnheader" aria-label="Selection" />
       {fields.map((column) => {
         const active = sort === column.sort;
@@ -180,13 +276,40 @@ export function TextListRow({
       role="row"
       tabIndex={-1}
       className={`asset text-list-row ${selected ? 'is-selected' : ''}`}
+      css={{
+        position: 'relative',
+        borderRadius: '5px',
+        minWidth: '0',
+        flexShrink: '0',
+        '&.is-selected': {
+          outline: '2px solid {colors.brand.solid}',
+          outlineOffset: '-2px',
+          background: '{colors.brand.selected}',
+        },
+        '&.is-active': { boxShadow: 'inset 0 -2px 0 {colors.brand.solid}' },
+        display: 'grid',
+        gridTemplateColumns: 'var(--text-list-grid)',
+        alignItems: 'center',
+        fontSize: '12px',
+        borderBottom: '1px solid {colors.border}',
+        '& > span': { minWidth: '0', paddingRight: '12px' },
+        '& > span:not(.text-list-selection)': {
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis',
+        },
+        '& .text-list-selection': { padding: '0' },
+        '& .text-list-name': { display: 'flex', alignItems: 'center', gap: '8px' },
+        '& .text-list-name .asset-open': { minWidth: '0', flex: '1' },
+      }}
       data-asset-id={asset.id}
       data-date={asset.date}
     >
       <Text as="span" role="cell" className="text-list-selection">
         {(!selection || selecting) && (
-          <input
+          <chakra.input
             className="asset-check"
+            css={{ position: 'absolute', top: '9px', left: '9px', zIndex: '1', margin: '0' }}
             type="checkbox"
             aria-label={`Select ${asset.name}`}
             checked={selected}
@@ -203,6 +326,18 @@ export function TextListRow({
           unstyled
           type="submit"
           className="asset-open"
+          css={{
+            border: '0',
+            background: 'transparent',
+            padding: '0',
+            color: 'inherit',
+            width: '100%',
+            textAlign: 'left',
+            fontSize: '12px',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
           aria-label={`Open ${asset.name}`}
           title={asset.name}
           onKeyDown={onNavigate}

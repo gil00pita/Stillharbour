@@ -46,7 +46,7 @@ export type PhotoRow = {
   headings: PhotoHeading[];
 };
 export type DateGrouping = 'capture' | 'added' | null;
-export const PHOTO_GUTTER = 4;
+export const PHOTO_GUTTER = 6;
 export const DATE_HEADING_HEIGHT = 36;
 export const THUMBNAIL_SIZES = { compact: 150, comfortable: 220, large: 300 } as const;
 function ratio(asset: AssetSummary): number {

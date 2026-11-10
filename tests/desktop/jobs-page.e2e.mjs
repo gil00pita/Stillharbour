@@ -40,7 +40,7 @@ describe('Jobs page — generated native fixture', () => {
     await $('.root-setup input[required]').setValue('Generated Jobs page');
     await $('button=Save & Start scanning').click();
     await $('.asset-open', { strict: false }).waitForDisplayed({ timeout: 45000 });
-    await $('button=Select').click();
+    await $('button[aria-label="Select"]').click();
     await $('.asset-check', { strict: false }).waitForEnabled();
     await activateWithFocus('.asset-check');
     const before = await browser.execute(() => {

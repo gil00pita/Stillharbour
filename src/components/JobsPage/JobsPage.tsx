@@ -47,28 +47,83 @@ export function JobsPage({
       />
     ));
   return (
-    <chakra.section className="jobs-page" aria-labelledby={id}>
+    <chakra.section
+      className="jobs-page"
+      css={{
+        '& h2': { fontSize: '17px', letterSpacing: '0', margin: '0' },
+        width: '100%',
+        minWidth: '0',
+        padding: '0',
+        '@media (max-width: 760px)': { padding: '0' },
+        '& h3': { margin: '0', fontSize: '13px', fontWeight: '550', overflowWrap: 'anywhere' },
+        '& p': { overflowWrap: 'anywhere' },
+        '& li': { overflowWrap: 'anywhere' },
+        '& > .help': { margin: '8px 0 0' },
+      }}
+      aria-labelledby={id}
+    >
       <PageHeader>
-        <chakra.header className="toolbar jobs-heading">
+        <chakra.header
+          className="toolbar jobs-heading"
+          css={{
+            flexShrink: '0',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: '16px',
+            minHeight: '64px',
+            padding: '12px 24px',
+            borderBottom: '1px solid {colors.border}',
+            background: '{colors.bg.toolbar}',
+            '@media (max-width: 600px)': { minHeight: '64px', padding: '18px 24px' },
+            marginBottom: '24px',
+            '& h1': { margin: '0', fontSize: '24px' },
+            margin: '0',
+          }}
+        >
           <Box>
             <Heading as="h1" unstyled id={id} ref={heading} tabIndex={-1}>
               Jobs
             </Heading>
           </Box>
-          <Box className="header-actions">
+          <Box
+            className="header-actions"
+            css={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
             <Button type="button" aria-label="Back from Jobs" onClick={onBack}>
               Back
             </Button>
           </Box>
         </chakra.header>
       </PageHeader>
-      <Box className="jobs-content">
-        <Text className="help">Follow background work and review recent outcomes.</Text>
+      <Box
+        className="jobs-content"
+        css={{ padding: '24px', '@media (max-width: 760px)': { paddingInline: '16px' } }}
+      >
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
+          Follow background work and review recent outcomes.
+        </Text>
         {!status ? (
           <Text role="status">Connecting to jobs…</Text>
         ) : (
           <>
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               {activeCount
                 ? `${activeCount} running ${activeCount === 1 ? 'job' : 'jobs'}`
                 : 'No running jobs.'}
@@ -103,10 +158,20 @@ export function JobsPage({
               </Box>
             ))}
             {recent.length > 0 && (
-              <details className="recent-jobs">
+              <chakra.details
+                className="recent-jobs"
+                css={{
+                  marginTop: '20px',
+                  '& > summary': {
+                    cursor: 'pointer',
+                    color: '{colors.fg.muted}',
+                    fontSize: '12px',
+                  },
+                }}
+              >
                 <summary>Recent jobs ({recent.length})</summary>
                 {entries(recent)}
-              </details>
+              </chakra.details>
             )}
           </>
         )}
@@ -163,6 +228,12 @@ function JobEntry({
     <chakra.section
       data-job-kind={job.kind ?? 'scan'}
       className="job-row"
+      css={{
+        padding: '20px 0',
+        borderBottom: '1px solid {colors.border}',
+        '&:last-child': { borderBottom: '0', paddingBottom: '0' },
+        '& p': { fontSize: '13px', lineHeight: '20px' },
+      }}
       aria-label={`${job.kind === 'thumbnails' ? 'Thumbnail' : 'Scan'} job for ${label}`}
     >
       <Heading as="h3" unstyled>
@@ -170,8 +241,16 @@ function JobEntry({
       </Heading>
       <ScanJobProgress job={job} label={label} />
       <JobCounts job={job} />
-      <Text className="help">{job.message}</Text>
-      <Box className="job-actions">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
+        {job.message}
+      </Text>
+      <Box
+        className="job-actions"
+        css={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '12px' }}
+      >
         <Button
           aria-expanded={expanded}
           aria-controls={detailId}
@@ -224,7 +303,29 @@ function JobEntry({
         )}
       </Box>
       {cancelError && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {cancelError}
         </Text>
       )}
@@ -259,7 +360,17 @@ function ThumbnailJobAction({
     }
   }
   return (
-    <Box className="thumbnail-job-action">
+    <Box
+      className="thumbnail-job-action"
+      css={{
+        display: 'grid',
+        gap: '8px',
+        marginBlock: '16px',
+        '& label': { display: 'grid', gap: '6px' },
+        '& select': { width: '100%', minWidth: '0' },
+        '& .help': { margin: '0' },
+      }}
+    >
       <Field.Root asChild unstyled>
         <label>
           <Field.Label asChild unstyled>
@@ -281,11 +392,36 @@ function ThumbnailJobAction({
       <Button onClick={() => void generate()} disabled={pending}>
         {pending ? 'Starting…' : 'Generate thumbnails'}
       </Button>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Prepare tiny previews in the background. Originals stay read-only.
       </Text>
       {error && (
-        <Text role="alert" className="error">
+        <Text
+          role="alert"
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+        >
           {error}
         </Text>
       )}
@@ -321,16 +457,50 @@ function JobDetails({
   error: string | null;
 }) {
   return (
-    <Box id={id} className="job-details">
+    <Box
+      id={id}
+      className="job-details"
+      css={{ fontSize: '13px', lineHeight: '20px', '& li': { overflowWrap: 'anywhere' } }}
+    >
       {error ? (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {error}
         </Text>
       ) : !detail ? (
         <Text role="status">Loading job details…</Text>
       ) : detail.issues.length ? (
         <>
-          <Text className="help">
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             Skip reasons and failures (up to 200 entries). Retry scans the saved scope again,
             reusing unchanged metadata. Change scan settings to include intentionally excluded
             files. Cached thumbnails are reused.

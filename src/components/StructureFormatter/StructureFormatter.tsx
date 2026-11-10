@@ -79,13 +79,34 @@ export function StructureFormatter({
     setStep('edit');
   }
   return (
-    <Box className="structure-page" css={styles}>
+    <Box
+      className="structure-page"
+      css={[styles, { display: 'flex', flexDirection: 'column', minHeight: '0', height: '100%' }]}
+    >
       <PageHeader>
-        <Flex as="header" className="toolbar">
+        <Flex
+          as="header"
+          className="toolbar"
+          css={{
+            flexShrink: '0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            minHeight: '64px',
+            padding: '12px 24px',
+            borderBottom: '1px solid {colors.border}',
+            background: '{colors.bg.toolbar}',
+            '@media (max-width: 600px)': { minHeight: '64px', padding: '18px 24px' },
+          }}
+        >
           <Heading as="h1" ref={title} tabIndex={-1}>
             Structure Formater
           </Heading>
-          <Flex className="header-actions">
+          <Flex
+            className="header-actions"
+            css={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
             <Button
               type="button"
               aria-label="Saved presets"
@@ -100,7 +121,18 @@ export function StructureFormatter({
           </Flex>
         </Flex>
       </PageHeader>
-      <Box className="structure-content" ref={content}>
+      <Box
+        className="structure-content"
+        css={{
+          padding: '24px',
+          overflow: 'auto',
+          minHeight: '0',
+          flex: '1',
+          '& > *': { maxWidth: '1120px' },
+          '@media (max-width: 760px)': { paddingInline: '16px' },
+        }}
+        ref={content}
+      >
         <StructureLibraryScope editing={step === 'edit'} />
         <StructureFeedback error={workflow.error} stale={workflow.stale} />
         {step === 'edit' && (

@@ -66,13 +66,76 @@ export function PlaceSearch({
       unmountOnExit
     >
       <Popover.Anchor asChild>
-        <Box className="fixed-search unified-search">
+        <Box
+          className="fixed-search unified-search"
+          css={{
+            flex: '1',
+            minWidth: '80px',
+            maxWidth: '360px',
+            position: 'relative',
+            '& > svg': {
+              position: 'absolute',
+              zIndex: '1',
+              inset: '10px auto auto 12px',
+              color: '{colors.fg.muted}',
+              pointerEvents: 'none',
+            },
+            '&:has(> svg) input': { paddingInlineStart: '38px' },
+            '& input': { width: '100%' },
+            '& .place-search-chip': {
+              fontSize: '12px',
+              minHeight: '28px',
+              marginTop: '4px',
+              maxWidth: '100%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            },
+          }}
+        >
           <Field.Root>
-            <Field.Label className="screen-reader-status">
+            <Field.Label
+              className="screen-reader-status"
+              css={{
+                position: 'absolute',
+                width: '1px',
+                height: '1px',
+                overflow: 'hidden',
+                clipPath: 'inset(50%)',
+              }}
+            >
               Search filenames, dates or places
             </Field.Label>
             <Box
               className="search-input-frame"
+              css={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                minWidth: '0',
+                height: 'var(--control-height)',
+                paddingInline: '8px',
+                border: '1px solid {colors.border.control}',
+                borderRadius: 'var(--control-radius)',
+                background: '{colors.bg.input}',
+                '& > svg': { flexShrink: '0', color: '{colors.fg.muted}', pointerEvents: 'none' },
+                '& .search-text-input': {
+                  flex: '1',
+                  minWidth: '0',
+                  minHeight: '0',
+                  height: '100%',
+                  padding: '0 4px',
+                  border: '0',
+                  borderRadius: '0',
+                  background: 'transparent',
+                },
+                '&:focus-within': {
+                  outline: '2px solid {colors.brand.solid}',
+                  outlineOffset: '2px',
+                },
+                '& .search-text-input:focus-visible': { outline: 'none' },
+              }}
               display="flex"
               alignItems="center"
               gap="2"

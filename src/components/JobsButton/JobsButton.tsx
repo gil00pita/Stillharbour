@@ -23,6 +23,16 @@ export function JobsButton({
         type="button"
         ref={buttonRef}
         className="jobs-trigger"
+        css={{
+          position: 'relative',
+          flex: '0 0 auto',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          minWidth: 'var(--control-height)',
+          minHeight: 'var(--control-height)',
+          "&[aria-current='page']": { background: '{colors.brand.selected}' },
+        }}
         aria-label="Jobs"
         title="Jobs"
         aria-current={current ? 'page' : undefined}
@@ -41,12 +51,41 @@ export function JobsButton({
           Jobs
         </Text>
         {count > 0 && (
-          <Text as="span" className="jobs-count" aria-hidden="true">
+          <Text
+            as="span"
+            className="jobs-count"
+            css={{
+              position: 'absolute',
+              top: '-6px',
+              right: '-6px',
+              minWidth: '18px',
+              padding: '1px 4px',
+              borderRadius: '12px',
+              background: '{colors.brand.solid}',
+              color: '{colors.brand.contrast}',
+              fontSize: '10px',
+              fontWeight: '600',
+              textAlign: 'center',
+            }}
+            aria-hidden="true"
+          >
             {count}
           </Text>
         )}
       </Button>
-      <Text as="span" id={id} className="screen-reader-status" role="status">
+      <Text
+        as="span"
+        id={id}
+        className="screen-reader-status"
+        css={{
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          clipPath: 'inset(50%)',
+        }}
+        role="status"
+      >
         {status ? `${count} running ${count === 1 ? 'job' : 'jobs'}` : 'Connecting to jobs'}
       </Text>
     </>

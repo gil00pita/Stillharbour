@@ -85,7 +85,10 @@ function TagEditor({
   }
   return (
     <chakra.section aria-label="Tag changes">
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         These catalog-only changes affect every exact matching label, including offline media and
         category relationships. Case, Unicode and literal slashes stay distinct. Original files
         remain unchanged.
@@ -116,7 +119,17 @@ function TagEditor({
             }}
           />
         </Field.Root>
-        <label className="check-row">
+        <chakra.label
+          className="check-row"
+          css={{
+            display: 'flex',
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: '10px',
+            margin: '12px 0',
+            '& label': { flexDirection: 'row', alignItems: 'center' },
+          }}
+        >
           <input
             type="checkbox"
             checked={remove}
@@ -127,7 +140,7 @@ function TagEditor({
             }}
           />
           Remove this label from the catalog
-        </label>
+        </chakra.label>
         {!remove && (
           <Field.Root required>
             <Field.Label>New or existing exact label</Field.Label>

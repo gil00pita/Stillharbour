@@ -1,6 +1,7 @@
 import { Textarea as ChakraTextarea } from '@chakra-ui/react';
-import type { ComponentPropsWithRef } from 'react';
+import type { TextareaProps } from '@chakra-ui/react';
+import type { RefAttributes } from 'react';
 
-export function Textarea(props: ComponentPropsWithRef<'textarea'>) {
+export function Textarea(props: TextareaProps & RefAttributes<HTMLTextAreaElement>) {
   return <ChakraTextarea {...props} />;
 }

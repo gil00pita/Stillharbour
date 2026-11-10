@@ -27,7 +27,16 @@ export function InspectionJobProgress({
     }
   }
   return (
-    <chakra.section className="job-row" aria-label={`${job.input.task.kind} inspection job`}>
+    <chakra.section
+      className="job-row"
+      css={{
+        padding: '20px 0',
+        borderBottom: '1px solid {colors.border}',
+        '&:last-child': { borderBottom: '0', paddingBottom: '0' },
+        '& p': { fontSize: '13px', lineHeight: '20px' },
+      }}
+      aria-label={`${job.input.task.kind} inspection job`}
+    >
       <Heading as="h3" unstyled>
         {job.input.task.kind === 'duplicates'
           ? 'Duplicate'

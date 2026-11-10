@@ -67,7 +67,50 @@ export function ViewerControls({
   favorite: ReactNode;
 }) {
   return (
-    <Box className="viewer-controls viewer-zoom" role="group" aria-label="Photo controls">
+    <Box
+      className="viewer-controls viewer-zoom"
+      css={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'nowrap',
+        gap: '4px',
+        width: 'max-content',
+        maxWidth: '100%',
+        padding: '8px',
+        borderRadius: '12px',
+        background: '{colors.bg.panel}',
+        boxShadow: '0 6px 24px rgb(0 0 0 / 0.28)',
+        '& button:hover:not(:disabled)': {
+          background: '{colors.border}',
+          color: '{colors.brand.solid}',
+        },
+        "& button[aria-pressed='true']": {
+          background: '{colors.border}',
+          color: '{colors.brand.solid}',
+        },
+        "& input[type='range']": {
+          width: 'clamp(40px, 6vw, 80px)',
+          minWidth: '24px',
+          minHeight: '24px',
+          margin: '0',
+          padding: '0',
+          border: '0',
+          background: 'transparent',
+          accentColor: '{colors.brand.solid}',
+        },
+        '& output': {
+          minWidth: '64px',
+          flexShrink: '0',
+          whiteSpace: 'nowrap',
+          fontSize: '12px',
+          color: '{colors.fg.muted}',
+          textAlign: 'center',
+        },
+      }}
+      role="group"
+      aria-label="Photo controls"
+    >
       <IconButton
         unstyled
         type="submit"
@@ -108,7 +151,12 @@ export function ViewerControls({
       >
         <ToolIcon name="fit" />
       </IconButton>
-      <Text as="span" className="viewer-control-divider" aria-hidden="true" />
+      <Text
+        as="span"
+        className="viewer-control-divider"
+        css={{ height: '24px', borderLeft: '1px solid {colors.border}', margin: '0 4px' }}
+        aria-hidden="true"
+      />
       {favorite}
       <IconButton
         unstyled

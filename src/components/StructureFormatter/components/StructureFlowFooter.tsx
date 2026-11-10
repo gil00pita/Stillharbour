@@ -1,6 +1,5 @@
 import { Box, Flex, Text } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
-import classes from '../StructureFormatter.module.css';
 
 const messages = {
   edit: 'Previewing leaves originals untouched. Actual restructuring remains disabled pending reviewed execution and proven recovery.',
@@ -24,8 +23,12 @@ export function StructureFlowFooter({
 }) {
   if (step === 'complete') return null;
   return (
-    <Box className={`structure-flow-footer ${classes.footer}`}>
-      <Text className="help" id="structure-execution-help">
+    <Box className="structure-flow-footer">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+        id="structure-execution-help"
+      >
         {messages[step]}
       </Text>
       <Flex gap="3" wrap="wrap">

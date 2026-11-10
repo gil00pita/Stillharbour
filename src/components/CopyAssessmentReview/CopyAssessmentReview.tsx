@@ -77,7 +77,29 @@ export function CopyAssessmentReview({ manifest }: { manifest: CopyManifest }) {
         {pending ? 'Checking copy space…' : 'Check copy space and fidelity'}
       </Button>
       {error && (
-        <Text role="alert" className="error">
+        <Text
+          role="alert"
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+        >
           {error}
         </Text>
       )}
@@ -124,7 +146,38 @@ export function CopyAssessmentReview({ manifest }: { manifest: CopyManifest }) {
             Originals stay in place. This report does not verify any copied content or independent
             backup. The current copy engine has these fidelity limits:
           </Text>
-          <Box className="organization-table">
+          <Box
+            className="organization-table"
+            css={{
+              overflowX: 'auto',
+              marginTop: '16px',
+              '& table': { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+              '& th': {
+                padding: '12px 16px 12px 0',
+                textAlign: 'left',
+                verticalAlign: 'top',
+                overflowWrap: 'anywhere',
+                borderBottom: '1px solid {colors.border}',
+              },
+              '& td': {
+                padding: '12px 16px 12px 0',
+                textAlign: 'left',
+                verticalAlign: 'top',
+                overflowWrap: 'anywhere',
+                borderBottom: '1px solid {colors.border}',
+              },
+              '& caption': { textAlign: 'left', paddingBottom: '12px', color: '{colors.fg.muted}' },
+              '& small': {
+                display: 'block',
+                color: '{colors.fg.muted}',
+                marginTop: '8px',
+                fontSize: '12px',
+                lineHeight: '16px',
+              },
+              '& bdi': { whiteSpace: 'pre-wrap' },
+              '& p': { margin: '0 0 8px' },
+            }}
+          >
             <Table.Root unstyled>
               <Table.Caption unstyled captionSide="top">
                 Copy fidelity scope
@@ -145,7 +198,15 @@ export function CopyAssessmentReview({ manifest }: { manifest: CopyManifest }) {
               </Table.Body>
             </Table.Root>
           </Box>
-          <Text className="help">
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             Observed {report.observedAt}. This report does not approve copying.
           </Text>
         </>

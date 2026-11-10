@@ -5,6 +5,7 @@ import { StructurePathBuilder } from '@/components/StructurePathBuilder';
 import { presets, type LayoutGroup, type OrganizationPreset } from './presets';
 import { organizationPresetsRecipe } from './OrganizationPresets.slot-recipe';
 import { PresetIllustration } from './components/PresetIllustration';
+import { LayoutTypeIcon } from './components/LayoutTypeIcon';
 import { pathParts, withFolders } from '@/components/StructurePathBuilder';
 
 export type LayoutTab = LayoutGroup | 'custom';
@@ -63,11 +64,11 @@ export function OrganizationPresets({
         value={tab}
         disabled={disabled}
         choices={[
-          { value: 'date', label: 'By date' },
-          { value: 'location', label: 'By location' },
-          { value: 'tags', label: 'By tags' },
-          { value: 'camera', label: 'By camera' },
-          { value: 'custom', label: 'Custom' },
+          { value: 'date', label: 'By date', icon: <LayoutTypeIcon category="date" /> },
+          { value: 'location', label: 'By location', icon: <LayoutTypeIcon category="location" /> },
+          { value: 'tags', label: 'By tags', icon: <LayoutTypeIcon category="tags" /> },
+          { value: 'camera', label: 'By camera', icon: <LayoutTypeIcon category="camera" /> },
+          { value: 'custom', label: 'Custom', icon: <LayoutTypeIcon category="custom" /> },
         ]}
         onChange={(value) => {
           setTab(value);
@@ -128,13 +129,33 @@ export function OrganizationPresets({
             </Box>
           </RadioCard.Root>
           {(!selected || selected.group !== tab) && (
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               Current layout: {selected?.name ?? 'Custom'}. Choose a layout above to replace it.
             </Text>
           )}
         </>
       )}
-      {categoryHelp[tab] && <Text className="help">{categoryHelp[tab]}</Text>}
+      {categoryHelp[tab] && (
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
+          {categoryHelp[tab]}
+        </Text>
+      )}
     </Box>
   );
 }

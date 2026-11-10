@@ -50,9 +50,40 @@ export function BatchToolbar({
     }
   }
   return (
-    <Box className={`selection-area ${count ? 'has-selection' : ''}`}>
+    <Box
+      className={`selection-area ${count ? 'has-selection' : ''}`}
+      css={{
+        '&.has-selection': {
+          position: 'absolute',
+          insetInline: '6',
+          bottom: '6',
+          zIndex: 10,
+          maxHeight: '50%',
+          overflowY: 'auto',
+          padding: '4',
+          background: 'bg.elevated',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid {colors.border}',
+          borderRadius: 'panel',
+          boxShadow: '0 8px 24px rgb(0 0 0 / 16%)',
+          '& .results-heading': { margin: 0 },
+        },
+      }}
+    >
       <Box
         className="results-heading"
+        css={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+          fontSize: '12px',
+          margin: '14px 0 10px',
+          minHeight: '34px',
+          flexWrap: 'wrap',
+          '& p': { margin: '0', color: '{colors.fg.muted}' },
+          '& > div': { display: 'flex', gap: '6px', flexWrap: 'wrap' },
+        }}
         role={count ? 'toolbar' : undefined}
         aria-label={count ? 'Selected photo actions' : undefined}
         onKeyDown={(event) => {
@@ -79,7 +110,11 @@ export function BatchToolbar({
             </Button>
           ) : (
             <>
-              <Text as="span" className="selection-scope">
+              <Text
+                as="span"
+                className="selection-scope"
+                css={{ fontSize: '11px', color: '{colors.fg.muted}', alignSelf: 'center' }}
+              >
                 {frozen ? 'All matching results' : 'Explicitly selected photos'}
               </Text>
               <Button disabled={busy} onClick={() => setEditingTags((value) => !value)}>
@@ -129,7 +164,19 @@ export function BatchToolbar({
         </Box>
       </Box>
       {editingTags && count > 0 && (
-        <chakra.form className="batch-tag-form" onSubmit={(event) => void saveTags(event)}>
+        <chakra.form
+          className="batch-tag-form"
+          css={{
+            padding: '12px 0',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'end',
+            gap: '12px',
+            '& .tag-field': { flex: '1 1 280px' },
+            '& .help': { flexBasis: '100%', margin: '0' },
+          }}
+          onSubmit={(event) => void saveTags(event)}
+        >
           <TagInput
             name="batchTags"
             label="Tags for selected photos"
@@ -138,7 +185,15 @@ export function BatchToolbar({
             disabled={busy}
             onChange={setTags}
           />
-          <Text className="help">
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             Adds to existing catalog tags. Originals and sidecars stay unchanged.
           </Text>
           <Button disabled={busy} type="submit">

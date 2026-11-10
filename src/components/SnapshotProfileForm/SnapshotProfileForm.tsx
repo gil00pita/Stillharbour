@@ -112,13 +112,85 @@ export function SnapshotProfileForm({
   );
   const locked = busy || disabled;
   return (
-    <chakra.section className="backup-review" aria-label="New snapshot profile" aria-busy={busy}>
+    <chakra.section
+      className="backup-review"
+      css={{
+        border: '1px solid {colors.border}',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBlock: '20px',
+        minWidth: '0',
+        background: '{colors.bg.panel}',
+        '& fieldset': {
+          display: 'grid',
+          gap: '16px',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          padding: '16px',
+          marginBlock: '20px',
+        },
+        '& legend': { fontWeight: '600', paddingInline: '6px' },
+        '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+        "& label:has(> input[type='checkbox'])": {
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px',
+        },
+        "& input[type='checkbox']": { flex: '0 0 auto', marginTop: '4px' },
+        "& input:not([type='checkbox'])": {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& textarea': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+          resize: 'vertical',
+          minHeight: '100px',
+        },
+        '& select': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& .backup-form-grid': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+        '& small': { color: '{colors.fg.muted}' },
+        '& .backup-table': { maxHeight: '360px' },
+        '@media (max-width: 850px)': { '& .backup-form-grid': { gridTemplateColumns: '1fr' } },
+      }}
+      aria-label="New snapshot profile"
+      aria-busy={busy}
+    >
       <Heading as="h3" unstyled>
         New encrypted snapshot profile
       </Heading>
       <Text>
         Source: {base?.label ?? 'No base library configured'}{' '}
-        <Text as="span" className="backup-path">
+        <Text
+          as="span"
+          className="backup-path"
+          css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+        >
           {base?.displayPath}
         </Text>
       </Text>
@@ -158,7 +230,11 @@ export function SnapshotProfileForm({
             });
         }}
       >
-        <chakra.fieldset disabled={locked} className="backup-form-grid">
+        <chakra.fieldset
+          disabled={locked}
+          className="backup-form-grid"
+          css={{ '& > fieldset': { gridColumn: '1 / -1' } }}
+        >
           <chakra.legend>Profile and source scope</chakra.legend>
           <Field.Root asChild unstyled>
             <label>
@@ -214,7 +290,11 @@ export function SnapshotProfileForm({
             {status.roots.length <= 1 && <Text>No additional roots are configured.</Text>}
           </chakra.fieldset>
         </chakra.fieldset>
-        <chakra.fieldset disabled={locked} className="backup-form-grid">
+        <chakra.fieldset
+          disabled={locked}
+          className="backup-form-grid"
+          css={{ '& > fieldset': { gridColumn: '1 / -1' } }}
+        >
           <chakra.legend>Destination</chakra.legend>
           <Field.Root asChild unstyled>
             <label>
@@ -247,7 +327,10 @@ export function SnapshotProfileForm({
           </Field.Root>
           {protocol === 'local' ? (
             <Box>
-              <Text className="backup-path">
+              <Text
+                className="backup-path"
+                css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+              >
                 {selection?.displayPath ?? 'Choose a separate parent folder for this repository.'}
               </Text>
               <Button
@@ -473,11 +556,63 @@ export function SnapshotProfileForm({
           </Text>
         </chakra.fieldset>
         {error && (
-          <Text className="error" role="alert">
+          <Text
+            className="error"
+            css={{
+              border: '1px solid {colors.border.control}',
+              borderRadius: 'var(--control-radius)',
+              background: '{colors.danger.bg}',
+              color: '{colors.danger.fg}',
+              padding: '16px 20px',
+              margin: '24px 0 0',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              '& p': { margin: '0' },
+              '& button': {
+                marginTop: '12px',
+                border: '1px solid currentColor',
+                background: 'transparent',
+                color: 'inherit',
+                borderRadius: '4px',
+                padding: '7px 12px',
+              },
+            }}
+            role="alert"
+          >
             {error}
           </Text>
         )}
-        <Box className="backup-controls">
+        <Box
+          className="backup-controls"
+          css={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'flex-end',
+            flexWrap: 'wrap',
+            marginBlock: '16px',
+            '& select': { marginInlineStart: '0' },
+            '& .primary': { marginTop: '0' },
+            '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+            '& > p': {
+              flexBasis: '100%',
+              margin: '0',
+              color: '{colors.fg.muted}',
+              fontSize: '13px',
+              maxWidth: '70ch',
+            },
+            "& label:not(:has(> input[type='checkbox']))": {
+              display: 'grid',
+              gap: '8px',
+              minWidth: '0',
+              margin: '0',
+            },
+            "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+            '@media (max-width: 760px)': {
+              "& > [data-scope='field']": { flexBasis: '100%' },
+              '& > label': { flexBasis: '100%' },
+            },
+          }}
+        >
           <Button className="primary" type="submit" disabled={locked || !canCreate}>
             Save snapshot profile
           </Button>

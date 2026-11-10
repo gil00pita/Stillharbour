@@ -14,7 +14,6 @@ import type {
 import { errorMessage } from '../../ipc';
 import { metadata } from '../../metadata/ipc';
 import { defaultQuery } from '../../library/model';
-import '../../metadata/metadata.css';
 import { SavedSearchReview } from '@/components/SavedSearchReview';
 import { MetadataExportPanel } from '@/components/MetadataExportPanel';
 import { TagTools } from '@/components/TagTools';
@@ -136,9 +135,36 @@ export function CatalogOrganizer({
     );
   }
   return (
-    <dialog
+    <chakra.dialog
       ref={dialog}
       className="catalog-organizer"
+      css={{
+        width: 'min(880px, calc(100vw - 32px))',
+        maxHeight: 'calc(100vh - 32px)',
+        overflow: 'hidden',
+        border: '1px solid {colors.border}',
+        borderRadius: '12px',
+        padding: '0',
+        background: '{colors.bg.panel}',
+        color: 'inherit',
+        '&[open]': { display: 'flex', flexDirection: 'column' },
+        '&::backdrop': { background: '#0009' },
+        '& > header': {
+          display: 'flex',
+          justifyContent: 'space-between',
+          gap: '20px',
+          alignItems: 'start',
+          flexShrink: '0',
+          padding: '20px 24px',
+          borderBottom: '1px solid {colors.border}',
+        },
+        '& > header button': { flexShrink: '0' },
+        '& h2': { margin: '0 0 8px' },
+        '& > header p': { margin: '0', color: '{colors.fg.muted}' },
+        '& label': { display: 'grid', gap: '6px', margin: '10px 0' },
+        '& label.check-row': { display: 'flex', alignItems: 'center' },
+        '@media (max-width: 760px)': { '& > header': { padding: '16px' } },
+      }}
       aria-labelledby="catalog-organizer-title"
       onCancel={(event) => {
         event.preventDefault();
@@ -151,7 +177,11 @@ export function CatalogOrganizer({
             Albums, searches &amp; tags
           </Heading>
           <Text>Organize your catalog. Originals stay in their folders.</Text>
-          <chakra.nav className="catalog-section-links" aria-label="Organization sections">
+          <chakra.nav
+            className="catalog-section-links"
+            css={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '16px' }}
+            aria-label="Organization sections"
+          >
             <Button onClick={() => focusSection('collections-title')}>Albums &amp; searches</Button>
             <Button onClick={() => focusSection('categories-title')}>Tag categories</Button>
           </chakra.nav>
@@ -160,7 +190,17 @@ export function CatalogOrganizer({
           Close
         </Button>
       </chakra.header>
-      <Box className="catalog-organizer-scroll">
+      <Box
+        className="catalog-organizer-scroll"
+        css={{
+          minHeight: '0',
+          overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          padding: '0 24px 24px',
+          scrollbarGutter: 'stable',
+          '@media (max-width: 760px)': { padding: '0 16px 16px' },
+        }}
+      >
         {error && (
           <Box role="alert">
             <Text>{error}</Text>
@@ -175,13 +215,40 @@ export function CatalogOrganizer({
           </Box>
         )}
         <Text role="status">{busy ? 'Updating catalog…' : notice}</Text>
-        <chakra.fieldset disabled={busy} className="catalog-organizer-body">
+        <chakra.fieldset
+          disabled={busy}
+          className="catalog-organizer-body"
+          css={{
+            border: '0',
+            padding: '0',
+            margin: '0',
+            display: 'grid',
+            gap: '24px',
+            minWidth: '0',
+            '& > section': { borderTop: '1px solid {colors.border}', paddingTop: '12px' },
+            '& h3:focus-visible': {
+              outline: '2px solid {colors.brand.solid}',
+              outlineOffset: '4px',
+            },
+            '& h3': { scrollMarginBlock: '16px' },
+          }}
+        >
           <chakra.section aria-labelledby="collections-title">
             <Heading as="h3" unstyled id="collections-title" tabIndex={-1}>
               Virtual albums &amp; saved searches
             </Heading>
             <chakra.form
               className="catalog-form"
+              css={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '12px',
+                alignItems: 'end',
+                margin: '12px 0',
+                '& label': { flex: '1', minWidth: '170px' },
+                '& button': { marginBottom: '10px' },
+                '@media (max-width: 760px)': { display: 'grid' },
+              }}
               onSubmit={(event) => {
                 event.preventDefault();
                 void change(async () => {
@@ -254,7 +321,10 @@ export function CatalogOrganizer({
             </Field.Root>
             {current && (
               <Box className="catalog-collection-detail">
-                <Box className="catalog-actions">
+                <Box
+                  className="catalog-actions"
+                  css={{ display: 'flex', flexWrap: 'wrap', gap: '10px', margin: '12px 0' }}
+                >
                   <Button disabled={current.archived} onClick={() => openCollection(current)}>
                     View {current.kind === 'album' ? 'album' : 'saved search'}
                   </Button>
@@ -283,6 +353,16 @@ export function CatalogOrganizer({
                 </Box>
                 <chakra.form
                   className="catalog-form"
+                  css={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '12px',
+                    alignItems: 'end',
+                    margin: '12px 0',
+                    '& label': { flex: '1', minWidth: '170px' },
+                    '& button': { marginBottom: '10px' },
+                    '@media (max-width: 760px)': { display: 'grid' },
+                  }}
                   onSubmit={(event) => {
                     event.preventDefault();
                     void change(async () => {
@@ -316,7 +396,15 @@ export function CatalogOrganizer({
                 </chakra.form>
                 {current.kind === 'search' && (
                   <>
-                    <Text className="help">
+                    <Text
+                      className="help"
+                      css={{
+                        fontSize: '13px',
+                        color: '{colors.fg.muted}',
+                        lineHeight: '20px',
+                        margin: '8px 0',
+                      }}
+                    >
                       Saved searches contain filter data. They grant no file permissions or
                       scheduled actions.
                     </Text>
@@ -346,7 +434,10 @@ export function CatalogOrganizer({
                 {current.kind === 'album' && (
                   <>
                     <Text>{selectionCount.toLocaleString()} photos selected in the library.</Text>
-                    <Box className="catalog-actions">
+                    <Box
+                      className="catalog-actions"
+                      css={{ display: 'flex', flexWrap: 'wrap', gap: '10px', margin: '12px 0' }}
+                    >
                       <Button
                         disabled={!selection || current.archived}
                         onClick={() =>
@@ -379,11 +470,27 @@ export function CatalogOrganizer({
             )}
             <details>
               <summary>About albums &amp; saved searches</summary>
-              <Text className="help">
+              <Text
+                className="help"
+                css={{
+                  fontSize: '13px',
+                  color: '{colors.fg.muted}',
+                  lineHeight: '20px',
+                  margin: '8px 0',
+                }}
+              >
                 An album groups photos without moving them. A saved search finds photos using saved
                 filters.
               </Text>
-              <Text className="help">
+              <Text
+                className="help"
+                css={{
+                  fontSize: '13px',
+                  color: '{colors.fg.muted}',
+                  lineHeight: '20px',
+                  margin: '8px 0',
+                }}
+              >
                 Up to 200 collections, including archived entries. An archived album keeps its
                 photos for restoration.
               </Text>
@@ -393,7 +500,15 @@ export function CatalogOrganizer({
             <Heading as="h3" unstyled id="categories-title" tabIndex={-1}>
               Tag categories
             </Heading>
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               Group related tags under a parent. Choosing a parent also includes its child tags.
             </Text>
             <Field.Root asChild unstyled>
@@ -421,6 +536,16 @@ export function CatalogOrganizer({
             </Field.Root>
             <chakra.form
               className="catalog-form"
+              css={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '12px',
+                alignItems: 'end',
+                margin: '12px 0',
+                '& label': { flex: '1', minWidth: '170px' },
+                '& button': { marginBottom: '10px' },
+                '@media (max-width: 760px)': { display: 'grid' },
+              }}
               onSubmit={(event) => {
                 event.preventDefault();
                 void change(async () => {
@@ -472,7 +597,24 @@ export function CatalogOrganizer({
                 {editingCategory ? 'Save category parent' : 'Create tag category'}
               </Button>
             </chakra.form>
-            <List.Root unstyled className="catalog-categories">
+            <List.Root
+              unstyled
+              className="catalog-categories"
+              css={{
+                listStyle: 'none',
+                padding: '0',
+                display: 'grid',
+                gap: '8px',
+                '& li': {
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  alignItems: 'center',
+                },
+                '& li > span': { minWidth: '0', overflowWrap: 'anywhere' },
+                '& li > button': { flexShrink: '0' },
+              }}
+            >
               {categories.map((node) => (
                 <List.Item unstyled key={node.id}>
                   <Text as="span">
@@ -495,10 +637,26 @@ export function CatalogOrganizer({
             </List.Root>
             <details>
               <summary>Tag matching &amp; limits</summary>
-              <Text className="help">
+              <Text
+                className="help"
+                css={{
+                  fontSize: '13px',
+                  color: '{colors.fg.muted}',
+                  lineHeight: '20px',
+                  margin: '8px 0',
+                }}
+              >
                 Tags match exactly: case, Unicode and labels containing slashes remain distinct.
               </Text>
-              <Text className="help">
+              <Text
+                className="help"
+                css={{
+                  fontSize: '13px',
+                  color: '{colors.fg.muted}',
+                  lineHeight: '20px',
+                  margin: '8px 0',
+                }}
+              >
                 Up to 512 categories and sixteen levels. Renaming/merging tag labels and sidecar
                 export require their separate reviewed workflows.
               </Text>
@@ -515,6 +673,6 @@ export function CatalogOrganizer({
           onBusy={setBusy}
         />
       </Box>
-    </dialog>
+    </chakra.dialog>
   );
 }

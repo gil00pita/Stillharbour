@@ -5,6 +5,7 @@ import { Button } from '@/components/Button';
 import { useCallback, useRef, useState, type ReactNode } from 'react';
 import type { AssetSummary, AssetQuery, LibraryStatus } from '../../bindings';
 import { FilterPanel, type GalleryDisplay } from '@/components/FilterPanel';
+import { DisplayPanel } from '@/components/DisplayPanel';
 import type { PhotoViewportHandle } from '@/components/AssetBrowser';
 import { PhotoCollection } from '@/components/PhotoCollection';
 import { useLibraryController } from '@/hooks/use-library-controller';
@@ -72,6 +73,7 @@ export function LibraryScreen({
   const { ids: selected, frozen, busy: batchBusy, count: selectionCount } = c.selection;
   const [columns, setColumns] = useState([...DEFAULT_TEXT_COLUMNS]);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [displayOpen, setDisplayOpen] = useState(false);
   const [displayOverride, setDisplay] = useState<Partial<GalleryDisplay>>({});
   const display: GalleryDisplay = {
     size: displayOverride.size ?? defaults.thumbnailSize,
@@ -103,6 +105,11 @@ export function LibraryScreen({
       jobsControl={jobsControl}
       navigationControl={navigationControl}
       section={section}
+      displayOpen={displayOpen}
+      onDisplay={() => {
+        setFilterOpen(false);
+        setDisplayOpen(true);
+      }}
       value={query.name}
       onSearch={(name) => filter({ name })}
       placeId={query.placeId}
@@ -116,7 +123,10 @@ export function LibraryScreen({
           setSelectionMode(false);
         } else setSelectionMode(true);
       }}
-      onFilter={() => setFilterOpen(true)}
+      onFilter={() => {
+        setDisplayOpen(false);
+        setFilterOpen(true);
+      }}
       filterOpen={filterOpen}
       activeCount={
         Object.entries(query).filter(
@@ -140,16 +150,49 @@ export function LibraryScreen({
         },
       }}
     >
-      <Box className={`library-page ${selecting ? 'photo-selection-mode' : ''}`}>
+      <Box
+        className={`library-page ${selecting ? 'photo-selection-mode' : ''}`}
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: '1',
+          minWidth: '0',
+          minHeight: '0',
+          position: 'relative',
+          overflow: 'hidden',
+          isolation: 'isolate',
+          '&.photo-selection-mode': {
+            '& .asset-check': { opacity: '1' },
+            '& .date-heading input': { opacity: '1' },
+          },
+        }}
+      >
         <Box
           className="library-underlay"
+          css={{
+            display: 'flex',
+            flexDirection: 'column',
+            flex: '1',
+            minWidth: '0',
+            minHeight: '0',
+          }}
           inert={Boolean(viewerInitial)}
           aria-hidden={Boolean(viewerInitial)}
         >
           {header}
           {albumControls}
           {!albumControls && query.albumId && (
-            <Box className="catalog-collection-scope">
+            <Box
+              className="catalog-collection-scope"
+              css={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '12px',
+                alignItems: 'center',
+                padding: '10px 24px',
+                borderBottom: '1px solid {colors.border}',
+              }}
+            >
               <Text as="span">Virtual album filter active</Text>
               <Button onClick={() => filter({ albumId: null })}>Clear album filter</Button>
             </Box>
@@ -165,9 +208,28 @@ export function LibraryScreen({
               <Button onClick={clearMapScope}>Clear location filter</Button>
             </Box>
           )}
-          <Box className="library-content">
+          <Box
+            className="library-content"
+            css={{
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: '0',
+              flex: '1',
+              position: 'relative',
+            }}
+          >
             <PreparationBanner status={status} rootId={query.rootId} onRefresh={onRefresh} />
-            <Box className="library-content-body">
+            <Box
+              className="library-content-body"
+              css={{
+                padding: '24px 24px 0',
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: '0',
+                flex: '1',
+                '@media (max-width: 760px)': { padding: '14px 16px 0' },
+              }}
+            >
               {selectionCount > 0 && (
                 <BatchToolbar
                   loading={loading}
@@ -207,7 +269,12 @@ export function LibraryScreen({
                   status={status}
                   mode={mode}
                   viewerOpen={Boolean(
-                    viewerInitial || comparison || filterOpen || organizationIds || catalogOpen,
+                    viewerInitial ||
+                    comparison ||
+                    filterOpen ||
+                    displayOpen ||
+                    organizationIds ||
+                    catalogOpen,
                   )}
                   onOpen={(id, opener) => {
                     const asset = page?.assets.find((asset) => asset.id === id);
@@ -220,7 +287,17 @@ export function LibraryScreen({
                   }}
                 />
               )}
-              <Text className="screen-reader-status" role="status">
+              <Text
+                className="screen-reader-status"
+                css={{
+                  position: 'absolute',
+                  width: '1px',
+                  height: '1px',
+                  overflow: 'hidden',
+                  clipPath: 'inset(50%)',
+                }}
+                role="status"
+              >
                 {notice}
               </Text>
             </Box>
@@ -242,14 +319,23 @@ export function LibraryScreen({
             controller={c}
             status={status}
             section={section}
-            mode={mode}
-            display={display}
             onClose={() => setFilterOpen(false)}
             onSettings={onSettings}
             onRelink={onRelink}
-            onApply={(draft, nextMode, nextDisplay) => {
+            onApply={(draft) => {
               viewportHandle.current?.remember();
               if (JSON.stringify(draft) !== JSON.stringify(query)) filter(draft);
+            }}
+          />
+        )}
+        {displayOpen && (
+          <DisplayPanel
+            mode={mode}
+            display={display}
+            busy={batchBusy}
+            onClose={() => setDisplayOpen(false)}
+            onApply={(nextMode, nextDisplay) => {
+              viewportHandle.current?.remember();
               setMode(nextMode);
               setDisplay(nextDisplay);
             }}
@@ -296,7 +382,17 @@ export function LibraryScreen({
 
 function QueryFailure({ loading, onRetry }: { loading: boolean; onRetry: () => void }) {
   return (
-    <Box className="empty-results">
+    <Box
+      className="empty-results"
+      css={{
+        flex: '1',
+        textAlign: 'center',
+        alignContent: 'center',
+        padding: '50px 20px',
+        '& h2': { fontSize: '22px' },
+        '& p': { fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '1.6' },
+      }}
+    >
       <Heading as="h2" unstyled>
         Library couldn’t be loaded
       </Heading>

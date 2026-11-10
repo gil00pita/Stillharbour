@@ -1,3 +1,4 @@
+import { chakra } from '@chakra-ui/react';
 import { Box, List, Text } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { useEffect, useState } from 'react';
@@ -42,7 +43,18 @@ export function LibraryChanges({ status }: { status: LibraryStatus }) {
   return (
     <>
       {status.monitoring?.map((monitor) => (
-        <Text className="help library-monitor" key={monitor.rootId}>
+        <Text
+          className="help library-monitor"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+            overflowWrap: 'anywhere',
+            '& strong': { fontWeight: '600' },
+          }}
+          key={monitor.rootId}
+        >
           <strong>
             {status.roots.find((root) => root.id === monitor.rootId)?.label ?? 'Library'}
           </strong>
@@ -52,15 +64,28 @@ export function LibraryChanges({ status }: { status: LibraryStatus }) {
           {monitor.message}
         </Text>
       ))}
-      <details
+      <chakra.details
         className="library-changes"
+        css={{
+          paddingBlock: '12px',
+          borderTop: '1px solid {colors.border}',
+          '& summary': { cursor: 'pointer' },
+        }}
         onToggle={(event) => {
           setOpen(event.currentTarget.open);
           if (event.currentTarget.open && !open) setAttempt((value) => value + 1);
         }}
       >
         <summary>Library changes</summary>
-        <Text className="help">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           Observed changes after the first completed scan. Originals stay unchanged by Stillharbour.
         </Text>
         {loading && <Text role="status">Checking library changes…</Text>}
@@ -71,7 +96,22 @@ export function LibraryChanges({ status }: { status: LibraryStatus }) {
         )}
         {page?.changes.length === 0 && !loading && !error && <Text>No changes recorded yet.</Text>}
         {page && (
-          <List.Root as="ol" unstyled className="library-change-list">
+          <List.Root
+            as="ol"
+            unstyled
+            className="library-change-list"
+            css={{
+              listStyle: 'none',
+              margin: '12px 0',
+              padding: '0',
+              '& li': {
+                paddingBlock: '10px',
+                borderBottom: '1px solid {colors.border}',
+                overflowWrap: 'anywhere',
+              },
+              '& p': { margin: '4px 0' },
+            }}
+          >
             {page.changes.map((change) => (
               <List.Item unstyled key={change.sequence}>
                 <Box>
@@ -88,21 +128,42 @@ export function LibraryChanges({ status }: { status: LibraryStatus }) {
                 {change.path && change.path !== change.previousPath && (
                   <Text>
                     {change.kind === 'moved' && (
-                      <Text as="span" className="help">
+                      <Text
+                        as="span"
+                        className="help"
+                        css={{
+                          fontSize: '13px',
+                          color: '{colors.fg.muted}',
+                          lineHeight: '20px',
+                          margin: '8px 0',
+                        }}
+                      >
                         To:{' '}
                       </Text>
                     )}
                     <bdi>{change.path}</bdi>
                   </Text>
                 )}
-                <time className="help" dateTime={change.observedAt}>
+                <chakra.time
+                  className="help"
+                  css={{
+                    fontSize: '13px',
+                    color: '{colors.fg.muted}',
+                    lineHeight: '20px',
+                    margin: '8px 0',
+                  }}
+                  dateTime={change.observedAt}
+                >
                   {new Date(change.observedAt).toLocaleString()}
-                </time>
+                </chakra.time>
               </List.Item>
             ))}
           </List.Root>
         )}
-        <Box className="library-change-navigation">
+        <Box
+          className="library-change-navigation"
+          css={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}
+        >
           {before && (
             <Button disabled={loading} onClick={() => setBefore(null)}>
               Latest changes
@@ -114,7 +175,7 @@ export function LibraryChanges({ status }: { status: LibraryStatus }) {
             </Button>
           )}
         </Box>
-      </details>
+      </chakra.details>
     </>
   );
 }

@@ -1,200 +1,174 @@
-# Using Stillharbour during development
+# Use Stillharbour
 
-Stillharbour is a local desktop photo organizer. The current build browses folders and stores organization in a local catalog. **Signed distribution and clean-machine release acceptance are pending.** See [release readiness](M6_RELEASE_READINESS.md) and [format support](FORMAT_SUPPORT.md) before relying on a capability. No account or telemetry is enabled.
+Stillharbour indexes photo folders and stores organization in a local catalog.
+Your originals stay in place. A catalog, thumbnail or inspection report is not a
+backup of the photographs. Read [format support](FORMAT_SUPPORT.md) and
+[release status](RELEASE_STATUS.md) for the build's limits.
 
-## Add and browse folders
+## Add a photo folder
 
-Choose a folder, review its name and scan settings, then select **Save & Start scanning**. Selection permits the reviewed scan; it does not authorize moving or deleting originals. Development tests must use disposable generated folders.
+Choose a folder, review its name and scan settings, then select
+**Save & Start scanning**. Additional folders must not overlap registered roots.
+Selection authorizes the reviewed scan, not moving or deleting originals.
+Use generated disposable folders for development tests.
 
-New folders default to **Managed**. Turning on **Read only** saves a referenced root. Both modes currently read originals; Managed is not a blanket write grant. Additional folders must not overlap existing roots. Change location in Settings uses explicit native selection and identity checks. A different disk at the same path is not automatically trusted.
+New folders default to **Managed**. **Read only** saves a referenced root. Both
+modes read originals in the default build; Managed is not a blanket write grant.
+Settings lets you add folders, change scan scope or reconnect a moved folder
+through native identity checks. A different disk at the same path is not
+automatically trusted.
 
-Advanced settings control hidden files, hidden folders, exclusions, extensions and size limits. Hidden-folder traversal and hidden-file inclusion are independent. The 34-extension preset includes MP4 for discovery; this does not establish video playback or every RAW decoder. Existing saved filters keep their scope. Scan filters affect the catalog view, not a promise of full-folder backup coverage.
+Advanced settings include extensions, hidden files/folders, exclusions, dates and
+size limits. Minimum and maximum sizes each contain an amount and unit selector.
+Discovery of a video or RAW extension does not imply preview/playback support.
+Scan filters do not establish complete backup coverage.
 
-Use Photos for timeline/grid/text views, Folders for immediate indexed children, filename search and Filter for query choices. Apply commits filter drafts; Close discards them. Text list does not start image-preview work. Choose **Select**, or right-click a photo and choose **Select**, to show selection checkboxes. **Done selecting** clears the selection and hides them. Right-click (or Shift+F10 on a focused photo) also offers **Add to album**; the photo dots button is removed. Explicit Select all results includes unloaded matches through a backend selection; day selection covers only the displayed group. Jobs, above Settings in the sidebar, opens a full page with actual work, cancellation requests, retained outcomes and issues. Use Back to return to your previous screen, or choose another sidebar destination. A running discovery has no known total, so its activity bar is not a completion percentage.
+Follow discovery and preview preparation in the progress banner and **Jobs**.
+Discovery can have no known total. Pause, resume, cancellation and retry use the
+actual job state. Offline roots retain earlier observations and available cached
+previews; they are not empty libraries.
 
-In Photos and Map, search a filename or enter a full date as **DD-MM-YYYY** or **YYYY-MM-DD**. For example, **10-10-2025** shows photos dated **10 October 2025**, using the timeline's capture-local date and its existing fallback when capture metadata is unavailable. Other active filters still apply, including date ranges, and sorting does not change which day is searched. Clear the search to restore the remaining filters. Invalid or incomplete dates stay filename searches; a full filename such as `10-10-2025.jpg` also searches by filename. Folders continues to search immediate child names.
+## Browse and select photos
 
-Opening a photo gives zoom, pan, neighboring photos, filmstrip and Info. Original-quality viewing is limited to admitted formats and sizes; labelled derived previews remain previews. Closing returns to the collection. Visual Compare of 2–4 selections establishes no duplicate equality.
+Use **Photos** for the chronological canvas and **Folders** for indexed immediate
+children. **Display options** contains Timeline, Uniform grid, Text list,
+thumbnail size and grid fit. **Apply display** commits a draft; Cancel, Close and
+Escape discard it. Text list mounts no photo previews.
 
-An offline folder retains catalog records and available cached previews. Offline, inaccessible, missing, unsupported and failed are different states. Reconnect or explicitly relink the original folder, then retry the affected work. A failed listing does not mean the folder is empty. Unsupported/damaged inputs stay preserved; the app does not repair or delete them automatically.
+The **Filter** icon opens query choices and shows their active count. Applying
+filters is independent of display choices. Search accepts filenames and full
+dates as `DD-MM-YYYY` or `YYYY-MM-DD`, using the catalog's capture-date policy and
+existing fallback. Other active constraints still apply.
 
-Type a city or country in the main Photos/Map search, then choose the suggestion with the right region/country to search GPS entirely offline. Choosing a place clears the lookup term; later filename or date text can narrow that place.
-Cities mean **within 25 km of the listed centre**; countries use approximate
-boundaries. Only photos with indexed GPS can match. Date text and other filters
-still apply. **Clear place filter** removes just that place; closing suggestions retains the current text and place filter. Map keeps its viewport when you clear the place. Some
-small towns/names and photos without GPS will not be found; credits and coverage
-are available in the picker. See [offline place search](PLACE_SEARCH.md).
+Hover or focus a thumbnail to reveal its checkbox and favourite heart. The heart
+fills only after the catalog confirms the save. The **Select** checkbox icon
+reveals selection controls; **Done selecting** clears selection and returns to
+browsing. Right-click or press Shift+F10 on a focused photo for **Select** and
+**Add to album**. Group selection covers displayed members; explicit all-results
+selection can include unloaded matches. Batch actions appear above the canvas.
 
-## Catalog annotations and exports
+Appearance follows the system on first use. The header's sun/moon button saves a
+light or dark choice on this device, taking precedence over system appearance.
 
-Favourites, ratings, tags, captions and reject flags save to the catalog. Albums are virtual memberships and saved searches store filters. They do not move photos. Open **Catalog** or **Saved plans** from the **Albums / Tags** header. Catalog provides explicit tag rename/merge/removal review, retained undo history and observed-keyword import; a stale edit requires resolving the current version. Unsaved caption/review drafts last only for the current bounded session and are lost on closure or catalog switching. Save explicitly.
+## View and annotate
 
-Portable catalog export creates a consistent SQLite copy in a separately chosen folder. It includes organization, not original media, credentials, schedules or live root permissions. It is not a backup of your photographs. Opening/recovering catalogs requires the supported native workflow and fresh root authorization; moving an active database into a network/cloud-sync folder is unsupported. General File > Open/import of arbitrary portable catalogs remains separately gated.
+Open a photo for zoom, pan, filmstrip and **Info**. The viewer uses admitted
+original bytes when supported, otherwise a labelled cached preview or explicit
+unavailable state. Closing returns to the invoking photo and its browsing scope.
+Visual comparison of selected photos does not establish duplicate equality.
 
-XMP export previews the exact new output files and requires approval. It preserves supported unknown metadata and original companion artifacts; unsupported or ambiguous packets block export. Existing source sidecars and destination files are not overwritten. If sources or the destination change, preview again. A completed export verifies those outputs, not every original or every metadata ecosystem. See [metadata documentation](M5_METADATA.md).
+Favourites, ratings, tags, captions and reject flags save to the catalog, without
+rewriting originals or source sidecars. Save caption/review drafts explicitly;
+unsaved bounded session drafts do not survive app closure or catalog switching.
 
-## Organization and duplicates
+Open **Catalog** and **Saved plans** from the **Albums / Tags** header. Catalog
+provides reviewed tag changes, retained undo history and observed-keyword import.
+An edit made against an older catalog version needs a fresh review.
 
-Organize previews templates for up to 240 explicit photos. Review Before/After, missing-date rules, exact proposed names, conflicts and companions. A preview or saved JSON/CSV plan changes no originals. Companion candidates need explicit confirmation; equal JPEGs cannot prove unique RAW, motion or sidecar components redundant. CSV review output protects spreadsheet formula prefixes; JSON preserves the review data without spreadsheet interpretation.
+## Organize albums
 
-Production copying, renaming, moving, quarantine and undo remain gated. Generated laboratory controls in instrumented development builds operate only on their own disposable files. They grant no authority over a personal library. A future real operation requires its immutable reviewed plan, separate approval, fresh identities and appropriate independent recovery evidence.
+**Albums / Tags** shows custom albums and tag-derived collections together.
+**From tags** marks collections gathered from observed photo tags. A photo can
+belong to several albums; membership never moves it.
 
-Under Utilities, Duplicates first asks you to choose libraries and scan settings. Start the scan to open a searchable cluster list with evidence filters and group selection. Choose a cluster to compare two cached previews side by side, with a comparison slider or a difference heatmap. These visual aids do not prove equality. Resolution, RAW and file-size keeper suggestions retain ties; manual choices and backend folder protections can be retained without moving files. Cleanup rules preview the current scope, and Recently Deleted explains the closed removal/Undo gate. Visual scores, audio matching, export lineage and edit/capture/album rankings are not measured by this inspection engine; unavailable controls and unknown storage remain explicit. See [Utilities UI](UTILITIES_UI.md).
+Choose **New album**, enter a unique name, select photos and choose **Create album**.
+Empty albums are allowed. In a custom album, **Add photos** adds up to 500 selected
+members per save and retains existing members. Picker checkboxes stay visible
+even when no photo is selected. Tag-derived albums follow their tags rather than
+manual membership.
 
-Duplicates distinguishes exact content, file-property candidates and the declared static PNG8 normalized-pixel policy. Normalized pixels require manual review and do not establish identical files. Perceptual visual similarity is unavailable. Keeper choices respect protected folders, accessible independent objects, fresh full-byte checks and complete companions. Cached hashes, thumbnails and offline keepers cannot justify removal. Quarantine would retain files and free no same-volume data blocks; no production quarantine/purge action is available.
+## Explore locations
 
-## Utility scans and history
+**Map** opens a bundled offline world overview. Local city/country search works
+without online geocoding. City filters mean within 25 km of the listed center;
+country boundaries are approximate. Only indexed GPS can match. Missing GPS is
+different from valid zero coordinates. Old observations may require an explicit
+rescan to acquire previously unextracted GPS.
 
-Duplicates, Integrity, Storage and Sync welcome you with setup before the first scan. Returning to a scanned utility shows your previous results while a read-only background scan checks for changes. This check runs when you reopen the page; it does not continuously monitor every file. Originals stay unchanged, and background checking never starts copying, backup, restore or another baseline establishment.
+Markers load representative previews. Select a marker or explicitly request
+photos to load the photo strip. **Show in photos** transfers the chosen map scope
+to Photos, where its tag can be removed independently of filename/date filters.
+Ordinary sidebar Photos navigation clears a previous map handoff.
 
-Use **Scan settings** (or **Measurement details** in Storage) to change an inspection, or the **history icon** to view dated earlier results. Choosing history keeps that version on screen even when a background scan finishes. History records observations, not recoverable copies of your originals. Offline libraries keep their previous results and need reconnecting before another scan.
+**Satellite** explicitly loads NASA GIBS overview imagery over the internet. It
+sends viewed tile areas to NASA, not your originals, private filenames or catalog
+records. Attribution, loading/failure state and limited-detail disclosure remain
+visible. Return to **Map** for bundled offline geometry. A photo-list alternative
+is available when map graphics cannot run.
 
-Saved backup comparison profiles can recheck their native source/destination bindings. An unsaved destination must be chosen again after restarting; a historical path is not permission to read or write that folder. Backup comparison history saves up to 32 reports; a full history retains earlier versions and tells you when the latest report was not saved. On Backup, the selected profile shows its latest recorded snapshot, with earlier snapshots behind the history icon. Merely selecting one does not read the repository or start a restore.
+## Inspect and compare
 
-## Integrity and storage
+**Duplicates**, **Integrity**, **Storage** and **Sync** start with setup and retain
+earlier reports. Reopening a scanned utility can run a read-only background check;
+it does not continuously monitor every original or start a copy/backup operation.
+History keeps the selected earlier report visible. Offline roots need reconnecting
+before new inspections.
 
-Quick checks and deep decodes have different coverage. Deep validation is bounded to supported static PNG/JPEG/WebP, not full RAW data, every animation frame or multipage content. A checksum mismatch means bytes changed since the recorded baseline; it does not alone prove damage. Keep earlier evidence and known-good copies. No automatic repair follows.
+Duplicates distinguishes exact bytes, property candidates and its declared
+normalized static-pixel policy. Normalized pixels require manual review and do
+not prove identical files. Keeper suggestions, cached hashes and offline images
+cannot authorize removal. Cleanup and quarantine execution remain disabled.
 
-Storage distinguishes logical size, unique filesystem objects, reported allocation and unknown physical reclaim. Hard links are not independent backups. Sparse files, clones, snapshots and links outside scope can prevent exact savings estimates. Folder-table sorting is within its retained page. Partial/excluded/unreadable scopes remain visible. See [inspection limits](M3_INSPECTIONS.md).
+Integrity distinguishes quick checks, bounded deep decodes and recorded checksum
+baselines. A checksum mismatch proves a change, not damage. Failed runs offer
+explicit retry; establishing a baseline requires acknowledgement. There is no
+automatic repair.
 
-## Backup, keys and recovery
+Storage distinguishes logical size, unique filesystem objects and reported
+allocation. Hard links, clones, sparse files, snapshots and out-of-scope links
+prevent simple claims about reclaimable space. Partial and unreadable coverage
+remains visible.
 
-Sync offers read-only comparison of the bound base library and a separate destination in the default build. Quick equality is unverified; complete byte comparison has stronger evidence. Destination-only files are retained. A saved comparison profile stays bound to its original root IDs, even if the default changes. Comparison creates no readable mirror, snapshot or recovery guarantee.
+Sync compares the bound base library and a separately chosen destination.
+Quick equality is unverified; full-byte comparison has stronger evidence.
+Destination-only files are retained. Saved profiles preserve their native
+bindings; historical paths grant no new access. Comparison creates no backup.
 
-Production Safe copy, retained replacement, encrypted snapshots, restore and schedules remain disabled pending their native preservation gates. The following describes the implemented experimental workflow and its limits, not an enabled production service:
+## Preview folder structures
 
-- Safe copy retains sources and destination-only files. Replacing a reviewed destination requires retaining and verifying its previous version; there is no universal Force action.
-- Encrypted snapshots use pinned restic/rclone helpers. They are not browsable filename mirrors. Store the repository key separately and securely through the reviewed recovery-key workflow; losing it can make the repository unrecoverable. Never put secrets into a catalog export or support log.
-- “Included in snapshot,” “structure checked,” “data read verified” and “restored and compared” are distinct evidence levels. A sample restore does not verify a whole library. Partial/offline/failed items stay unprotected.
-- Restore defaults to reviewed new output, compares selected restored bytes and retains existing neighbors. Catalog activation is separate, retains the current consistent catalog and takes effect after reopening. Wrong keys, changed roots, collisions or ambiguous results block progress. No surprise unlock, repair, prune or forget runs.
-- Experimental schedules run only while the app/tray process lives, for an exact unchanged reviewed manifest. They use elapsed UTC intervals; changed files/endpoints need fresh review. Catch-up allows at most one run. With catch-up off, a deadline over 30 seconds overdue is skipped. Fully quit execution has no background agent.
-- Owned transfer/comparison/verification I/O uses shared limits. Helper network caps do not cap every helper disk read or physical-device request. Full fidelity, transport and filesystem claims require their own tests.
+**Structure Formater** previews the whole catalog independently of Photos'
+selection. Date, indexed location, catalog-tag, camera and custom rules propose
+paths without creating folders. Prefix icons identify layout choices. Location
+uses indexed metadata rather than inventing a trip or online place label.
 
-If work is interrupted, keep sources, staged outputs, history, catalog and repository objects. Inspect the explicit outcome and obtain fresh review before any continuation. Do not manually delete unfamiliar temporary/history files or force-unlock a repository to make a warning disappear. Same-disk history, clones and hard links do not provide independent disaster recovery. Keep independent off-device/off-site protection and periodically demonstrate restoration.
+**Illustrative preview** uses four invented examples. **Preview restructure**
+builds the actual paged catalog report. Review global counts, before/after paths,
+search, attention and skipped rows. Missing-date Undated/Skip policies apply only
+when the rule needs a date. Session presets survive navigation within the open
+catalog but clear on reload; durable catalog templates are separate.
 
-## Map, privacy and support limits
+**Simulate plan** revalidates the preview and simulates completion. It changes no
+files and starts no backup or Sync job. Selected-photo template and destination
+reviews, saved drafts and JSON/CSV review exports also grant no execution authority.
+Actual copy, rename, move and restructure execution remain disabled.
 
-Map uses a bundled offline world overview with attribution, plus local city/country lookup. Street-level online tiles and online geocoding are unavailable. Missing GPS is separate from valid zero coordinates. The photo list works without graphics. Existing scans may need an explicitly requested rescan to acquire previously unextracted GPS; a preview does not silently rescan. No online map provider is configured.
+## Export catalog metadata
 
-The tested primary paths are Apple Silicon macOS and bounded Windows local NTFS, with exact format/OS evidence in [format support](FORMAT_SUPPORT.md) and [M5 closeout](M5_CLOSEOUT.md). Configured minimum macOS, Intel builds, network-root behavior, untested cameras/color/HDR, cloud imports, basic editing and mobile are not implied supported capabilities. Updates remain disabled pending signature-verification acceptance. Keyboard/focus evidence and a bounded owner VoiceOver review exist; full-app VoiceOver/NVDA, high-DPI and reduced-motion acceptance remain M6 work.
+Portable catalog export creates a consistent SQLite copy in a separately chosen
+folder. It contains catalog organization, not original media, credentials,
+schedules or live root permissions. Keep the writable catalog local; placing it
+on network/cloud-sync storage is unsupported. General import/open of arbitrary
+portable catalogs is not an enabled workflow.
 
-If macOS Keychain blocks catalog startup, Stillharbour offers **Authorize** for one OS permission request. This needs your Mac login password if macOS asks, not your backup repository password; Stillharbour does not receive it. Choose **Always Allow** only for a build you trust. Unlock a locked login keychain in Keychain Access before retrying. Development rebuilds may require authorization again because their signing identity changes. Failed authorization leaves the existing catalogs retained. Do not delete Keychain items or reset the catalog to get past the error. See [Keychain startup](KEYCHAIN_STARTUP.md) for troubleshooting and signing limits.
+XMP export previews exact new outputs and requires approval. Existing source
+sidecars and destination files are not overwritten. Unsupported or ambiguous
+packets block export. Changed sources or destinations require a new preview.
 
-Catalog errors now identify the failed operation and the stage:
+## Handle errors and closed capabilities
 
-- **Request queue is full (16 waiting requests):** this request was not queued.
-  Wait briefly, then try again. If the failed operation is catalog recovery,
-  close and reopen Stillharbour before trying again.
-- **Catalog database worker has stopped:** this request was not queued. Close
-  and reopen Stillharbour.
-- **Completion could not be confirmed:** the request was queued, but its reply
-  was lost. Close and reopen Stillharbour and check the result before repeating
-  the action; a change may already have been saved.
+Global errors remain visible until dismissed. Retry controls are explicit;
+notifications do not automatically replay an operation. If completion could not
+be confirmed after a lost catalog reply, reopen and check the result before
+repeating an edit. A stopped catalog worker needs reopening, not a catalog reset.
 
-These messages are separate from Keychain authorization. They do not diagnose
-catalog damage or disk capacity. Repeated failures need investigation; richer
-messages alone do not resolve the cause of a busy/stopped worker.
+For a macOS Keychain startup error, **Authorize** permits one OS request for the
+catalog activation record. macOS may ask for your Mac login password, not a backup
+repository password; Stillharbour does not receive it. Trust only builds you
+recognize. Unlock a locked login keychain in Keychain Access before retrying.
+Do not delete credentials or catalogs to bypass an error.
 
-Global request errors now appear at the bottom of the window. The notification
-keeps the full details until you dismiss it with **Dismiss error**, or focus it
-and press Escape. Reconnect remains available for an unavailable desktop
-connection. A failed library read keeps **Retry library** in the workspace.
-Notifications never retry an operation automatically. Form validation and
-blocking recovery/job outcomes remain beside their related controls.
-
-## Albums / Tags
-
-Open Albums / Tags to browse all your collections or search by album name. From tags marks albums gathered automatically from photo tags during scanning. A photo can belong to several albums; creating an album never moves or changes it.
-
-Choose New album, enter a unique name, select photos from the searchable library, then Create album. You may also create an empty album. Open a custom album and choose Add photos to add up to 500 photos per save. Right-click a photo on Photos, or use its labelled options button, then Add to album to choose an existing custom album or create one with that photo selected. Albums and memberships are saved in your catalog; the catalog does not contain the original photos.
-
-On Map, choose **Show in photos** to browse that map selection in Photos. A tag inside the search field names the active map scope; it also appears in **Filter**. Use the tag’s × to remove the map restriction while keeping any filename/date text or chosen place. The search input itself stays available for filename/date searches. Choosing **Photos** in the sidebar opens the normal Photos view without carrying over Map's location filters. **Return to map** retains the map context.
-
-## Organization, Backup and Sync — 2026-11-07
-
-Open **Structure Formater** under Utilities, set your folder and filename rules,
-then choose **Preview restructure**. It always covers the entire indexed library;
-you do not need to select photos. Filters and albums do not limit the preview.
-
-The **Backup & sync check** shows whether active jobs, unfinished recovery or an
-enabled backup schedule would block restructuring. All backup and sync work must
-finish or be resolved, and enabled backup schedules must be turned off, including
-ones due far in the future. The check refreshes automatically; **Check again**
-retries immediately. It never stops jobs or changes schedules for you. Sync
-currently runs on demand. You can continue configuring and previewing rules while
-these blockers are present. A clear check does not enable Run restructure yet.
-
-Review the proposed paths and blocked items across the result pages. A library
-change requires a fresh preview. Existing catalog templates and saved plans remain
-available. **Run restructure** is currently disabled until the reviewed
-whole-library execution and recovery path is available. Previewing leaves your
-originals in place.
-
-Backup is a separate page for encrypted versioned snapshots and recovery. Sync
-compares the library with a destination and exposes the existing reviewed
-one-way copy workflow. Comparison is read only and never authorizes copying by
-itself. Existing source/destination protection and recovery gates still apply.
-
-Photos, Albums, Folders and Map share aligned search and actions. The photo
-timeline stays visible at rest; dates have their own reserved lane.
-
-Choose a category and an illustrated folder-layout card. Folder choices preserve
-your filename settings. **Filename format** offers Original, Date + original and
-Sequence number; **Filename case** changes the stem while preserving the original
-extension. **Advanced path rule** exposes the complete editable pattern. Changing
-a rule invalidates the previous library preview. Existing saved rules load without
-rewriting their stored values.
-
-Structure Formater also offers **By location**, **By tags**, **By camera** and
-**Custom**. The date group includes year/month/day and quarter folders. Location
-rules use embedded names already indexed in your catalog; GPS is not used to
-look up names. Tag rules follow the category parents you have configured. Camera
-rules use observed make/model, and camera type needs an explicit metadata value.
-A missing or ambiguous required value blocks that photo in the preview.
-
-In **Custom**, type into **Folder levels** to find a predefined part, or enter a
-literal folder name. Enter adds the highlighted part; Backspace on an empty
-input removes the last level. Drag a chip by its grip or label to reorder it;
-the insertion marker shows its destination, including on wrapped rows. You can
-also click a chip, then click its destination chip. With a grip focused, press
-Space or Enter to pick it up, arrows (or Home/End) to choose a level, and Enter
-to place it. Escape cancels, and the × still removes a level. Folder levels read
-left to right, from outside to inside. Edit the
-filename pattern separately, then preview the actual paths. Camera → Event asks
-for one event name for this rule; Trip grouping is omitted.
-
-Older catalogs may not contain embedded naming fields that were not previously
-collected, and reader coverage differs by format/platform. Those fields remain
-missing; opening the tool does not silently rescan or rewrite the library.
-
-### Examples, session presets and review
-
-The right-hand **Illustrative preview** updates its Folder tree or Sample paths
-when you change a rule. It uses four invented photos, including one without a
-date; it does not inspect your library. Choose **Preview restructure** to build
-the actual catalog-wide read-only report.
-
-Missing-date handling offers **Undated folder** or **Skip photo**. These apply
-when your rule needs a date: Undated keeps the original filename in `Undated/`,
-while Skip keeps that photo in place and visible as skipped. Missing dates do not
-skip photos under rules that require no date. Sequence numbering stays global,
-so skipped rows can leave gaps. A loaded historical Block policy remains visible.
-
-**Save preset** names the current rules for this app session; **Presets** loads or
-removes them. Presets survive navigation and are scoped to the open catalog, but
-clear when the app reloads. Names must be unique within that catalog; up to 20 can
-be saved. Use the separate **Catalog templates** disclosure for existing durable
-templates; saving either kind of rule never approves a file operation.
-
-The review screen counts proposed moves, destination folders, renames and photos
-without an indexed capture date across the whole result. Destination folders are
-proposed paths, not a count of folders newly created on disk. Search matches
-literal before/after path text across all pages. **Changes**, **Needs attention**,
-**Skipped** and the missing-date notice help narrow the report; summary counts
-remain global. Needs attention can include missing dates even when Undated or
-Skip handles them. Each row retains its before/after paths and status.
-
-**Edit structure** returns to editing with your rules retained. **Simulate plan** opens a
-confirmation dialog and rechecks the preview before showing **Simulation complete**.
-It changes no files, creates no folders and starts no backup or sync job. Actual
-restructuring remains disabled pending the preservation and recovery gates.
+The default build does not execute backup snapshots, restore, schedules or
+original-file mutations. Retain sources, catalogs, repository objects and any
+staging/history after an interruption. Never force-unlock, repair or delete
+unfamiliar files to clear a warning. See [release status](RELEASE_STATUS.md) and
+the [preservation contract](PRESERVATION_CONTRACT.md).

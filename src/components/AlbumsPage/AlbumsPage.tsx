@@ -107,7 +107,21 @@ export function AlbumsPage({
   return (
     <Box css={styles} className="albums-page">
       <PageHeader>
-        <chakra.header className="toolbar">
+        <chakra.header
+          className="toolbar"
+          css={{
+            flexShrink: '0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            minHeight: '64px',
+            padding: '12px 24px',
+            borderBottom: '1px solid {colors.border}',
+            background: '{colors.bg.toolbar}',
+            '@media (max-width: 600px)': { minHeight: '64px', padding: '18px 24px' },
+          }}
+        >
           <Heading as="h1" unstyled>
             Albums / Tags
           </Heading>
@@ -117,7 +131,10 @@ export function AlbumsPage({
             value={search}
             onChange={setSearch}
           />
-          <Box className="header-actions">
+          <Box
+            className="header-actions"
+            css={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
             {jobsControl}
             <CatalogActions status={status} onBrowse={onBrowse} onRefresh={onRefresh} />
             <Button className="primary" aria-label="New album" onClick={() => setCreating(true)}>

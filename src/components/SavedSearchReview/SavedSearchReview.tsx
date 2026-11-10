@@ -38,7 +38,21 @@ function FilterSummary({
   collections: CatalogCollection[];
 }) {
   return (
-    <dl className="catalog-filter-summary">
+    <chakra.dl
+      className="catalog-filter-summary"
+      css={{
+        margin: '0',
+        fontSize: '13px',
+        '& > div': {
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: '12px',
+          paddingBlock: '6px',
+        },
+        '& dt': { color: '{colors.fg.muted}' },
+        '& dd': { margin: '0', overflowWrap: 'anywhere' },
+      }}
+    >
       {(Object.keys(labels) as Array<keyof AssetQuery>)
         .map((key) => [key, query[key]] as const)
         .filter(([, value]) => value !== null && value !== undefined && value !== '')
@@ -91,7 +105,7 @@ function FilterSummary({
           <dd>All libraries</dd>
         </Box>
       )}
-    </dl>
+    </chakra.dl>
   );
 }
 
@@ -148,16 +162,33 @@ export function SavedSearchReview({
       ref={review}
       tabIndex={-1}
       className="catalog-search-review"
+      css={{
+        marginBlock: '20px',
+        paddingBlock: '16px',
+        borderBlock: '1px solid {colors.border}',
+        '& h4': { margin: '0 0 12px', fontSize: '14px' },
+      }}
       aria-label="Review saved search filters"
     >
       <Heading as="h4" unstyled>
         Replace filters for <bdi>{current.name}</bdi>?
       </Heading>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Review both sets of filters before replacing this saved search. Photos and other searches
         stay unchanged.
       </Text>
-      <Box className="catalog-filter-comparison">
+      <Box
+        className="catalog-filter-comparison"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '24px',
+          '@media (max-width: 760px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+        }}
+      >
         <chakra.section aria-label="Saved filters">
           <Heading as="h4" unstyled>
             Saved filters
@@ -171,7 +202,10 @@ export function SavedSearchReview({
           <FilterSummary query={proposed} roots={roots} collections={collections} />
         </chakra.section>
       </Box>
-      <Box className="catalog-actions">
+      <Box
+        className="catalog-actions"
+        css={{ display: 'flex', flexWrap: 'wrap', gap: '10px', margin: '12px 0' }}
+      >
         <Button onClick={() => setProposed(null)}>Keep saved filters</Button>
         <Button className="primary" onClick={() => void onApply(proposed)}>
           Replace saved search filters

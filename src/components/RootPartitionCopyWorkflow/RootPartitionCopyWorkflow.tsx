@@ -60,7 +60,10 @@ export function RootPartitionCopyWorkflow({
           ? 'Copy one source library at a time'
           : 'Compare one source library at a time'}
       </Heading>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         This selection spans {ids.length} libraries.{' '}
         {purpose === 'copy'
           ? 'Each library has its own output folder, native review, approval and job. A completed job covers only its reviewed files.'

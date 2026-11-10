@@ -43,10 +43,26 @@ export function ScanJobProgress({
       ? `Indexing files · ${job.processedFiles ?? 0} of ${job.totalFiles} · ${percentage}%`
       : (descriptions[job.state] ?? 'Scan not running');
   return (
-    <Box className="job-progress">
+    <Box className="job-progress" css={{ marginTop: '14px', '& .help': { margin: '7px 0 0' } }}>
       {active || completed ? (
         <Box
           className={`job-progress-track ${active && job.state !== 'paused' && percentage === undefined ? 'is-active' : 'is-complete'}`}
+          css={{
+            height: '6px',
+            overflow: 'hidden',
+            borderRadius: '4px',
+            background: '{colors.border}',
+            '&.is-active .job-progress-fill': {
+              width: '32%',
+              animation: 'scan-activity 1.8s ease-in-out infinite alternate',
+            },
+            '@media (prefers-reduced-motion: reduce)': {
+              '&.is-active .job-progress-fill': {
+                animation: 'none',
+                transform: 'translateX(106%)',
+              },
+            },
+          }}
           role="progressbar"
           aria-label={`Scan progress for ${label}`}
           aria-describedby={descriptionId}
@@ -58,6 +74,7 @@ export function ScanJobProgress({
           <Text
             as="span"
             className="job-progress-fill"
+            css={{ display: 'block', height: '100%', background: '{colors.brand.solid}' }}
             style={
               percentage === undefined
                 ? job.state === 'paused'
@@ -68,9 +85,33 @@ export function ScanJobProgress({
           />
         </Box>
       ) : (
-        <Box className="job-progress-track" aria-hidden="true" />
+        <Box
+          className="job-progress-track"
+          css={{
+            height: '6px',
+            overflow: 'hidden',
+            borderRadius: '4px',
+            background: '{colors.border}',
+            '&.is-active .job-progress-fill': {
+              width: '32%',
+              animation: 'scan-activity 1.8s ease-in-out infinite alternate',
+            },
+            '@media (prefers-reduced-motion: reduce)': {
+              '&.is-active .job-progress-fill': {
+                animation: 'none',
+                transform: 'translateX(106%)',
+              },
+            },
+          }}
+          aria-hidden="true"
+        />
       )}
-      <Text id={descriptionId} className="help" hidden={compact}>
+      <Text
+        id={descriptionId}
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+        hidden={compact}
+      >
         {description}
       </Text>
     </Box>
@@ -98,9 +139,22 @@ function ThumbnailProgress({
   const description = thumbnailDescription(job, processed, percentage);
   const showProgress = active || completed;
   return (
-    <Box className="job-progress">
+    <Box className="job-progress" css={{ marginTop: '14px', '& .help': { margin: '7px 0 0' } }}>
       <Box
         className={`job-progress-track ${showProgress ? (indeterminate && job.state !== 'paused' ? 'is-active' : 'is-complete') : ''}`}
+        css={{
+          height: '6px',
+          overflow: 'hidden',
+          borderRadius: '4px',
+          background: '{colors.border}',
+          '&.is-active .job-progress-fill': {
+            width: '32%',
+            animation: 'scan-activity 1.8s ease-in-out infinite alternate',
+          },
+          '@media (prefers-reduced-motion: reduce)': {
+            '&.is-active .job-progress-fill': { animation: 'none', transform: 'translateX(106%)' },
+          },
+        }}
         role={showProgress ? 'progressbar' : undefined}
         aria-hidden={showProgress ? undefined : true}
         aria-label={`Thumbnail progress for ${label}`}
@@ -113,6 +167,7 @@ function ThumbnailProgress({
         <Text
           as="span"
           className="job-progress-fill"
+          css={{ display: 'block', height: '100%', background: '{colors.brand.solid}' }}
           style={
             indeterminate
               ? job.state === 'paused'
@@ -122,7 +177,12 @@ function ThumbnailProgress({
           }
         />
       </Box>
-      <Text id={descriptionId} className="help" hidden={compact}>
+      <Text
+        id={descriptionId}
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+        hidden={compact}
+      >
         {description}
       </Text>
     </Box>

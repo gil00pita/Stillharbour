@@ -54,17 +54,40 @@ export function ImportDestinationSettings({
     }
   }
   return (
-    <chakra.section className="settings-section" aria-labelledby="import-destination-title">
+    <chakra.section
+      className="settings-section"
+      css={{
+        padding: '32px 0',
+        borderBottom: '1px solid {colors.border}',
+        '& h2': {
+          fontSize: '16px',
+          fontWeight: '600',
+          letterSpacing: '-0.01em',
+          margin: '0 0 8px',
+        },
+        '& h3': { fontSize: '14px', margin: '0 0 8px' },
+        '& > .help': { maxWidth: '72ch' },
+        '& .view-switch': { margin: '16px 0', flexWrap: 'wrap', gap: '8px' },
+        '& .view-switch > button': { fontSize: '13px !important' },
+        '& .thumbnail-control': { fontSize: '13px' },
+        '& .scan-options': { marginTop: '20px' },
+      }}
+      aria-labelledby="import-destination-title"
+    >
       <Heading as="h2" unstyled id="import-destination-title">
         Import destination
       </Heading>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Suggest a library for new import plans in this catalog. Your base library and browsing
         defaults stay unchanged. You still choose the destination folder and approve each copy;
         unavailable libraries and source folders cannot be used as destinations.
       </Text>
       <chakra.form
         className="settings-import-form"
+        css={{ display: 'grid', gap: '12px', '& > button': { justifySelf: 'start' } }}
         aria-label="Import destination preference"
         onSubmit={(event) => void save(event)}
       >
@@ -104,7 +127,16 @@ export function ImportDestinationSettings({
           </label>
         </Field.Root>
         {unavailableReason && (
-          <Text className="help" id={unavailableId}>
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+            id={unavailableId}
+          >
             {unavailableReason}
           </Text>
         )}

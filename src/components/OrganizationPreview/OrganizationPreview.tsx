@@ -104,6 +104,36 @@ export function OrganizationPreview({
   return (
     <Surface
       className={`organization-preview ${inline ? 'organization-inline' : ''}`}
+      css={{
+        width: 'min(1100px, calc(100vw - 48px))',
+        maxHeight: 'calc(100dvh - 48px)',
+        padding: '0',
+        border: '1px solid {colors.border}',
+        borderRadius: '12px',
+        color: 'inherit',
+        background: '{colors.bg.panel}',
+        '&[open]': { display: 'flex', flexDirection: 'column' },
+        '&::backdrop': { background: 'rgb(0 0 0 / 65%)' },
+        '@media (max-width: 760px)': {
+          width: 'calc(100vw - 24px)',
+          maxHeight: 'calc(100dvh - 24px)',
+        },
+        '&.organization-inline': {
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'static',
+          width: '100%',
+          maxHeight: 'none',
+          margin: '0',
+          border: '0',
+          borderRadius: '0',
+          background: 'transparent',
+          '& .organization-heading': { paddingInline: '0' },
+          '& .organization-body': { paddingInline: '0', overflow: 'visible' },
+          '& .organization-footer': { paddingInline: '0' },
+          '& .organization-heading h2': { fontSize: '18px' },
+        },
+      }}
       ref={inline ? undefined : dialog}
       aria-labelledby="organization-title"
       onCancel={(event) => {
@@ -111,13 +141,34 @@ export function OrganizationPreview({
         onClose();
       }}
     >
-      <chakra.header className="organization-heading">
+      <chakra.header
+        className="organization-heading"
+        css={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '24px',
+          padding: '20px 24px',
+          flexShrink: '0',
+          borderBottom: '1px solid {colors.border}',
+          '& h2': { margin: '0', marginBottom: '8px', fontSize: '20px' },
+          '& p': { margin: '0' },
+        }}
+      >
         <Box>
           <Heading as="h2" unstyled id="organization-title">
             Folder &amp; filename template
           </Heading>
           {!inline && (
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               {assetIds.length} explicitly selected {assetIds.length === 1 ? 'photo' : 'photos'} ·
               Originals stay in place
             </Text>
@@ -129,7 +180,27 @@ export function OrganizationPreview({
           </Button>
         )}
       </chakra.header>
-      <Box className="organization-body">
+      <Box
+        className="organization-body"
+        css={{
+          padding: '0 24px 24px',
+          overflowY: 'auto',
+          minHeight: '0',
+          '& fieldset': {
+            display: 'grid',
+            gap: '16px',
+            padding: '0',
+            border: '0',
+            margin: '24px 0',
+            minWidth: '0',
+          },
+          '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+          '& input': { width: '100%', minWidth: '0' },
+          '& select': { width: '100%', minWidth: '0' },
+          '& fieldset > button': { justifySelf: 'start' },
+          '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+        }}
+      >
         {!inline && (
           <Text>
             Preview folder and filename changes using indexed metadata. Originals stay in place.
@@ -150,7 +221,29 @@ export function OrganizationPreview({
           }}
         />
         {error && (
-          <Text role="alert" className="error">
+          <Text
+            role="alert"
+            className="error"
+            css={{
+              border: '1px solid {colors.border.control}',
+              borderRadius: 'var(--control-radius)',
+              background: '{colors.danger.bg}',
+              color: '{colors.danger.fg}',
+              padding: '16px 20px',
+              margin: '24px 0 0',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              '& p': { margin: '0' },
+              '& button': {
+                marginTop: '12px',
+                border: '1px solid currentColor',
+                background: 'transparent',
+                color: 'inherit',
+                borderRadius: '4px',
+                padding: '7px 12px',
+              },
+            }}
+          >
             {error}
           </Text>
         )}
@@ -160,13 +253,29 @@ export function OrganizationPreview({
               {preview.proposed} proposed · {preview.blocked} blocked ·{' '}
               {BigInt(preview.selectedBytes).toLocaleString()} selected file bytes
             </Text>
-            <Text className="help">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               Relative paths only. Destination conflicts, native case and Unicode rules, companions,
               metadata fidelity and free space still need review. Sequence numbers follow library ID
               and native source path order.
             </Text>
             {template.missingDate === 'skip' ? (
-              <Text className="help">
+              <Text
+                className="help"
+                css={{
+                  fontSize: '13px',
+                  color: '{colors.fg.muted}',
+                  lineHeight: '20px',
+                  margin: '8px 0',
+                }}
+              >
                 Skipping missing dates is supported in Structure Formater’s whole-library preview.
                 Destination and copy planning are unavailable for this saved rule.
               </Text>
@@ -194,7 +303,42 @@ export function OrganizationPreview({
               </label>
             </Field.Root>
             <OrganizationTrees rows={preview.rows} roots={roots} />
-            <Box className="organization-table">
+            <Box
+              className="organization-table"
+              css={{
+                overflowX: 'auto',
+                marginTop: '16px',
+                '& table': { width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' },
+                '& th': {
+                  padding: '12px 16px 12px 0',
+                  textAlign: 'left',
+                  verticalAlign: 'top',
+                  overflowWrap: 'anywhere',
+                  borderBottom: '1px solid {colors.border}',
+                },
+                '& td': {
+                  padding: '12px 16px 12px 0',
+                  textAlign: 'left',
+                  verticalAlign: 'top',
+                  overflowWrap: 'anywhere',
+                  borderBottom: '1px solid {colors.border}',
+                },
+                '& caption': {
+                  textAlign: 'left',
+                  paddingBottom: '12px',
+                  color: '{colors.fg.muted}',
+                },
+                '& small': {
+                  display: 'block',
+                  color: '{colors.fg.muted}',
+                  marginTop: '8px',
+                  fontSize: '12px',
+                  lineHeight: '16px',
+                },
+                '& bdi': { whiteSpace: 'pre-wrap' },
+                '& p': { margin: '0 0 8px' },
+              }}
+            >
               <Table.Root unstyled>
                 <Table.Caption unstyled captionSide="top" ref={resultsCaption} tabIndex={-1}>
                   Selected photos: current path, proposed relative path and review issues
@@ -256,8 +400,35 @@ export function OrganizationPreview({
           </chakra.section>
         )}
       </Box>
-      <chakra.footer className="organization-footer">
-        <Text className="help" id="organization-execution-help">
+      <chakra.footer
+        className="organization-footer"
+        css={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '24px',
+          padding: '20px 24px',
+          flexShrink: '0',
+          '& p': { margin: '0' },
+          borderTop: '1px solid {colors.border}',
+          '& button': { flexShrink: '0' },
+          '@media (max-width: 760px)': {
+            alignItems: 'flex-start',
+            flexDirection: 'column',
+            gap: '12px',
+          },
+        }}
+      >
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+          id="organization-execution-help"
+        >
           Copying and in-place changes are unavailable until destination planning, verification and
           recovery checks pass.
         </Text>

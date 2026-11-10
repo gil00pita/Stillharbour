@@ -44,6 +44,12 @@ export function CopyJobProgress({
   return (
     <chakra.section
       className="job-row"
+      css={{
+        padding: '20px 0',
+        borderBottom: '1px solid {colors.border}',
+        '&:last-child': { borderBottom: '0', paddingBottom: '0' },
+        '& p': { fontSize: '13px', lineHeight: '20px' },
+      }}
       aria-label={job.action === 'prepare_names' ? 'Output preparation job' : 'Verified copy job'}
     >
       <Heading as="h3" unstyled>
@@ -54,9 +60,36 @@ export function CopyJobProgress({
           ? 'Preparing native names; no source bytes copied.'
           : `${job.verifiedFiles} of ${job.totalFiles} files byte-verified.`}
       </Text>
-      <Text className="help">{job.message}</Text>
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
+        {job.message}
+      </Text>
       {job.error && (
-        <Text role="alert" className="error">
+        <Text
+          role="alert"
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+        >
           {job.error.message}
         </Text>
       )}
@@ -70,7 +103,29 @@ export function CopyJobProgress({
         </Button>
       )}
       {error && (
-        <Text role="alert" className="error">
+        <Text
+          role="alert"
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+        >
           {error}
         </Text>
       )}
@@ -151,7 +206,10 @@ export function CopyIoControls() {
       >
         {status?.byteIoPaused ? 'Resume byte I/O' : 'Pause byte I/O'}
       </Button>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Reads, writes and verification share this limit. Pause takes effect at the next admitted
         byte boundary. Metadata, flushes and external helpers have separate limits.
       </Text>
@@ -162,7 +220,29 @@ export function CopyIoControls() {
         </Text>
       )}
       {error && (
-        <Text role="alert" className="error">
+        <Text
+          role="alert"
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+        >
           {error}
         </Text>
       )}

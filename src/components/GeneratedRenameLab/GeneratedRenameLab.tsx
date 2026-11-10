@@ -165,22 +165,81 @@ export function GeneratedRenameLab() {
   }
   if (!open) return null;
   return (
-    <dialog
+    <chakra.dialog
       ref={dialog}
       className="organization-preview"
+      css={{
+        width: 'min(1100px, calc(100vw - 48px))',
+        maxHeight: 'calc(100dvh - 48px)',
+        padding: '0',
+        border: '1px solid {colors.border}',
+        borderRadius: '12px',
+        color: 'inherit',
+        background: '{colors.bg.panel}',
+        '&[open]': { display: 'flex', flexDirection: 'column' },
+        '&::backdrop': { background: 'rgb(0 0 0 / 65%)' },
+        '@media (max-width: 760px)': {
+          width: 'calc(100vw - 24px)',
+          maxHeight: 'calc(100dvh - 24px)',
+        },
+        '&.organization-inline': {
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'static',
+          width: '100%',
+          maxHeight: 'none',
+          margin: '0',
+          border: '0',
+          borderRadius: '0',
+          background: 'transparent',
+        },
+      }}
       aria-labelledby="rename-lab-title"
       onCancel={(event) => {
         event.preventDefault();
         close();
       }}
     >
-      <chakra.header className="organization-heading">
+      <chakra.header
+        className="organization-heading"
+        css={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '24px',
+          padding: '20px 24px',
+          flexShrink: '0',
+          borderBottom: '1px solid {colors.border}',
+          '& h2': { margin: '0', marginBottom: '8px', fontSize: '20px' },
+          '& p': { margin: '0' },
+        }}
+      >
         <Heading as="h2" unstyled id="rename-lab-title">
           Generated rename and undo fixture
         </Heading>
         <Button onClick={close}>Close fixture review</Button>
       </chakra.header>
-      <Box className="organization-body">
+      <Box
+        className="organization-body"
+        css={{
+          padding: '0 24px 24px',
+          overflowY: 'auto',
+          minHeight: '0',
+          '& fieldset': {
+            display: 'grid',
+            gap: '16px',
+            padding: '0',
+            border: '0',
+            margin: '24px 0',
+            minWidth: '0',
+          },
+          '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+          '& input': { width: '100%', minWidth: '0' },
+          '& select': { width: '100%', minWidth: '0' },
+          '& fieldset > button': { justifySelf: 'start' },
+          '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+        }}
+      >
         <Text>
           Test instrumentation · disposable generated files only. Local retained versions are not
           independent recovery. Real-library mutations remain disabled.
@@ -351,6 +410,6 @@ export function GeneratedRenameLab() {
         </chakra.fieldset>
         {busy && <Text role="status">Checking generated native state…</Text>}
       </Box>
-    </dialog>
+    </chakra.dialog>
   );
 }

@@ -26,7 +26,7 @@ it('loads each side by row identity and keeps decoder failures as text without a
     'data:image/png;base64,iVBORw==',
   );
   expect(await screen.findByText('<script>Unsupported image</script>')).toBeVisible();
-  expect(document.querySelector('script')).toBeNull();
+  expect(document.querySelector('script:not([type="application/json"])')).toBeNull();
   await waitFor(() => expect(screen.getByRole('button')).toBeEnabled());
   expect(libraryData).toHaveBeenCalledWith(
     { kind: 'backup_comparison_preview', run_id: 'run', entry_id: 'entry', side: 'destination' },

@@ -58,7 +58,11 @@ export function StructureProtection() {
       <Heading as="h3" fontSize="sm" id="structure-protection-title" mb="2">
         Backup &amp; sync check
       </Heading>
-      <Text className="help" id="structure-protection-help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+        id="structure-protection-help"
+      >
         Restructuring requires backup and sync to be idle, with no enabled future schedules or
         unresolved jobs. You can keep configuring rules and previewing the library.
       </Text>

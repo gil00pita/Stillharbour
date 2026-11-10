@@ -28,7 +28,6 @@ import { displayBytes } from '../../inspection/format';
 import { UtilityWelcome } from '@/components/UtilityWelcome';
 import { UtilityHistory } from '@/components/UtilityHistory';
 import { formatScanDate } from '../../utils/format-scan-date';
-import '../../inspection/inspection.css';
 
 export type InspectionSection = 'Duplicates' | 'Integrity' | 'Storage';
 const fileScopeChoices = [
@@ -104,28 +103,36 @@ export function InspectionScreen({
   const resultEpoch = useRef(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [failedResults, setFailedResults] = useState<InspectionJob | null>(null);
+  const [reload, setReload] = useState(0);
   const epoch = useRef(0);
   const running = active(job);
   const jobId = job?.id ?? null;
   const loadResults = useCallback(async (record: InspectionJob, token: number) => {
-    const [summary, rows, matches] = await Promise.all([
-      libraryData({ kind: 'inspection_report', job_id: record.id }, 'inspection_report'),
-      libraryData(
-        { kind: 'inspection_findings', job_id: record.id, after: null },
-        'inspection_findings',
-      ),
-      record.input.task.kind === 'duplicates'
-        ? libraryData(
-            { kind: 'inspection_groups', job_id: record.id, after: null },
-            'inspection_groups',
-          )
-        : Promise.resolve(null),
-    ]);
-    if (token !== resultEpoch.current) return;
-    setViewedJob(record);
-    setReport(summary);
-    setFiles(rows);
-    setGroups(matches);
+    try {
+      const [summary, rows, matches] = await Promise.all([
+        libraryData({ kind: 'inspection_report', job_id: record.id }, 'inspection_report'),
+        libraryData(
+          { kind: 'inspection_findings', job_id: record.id, after: null },
+          'inspection_findings',
+        ),
+        record.input.task.kind === 'duplicates'
+          ? libraryData(
+              { kind: 'inspection_groups', job_id: record.id, after: null },
+              'inspection_groups',
+            )
+          : Promise.resolve(null),
+      ]);
+      if (token !== resultEpoch.current) return;
+      setViewedJob(record);
+      setReport(summary);
+      setFiles(rows);
+      setGroups(matches);
+      setFailedResults(null);
+    } catch (failure) {
+      if (token === resultEpoch.current) setFailedResults(record);
+      throw failure;
+    }
   }, []);
   useEffect(() => {
     let disposed = false;
@@ -151,6 +158,7 @@ export function InspectionScreen({
           matching.find((record) => !active(record));
         if (retained) await loadResults(retained, ++resultEpoch.current);
         if (disposed || active(latest)) return;
+        if (latest.state === 'failed' || latest.state === 'canceled') return;
         if (jobs.some(active)) {
           setNotice(
             'Another inspection is running. Saved results remain available; scan again when it finishes.',
@@ -196,7 +204,7 @@ export function InspectionScreen({
     };
     // Opening a utility restores its scope once; changing draft settings must not restart a scan.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [section, loadResults]);
+  }, [section, loadResults, reload]);
   useEffect(() => {
     if (!jobId || !running) return;
     const id = jobId;
@@ -242,6 +250,7 @@ export function InspectionScreen({
     const token = ++epoch.current;
     setBusy(true);
     setError(null);
+    setFailedResults(null);
     pinnedHistory.current = false;
     setHistorical(false);
     setNotice(null);
@@ -271,6 +280,18 @@ export function InspectionScreen({
       if (token === epoch.current) setError(errorMessage(failure));
     } finally {
       if (token === epoch.current) setBusy(false);
+    }
+  }
+  async function retryResults() {
+    if (!failedResults) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await loadResults(failedResults, ++resultEpoch.current);
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
     }
   }
   async function selectJob(record: InspectionJob) {
@@ -346,7 +367,20 @@ export function InspectionScreen({
   const inspectionDetails = (
     <>
       {' '}
-      <details className="inspection-setup" open={history.length === 0 || setupOpen}>
+      <chakra.details
+        className="inspection-setup"
+        css={{
+          marginBlock: '24px',
+          '& > summary': {
+            cursor: 'pointer',
+            color: '{colors.fg.secondary}',
+            fontSize: '13px',
+            paddingBlock: '12px',
+            borderBlock: '1px solid {colors.border}',
+          },
+        }}
+        open={history.length === 0 || setupOpen}
+      >
         <summary
           onClick={(event) => {
             event.preventDefault();
@@ -362,8 +396,50 @@ export function InspectionScreen({
         <chakra.fieldset
           disabled={busy || running}
           className={`inspection-controls ${section === 'Duplicates' ? 'duplicate-controls' : ''}`}
+          css={{
+            '& > .primary': { marginTop: '16px', gridColumn: '1 / -1', justifySelf: 'start' },
+            '& > p': { maxWidth: '80ch', fontSize: '13px', gridColumn: '1 / -1' },
+            border: '1px solid {colors.border}',
+            borderRadius: '10px',
+            padding: '16px',
+            margin: '16px 0',
+            background: '{colors.bg.panel}',
+            '& legend': { padding: '0 6px' },
+            '& fieldset': {
+              border: '1px solid {colors.border}',
+              margin: '12px 0',
+              padding: '12px',
+            },
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '0 24px',
+            '& > legend': { gridColumn: '1 / -1' },
+            '& > .inspection-roots': { gridColumn: '1 / -1' },
+            '& > fieldset': { gridColumn: '1 / -1' },
+            '@media (max-width: 760px)': { display: 'block' },
+            '&.duplicate-controls': {
+              padding: '0',
+              border: '0',
+              background: 'transparent',
+              margin: '24px 0',
+              '& .inspection-roots': { margin: '20px 0' },
+            },
+            '& > .duplicate-match-options': { gridColumn: '1 / -1' },
+            '& > .inspection-choice-group': { gridColumn: '1 / -1' },
+          }}
         >
-          <chakra.legend className={section === 'Duplicates' ? 'screen-reader-status' : undefined}>
+          <chakra.legend
+            className={section === 'Duplicates' ? 'screen-reader-status' : undefined}
+            css={{
+              '&.screen-reader-status': {
+                position: 'absolute',
+                width: '1px',
+                height: '1px',
+                overflow: 'hidden',
+                clipPath: 'inset(50%)',
+              },
+            }}
+          >
             {section === 'Duplicates'
               ? 'Find duplicate clusters'
               : section === 'Integrity'
@@ -377,7 +453,16 @@ export function InspectionScreen({
               disabled={busy || running}
             />
           )}
-          <Box className="inspection-roots">
+          <Box
+            className="inspection-roots"
+            css={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '8px 20px',
+              alignItems: 'center',
+              '& small': { color: '{colors.fg.muted}' },
+            }}
+          >
             {rootIds
               .filter((id) => !status.roots.some((root) => root.id === id))
               .map((id) => (
@@ -529,9 +614,20 @@ export function InspectionScreen({
             </Button>
           }
         </chakra.fieldset>
-      </details>
+      </chakra.details>
       {job && (
-        <chakra.section className="inspection-job" aria-label="Inspection job">
+        <chakra.section
+          className="inspection-job"
+          css={{
+            border: '1px solid {colors.border}',
+            borderRadius: '10px',
+            padding: '16px',
+            margin: '16px 0',
+            background: '{colors.bg.panel}',
+            '& progress': { display: 'block', width: 'min(360px, 100%)', margin: '12px 0' },
+          }}
+          aria-label="Inspection job"
+        >
           <Heading as="h2" unstyled>
             {job.state.replaceAll('_', ' ')}
           </Heading>
@@ -550,6 +646,21 @@ export function InspectionScreen({
                 Cancel inspection
               </Button>
             </>
+          )}
+          {!running && (job.state === 'failed' || job.state === 'canceled') && (
+            <Button
+              disabled={busy || loading || rootIds.length === 0 || unavailable || invalidRules}
+              onClick={() => {
+                if (section === 'Integrity' && healthMode === 'establish_baseline') {
+                  setBaselineAcknowledged(false);
+                  setSetupOpen(true);
+                } else {
+                  void start();
+                }
+              }}
+            >
+              {section === 'Integrity' ? 'Retry integrity check' : 'Retry inspection'}
+            </Button>
           )}
           {job.limited && (
             <Text>
@@ -613,16 +724,36 @@ export function InspectionScreen({
     </Text>
   );
   return (
-    <Box className={`inspection-page inspection-section-${section.toLowerCase()}`}>
+    <Box
+      className={`inspection-page inspection-section-${section.toLowerCase()}`}
+      css={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '0' }}
+    >
       <PageHeader>
-        <chakra.header className="toolbar">
+        <chakra.header
+          className="toolbar"
+          css={{
+            flexShrink: '0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            minHeight: '64px',
+            padding: '12px 24px',
+            borderBottom: '1px solid {colors.border}',
+            background: '{colors.bg.toolbar}',
+            '@media (max-width: 600px)': { minHeight: '64px', padding: '18px 24px' },
+          }}
+        >
           {navigationControl}
           <Box minW="0">
             <Heading as="h1" unstyled>
               {section}
             </Heading>
           </Box>
-          <Box className="header-actions">
+          <Box
+            className="header-actions"
+            css={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
             {section === 'Storage' ? (
               <>
                 <Button
@@ -666,7 +797,59 @@ export function InspectionScreen({
           </Box>
         </chakra.header>
       </PageHeader>
-      <Box className="inspection-content">
+      <Box
+        className="inspection-content"
+        css={{
+          overflow: 'auto',
+          minHeight: '0',
+          padding: '24px',
+          '& > *': { maxWidth: '1440px' },
+          '& h2:not(:where(.duplicate-studio *, .storage-explorer *))': {
+            fontSize: '18px',
+            margin: '24px 0 12px',
+          },
+          '& h3:not(:where(.duplicate-studio *, .storage-explorer *))': { fontSize: '16px' },
+          '& p:not(:where(.duplicate-studio *, .storage-explorer *))': {
+            color: '{colors.fg.muted}',
+          },
+          '&\n  label:not(:where(.duplicate-studio *, .storage-explorer *)):not(.inspection-choice-card):not(\n    .inspection-choice-label\n  )':
+            {
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'stretch',
+              gap: '8px',
+              margin: '12px 0',
+              fontSize: '13px',
+            },
+          "&\n  label:not(:where(.duplicate-studio *, .storage-explorer *)):has(> input[type='checkbox'])":
+            { flexDirection: 'row', alignItems: 'center' },
+          "&\n  input:not([type='checkbox']):not([type='radio']):not(\n    :where(.duplicate-studio *, .storage-explorer *)\n  )":
+            {
+              padding: '7px 10px',
+              maxWidth: '100%',
+              color: 'inherit',
+              background: '{colors.bg}',
+              border: '1px solid {colors.border}',
+              borderRadius: 'var(--control-radius)',
+            },
+          '& select:not(:where(.duplicate-studio *, .storage-explorer *))': {
+            padding: '7px 10px',
+            maxWidth: '100%',
+            color: 'inherit',
+            background: '{colors.bg}',
+            border: '1px solid {colors.border}',
+            borderRadius: 'var(--control-radius)',
+          },
+          '@media (max-width: 800px)': { padding: '16px' },
+          '& :is(button, input, summary):focus-visible': {
+            outline: '2px solid {colors.brand.solid}',
+            outlineOffset: '3px',
+          },
+          "& input[type='checkbox']": { accentColor: '{colors.brand.solid}' },
+          '& ::selection': { background: '{colors.brand.solid}', color: '{colors.bg}' },
+          '@media (max-width: 760px)': { '&:has(.duplicate-controls)': { padding: '20px 16px' } },
+        }}
+      >
         {section === 'Storage' && (
           <>
             {notice && <Text role="status">{notice}</Text>}
@@ -698,9 +881,48 @@ export function InspectionScreen({
           </>
         )}
         {error && (section !== 'Storage' || !storageDetailsOpen) && (
-          <Text role="alert" className="error">
-            {error}
-          </Text>
+          <Box
+            role="alert"
+            className="error"
+            css={{
+              border: '1px solid {colors.border.control}',
+              borderRadius: 'var(--control-radius)',
+              background: '{colors.danger.bg}',
+              color: '{colors.danger.fg}',
+              padding: '16px 20px',
+              margin: '24px 0 0',
+              fontSize: '13px',
+              lineHeight: '1.6',
+              '& p': { margin: '0' },
+              '& button': {
+                marginTop: '12px',
+                border: '1px solid currentColor',
+                background: 'transparent',
+                color: 'inherit',
+                borderRadius: '4px',
+                padding: '7px 12px',
+              },
+            }}
+          >
+            <Text>{error}</Text>
+            {failedResults && (
+              <Button disabled={busy || loading} onClick={() => void retryResults()}>
+                Retry loading results
+              </Button>
+            )}
+            {!history.length && !loading && (
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  setLoading(true);
+                  setError(null);
+                  setReload((value) => value + 1);
+                }}
+              >
+                Retry loading scans
+              </Button>
+            )}
+          </Box>
         )}
         {section === 'Duplicates' && viewedJob && (
           <DuplicateStudio
@@ -723,7 +945,29 @@ export function InspectionScreen({
                 }}
               >
                 {error && (
-                  <Text role="alert" className="error">
+                  <Text
+                    role="alert"
+                    className="error"
+                    css={{
+                      border: '1px solid {colors.border.control}',
+                      borderRadius: 'var(--control-radius)',
+                      background: '{colors.danger.bg}',
+                      color: '{colors.danger.fg}',
+                      padding: '16px 20px',
+                      margin: '24px 0 0',
+                      fontSize: '13px',
+                      lineHeight: '1.6',
+                      '& p': { margin: '0' },
+                      '& button': {
+                        marginTop: '12px',
+                        border: '1px solid currentColor',
+                        background: 'transparent',
+                        color: 'inherit',
+                        borderRadius: '4px',
+                        padding: '7px 12px',
+                      },
+                    }}
+                  >
                     {error}
                   </Text>
                 )}
@@ -792,7 +1036,10 @@ function PropertyControls({
         disabled={disabled}
         onChange={(logic) => onChange({ ...rules, logic })}
       />
-      <Box className="inspection-rule-options">
+      <Box
+        className="inspection-rule-options"
+        css={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', alignItems: 'center' }}
+      >
         {(
           ['filename', 'extension', 'size', 'modified', 'created', 'readonly', 'content'] as const
         ).map((key) => (

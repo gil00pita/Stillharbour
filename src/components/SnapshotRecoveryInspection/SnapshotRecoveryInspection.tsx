@@ -16,7 +16,74 @@ export function SnapshotRecoveryInspection({
   const [snapshotId, setSnapshotId] = useState(job.snapshotId ?? '');
   const valid = !snapshotId || /^[a-fA-F0-9]{64}$/.test(snapshotId);
   return (
-    <chakra.section aria-label="Inspect interrupted snapshot" className="backup-review">
+    <chakra.section
+      aria-label="Inspect interrupted snapshot"
+      className="backup-review"
+      css={{
+        border: '1px solid {colors.border}',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBlock: '20px',
+        minWidth: '0',
+        background: '{colors.bg.panel}',
+        '& fieldset': {
+          display: 'grid',
+          gap: '16px',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          padding: '16px',
+          marginBlock: '20px',
+        },
+        '& legend': { fontWeight: '600', paddingInline: '6px' },
+        '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+        "& label:has(> input[type='checkbox'])": {
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px',
+        },
+        "& input[type='checkbox']": { flex: '0 0 auto', marginTop: '4px' },
+        "& input:not([type='checkbox'])": {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& textarea': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+          resize: 'vertical',
+          minHeight: '100px',
+        },
+        '& select': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& .backup-form-grid': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+        '& small': { color: '{colors.fg.muted}' },
+        '& .backup-table': { maxHeight: '360px' },
+        '@media (max-width: 850px)': { '& .backup-form-grid': { gridTemplateColumns: '1fr' } },
+      }}
+    >
       <Heading as="h5" unstyled>
         Inspect existing snapshot
       </Heading>

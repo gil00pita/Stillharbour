@@ -1,0 +1,1 @@
+export { ThumbnailScale } from './ThumbnailScale';

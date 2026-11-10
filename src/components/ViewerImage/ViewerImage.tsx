@@ -53,12 +53,40 @@ export function ViewerImage({
   }
   if (!high && small === undefined && !origin) {
     return loading ? (
-      <Box className="viewer-loading">
+      <Box
+        className="viewer-loading"
+        css={{
+          display: 'grid',
+          placeContent: 'center',
+          textAlign: 'center',
+          minHeight: '100%',
+          margin: '0',
+          padding: '32px',
+          color: '{colors.fg.muted}',
+          fontSize: '13px',
+          position: 'relative',
+          overflow: 'hidden',
+          background: '{colors.bg.panel}',
+        }}
+      >
         <LoadingSheen />
         <Text role="status">Preparing cached preview…</Text>
       </Box>
     ) : (
-      <Box className="viewer-unavailable" role="status">
+      <Box
+        className="viewer-unavailable"
+        css={{
+          display: 'grid',
+          placeContent: 'center',
+          textAlign: 'center',
+          minHeight: '100%',
+          margin: '0',
+          padding: '32px',
+          color: '{colors.fg.muted}',
+          fontSize: '13px',
+        }}
+        role="status"
+      >
         <Heading as="h3" unstyled>
           <bdi>{asset.name}</bdi>
         </Heading>
@@ -73,6 +101,16 @@ export function ViewerImage({
   return (
     <Box
       className={`viewer-renditions ${revealed ? 'is-revealed' : ''} ${document.visibilityState === 'hidden' ? 'without-motion' : ''}`}
+      css={{
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        '& img': { position: 'absolute', inset: '0' },
+        '&.is-revealed .viewer-rendition-high': { opacity: '1', filter: 'blur(0)' },
+        '&.is-revealed .viewer-rendition-small': { opacity: '0' },
+        '&.without-motion .viewer-rendition-high': { transition: 'none', filter: 'none' },
+        '&.without-motion .viewer-rendition-small': { transition: 'none', filter: 'none' },
+      }}
       aria-busy={loading}
     >
       {origin && !revealed && (small === undefined || !loaded.has(small)) && (
@@ -88,6 +126,10 @@ export function ViewerImage({
         <CachedPreviewImage
           key={`${small}:${attempt}`}
           className="viewer-rendition-small"
+          css={{
+            transition: 'opacity 400ms ease',
+            '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+          }}
           src={url(small)}
           alt={asset.name}
           draggable={false}
@@ -99,6 +141,12 @@ export function ViewerImage({
         <CachedPreviewImage
           key={`${VIEWER_EDGE}:${attempt}`}
           className="viewer-rendition-high"
+          css={{
+            opacity: '0',
+            filter: 'blur(2px)',
+            transition: 'opacity 400ms ease,\n    filter 400ms ease',
+            '@media (prefers-reduced-motion: reduce)': { transition: 'none', filter: 'none' },
+          }}
           src={url(VIEWER_EDGE)}
           alt={small !== undefined ? '' : asset.name}
           draggable={false}
@@ -109,13 +157,37 @@ export function ViewerImage({
       {loading ? (
         <>
           <LoadingSheen />
-          <Text className="viewer-quality" role="status">
+          <Text
+            className="viewer-quality"
+            css={{
+              position: 'absolute',
+              bottom: '8px',
+              left: '8px',
+              right: '8px',
+              fontSize: '12px',
+              background: '{colors.bg.panel}',
+              padding: '8px',
+            }}
+            role="status"
+          >
             Loading photo preview…
           </Text>
         </>
       ) : (
         !revealed && (
-          <Text className="viewer-quality" role="status">
+          <Text
+            className="viewer-quality"
+            css={{
+              position: 'absolute',
+              bottom: '8px',
+              left: '8px',
+              right: '8px',
+              fontSize: '12px',
+              background: '{colors.bg.panel}',
+              padding: '8px',
+            }}
+            role="status"
+          >
             Smaller cached preview ·{' '}
             {failed.has(VIEWER_EDGE) ? 'Higher detail could not be loaded.' : error}{' '}
             <Button unstyled type="submit" onClick={retry}>
@@ -131,6 +203,30 @@ export function ViewerImage({
 export function LoadingSheen() {
   const hidden = useDocumentHidden();
   return (
-    <Text as="span" className="preview-loading-sheen" aria-hidden="true" data-paused={hidden} />
+    <Text
+      as="span"
+      className="preview-loading-sheen"
+      css={{
+        position: 'absolute',
+        inset: '0',
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        '&::after': {
+          content: "''",
+          position: 'absolute',
+          inset: '0',
+          background:
+            'linear-gradient(\n    110deg,\n    transparent 25%,\n    rgb(255 255 255 / 0.04) 40%,\n    rgb(255 255 255 / 0.22) 50%,\n    rgb(255 255 255 / 0.04) 60%,\n    transparent 75%\n  )',
+          transform: 'translateX(-110%)',
+          animation: 'preview-loading-glare 1800ms linear infinite',
+        },
+        "&[data-paused='true']::after": { animationPlayState: 'paused' },
+        '@media (prefers-reduced-motion: reduce)': {
+          '&::after': { animation: 'none', transform: 'none', opacity: '0.3' },
+        },
+      }}
+      aria-hidden="true"
+      data-paused={hidden}
+    />
   );
 }

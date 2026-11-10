@@ -30,7 +30,7 @@ export function Inspector({
   const [attempt, setAttempt] = useState(0);
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
-    heading.current?.focus();
+    heading.current?.focus({ preventScroll: true });
   }, []);
   useEffect(() => {
     let active = true;
@@ -64,8 +64,36 @@ export function Inspector({
   }
   const asset = detail?.asset;
   return (
-    <chakra.aside className="inspector" aria-label="Photo details">
-      <Box className="section-heading">
+    <chakra.aside
+      className="inspector"
+      css={{
+        borderLeft: '1px solid {colors.border}',
+        padding: '0 0 20px 18px',
+        overflowY: 'auto',
+        minWidth: '0',
+        '& h2': { fontSize: '17px', letterSpacing: '0' },
+        '& h3': { marginTop: '24px', overflowWrap: 'anywhere' },
+        '& .section-heading': { marginBottom: '20px' },
+        '& dl': { fontSize: '13px', lineHeight: '20px', margin: '24px 0' },
+        '& dt': { color: '{colors.fg.muted}', marginTop: '12px' },
+        '& dd': { margin: '3px 0 0', overflowWrap: 'anywhere' },
+        '& form label': { margin: '12px 0' },
+        '& details': { marginTop: '20px', fontSize: '12px' },
+        '& pre': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', fontSize: '11px' },
+        '& li': { overflowWrap: 'anywhere' },
+        '@media (max-width: 760px)': { borderLeft: '0', padding: '0 0 20px', flex: '1' },
+      }}
+      aria-label="Photo details"
+    >
+      <Box
+        className="section-heading"
+        css={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+        }}
+      >
         <Heading as="h2" unstyled ref={heading} tabIndex={-1}>
           Photo details
         </Heading>
@@ -76,12 +104,32 @@ export function Inspector({
           <Heading as="h3" unstyled>
             <bdi>{asset.name}</bdi>
           </Heading>
-          <Text className="path">
+          <Text
+            className="path"
+            css={{
+              fontSize: '13px',
+              lineHeight: '1.6',
+              overflowWrap: 'anywhere',
+              whiteSpace: 'pre-wrap',
+              margin: '8px 0 0',
+              color: '{colors.fg.muted}',
+            }}
+          >
             <bdi>{asset.relativePath}</bdi>
           </Text>
           <AssetFields asset={asset} root={detail.root} />
           {(asset.metadataError || asset.previewError) && (
-            <Text className="help">{asset.metadataError ?? asset.previewError}</Text>
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
+              {asset.metadataError ?? asset.previewError}
+            </Text>
           )}
           {saveError && <Text role="alert">{saveError}</Text>}
           <chakra.form
@@ -100,8 +148,28 @@ export function Inspector({
             <Heading as="h3" unstyled>
               Catalog notes
             </Heading>
-            <Text className="help">Saved here. Originals and sidecars stay unchanged.</Text>
-            <label className="check-row">
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
+              Saved here. Originals and sidecars stay unchanged.
+            </Text>
+            <chakra.label
+              className="check-row"
+              css={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: '10px',
+                margin: '12px 0',
+                '& label': { flexDirection: 'row', alignItems: 'center' },
+              }}
+            >
               <input
                 type="checkbox"
                 disabled={busy}
@@ -111,7 +179,7 @@ export function Inspector({
                 }
               />{' '}
               Favorite
-            </label>
+            </chakra.label>
             <Field.Root asChild unstyled>
               <label>
                 <Field.Label asChild unstyled>
@@ -160,7 +228,15 @@ export function Inspector({
                   </List.Item>
                 ))}
               </List.Root>
-              <Text className="help">
+              <Text
+                className="help"
+                css={{
+                  fontSize: '13px',
+                  color: '{colors.fg.muted}',
+                  lineHeight: '20px',
+                  margin: '8px 0',
+                }}
+              >
                 Matching names are shown for reference; files are not automatically grouped or
                 changed.
               </Text>
@@ -174,7 +250,17 @@ export function Inspector({
       ) : loadError ? (
         <Box>
           <Text>Photo details couldn’t be loaded.</Text>
-          <Text className="help">{loadError}</Text>
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
+            {loadError}
+          </Text>
           <Button
             onClick={() => {
               setLoadError(null);

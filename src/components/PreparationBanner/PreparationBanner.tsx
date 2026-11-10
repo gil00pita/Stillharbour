@@ -103,11 +103,44 @@ function PreparationStatus({
   return (
     <chakra.section
       className="preparation-banner"
+      css={{
+        flex: 'none',
+        padding: '8px 16px',
+        borderBottom: '1px solid {colors.border}',
+        '& p': {
+          margin: '4px 0 0',
+          fontSize: '13px',
+          color: '{colors.fg.muted}',
+          overflowWrap: 'anywhere',
+        },
+        '& .job-progress': { margin: '0' },
+        '& button': {
+          flex: 'none',
+          padding: '7px 12px',
+          color: 'inherit',
+          background: 'transparent',
+          border: '1px solid {colors.border}',
+          borderRadius: 'var(--control-radius)',
+        },
+        '& button:hover:not(:disabled)': { borderColor: '{colors.brand.solid}' },
+      }}
       aria-label="Library preparation"
       title={`${root.label}${otherRoots > 0 ? ` · ${otherRoots} more folders in Jobs` : ''}`}
     >
-      <Box className="preparation-row">
-        <Text as="span" className="preparation-summary">
+      <Box
+        className="preparation-row"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'auto minmax(32px, 1fr) auto',
+          gap: '12px',
+          alignItems: 'center',
+        }}
+      >
+        <Text
+          as="span"
+          className="preparation-summary"
+          css={{ fontSize: '13px', color: '{colors.fg.secondary}' }}
+        >
           {job?.state === 'paused'
             ? 'Preparation paused'
             : !job
@@ -117,7 +150,7 @@ function PreparationStatus({
                 : `${job.discovered.toLocaleString()} files scanned`}
         </Text>
         {job ? <ScanJobProgress job={job} label={root.label} compact /> : <Text as="span" />}
-        <Box className="preparation-actions">
+        <Box className="preparation-actions" css={{ display: 'flex', gap: '8px' }}>
           {job && job.kind !== 'thumbnails' && job.state !== 'paused' && (
             <Button
               disabled={busy || stopping || job.state === 'pause_requested'}

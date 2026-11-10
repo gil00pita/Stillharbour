@@ -50,7 +50,7 @@ describe('M5 generated native metadata export', () => {
       );
       await browser.waitUntil(async () => $('button=Show in photos').isEnabled());
       await $('button=Show in photos').click();
-      await $('button=Select').click();
+      await $('button[aria-label="Select"]').click();
       await browser.waitUntil(async () =>
         $('.asset-check[aria-label="Select South.jpg"]').isExisting(),
       );

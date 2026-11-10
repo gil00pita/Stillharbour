@@ -50,8 +50,6 @@ function setup() {
         controller={c}
         status={status}
         section="Photos"
-        mode="gallery"
-        display={{ size: 'comfortable', fit: 'contain' }}
         onApply={onApply}
         onClose={onClose}
         onSettings={vi.fn()}
@@ -62,18 +60,16 @@ function setup() {
   render(<Harness />);
   return { onApply, onClose };
 }
-it('keeps filter/display choices as a draft until Apply and preserves them on validation', async () => {
+it('keeps filters as a draft until Apply without offering display settings', async () => {
   const c = setup();
   await screen.findByText(/5 matching photos/);
   fireEvent.change(screen.getByRole('textbox', { name: 'Tag' }), { target: { value: 'Family' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Uniform grid' }));
+  expect(screen.queryByRole('button', { name: 'Uniform grid' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('slider')).not.toBeInTheDocument();
   expect(c.onApply).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Select all results' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: 'Apply filters' }));
-  expect(c.onApply).toHaveBeenCalledWith(expect.objectContaining({ tag: 'Family' }), 'grid', {
-    size: 'comfortable',
-    fit: 'contain',
-  });
+  expect(c.onApply).toHaveBeenCalledWith(expect.objectContaining({ tag: 'Family' }));
   expect(c.onClose).toHaveBeenCalledOnce();
 });
 it('closes on Escape without applying edits', async () => {

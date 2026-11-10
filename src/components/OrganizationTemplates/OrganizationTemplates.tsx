@@ -86,6 +86,14 @@ export function OrganizationTemplates({
   return (
     <chakra.section
       className="organization-destination"
+      css={{
+        margin: '24px 0',
+        padding: '16px',
+        border: '1px solid {colors.border}',
+        borderRadius: 'var(--control-radius)',
+        '& h3': { marginTop: '0' },
+        '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+      }}
       aria-label="Saved templates"
       aria-busy={busy}
     >
@@ -192,14 +200,44 @@ export function OrganizationTemplates({
               settings.
             </Text>
           )}
-          <Text className="help">
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             Each save retains an immutable version. Editing the preview does not change earlier
             plans.
           </Text>
         </>
       )}
       {error && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {error}
         </Text>
       )}

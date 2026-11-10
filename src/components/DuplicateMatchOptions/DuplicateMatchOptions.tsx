@@ -1,3 +1,4 @@
+import { chakra } from '@chakra-ui/react';
 import { Box } from '@chakra-ui/react';
 import type { DuplicateOptions } from '../../bindings';
 import { InspectionChoiceCards, type InspectionChoice } from '@/components/InspectionChoiceCards';
@@ -46,7 +47,7 @@ export function DuplicateMatchOptions({
   disabled: boolean;
 }) {
   return (
-    <Box className="duplicate-match-options">
+    <Box className="duplicate-match-options" css={{ marginBottom: '24px' }}>
       <InspectionChoiceCards
         label="Match mode"
         value={options.mode}
@@ -55,7 +56,16 @@ export function DuplicateMatchOptions({
         disabled={disabled}
         onChange={(mode) => onChange({ ...options, mode })}
       />
-      <details className="duplicate-advanced-options">
+      <chakra.details
+        className="duplicate-advanced-options"
+        css={{
+          marginTop: '20px',
+          borderBottom: '1px solid {colors.border}',
+          paddingBottom: '12px',
+          '& > summary': { color: '{colors.fg.secondary}', padding: '12px 0' },
+          '&[open] > summary': { marginBottom: '12px' },
+        }}
+      >
         <summary>Advanced matching options</summary>
         <InspectionChoiceCards
           label="Content algorithm"
@@ -75,7 +85,7 @@ export function DuplicateMatchOptions({
           />
           Exclude hard-linked objects from this search
         </label>
-      </details>
+      </chakra.details>
     </Box>
   );
 }

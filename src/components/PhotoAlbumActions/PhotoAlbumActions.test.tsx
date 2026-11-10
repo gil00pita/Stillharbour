@@ -172,9 +172,9 @@ function SelectablePhoto() {
     </PhotoAlbumActions>
   );
 }
-it('reveals checkboxes only after Select, selects the context photo, and hides them when finished', async () => {
+it('keeps hover selection available, selects the context photo, and clears it when finished', async () => {
   render(<SelectablePhoto />);
-  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
   const photo = screen.getByRole('button', { name: `Open ${asset.name}` });
   expect(document.querySelector('.photo-album-menu-button')).toBeNull();
   fireEvent.contextMenu(photo, { clientX: 100, clientY: 150 });
@@ -184,7 +184,7 @@ it('reveals checkboxes only after Select, selects the context photo, and hides t
   fireEvent.click(photo);
   expect(screen.getByRole('checkbox')).not.toBeChecked();
   fireEvent.click(screen.getByRole('button', { name: 'Done selecting' }));
-  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('checkbox')).not.toBeChecked();
 });
 it('disables context selection while a batch action is busy', async () => {
   const onSelect = vi.fn();

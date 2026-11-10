@@ -1,13 +1,38 @@
+import { chakra } from '@chakra-ui/react';
 // Photo-card interpretation of the owner's scanning-document animation.
 export function PhotoScanningArt({ active }: { active: boolean }) {
   return (
-    <svg
+    <chakra.svg
       className="photo-scanning-art"
+      css={{
+        '--scan-art-shadow': '{colors.border}',
+        '--scan-art-back': '{colors.border}',
+        '--scan-art-lens': '{colors.bg}',
+        '--scan-art-frame': '{colors.bg.panel}',
+        '--scan-art-outline': '{colors.fg.muted}',
+        '--scan-art-sky': '{colors.bg.hover}',
+        '--scan-art-accent': '{colors.brand.solid}',
+        display: 'block',
+        width: '160px',
+        maxWidth: '100%',
+        flexShrink: 0,
+        height: 'auto',
+        margin: '0 auto 24px',
+        '--photo-scan-cycle': '3s',
+        "&[data-active='true'] .photo-scanning-lens": {
+          animation: 'photo-scan-search var(--photo-scan-cycle) ease-in-out infinite',
+        },
+        "&[data-active='true'] .photo-scanning-card": {
+          animation: 'photo-scan-float var(--photo-scan-cycle) ease-in-out infinite',
+        },
+        '@media (prefers-reduced-motion: reduce)': {
+          "&[data-active='true'] .photo-scanning-lens": { animation: 'none' },
+          "&[data-active='true'] .photo-scanning-card": { animation: 'none' },
+        },
+      }}
       data-active={active}
       aria-hidden="true"
       focusable="false"
-      width="302"
-      height="215"
       viewBox="0 0 302 215"
       fill="none"
     >
@@ -59,6 +84,6 @@ export function PhotoScanningArt({ active }: { active: boolean }) {
         <path d="m178 125 22 22" strokeWidth="10" />
         <path d="M142 103a16 16 0 0 1 16-14" strokeWidth="3" opacity="0.65" />
       </g>
-    </svg>
+    </chakra.svg>
   );
 }

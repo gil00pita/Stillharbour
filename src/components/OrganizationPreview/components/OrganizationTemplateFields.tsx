@@ -56,14 +56,26 @@ export function OrganizationTemplateFields({
           />
         </label>
       </Field.Root>
-      <Text className="help" id="organization-token-help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+        id="organization-token-help"
+      >
         Tokens:{' '}
         {
           '{capture:%Y-%m-%d}, {quarter}, {country}, {city}, {tag}, {brand}, {model}, {original_stem}, {ext}, {sequence:04}'
         }
         . Keep the original extension. Unsafe names are blocked rather than silently renamed.
       </Text>
-      <Box className="organization-options">
+      <Box
+        className="organization-options"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '16px',
+          '@media (max-width: 760px)': { gridTemplateColumns: 'minmax(0, 1fr)' },
+        }}
+      >
         <SegmentedControl
           label="When capture date is missing"
           value={template.missingDate}
@@ -89,7 +101,10 @@ export function OrganizationTemplateFields({
           onChange={(filenameStemCase) => update({ filenameStemCase })}
         />
       </Box>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Stem case applies to proposed filenames, including Undated names. Folder names and extension
         case stay as previewed.
       </Text>

@@ -406,3 +406,85 @@ it('starts Storage results at the filters and keeps retained controls, issues an
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   expect(opener).toHaveFocus();
 });
+
+it('offers an explicit retry after a failed integrity run without replaying it on open', async () => {
+  const failed: InspectionJob = {
+    ...job,
+    state: 'failed',
+    message: 'Generated decoder failure',
+    input: { ...job.input, task: { kind: 'health', mode: 'deep' } },
+  };
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_jobs') return [failed];
+    if (request.kind === 'inspection_report') return savedReport(request.job_id);
+    if (request.kind === 'inspection_findings') return { jobId: failed.id, rows: [], next: null };
+    if (request.kind === 'inspection_start') return { ...job, input: request.input };
+    if (request.kind === 'inspection_job') return { ...job, input: failed.input };
+    throw new Error('Unexpected request');
+  });
+  setup('Integrity');
+  const retry = await screen.findByRole('button', { name: 'Retry integrity check' });
+  await waitFor(() => expect(retry).toBeEnabled());
+  expect(
+    vi.mocked(libraryData).mock.calls.some(([request]) => request.kind === 'inspection_start'),
+  ).toBe(false);
+  fireEvent.click(retry);
+  await waitFor(() =>
+    expect(libraryData).toHaveBeenCalledWith(
+      { kind: 'inspection_start', input: failed.input },
+      'inspection_job',
+    ),
+  );
+  expect(screen.queryByRole('button', { name: 'Retry integrity check' })).not.toBeInTheDocument();
+});
+
+it('retries loading a failed saved report without starting another scan', async () => {
+  let unavailable = true;
+  const failed: InspectionJob = {
+    ...job,
+    state: 'failed',
+    input: { ...job.input, task: { kind: 'health', mode: 'compare_baseline' } },
+  };
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_jobs') return [failed];
+    if (request.kind === 'inspection_report') {
+      if (unavailable) throw new Error('Report temporarily unavailable');
+      return savedReport(request.job_id);
+    }
+    if (request.kind === 'inspection_findings') return { jobId: failed.id, rows: [], next: null };
+    throw new Error('Unexpected request');
+  });
+  setup('Integrity');
+  expect(await screen.findByRole('alert')).toHaveTextContent('Report temporarily unavailable');
+  unavailable = false;
+  fireEvent.click(screen.getByRole('button', { name: 'Retry loading results' }));
+  expect(await screen.findByText(/Showing scan from/)).toBeVisible();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(
+    vi.mocked(libraryData).mock.calls.some(([request]) => request.kind === 'inspection_start'),
+  ).toBe(false);
+});
+
+it('requires a fresh acknowledgement when retrying failed baseline establishment', async () => {
+  setup('Integrity');
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Start checksum comparison' })).toBeEnabled(),
+  );
+  fireEvent.change(screen.getByLabelText('Integrity mode'), {
+    target: { value: 'establish_baseline' },
+  });
+  fireEvent.click(screen.getByRole('checkbox', { name: /baseline/i }));
+  vi.mocked(libraryData).mockImplementation(async (request) => {
+    if (request.kind === 'inspection_start')
+      return { ...job, state: 'failed', input: request.input };
+    throw new Error('Unexpected request');
+  });
+  fireEvent.click(screen.getByRole('button', { name: 'Establish checksum baselines' }));
+  const retry = await screen.findByRole('button', { name: 'Retry integrity check' });
+  fireEvent.click(retry);
+  expect(screen.getByRole('button', { name: 'Establish checksum baselines' })).toBeDisabled();
+  expect(screen.getByRole('checkbox', { name: /baseline/i })).not.toBeChecked();
+  expect(
+    vi.mocked(libraryData).mock.calls.filter(([request]) => request.kind === 'inspection_start'),
+  ).toHaveLength(1);
+});

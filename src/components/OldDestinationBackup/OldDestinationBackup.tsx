@@ -98,7 +98,74 @@ export function OldDestinationBackup({
   }
   const locked = disabled || busy || running;
   return (
-    <chakra.section className="backup-review" aria-label="Protect old destination versions">
+    <chakra.section
+      className="backup-review"
+      css={{
+        border: '1px solid {colors.border}',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBlock: '20px',
+        minWidth: '0',
+        background: '{colors.bg.panel}',
+        '& fieldset': {
+          display: 'grid',
+          gap: '16px',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          padding: '16px',
+          marginBlock: '20px',
+        },
+        '& legend': { fontWeight: '600', paddingInline: '6px' },
+        '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+        "& label:has(> input[type='checkbox'])": {
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px',
+        },
+        "& input[type='checkbox']": { flex: '0 0 auto', marginTop: '4px' },
+        "& input:not([type='checkbox'])": {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& textarea': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+          resize: 'vertical',
+          minHeight: '100px',
+        },
+        '& select': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& .backup-form-grid': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+        '& small': { color: '{colors.fg.muted}' },
+        '& .backup-table': { maxHeight: '360px' },
+        '@media (max-width: 850px)': { '& .backup-form-grid': { gridTemplateColumns: '1fr' } },
+      }}
+      aria-label="Protect old destination versions"
+    >
       <Heading as="h4" unstyled>
         Back up old destination and companions
       </Heading>
@@ -221,7 +288,29 @@ export function OldDestinationBackup({
         />
       )}
       {error && (
-        <Text role="alert" className="error">
+        <Text
+          role="alert"
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+        >
           {error}
         </Text>
       )}

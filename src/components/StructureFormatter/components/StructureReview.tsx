@@ -36,7 +36,17 @@ function MissingDateNotice({
           {summary.missingDates.toLocaleString()}{' '}
           {summary.missingDates === 1 ? 'item has' : 'items have'} no indexed capture date.
         </Text>
-        <Text className="help">{missingDateMessages[policy]}</Text>
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
+          {missingDateMessages[policy]}
+        </Text>
       </Box>
       <Button type="button" onClick={onShow}>
         Show affected
@@ -131,7 +141,16 @@ export function StructureReview({
       ) : (
         <>
           <StructureSummary summary={summary} />
-          <Text className="help" role="status">
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+            role="status"
+          >
             {preview.total.toLocaleString()} library items · {preview.proposed.toLocaleString()}{' '}
             proposed · {preview.blocked.toLocaleString()} blocked ·{' '}
             {summary.skipped.toLocaleString()} skipped · {summary.unchanged.toLocaleString()}{' '}
@@ -207,7 +226,15 @@ export function StructureReview({
               Next page
             </Button>
           </Flex>
-          <Text className="help">
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             Search and filters cover the whole preview. Destination and companion checks remain
             pending; simulation covers all eligible items, including those outside the current
             filter.

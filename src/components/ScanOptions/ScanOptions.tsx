@@ -1,3 +1,4 @@
+import { chakra } from '@chakra-ui/react';
 import { Field, Box, List, Text } from '@chakra-ui/react';
 import { Button } from '@/components/Button';
 import { Textarea } from '@/components/Textarea';
@@ -27,7 +28,29 @@ export function ScanOptions({
     setPreview([]);
   }
   return (
-    <details className="scan-options">
+    <chakra.details
+      className="scan-options"
+      css={{
+        flexBasis: '100%',
+        '& textarea': { margin: '0 0 10px' },
+        border: '1px solid {colors.border}',
+        borderRadius: 'var(--control-radius)',
+        '& > summary': {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          width: '100%',
+          minHeight: '46px',
+          padding: '12px 16px',
+          listStyle: 'none',
+        },
+        '& > summary::-webkit-details-marker': { display: 'none' },
+        '& > summary::marker': { content: "''" },
+        '& > summary:hover': { background: '{colors.bg.panel}' },
+        '&[open] > summary': { borderBottom: '1px solid {colors.border}' },
+        '&[open] .accordion-chevron': { transform: 'rotate(180deg)' },
+      }}
+    >
       <summary>
         <Text as="span">Advanced</Text>
         <svg
@@ -47,8 +70,17 @@ export function ScanOptions({
           />
         </svg>
       </summary>
-      <Box className="advanced-content">
-        <Box className="scan-switches">
+      <Box className="advanced-content" css={{ padding: '8px 16px 20px' }}>
+        <Box
+          className="scan-switches"
+          css={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '16px',
+            margin: '12px 0',
+            '@media (max-width: 760px)': { gridTemplateColumns: '1fr', gap: '2px' },
+          }}
+        >
           <Switch
             label="Include hidden files"
             checked={filter.includeHiddenFiles}
@@ -62,11 +94,28 @@ export function ScanOptions({
             onChange={(value) => update('includeHiddenFolders', value)}
           />
         </Box>
-        <Text className="help">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           Add one value per tag with Enter or Tab. Hidden files and hidden folders are controlled
           separately.
         </Text>
-        <Box className="form-grid">
+        <Box
+          className="form-grid"
+          css={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '16px',
+            width: '100%',
+            '@media (max-width: 600px)': { gridTemplateColumns: '1fr' },
+          }}
+        >
           {scanTagFields.map(({ key, label, placeholder }) => (
             <TagInput
               key={key}
@@ -95,14 +144,38 @@ export function ScanOptions({
             onChange={(value) => update('maxBytes', value)}
           />
         </Box>
-        <Text className="help">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           Size units use 1 KB = 1,000 bytes. Leave a size empty for no limit.
         </Text>
-        <Text className="help">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           File Extensions match regardless of letter case. This list controls discovery; previews
           depend on format support.
         </Text>
-        <Text className="help">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           Patterns use root-relative paths. Excluded folders win. Links, cloud placeholders and
           protected application folders are never opened.
         </Text>
@@ -141,7 +214,16 @@ export function ScanOptions({
           Preview filters
         </Button>
         {preview.length > 0 && (
-          <List.Root unstyled className="filter-preview">
+          <List.Root
+            unstyled
+            className="filter-preview"
+            css={{
+              fontSize: '12px',
+              paddingLeft: '18px',
+              lineHeight: '1.7',
+              overflowWrap: 'anywhere',
+            }}
+          >
             {Array.from(new Set(preview)).map((line) => (
               <List.Item unstyled key={line}>
                 <bdi>{line}</bdi>
@@ -150,6 +232,6 @@ export function ScanOptions({
           </List.Root>
         )}
       </Box>
-    </details>
+    </chakra.details>
   );
 }

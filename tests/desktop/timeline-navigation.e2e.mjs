@@ -24,12 +24,12 @@ describe('Reference timeline navigation through bounded native pages', () => {
     await $('.asset-open', { strict: false }).waitForDisplayed({ timeout: 45000 });
     // This hook creates catalog-only placeholder records with no preview bytes.
     // Use the real Text list control so the test never requests fake thumbnails.
-    await $('button[aria-controls="library-filter-panel"]').click();
-    await $('#library-filter-panel[open]').waitForDisplayed();
-    await $('#library-filter-panel').$('button=Text list').click();
-    await $('button=Apply filters').click();
+    await $('button[aria-controls="library-display-panel"]').click();
+    await $('#library-display-panel[open]').waitForDisplayed();
+    await $('#library-display-panel').$('button=Text list').click();
+    await $('button=Apply display').click();
     await browser.waitUntil(() =>
-      browser.execute(() => !document.querySelector('#library-filter-panel[open]')),
+      browser.execute(() => !document.querySelector('#library-display-panel[open]')),
     );
     assert.equal(await invoke('test_scroll_catalog'), 960);
     await browser.execute(() => {
@@ -181,8 +181,18 @@ describe('Reference timeline navigation through bounded native pages', () => {
           overflow: document.documentElement.scrollWidth > innerWidth,
         };
       });
-      const idle = await browser.execute(() => {
+      await browser.execute(() => {
         document.activeElement?.blur();
+        document
+          .querySelector('.date-rail')
+          .dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
+      });
+      await browser.waitUntil(() =>
+        browser.execute(
+          () => getComputedStyle(document.querySelector('.timeline-current')).opacity === '0',
+        ),
+      );
+      const idle = await browser.execute(() => {
         const rail = document.querySelector('.date-rail');
         rail.dispatchEvent(new PointerEvent('pointerleave', { bubbles: true }));
         const bounds = rail.getBoundingClientRect();
@@ -191,16 +201,24 @@ describe('Reference timeline navigation through bounded native pages', () => {
         return {
           opacity: getComputedStyle(rail).opacity,
           contained:
-            date.left >= bounds.left &&
-            date.right <= bounds.right &&
+            date.left >= 0 &&
+            date.right <= bounds.left &&
             date.top >= bounds.top &&
             date.bottom <= bounds.bottom,
-          separate: date.left >= viewport.right,
+          hidden: getComputedStyle(rail.querySelector('.timeline-current')).opacity === '0',
+          railWidth: bounds.width,
+          separate: bounds.left >= viewport.right,
         };
       });
-      assert.deepEqual(idle, { opacity: '1', contained: true, separate: true });
-      assert.equal(metrics.width, 96);
-      assert.equal(metrics.lineWidth, 40);
+      assert.deepEqual(idle, {
+        opacity: '1',
+        contained: true,
+        hidden: true,
+        railWidth: 32,
+        separate: true,
+      });
+      assert.equal(metrics.width, 32);
+      assert.equal(metrics.lineWidth, 24);
       assert.equal(metrics.lineHeight, 1);
       assert.equal(metrics.labelHeight, 24);
       assert(metrics.lineError <= 1 && metrics.labelError <= 1, JSON.stringify(metrics));

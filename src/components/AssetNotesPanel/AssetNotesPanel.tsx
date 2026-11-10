@@ -92,7 +92,15 @@ function Notes({ assetId }: { assetId: string }) {
     }
   }
   return (
-    <chakra.section aria-label="Caption and review" className="catalog-notes">
+    <chakra.section
+      aria-label="Caption and review"
+      className="catalog-notes"
+      css={{
+        '& label': { display: 'grid', gap: '6px', margin: '10px 0' },
+        '& textarea': { width: '100%', resize: 'vertical', minHeight: '88px' },
+        '& label.check-row': { display: 'flex', alignItems: 'center' },
+      }}
+    >
       <Heading as="h3" unstyled>
         Caption &amp; review
       </Heading>
@@ -121,7 +129,17 @@ function Notes({ assetId }: { assetId: string }) {
                 />
               </label>
             </Field.Root>
-            <label className="check-row">
+            <chakra.label
+              className="check-row"
+              css={{
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: '10px',
+                margin: '12px 0',
+                '& label': { flexDirection: 'row', alignItems: 'center' },
+              }}
+            >
               <input
                 type="checkbox"
                 checked={rejected}
@@ -129,8 +147,16 @@ function Notes({ assetId }: { assetId: string }) {
                 onChange={(event) => edit(caption, event.target.checked)}
               />
               Mark as rejected
-            </label>
-            <Text className="help">
+            </chakra.label>
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
               This review flag stays in the catalog. Original files and sidecars stay unchanged.
             </Text>
             <Button type="submit" disabled={busy || reloading || !dirty}>
@@ -155,7 +181,15 @@ function Notes({ assetId }: { assetId: string }) {
               ) : (
                 <Text>No keyword observation is retained for this item.</Text>
               )}
-              <Text className="help">
+              <Text
+                className="help"
+                css={{
+                  fontSize: '13px',
+                  color: '{colors.fg.muted}',
+                  lineHeight: '20px',
+                  margin: '8px 0',
+                }}
+              >
                 These source observations are separate from your catalog tags.
               </Text>
             </details>
@@ -175,7 +209,19 @@ function Notes({ assetId }: { assetId: string }) {
           >
             Reload saved notes
           </Button>
-          {dirty && <Text className="help">Reload discards this notes draft.</Text>}
+          {dirty && (
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
+              Reload discards this notes draft.
+            </Text>
+          )}
         </>
       )}
       <Text role="status">

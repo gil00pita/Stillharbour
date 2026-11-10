@@ -1,1132 +1,173 @@
-On constrained Windows development disks, use `$env:CARGO_INCREMENTAL='0'` before repeated feature-matrix builds. The M4 integration exhausted disk space through 20.8 GB of incremental cache; only the verified worktree `target/debug/incremental` cache was removed after all builds stopped. No user library/data cleanup is part of this workflow. Build/native test failures must be recorded before retrying.
-
-M4 application tables originated in schema 13; the current M5 catalog schema is 17, with a distinct `backup-workflow` feature. See [ADR-0079](decisions/ADR-0079-backup-application-workflows.md). The default production workflow gate remains disabled pending native acceptance. Instrumented desktop builds enable the reviewed backup path for generated application tests, retaining the existing prohibition on real-library development mutations. Native application receipts go under `.context/m4-application`; the transport/lab receipts below remain separate evidence.
-
-Catalog activation on restart follows [ADR-0080](decisions/ADR-0080-catalog-restore-activation.md). Startup holds the native appdata lifetime lock and OS selector before opening SQLite. A selected existing catalog uses an identity-bound open without CREATE; only an OS-authorized first-use seed may initialize schema zero. Unknown, missing, truncated or uncertain selections fail closed. No personal catalog is used in development tests. A locked/unavailable native authority is an explicit startup error, never a reason to create an empty replacement.
-
-Catalog switch preparation uses the normal typed snapshot command, with a native-only interception for its opaque approval ID. Invalid approval is checked before stopping work. The shell then drains request lifetimes, helper/scan/inspection/preview work and scope leases, freezes actor SQL writes, retains a consistent current catalog and prepares a separate candidate. The whole UI stops polling and offers close/reopen instructions; preparation is not activation. Root paths need fresh native confirmation. Initial support is the same catalog UUID, platform and current schema; no arbitrary catalog-file opening or cross-OS migration is advertised. The latest OS-sealed pre-restore catalog is a second reviewed source, available without repository helpers or passwords. Returning always creates a new forward transaction and another consistent backup of current edits. Its roots come from the retained database, including roots absent from the older snapshot.
-
-Bound catalog opens reject leaf symlinks before resolving inherited parent aliases, then hold native parent chains and compare stable parent identities around SQLite opening. They keep NOFOLLOW and never request CREATE. Ordinary catalog creation preserves existing platform parent-alias behavior. A canonical path alone does not establish race-proof authorization; native selection witnesses remain held through the actor lifetime.
-
-The isolated `npm run desktop:test:catalog` suite uses three actual native processes sharing one generated session. Its fixed fixture roles and nonce marker are native-validated; the renderer cannot supply execution paths. The suite retains failed sessions. Successful cleanup requires receipts from all three distinct exited process IDs and native scoped credential/authority cleanup before removing the exact generated directory. Evidence is under `.context/m4-catalog-restart`. Running this command does not itself establish a pass; record its actual outcome.
-
-Generated checks: `node scripts/cargo.mjs test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow catalog_restore -- --include-ignored` exercises defensive schema/OS selector/native preparation; `node scripts/cargo.mjs test --locked -p stillharbour --features desktop-test catalog_admission` checks request draining. Run `desktop:test:build` then the M4 application spec sequentially. The instrumented-only `m4_application_catalog_root_picker` arms one fixed generated root for one native selection; `m4_application_catalog_audit` validates actual native prepared artifacts. Neither accepts paths or grants production authority. Default-suite receipts prove preparation; the separate three-launch suite proves GUI activation only on platforms where it actually passes. [M4_VALIDATION.md](M4_VALIDATION.md) records observed results.
-
 # Development
 
-## Local validation and CI
+Read [build capabilities](CODEX_SPEC.md), [architecture](ARCHITECTURE.md), the
+[preservation contract](PRESERVATION_CONTRACT.md) and [AGENTS.md](../AGENTS.md)
+before changing native behavior. Use disposable generated media for tests.
 
-Owner-approved workflow, 2026-11-06: run focused local checks while developing and require full GitHub CI before merging. This section governs routine validation; older feature notes below retain their commands and historical evidence, but their full-suite sequences are not a requirement after every small edit. Explicit preservation, milestone and release qualifications still apply.
+## Setup
 
-Choose checks for changed behavior and its consumers, not just edited filenames. Run `git diff --check` for every change and check formatting of changed supported files with `npm exec -- prettier --check <changed-files>`.
-
-| Change                                                                                          | Local checks                                                                                                                                                                                           |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Documentation only                                                                              | Changed-file formatting, links/paths/commands and whitespace.                                                                                                                                          |
-| UI/component behavior                                                                           | `npm run typecheck`, `npm run lint`, affected component and consumer tests; run the focused native desktop smoke when native interaction changes.                                                      |
-| Theme, shared components/types, IPC, dependencies or build configuration                        | Broaden coverage to affected consumers; run the frontend build for output changes, IPC drift checks for schema changes and relevant Rust/native checks. Use full checks when impact cannot be bounded. |
-| Rust business logic                                                                             | `node scripts/cargo.mjs fmt --all --check`, Clippy for the affected package/targets/features with `-- -D warnings`, affected Rust tests and callers.                                                   |
-| Copy/delete, backup/restore, catalog migrations, permissions or other safety-sensitive behavior | Relevant preservation and failure/recovery regressions locally, plus affected native integration checks using generated fixtures. Keep both-platform CI and existing enablement gates.                 |
-| Milestone or release qualification                                                              | The complete applicable acceptance and platform gates, including checks absent from routine CI.                                                                                                        |
-
-Examples using existing scripts (replace paths/filters with the affected feature):
-
-```sh
-npm test -- src/components/PlaceSearch src/components/LibraryHeader
-npm run test:watch -- src/components/PlaceSearch
-node scripts/cargo.mjs test --locked -p stillharbour-core --lib library::search::tests
-node scripts/cargo.mjs clippy --locked -p stillharbour-core --lib -- -D warnings
-npm run desktop:test -- --spec tests/desktop/map-photos.e2e.mjs
-```
-
-The native example requires a current instrumented build (`npm run desktop:test:build`) and the documented generated fixtures. Keep native drivers and frontend builds sequential. Use the isolated executable/target workflow below when development is running; restore ordinary production output before production preflight. Browser/component tests do not establish native behavior.
-
-Run focused checks after relevant edits. Reuse a recorded passing result only while its relevant code, dependencies, configuration and build inputs remain unchanged, recording its revision/scope and identifying it as reused evidence. Shared changes broaden the scope; failures require investigation and rerunning affected checks after a fix. An unrelated failure remains reported. Avoid repeating successful unchanged checks merely to finish another small edit.
-
-`npm run check` remains the comprehensive aggregate for CI and broad local validation. It includes formatting, lint, strict types, component tests, release/dependency policy tests, IPC drift, Rust formatting/Clippy/tests and the frontend build. Full desktop and transport checks remain separate. Routine local completion can be reported once applicable focused checks pass, with the remaining CI explicitly pending; it is not merge, milestone or release acceptance.
-
-Before merging, require successful `native (macos-15)`, `native (windows-latest)`, `transports (macos-15)` and `transports (windows-latest)` checks for the current PR revision and an up-to-date base. Foundation checks and M4 disposable transport evidence retain their full macOS/Windows matrices, native recovery/desktop/cross-volume/restore cases and evidence uploads. No path filters or nightly-only substitutions remove this PR coverage. Live enforcement is a GitHub repository ruleset setting, not a consequence of committing a workflow; record its actual verification in the implementation log.
-
-Both workflows scope concurrency by workflow name and PR number: a newer PR run cancels its superseded run. Non-PR events use unique run IDs, so main pushes and manual transport evidence runs do not cancel one another or PR evidence. Existing npm/Rust caches remain enabled. Canceled or pending runs are not passing evidence; wait for the replacement run. See [GitHub concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) and [required status checks](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
-
-Current frontend layout: [TypeScript and Chakra conventions](TYPESCRIPT_STRUCTURE.md).
-The 2026-11-06 refactor moves component tests to their owning component folders;
-shared hooks use `src/hooks/use-*.ts`. Import components through `@/components/<Name>`.
-[React Doctor review](REACT_DOCTOR_REVIEW.md) records the diagnostic evidence and limits.
-
-Collapsed sidebar alignment: the Foundation desktop smoke checks every navigation
-icon against the logo centre and matches main/footer button edges at 1180×780 and
-660×560, including overflowing navigation at minimum height. Keep collapsed
-main/footer horizontal padding equal and size buttons from the shared rail width
-(excluding its border and padding), rather than the scrollbar-reduced scrollport.
-Native macOS scrollbars can consume 13 px even with `scrollbar-width: thin`;
-overlay-scrollbar browser fixtures alone missed the resulting 6.5 px icon shift.
-The smoke saves geometry JSON and screenshots before asserting alignment so the
-scrollbar width survives failures. Do not reintroduce negative navigation margins.
-Expanded padding remains unchanged. Browser fixtures are separate from native evidence.
-
-File-size field geometry: keep the unit's `Field.Root` as a flex container. An
-inline select can contribute extra baseline descent to its wrapper, stretching
-the adjacent amount input through the shared grid row (41 px versus 36 px on
-macOS 15 CI). `tests/desktop/file-size-fields.e2e.mjs` checks both native and
-bottom-edge fallback baselines at desktop/minimum sizes in a fresh Settings
-session, without a registered library. Test-only `contain: layout` suppresses the
-select's intrinsic baseline as specified by [CSS containment](https://www.w3.org/TR/css-contain-1/#containment-layout);
-it does not set either control's height. Geometry JSON and screenshots are saved
-before assertions in `.context/screenshots/file-size-*`, already uploaded by CI.
-
-The Foundation organization workflow opens Saved plans from Albums / Tags. After
-closing the dialog it must navigate back to Photos before using the Filter panel,
-then reselect its stable fixture IDs for subsequent compare/viewer checks. Section
-navigation mounts a fresh photo selection; closing Saved plans alone does not
-return to Photos. Retain all original-file and destination-neighbor audits.
-After clearing the selection, activate Done selecting before opening a photo;
-clearing selected IDs alone intentionally leaves selection mode active.
-
-Windows desktop regressions (2026-11-06): Map's search glyph now lives inside
-`.search-input-frame`; measure that shared border, the glyph before the input,
-input hit testing and the adjacent Filters trigger. Storage's explorer is a direct
-child of the page content, with version/background status allowed before it;
-the explorer itself starts at its filters and measurement controls stay in the
-dialog. Keep the viewer's single-row and pointer-reachability checks at minimum
-window size: Windows window borders can leave a 644 px content viewport inside
-a 660 px outer window. The slider may shrink while icon button widths remain fixed.
-The shared generated metadata export flow waits for the newly applied tag-history
-identity before selecting its Undo button, avoiding a cached previous first-row
-element while the history reloads. Existing catalog revision/conflict checks remain
-binding; the harness does not retry a rejected undo or alter backend revisions.
-
-Native CI regressions (2026-11-06): `npm run desktop:test:build` then `npm run desktop:test` checks favorite motion policy, Foundation/gallery/saved-profile baselines and Storage Escape using generated fixtures. The heart scenario records motion inputs and deliberately exercises hidden-document suppression; it does not force animations against OS preferences. Foundation focuses the fading timeline before asserting visibility and records `timeline-top-failure.json` on a start-position mismatch; CI retains that diagnostic with existing gallery evidence. A reopened saved backup profile starts an actual comparison, so its report becomes the baseline of the following manual scan. Component tests wait for the portalled Map filters' focus lifecycle before sending Escape; the native case focuses its ordinary Close filters button before the actual key so a native select cannot consume it. No personal-library fixture or preservation gate changes.
-
-Viewer hit-test CI follow-up (2026-11-06): Foundation and `tests/desktop/viewer-controls.e2e.mjs` share `viewer-controls.mjs`. A persistent notification from the deliberately unavailable generated preview can cover the floating toolbar. Verify its exact known description, dismiss it through Dismiss error, and await removal before testing every control and navigation arrow at desktop/minimum sizes, with Info open/closed. Unexpected notifications fail visibly and remain present. The dedicated native case forces this state through the existing test-only picker interceptor and verifies unchanged generated sources; it adds no production hook or file operation. Failed hit-tests retain control names, bounds, disabled state, actual hit elements and a screenshot under `.context/screenshots/viewer-controls-failure.*`, already included in CI artifacts. Do not weaken targets, skip disabled-button hit-tests or bypass pointer geometry with programmatic clicks.
-
-Windows desktop CI repair (2026-11-06): the Map smoke measures the shared `.search-input-frame`, its actual inline magnifier and input bounds/hit testing; the icon is no longer an absolutely positioned direct child of `.fixed-search`. Storage asserts that the results workspace is a direct child of its content area and inline setup/job/coverage controls remain absent, while allowing the existing scan-version/background-status paragraphs. Viewer keeps all six 44 px-wide buttons in one row: remove native range-input margins, retain a bounded 24 px minimum track and allow it to shrink while keeping the zoom readout unbroken. The shared native geometry checks retain single-row/containment/hit tests and additionally check button widths and slider/readout fit; failure diagnostics include actual client dimensions, which differ from the outer Windows window size. Run the affected PlaceSearch, MapScreen, InspectionScreen, StorageExplorer and PhotoViewer component tests, types/lint, and the three Map/Storage/Viewer desktop specs with a current instrumented executable. Use generated fixtures only. Browser reproductions of the actual component/CSS and native-test callbacks are useful local evidence, but do not establish a native Windows pass; retain the full CI merge gate and record failed build prerequisites separately.
-
-Native CI lifecycle follow-up (2026-11-06): the Duplicate cards and Utility lifecycle specs wait for the enabled onboarding picker before installing their picker interceptors, so startup status reads cannot receive a directory reply. Failed tests retain screenshots under `.context/screenshots/desktop-failure-*.png`. Saving a comparison profile remounts its workspace; wait for the native profile's selected ID before acquiring the new Compare button. Organization's Saved plans lives in Albums, so returning to gallery filters requires explicit Photos navigation and a fresh selection for annotation checks. Clear selection retains selection mode; use Done selecting before opening a viewer. Run desktop suites sequentially: the embedded driver defaults to port 4445; separate workspaces can set distinct free `TAURI_WEBDRIVER_PORT` values. A focused native run can use `npm run desktop:test -- --spec tests/desktop/duplicate-cards.e2e.mjs --spec tests/desktop/utilities-scans.e2e.mjs`; include the Foundation organization/annotation scenarios when changing those transitions.
-
-The generated Windows SMB server has a bounded 90-second readiness allowance for cold PowerShell module loading and C# adapter compilation in both transport and disconnect probes. Other protocol startup limits stay at 20 seconds; repository operation timeouts and preservation assertions are unchanged. Fixed startup-phase messages distinguish scope validation, adapter compilation and loopback binding in failure receipts without printing fixture secrets. `python3 -m unittest discover -s scripts/tests` checks delayed readiness, failure/timeout cleanup and the original non-SMB bound. This supervision evidence does not replace native Windows SMB backup/restore/disconnect CI.
-
-Utility scan lifecycle (2026-11-05): [UTILITIES_UI.md](UTILITIES_UI.md) and [ADR-0094](decisions/ADR-0094-utility-scan-history.md) own first-use setup, saved results, page-entry read-only reconciliation and the history-icon popover. New `backup_comparison_history` returns only bounded display records; existing comparison paging can read archived findings, while preview/execution still require a live run. Reports occupy a separate namespace in the existing immutable history table, with no schema/identity migration. Run focused inspection/backup components, the backup_compare Rust cases and `npm run check`; then `npm run desktop:test:build` and `npm run desktop:test -- --spec tests/desktop/utilities-scans.e2e.mjs`. The native case creates only generated media/destinations and writes `.context/utility-*.png`. Restore production output after instrumented checks. No personal library is authorized as a development fixture.
-
-Offline place search (2026-11-05): [PLACE_SEARCH.md](PLACE_SEARCH.md) and [ADR-0089](decisions/ADR-0089-offline-place-search.md) own optional versioned placeId, bounded suggestions, compiled GeoNames/Natural Earth data, pure geometry and a DIRECTONLY SQLite predicate. Schema/migrations, original access and network capabilities stay unchanged. Reuse pinned flate2 1.1.10 for bounded decoding and enable rusqlite's functions feature without version changes. `components/PlaceSearch` owns its popover recipe; add only missing spacing/size/font/stacking tokens to the existing theme. Typegen: `npx --yes @chakra-ui/cli@3.38.0 typegen ./src/theme/index.ts`. Run focused place/component tests, normal checks and generated native map acceptance, then restore production assets before release preflight. Source rotation must fail its pin rather than trigger an automatic update.
-
-M6 CI continuation (2026-11-04): `npm run test:release` now has eleven release/dependency cases. ZIP safety targets the actual resolved helper's explicit JavaScript extractor and checks its specific containment cause; default/native-first extraction receives a separate benign fixture test. Pin its optional `yauzl` peer in this checkout, and reject resolution from ancestor checkouts. Archive/glob expectations use native path separators. [M6 dependency evidence](M6_DEPENDENCY_HARDENING.md) records the reproduced two-target CI failures and clean-install qualification; no automatic downloads are enabled.
-
-M6 memory-only executable smoke: build ordinary output with `npm run tauri -- build --no-bundle`, then run `npm run release:smoke -- target/release/stillharbour.exe` on Windows (supply the actual executable on macOS). The command accepts no source/catalog path, creates its PNG entirely in memory, uses only early worker/SQLite modes, checks typed malformed-input and invalid-argument failures, bounds child runtime/output and verifies an unchanged executable SHA-256 before emitting its receipt. It launches no normal GUI and opens no user catalog. This is unsigned decoder/SQLite evidence only, separate from helper resources, installed GUI, signing, clean-machine and restore acceptance. Source/receipt identity must distinguish earlier legacy-checkout experiments from current main. See [package evidence](M6_PACKAGE_VALIDATION.md).
-
-M5's implemented development gate is complete; [M5 closeout](M5_CLOSEOUT.md) maps the final merged application tree to passing both-platform CI and inspected native receipts. Historical pending checks in the increment notes below retain their original scope. To review the exact CI evidence, download `native-evidence-macos-15` and `native-evidence-windows-latest` from Foundation run `41631002416` with `gh run download`, inspect each `m5-native/map.json` and compare the closeout's SHA-256 pins. Replaying its assertions is evidence review, not a new native/source audit. Separate metadata-spec receipt directories are not retained by that workflow's artifact list. Preserve clean-machine/format/accessibility and original-file restrictions; stop before M6.
-
-M5 geographic browsing originated in catalog schemas 14/15; the metadata/export continuation advances the current catalog to 17; M4's tables originated in schema 13. See [M5_MAP.md](M5_MAP.md) and [ADR-0081](decisions/ADR-0081-offline-geographic-browsing.md) for the offline map data/license path, spatial index migration, typed query filters and generated native checks. Known schema-13/14 bound catalogs are compared with their compiled historical schema and receive a consistent retained snapshot before migration; schema 15 fixes JSONQ numerical text extraction. Old-schema catalog activation remains gated. Windows bounded EXIF/GPS and native map/metadata acceptance now have passing Foundation evidence; wider format/platform and preservation limits remain in [M5 validation](M5_VALIDATION.md).
-
-Local disposable M4 server setup, pinned dependencies and actual protocol evidence: [M4_TRANSPORT_TESTS.md](M4_TRANSPORT_TESTS.md). Use Python 3.13 and hashed development dependencies. Generated retained-replacement native receipts live under `.context/m4c-retained`; no production mutation command is added by these tests.
-
-M4B generated transfer checks: `node scripts/cargo.mjs test --locked -p stillharbour-core m4b_append --lib` exercises the shared executor, separate staging, ordered durable events, fresh continuation, nine real child exits and preservation failures. The instrumented native suite invokes a no-input generated lab and saves `.context/m4b-append/native-*/m4b-append.json`; CI retains it on both platforms. These checks add no production transfer authorization. ADR-0077 records boundaries and remaining gates.
-
-Build-time backup-helper preparation: `python scripts/prepare-backup-helpers.py --download` downloads only fixed upstream archives and verifies archive/executable SHA-256 against `vendor/backup-helper-manifest.json`. Without `--download`, use existing verified archives under `.context/m4-helpers`; `--check` checks installed host helpers. Generated executables under `vendor/backup-helpers` are ignored. Windows x64 and macOS Apple Silicon hashes are recorded independently; cross-platform extraction is not an executed native test or signed distribution. Platform Tauri resource maps now bundle only the two fixed host executables, the manifest and licenses. Run `node scripts/backup-helpers.mjs --download` explicitly before a first native build; build/dev launchers check existing pins without downloading. CI prepares the reviewed host resources before compilation. Application integration is being validated; bundling alone is not a support claim.
-
-For `Missing or changed pinned helper: restic` (or `rclone`) in a fresh workspace, run `node scripts/backup-helpers.mjs --download`, then `node scripts/backup-helpers.mjs --check` and retry the original build/dev command. Each workspace needs its own ignored helpers. If an existing executable differs, stop for review; do not overwrite it, change the manifest pins or substitute a PATH-installed helper. If Python reports `CERTIFICATE_VERIFY_FAILED`, retain TLS verification: configure its trusted CA store, or use a TLS-verifying downloader for only the manifest's exact archive URLs and SHA-256 pins. Place verified archives at `.context/m4-helpers/<helper>/<archive>`, then run `node scripts/backup-helpers.mjs` without `--download` to verify both archive and extracted executable. This prepares build resources only; it does not run backup or restore operations.
-
-M4B starts with backend-only `Library::backup_append_review(run_id, keep_destination_entry_ids)` and pure rules in `crates/core/src/backup/append.rs`. Review creates no outputs and has no IPC/approval/start consumer. Select generated regressions with `node scripts/cargo.mjs test --locked -p stillharbour-core append --lib`; run standard full/native/release checks below. See ADR-0076 and M4_BACKUP_SYNC.md for remaining shared-executor and native transfer gates. M4A acceptance remains read-only historical evidence.
-
-M4A implementation and native validation are complete at `90acf91` / CI 41356788575, with inspected receipts linked in M4A_VALIDATION.md. Current M4A completion uses schema 12 and comparison policy 3 (ADR-0075). Run the focused backup comparison core tests, `node scripts/cargo.mjs test --locked -p stillharbour-core --test backup_compare`, exact `catalog::tests` plus `catalog::comparison_history_migration_tests`, frontend tests, full checks and both native platform suites. The comparison native step now loads a real source preview, revisits historical context and explicitly reviews/saves a superseding profile before a fresh comparison. The macOS gallery fixture retains its intentional link loop: require incomplete/blocked/no digest/no historical observation rather than weakening that result to complete. Clean native core/integration roots cover full history separately. See M4A_VALIDATION.md; no subsequent transfer gate is implied.
-
-M4A pull-request validation collects `m4a-comparison.json` from both macOS gallery evidence directories and Windows directory-selection evidence. The receipt contains the immutable profile, fresh run identities, category/page totals and independent unchanged-tree audits. Use the Foundation checks matrix for the exact PR head before claiming macOS validation; earlier pause-test-only CI does not validate M4A. Remaining milestone gates are listed in [M4 scope](M4_BACKUP_SYNC.md).
-
-M4A policy-2 conflict/review checks (ADR-0074): run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib backup::names` for conservative Unicode/ancestor screening and the comparison adapter cases for actual native case/type conflicts and filtered pages beyond 200 matches. Rebuild the instrumented desktop app and run the native foundation suite: its comparison step opens row details, filters to zero blocked findings and back to source-only entries before reopening the saved profile. Full checks remain required. No current Mac result may be inferred from the earlier test-only pause-fix CI. Policy-2 history: schema 11/profile format 1 were unchanged at that increment; current schema 12 adds observation history.
-
-M4 has started with the [read-only Backup & Sync increment](M4_BACKUP_SYNC.md) ([ADR-0072](decisions/ADR-0072-read-only-backup-comparison.md)). Focused checks: `node scripts/cargo.mjs test --locked -p stillharbour-core --lib library::backup_compare` and `npm test -- src/components/BackupScreen/BackupScreen.test.tsx`; also run full checks and native tests. Use generated roots only. Reviews are session-only; M4A acceptance/M4B–D remain open. Schema 11 adds immutable saved comparison profiles through the catalog actor; dependency/helper versions and production write authority remain unchanged.
-
-[ADR-0073](decisions/ADR-0073-saved-comparison-profiles.md) records profile scope and bounds. Add `node scripts/cargo.mjs test --locked -p stillharbour-core --lib catalog::tests` for retained snapshots, collision rollback and the expanded 30 child-exit cases across versions 2–11. Native `m4a-comparison.json` now includes the saved profile and a separately started comparison after screen reopening. Profiles survive restart but never persist approvals; imported/foreign bindings require native reauthorization. The default MP4 regression is in Windows library integrations and the shared filter/setup/native-preset checks. The legacy `DEFAULT_PHOTO_EXTENSIONS` identifier remains for IPC compatibility; its built-in list has 34 media suffixes, including MP4. Existing saved application/library filters remain exact.
-
-Repository-local agent skills are versioned under `.agents/skills/`, including their reference material, scripts and assets. They are development guidance, not application dependencies or packaged features. Existing formatter and lint exclusions preserve these supplied files; consult the relevant `SKILL.md` when applying a skill and follow repository safety and milestone gates.
-
-M3 read-only inspection and constructor-owned duplicate recovery are accepted at the implemented fixture gate. Duplicates, Integrity and Storage use the native catalog job API; the Jobs page includes retained inspection jobs and cancellation. Coverage and decoder limits are documented in [M3_INSPECTIONS.md](M3_INSPECTIONS.md); complete both-platform checks and inspected native artifacts are indexed in [M3_VALIDATION.md](M3_VALIDATION.md). Real-library duplicate quarantine remains unavailable pending M4 recovery evidence.
-
-The desktop-test generated rename lab can explicitly reopen its owned retained scope (ADR-0068). This retires the live catalog/session and approvals, then revalidates the exact retained evidence and current native objects before another review. It accepts no renderer path. Existing real child-exit tests use the same decoder. The action does not restart the application process or enable adoption of a real library.
-
-Current M2 acceptance evidence and remaining qualifications are indexed in [M2_VALIDATION.md](M2_VALIDATION.md); dated implementation-log entries retain exact checkpoint outcomes.
-
-Jobs offers catalog-only retained organization-plan history by validated job UUID (ADR-0067). It shows saved paths and recorded attempts without checking current files or granting execution approval. The native-test generated lab uses the same review through a desktop-test-only history command; production permissions remain narrow. Native artifacts include bounded generated `gallery/**/multi-source-*.json` receipts alongside screenshots and existing preservation reports.
-
-M1 implements the read-only library on macOS Apple Silicon and a bounded Windows local NTFS scan/preview slice (see ADR-0021). Read [M1 validation](M1_VALIDATION.md) and [ADR-0002](decisions/ADR-0002-read-only-library.md) for behavior, limits and platform gates. Original-file mutations and production backup remain unavailable.
-
-Install Node 24 or newer compatible Node, npm 11.16.0, Rust via rustup, and the [native Tauri prerequisites](https://v2.tauri.app/start/prerequisites/). The repo pins Rust 1.99.1 with rustfmt/clippy. This session installed rustup without editing shell profiles; Node scripts explicitly include `~/.cargo/bin` in child PATH.
+CI uses Node.js 24 and Python 3.13. The repository declares Node.js >=22.12.0,
+npm 11.16.0 and Rust 1.99.1. Use the pinned npm package manager and Rust toolchain.
+Install the native [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
+for the target platform; Python 3 is also used by helper/fixture tooling.
 
 ```sh
 npm ci
+node scripts/backup-helpers.mjs --download
+node scripts/backup-helpers.mjs --check
 npm run desktop:dev
 ```
 
-Setup warnings: with the pinned npm 11.16.0, `npm warn allow-scripts` is an advisory notice about dependency lifecycle scripts without a recorded review. Inspect them without changing package policy using `npm approve-scripts --allow-scripts-pending`. Review individual scripts before approving named packages; a blanket approval is not required to check Rust bindings. See [npm approve-scripts](https://docs.npmjs.com/cli/v11/commands/npm-approve-scripts/); later npm versions can enforce different defaults. No install-script approvals are recorded by this troubleshooting change.
+The helper script verifies pinned archive/executable checksums. Do not disable
+TLS or checksum checks or replace a changed helper without review. Helpers and
+download caches are ignored and must be prepared in fresh workspaces. See
+[dependencies](DEPENDENCIES.md) for manifests and notices.
 
-`npm run bindings:check` uses the default Rust feature set. The owned directory-read helper is compiled for Windows snapshot metadata restoration, tests and explicit fixture/copy/backup features; the default macOS bindings build does not need it. `npm run rust:check` now also checks the default core library with warnings denied before the existing workspace feature checks, catching feature-specific unused helpers. A Rust `warning:` line alone is not a failed binding check: use the command's exit status and any subsequent error. Binding validation does not open or mutate a photo library.
+`desktop:dev` starts the native app and Vite. It uses `CONDUCTOR_PORT` when set,
+otherwise port 1420. Debug catalog data is isolated under `.context/native-data`;
+do not automate a running personal-catalog development session. A frontend-only
+`npm run dev` cannot provide native catalog or filesystem behavior.
 
-To prefetch the exact Rust dependency graph without changing versions, run `node scripts/cargo.mjs fetch --locked`. Cargo stores dependencies in its user cache. A restricted agent sandbox may need approved access both to crates.io and to that cache; an offline missing-package error can also reflect denied cache access. Do not change dependency pins or cache permissions to work around that restriction.
+## Commands
 
-The native command uses Conductor's allocated port when present and updates both Vite and Tauri's dev URL. Vite binds loopback and fails on port collisions. `npm run dev` alone opens a frontend development server; outside Tauri, the UI truthfully reports the missing native connection. It has no successful browser fallback.
+| Command                                                      | Purpose                                                                                                      |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
+| `npm run desktop:dev`                                        | Native development application                                                                               |
+| `npm run build`                                              | Strict frontend compilation and production frontend output                                                   |
+| `npm run typecheck` / `npm run lint`                         | TypeScript and ESLint                                                                                        |
+| `npm test -- <path>`                                         | Focused Vitest cases                                                                                         |
+| `npm run bindings:check`                                     | Generated Rust/TypeScript IPC drift                                                                          |
+| `npm run check`                                              | Formatting, lint, types, frontend cases, release/dependency policy, bindings, Rust matrix and frontend build |
+| `npm run desktop:test:build`                                 | Instrumented debug native app with generated-fixture features                                                |
+| `npm run desktop:test`                                       | Default native WebView suite                                                                                 |
+| `npm run desktop:test:catalog`                               | Separate three-process catalog activation/recovery suite                                                     |
+| `npm run desktop:test:formats`                               | Separate native format/viewer suite                                                                          |
+| `npm run desktop:test:map` / `npm run desktop:test:metadata` | Isolated generated map/metadata harnesses                                                                    |
+| `npm run desktop:test:albums`                                | Isolated generated Albums harness                                                                            |
+| `npm run desktop:build`                                      | Normal unsigned macOS `.app` bundle; not a Windows installer command                                         |
+| `npm run test:release` / `npm run release:check`             | Policy regressions / production-resource and feature preflight                                               |
+| `npm run release:smoke -- <executable>`                      | Built-worker and in-memory SQLite probe without a user catalog                                               |
+| `npm run native:cross-volume`                                | Platform-specific generated cross-volume fixtures                                                            |
 
-Conductor configuration lives in `.conductor/settings.toml`. Each worktree gets its own debug catalog under `.context/native-data`, so desktop development can run concurrently across workspaces. Conductor's Mac client reads shared settings after they reach the remote default branch; the commands can be run directly immediately. Native test sessions own fresh temporary catalogs and generated source folders; they do not share the development or production catalog.
+The scripts in [package.json](../package.json) and [scripts/](../scripts) are the
+command reference. Format/performance/transport probes have separate owned
+fixture and external-endpoint requirements; historical invocations are preserved
+in the [changelog](changelog/README.md), not ordinary setup instructions.
 
-Production builds use Tauri's local application-data directory. The directory picker returns a display path and opaque session ID; its native path stays in Rust. Selecting a directory only opens its handle and reads directory metadata, never enumerates its children. Canceling preserves the previous selection. Save & Start scanning explicitly registers that selection and begins a read-only scan. It is not permission for original-file mutations.
+## Validation and CI
 
-The initial screen focuses on the folder-selection heading and button. Selecting a folder replaces its welcome heading/icon/chooser with the form alone; Cancel returns to the chooser. The form and Advanced panel grow naturally without internal scrollbars; the main pane handles page scrolling. The sidebar footer displays the running Rust package version instead of tagline copy. Native/database diagnostics and milestone/footer notices are omitted from the product interface. Connection readiness still gates the button, errors remain visible, and a selected folder is explicitly unscanned. Native smoke tests verify catalog status through real Rust IPC rather than relying on visible developer diagnostics.
+Choose checks for changed behavior and consumers, including shared dependencies.
+Run `git diff --check` for every change and Prettier on changed supported files.
 
-The selected-folder card defaults new folders to Managed, with a Read only switch that saves referenced mode. Existing roots retain their mode. The full-width Advanced accordion uses independent Include hidden files / Include hidden folders switches and removable tags for exclusion patterns, excluded folder names and File Extensions. Include patterns is removed; setup clears legacy include-glob restrictions on Save/Rescan. New folders start with the 34-extension media preset (including MP4) exported from Rust; displayed dots and uppercase input normalise to lowercase suffixes. Existing custom filters remain intact. Enter, Tab and blur add a value; multiline paste adds several; commas remain literal. Save and Preview also include a pending value without needing blur. Scan date fields are removed, and save/rescan clears any legacy scan date bounds. Browsing date filters remain available. Size filters and the pure relative-path preview remain. Save persists the root and starts a real background scan. Results, cancellation and per-file issues come from Rust. Root mode, filters and annotations survive restart. Reconnecting or relinking reconciles retained inventory; an offline root is never treated as empty.
+| Change                                                            | Local validation                                                                                        |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Documentation only                                                | Formatting, local links/anchors, paths, commands and whitespace                                         |
+| UI behavior                                                       | Types, lint, affected component/consumer cases and focused native smoke when native interaction changes |
+| Shared theme/types, IPC, dependencies or build inputs             | Broader affected consumers, frontend build, IPC drift where relevant and affected native/Rust checks    |
+| Rust logic                                                        | Rust formatting, affected Clippy package/targets/features and domain tests/callers                      |
+| Filesystem mutations, recovery, catalog migrations or permissions | Applicable preservation, failure/recovery and generated native checks                                   |
+| Release or milestone qualification                                | Complete applicable acceptance and both target-platform gates                                           |
 
-The library uses bounded keyset pages (240 assets), virtualized gallery/grid/text rows and direct year seeks. Text list never requests nonempty preview batches. Select all results freezes membership in SQLite; favorite/rating/tag actions update the catalog only. The inspector labels date provenance and unknown offsets. Missing codecs, invalid or unsupported ICC inputs and oversized files stay catalogued with explicit unavailable previews. The approved macOS native preview slice and its per-camera evidence are documented in [FORMAT_SUPPORT.md](FORMAT_SUPPORT.md).
+Use focused checks while developing. Reserve `npm run check` and complete native/
+transport suites for CI, broad changes or explicit qualification. Reuse a passing
+result only while its relevant code, dependencies and build inputs are unchanged;
+identify reused evidence separately from fresh runs. Rerun after relevant edits
+or failures. Never invent a pass or call browser checks native desktop evidence.
 
-Photos/Map date search (2026-11-05) uses `crates/core/src/library/search.rs` to recognize complete valid `DD-MM-YYYY` and `YYYY-MM-DD` days in the existing query text. The shared SQL predicate applies an indexed effective-date range; skip filename-only candidate narrowing for those searches. Paging, counts, buckets, neighbors, seeks, saved searches and frozen selections share membership. No IPC/schema/dependency change or original access is added. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib library::search::tests`, the Map component suite and normal checks; the generated native foundation flow searches its EXIF leap-day fixture in both formats. Existing incomplete/invalid-date and other filename searches retain escaped literal substring behavior. Documentation of prior filename-only behavior below remains historical.
+Before merging, require these checks for the current head and an up-to-date base:
 
-The current photo canvas supersedes the earlier gapless gallery: justified 4 px rows preserve photo ratios, day headings show date provenance through details, and hover/focus checkboxes support explicit/page-range selection. Thumbnail density presets target 150/220/300 px; Uniform grid offers fit/crop and Text list requests no images. A fixed filename search, removable filter chips and collapsible navigation keep controls available. Actual filtered month buckets back the right-hand scrubber and indexed seeks for capture/Recently added sorting. Scroll loading replaces explicit paging: three native chunks of at most 240 assets retain no more than 720 summaries, with virtual rows and stable-ID anchors. See [ADR-0003](decisions/ADR-0003-photo-canvas.md) for controller, selection, preview ownership and new typed IPC.
+- `native (macos-15)`
+- `native (windows-latest)`
+- `transports (macos-15)`
+- `transports (windows-latest)`
 
-The modal viewer navigates within the same filtered query, including outside the loaded page, with optional filmstrip/Info and 100–400% fit-relative zoom/pan. It uses the existing 512 px cached previews, not a new full-resolution decoder. Closing restores focus and the original gallery offset. Compare accepts only 2–4 explicit selections and establishes no duplicate evidence. Batch Add tags merges atomically into existing catalog tags; favorites/ratings/tags never rewrite originals or sidecars. Similarity analysis, original editing remains unavailable; explicit new-output metadata export is available under the M5 review workflow. Schema-16 albums, saved searches, categories and captions/rejects are described in [M5_METADATA.md](M5_METADATA.md); Catalog and the selected-photo Add to album action open their native dialog. Native dialog behavior follows [MDN showModal](https://developer.mozilla.org/en-US/docs/Web/API/HTMLDialogElement/showModal), the accessible scrubber uses a [native range input](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/range), and virtualization uses the [official TanStack API](https://tanstack.com/virtual/latest/docs/api/virtualizer).
+[Foundation CI](../.github/workflows/check.yml) runs the aggregate, explicit native
+preservation opt-ins, desktop/catalog suites and cross-volume checks.
+[Transport CI](../.github/workflows/m4-transports.yml) supplies the separate
+disposable transport matrix. Keep both platforms, evidence uploads and required
+gates; canceled/pending runs are not passes. Live branch protection is a repository
+setting, not a consequence of a committed workflow.
 
-The Jobs page renders scan progress from the existing polled native status. Streaming discovery has no fixed total, so running/cancel-requested bars are indeterminate and retain actual found/indexed/skipped/issue counts. Only a native completed scan fills its bar; other terminal states show a stopped neutral track and explicit outcome. Reduced motion disables the activity sweep. This is presentation only; it adds no scanner, filesystem, schema or IPC changes.
+## Isolate native automation
 
-The collection waiting view uses PhotoScanningArt.tsx: a theme-aware inline photo-card SVG with a CSS-animated magnifying glass. Scoped queued/running work enables motion; paused/stopping work and reduced-motion preferences show still artwork. Scanning has its own heading rather than no-match wording. The SVG needs no image requests, timers, dependencies or source access. Component coverage is in emptyLibrary.test.tsx; the held native preparation fixtures check responsive fit and computed motion at desktop/minimum sizes. See INITIAL_LIBRARY_PREPARATION.md for the behavior contract.
-
-Advanced scan Minimum size/Maximum size use independent KB/MB/GB selectors (decimal units, 1 KB = 1,000 bytes). Empty inputs start in MB; saved limits select a suitable unit and retain every byte. FileSizeField uses exact BigInt conversion to the existing nullable byte-string fields; blank clears a limit, zero does not. Switching units changes the scale of the entered amount. Invalid drafts show a field error and block Save/Preview through form validation. Rust still validates the size range. The browsing Filters byte inputs and backend schema are unchanged.
-
-Desktop-test builds expose generated-source and synthetic-catalog fixture commands and a read-only frontend request-observation event, plus the existing picker-presentation registry. The suite bypasses only the OS picker interaction with a server-issued selection for an owned generated folder; saving, scanning, queries, annotations and cached PNG loading use actual Rust IPC/protocols. Normal builds exclude all test routes. Native OS picker automation remains unverified because Accessibility access is unavailable.
-
-| Command                                       | Purpose                                                                                                                                                                  |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `npm run check`                               | Full CI/broad-change aggregate: formatting, ESLint, strict types, component and release/dependency policy tests, IPC drift, Rust formatting/clippy/tests, frontend build |
-| `npm run bindings` / `npm run bindings:check` | Generate / verify the Rust-owned IPC schema                                                                                                                              |
-| `npm run fixtures:smoke`                      | Owned temporary catalog, volume, publication and interrupted-copy probes (macOS only for publication)                                                                    |
-| `npm run media:smoke`                         | Real decoder-child failure/timeout/replacement tests                                                                                                                     |
-| `npm run desktop:test:build`                  | Build a debug native app with test-only WebdriverIO instrumentation                                                                                                      |
-| `npm run desktop:test`                        | Drive native WebView with owned generated sources; native library IPC                                                                                                    |
-| `npm run desktop:build`                       | Build the normal unsigned local macOS app bundle                                                                                                                         |
-| `npm run release:check`                       | Check narrow production permissions and default dependency graph                                                                                                         |
-
-`npm run rust:check` defines the full Rust formatting/Clippy/test matrix in `scripts/rust-check.mjs`, including the fixture, copy and backup workflow features. For focused local checks, select the affected package/targets and the same features needed by those tests. Do not use `--all-features` for a release; it deliberately enables the forbidden test server. Fixture features belong only in development probes and instrumented tests, never the normal application.
-
-The helper probe is developer-only and requires explicitly supplied, checksum-reviewed helpers:
-
-```sh
-python3 scripts/helper-smoke.py \
-  --restic /absolute/path/to/restic \
-  --rclone /absolute/path/to/rclone \
-  --exiftool /absolute/path/to/exiftool \
-  --perl-library /absolute/path/to/exiftool/lib
-```
-
-It creates its own temporary root, PNG and companion fixtures, rejects an unwanted ExifTool config, backs up/restores a local restic repository and compares restored bytes. It removes only its asserted generated source folder. It never accepts a real photo root. A local test does not prove remote protocols or metadata fidelity. See DEPENDENCIES.md for the exact development helper versions and packaging gaps.
-
-Run `npm audit`, `npm audit --omit=dev`, and `cargo audit` when updating lockfiles. Review advisories rather than applying a forced downgrade. Dependency license metadata is an inventory input, not a finished distribution legal review.
-
-The GitHub workflow defines macOS/Windows checks and native smoke tests. A checked-in workflow is not evidence of a completed run. Windows original-file publication/durability and the broader packaged helper/codecs/signing matrix remain gates. M2 is authorized and in progress, beginning with catalog-only organization previews; production original operations remain unavailable. Windows local NTFS scanning now has a native adapter; other filesystems/network volumes, metadata helper packaging and broad Windows distribution remain gated.
-
-To repeat the owned synthetic catalog and packaged-code probes on macOS:
-
-```sh
-node scripts/cargo.mjs run --release -p stillharbour-core --features fixture-probes --example library_probe
-node scripts/cargo.mjs run --release -p stillharbour-core --features fixture-probes --example packaged_library_probe -- target/release/bundle/macos/Stillharbour.app
-```
-
-The packaged probe accepts only an application-bundle location. It creates its own photo fixtures and catalog, invokes the bundle's decoder executable and bundled ExifTool resources, and checks unchanged generated source bytes/names. It accepts no user-library path.
-
-## M6 release hardening
-
-M6 is owner-authorized as of 2026-11-03 and remains in progress. Read [release readiness](M6_RELEASE_READINESS.md), the [125-scenario AC/PS matrix](M6_EVIDENCE_MATRIX.md) and the [user guide](USER_GUIDE.md). Historical milestone acceptance never enables production original-file operations.
-
-`npm run test:release` runs isolated Node production-preflight regressions and is part of `npm run check`. They exercise missing/empty frontend output, source maps, linked build inputs, nested instrumented chunks and enabled/missing owned-package feature inventories. `npm run release:check` requires a completed production frontend build and prepared pinned helpers. It reads a quiescent build tree and the locked host default dependency graph; it is not signing, installed-artifact inspection or clean-machine acceptance. Keep the configured empty/default feature policy until a separately reviewed change with native evidence authorizes more. Run instrumented native builds and production builds sequentially because they share `dist`.
-
-## Documenting requested changes
-
-The root [README](../README.md) is the project entry point: keep its implemented features, platform limits, quick start, command summary and milestone status aligned with this guide and the owning validation documents. Detailed historical evidence belongs in the implementation log rather than the README.
-
-Every requested repository change includes the relevant documentation updates and a dated entry in [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md), including documentation-only requests. Update the existing documents that own the affected requirements, behavior, commands or paths. Approved product changes must also update the applicable specification and acceptance criteria; milestone and preservation gates remain in force.
-
-The log records the request, resulting change, affected files, actual validation and remaining limitations or next gate. Keep small entries brief and preserve earlier evidence. A documentation-only change needs relevant formatting/link checks; a code change needs checks appropriate to its behavior. Describe unrun checks accurately. Material architecture decisions belong in `docs/decisions/ADR-*.md`.
-
-The app shell fills the viewport. Sidebar and main content have independent vertical scroll areas, so long onboarding/settings pages do not move the identity rail. The collection retains its virtualized scroll region; settings use main-page scrolling. Selecting a new folder moves keyboard focus into Library name. Native tests compare sidebar/brand/navigation positions before and after scrolling the main pane at normal and minimum desktop sizes.
-
-## Settings and preferences
-
-Settings polish (2026-11-02) retains the existing palette and section order. The defaults actions align vertically, the import form uses 12px gaps, and browsing controls retain 13px text at narrow widths. Import preferences explain missing-catalog/unavailable-save states with an accessible description; this does not change native permissions or save behavior.
-
-The sidebar Settings screen manages indexed photo folders; it does not relocate catalog/cache storage. Change location reuses the native picker/identity-checked relink workflow, and Add photo folder reuses explicit setup/Save & Start scanning. Use generated disposable libraries for all location/scan tests. A relink may reconcile the selected folder; never invoke it against a real library as a development test.
-
-Preferences are generated from crates/core/src/preferences.rs and use the existing foundation_request permission boundary. The backend saves preferences.json only inside its private app-data directory (worktree-local for debug, temporary for native tests). It reads at most 64 KiB, validates the version/enums/shared scan filters and registered default-root ID, rejects links and unreadable/future data, then stages/syncs/atomically replaces its own preferences file and syncs the parent. This is app-owned configuration, not an original-file executor or catalog migration. Publication follows the pinned [tempfile persist API](https://docs.rs/tempfile/3.27.0/tempfile/struct.NamedTempFile.html#method.persist); contents and directory require explicit synchronization. Windows preference saving remains gated pending native durability tests.
-
-Settings defaults cover new Photos sessions and new folder setup. ScanOptions/scanForm, switches, tag fields, FileSizeField and BrowserControls are shared; existing root settings take priority over defaults. A corrupt preferences file is preserved with an explicit failed-load/retry state; automatic repair/reset of invalid files is not implemented. See [ADR-0004](decisions/ADR-0004-settings.md). Run npm run check, then desktop:test:build and desktop:test sequentially because general/test builds share dist output. Use the documented supported Node/npm versions; the installed Node 26.3.1/npm 11.16.0 toolchain is available through ~/.nvm/versions/node/v26.3.1/bin.
-
-## Gallery side panel and scroll feed — 2026-10-28
-
-Photos has fixed filename search, Filter and Jobs in its header. The native dialog side panel owns query/sort/display controls, folder/tag facets, active chips, total count, explicit availability/relink/settings and applied-query Select all. Apply commits drafts; Close/Escape cancels. The independently scrolling body preserves access to fixed actions at the minimum window. Add folders through Settings. A contextual batch toolbar appears only after selection.
-
-`useAssetFeed` serializes continuations, rejects stale-query responses and retains at most three 240-row keyset chunks. Forward loading evicts the oldest chunk; scrolling upward near the top (including scrollbar movement), wheel and keyboard navigation retrieve the preceding chunk. Programmatic anchor restoration is distinguished from user scrolling to avoid before/after oscillation. Capture the visible stable ID/offset before committing each window. Timeline seeks stay direct. Catalog revision refresh rereads at most three chunks from the first retained ID, falling back to the query head if the window disappears. Failed continuation retains rows and requires Retry. Native `seek_asset` uses an allowlisted sort and SQLite-native sort key (including u64-sized byte values), validates IDs/limits/query, and filters every returned row. It reads only the catalog. See [ADR-0005](decisions/ADR-0005-filter-panel-feed.md).
-
-The desktop-test-only `test_scroll_catalog` accepts no paths/counts and requires a verified generated library fixture. It inserts 960 explicitly unavailable synthetic catalog observations, not original files. Its only purpose is native bidirectional window/anchor validation in Text list. Production commands/capabilities exclude both fixture routes. This is not a large-photo decoding or full-library performance benchmark.
-
-## Inline library scan settings — 2026-10-28
-
-Settings now includes ScanSettingsGroup after Library locations. It embeds the existing RootSetup/ScanOptions form with a registered-root selector, saved per-root mode/filter values and independent Save & Rescan / Discard scan changes actions. It has no surrounding setup screen or dialog and no nested form. Gallery Scan settings links navigate to Settings and focus the group for that root. Per-location launch buttons are removed. Add photo folder still opens explicit onboarding; Change location still uses identity-checked relinking.
-
-The frontend `useFoundation.rescan` reuses typed update_mode and scan operations, then refreshes native status without navigating away or saving defaults. Failure refreshes status and rejects to the inline error, retaining the draft. Native mode publication and scan start remain separate existing operations; a scan failure is not proof the preceding mode update rolled back. Discard reloads the current native root values and resets field-local drafts/validity/preview. App defaults remain in a separate named form, so pending tags and identical scan field names never cross forms. Ordinary polling does not reset an unsaved scan draft. Select another library to load its saved values; discard pending edits from the previous root.
-
-Native regressions use generated sources to exercise gallery routing, per-root save/rescan, restart-of-the-page persistence, unchanged app defaults, valid form structure and desktop/minimum layouts. They do not authorize a personal-library rescan or original-file changes.
-
-## Remove library and clear preview cache — 2026-10-28
-
-Settings LibraryMaintenance uses typed prepare_maintenance/apply_maintenance through the existing local-main-window library command. A single five-minute opaque plan records target and catalog revision; apply takes the scan permit, cancels queued/inflight preview work and waits for the cache write barrier. Worker publication and protocol reads take the same read barrier. Native status/recovery is serialized with cleanup. No renderer destination/path or SQL is accepted.
-
-Removal job-stop revision (2026-10-31): prepare_maintenance for a library blocks new work admission, requests cancellation for that root's scan/initial/thumbnail jobs and waits at most 30 seconds before reviewing current counts. Keep pending admission distinct from the publication flag; another root's active jobs are not canceled or falsely counted as generated. Cache-only maintenance keeps its active-job rejection. Invalid approvals cannot cancel jobs; valid confirmations recheck expiry/revision after draining. Canceling the review leaves jobs stopped and records/previews retained. Existing Windows cache-cleanup support remains gated; this change enables automatic job stopping/review, not unsupported cleanup primitives.
-
-Run the maintenance_tests Rust module, Windows windows_library integration and src/components/LibraryMaintenance/LibraryMaintenance.test.tsx, then full checks/native build/suite. Both native generated-library scenarios now open Settings removal while a real initial-preview job is held, verify stopped terminal states and retained root, cancel review and explicitly resume preview generation. Receipts are windows-removal-stopped-jobs.json/removal-stopped-jobs.json in the existing owned evidence folders; screenshots are remove-library-stopped-win32/darwin.png. Independent source manifests remain required. The macOS terminal-removal assertion waits for completion text, distinguishing stopping feedback from successful cleanup.
-
-CacheCleanup holds the owned thumbnails directory descriptor and unlinks only index-owned 64-hex PNG names using openat/O_NOFOLLOW and unlinkat. It rejects linked/nonregular/invalid PNG-signature files and normal identity replacement; it does not claim immunity to a hostile writer changing owned files between checks. Cleanup is not recursive. Unindexed orphan/staging/unknown files are retained rather than claimed as owned from their suffix. File lists stream in 256-key batches; no unbounded renderer/worker list.
-
-The existing cache index remains until files are removed and the directory synced. A crash/error before catalog commit retains a retryable ownership list; already missing files are safe to retry and previews can regenerate. Final SQL transaction checks the revision again, removes target records/dependencies, promotes a surviving base UUID and bumps catalog revision; schema remains2. Cache-only cleanup leaves catalog notes/roots intact. Forgotten annotations are intentionally not restored by re-adding; no secure erasure/Undo/catalog portability feature is claimed. Native preference reads neutralize a removed default-root ID only in the returned effective defaults, preserving the app-owned file and unrelated preferences.
-
-See ADR-0006 and matching acceptance criteria. Validation is restricted to generated libraries and temporary app-data/cache directories; development never removes a real registered library or its cache. Native platform gates remain for Windows; POSIX descriptor behavior is exercised on macOS.
-
-## Folders explorer — 2026-10-28
-
-App routes Folders to FolderExplorer rather than the chronological collection. useDirectoryPage reads a typed browse_directory page for the selected root/directory/search/cursor; stale replies are ignored and failed reads remain explicit. ExplorerCanvas virtualizes one bounded page in responsive Icons or image-free Details. Back history is capped64; breadcrumb text scrolls horizontally rather than expanding a deep path into an unusable viewport. Photos keeps its own three-chunk scroll feed.
-
-The native directory adapter queries existing directory/asset observations only. It returns folders first plus immediate files (including non-media records) in at most240 entries, with bidirectional root/directory/search-bound cursors and a joined asset projection rather than per-file lookups. Identifiers encode native relative-path bytes and are catalog keys, not filesystem execution inputs. The root uses the empty native path. Root IDs are validated; unknown/excluded/blocked directory navigation fails. Old observations are labeled retained; they do not prove live presence. Empty/indexing/offline states remain distinct. Saved scan settings still determine what has been indexed.
-
-AssetQuery accepts optional directoryId for exact folder_native equality. The renderer never reconstructs an execution path from a display name. This scope constrains the existing photo viewer and its neighbors; the legacy folder string remains recursive. Exact-directory queries bypass the root media-count fast path. Non-media files use FileDetails and no external application. All original access uses the existing read-only preview path; navigation itself is SQL-only. No schema/dependency/capability expansion.
-
-Tests distinguish generated filesystem hierarchy evidence from synthetic catalog observations for non-text native bytes: this Mac/APFS volume refused creating invalid UTF-8 names, so no native creation support is claimed. Directory-query performance on huge/deep real libraries remains unmeasured; bounded IPC/DOM is not proof of the provisional latency targets. See ADR-0007 and M1_VALIDATION.
-
-Jobs page revision (2026-11-06): the sidebar JobsButton opens JobsPage in main. Both consume the shared activeJobCount helper and existing foundation status polling. The previous workspace stays mounted inside a hidden/inert wrapper; Back restores it and main scrolling, focusing Jobs. Sidebar navigation leaves Jobs normally. No popup positioning, portal, outside-dismissal or global Escape listener remains. Existing progress/actions and their ID-only IPC are retained. Component regressions live in App and JobsPage; native Foundation checks the page, both window sizes, progress, pause/resume, history and return paths. Opening Jobs itself starts no work.
-
-Text list uses shared native SortControl choices and a session-local Columns menu. textColumns owns the bounded allowlist/order/widths; TextList renders accessible headers/rows and indexed metadata only. Modified Date is AssetSummary.modifiedAt, not the effective capture-date fallback. The default table omits repeated provenance; optional Date Source and the inspector retain it. Name is pinned, Reset restores the six defaults, and column changes do not publish queries or clear selection. Sort changes reuse the controller/native keyset query (and its existing selection reset). The table shares a horizontal scroll surface for header/body rather than hiding later fields at narrow widths. No preference, IPC or database schema is added.
-
-## P0 performance diagnostics
-
-Read [PERFORMANCE_BASELINE.md](PERFORMANCE_BASELINE.md), the [P0 checklist](PERFORMANCE_ACCEPTANCE_TESTS.md) and [ADR-0008](decisions/ADR-0008-performance-baseline.md). P0 does not approve later optimisations. Scripts use Python3 plus the pinned Node/Rust tools and generated sources only. The release catalog probe creates a fresh UUID-owned directory under .context/performance and retains its catalog/sources/manifests. It rejects unsupported sizes and requires a four-GiB free-space reserve. It never accepts a photo-library path, purges caches or modifies production catalog settings.
+Run native drivers serially. Do not rebuild a binary used by another agent or
+development session. For an isolated instrumented build on macOS:
 
 ```sh
-npm run desktop:build
-node scripts/performance/packaged-sqlite.mjs
-npm run perf:catalog:build
-npm run perf:catalog -- --rows 10000 100000 1000000
-STILLHARBOUR_REACT_PROFILE=1 npm run desktop:test:build
-STILLHARBOUR_PERF_ROWS=100000 npm run perf:desktop
-STILLHARBOUR_PERF_ROWS=1000000 npm run perf:desktop
-python3 scripts/performance/summarize.py --catalog-run UUID_FROM_THE_CATALOG_RUN
+CARGO_TARGET_DIR="$PWD/.context/native-test/target" npm run desktop:test:build
 ```
 
-Do not build while taking a quiet measurement, and do not run two native drivers together. A six-step smoke run uses STILLHARBOUR_PERF_STEPS=6; it cannot pass the60-second scenario. The embedded evaluator has an independent30-second timeout, so the seed harness submits one owned promise and polls completion with a180-second bound (600seconds for the separate million-row debug setup). The optional React profiling alias affects only desktop-test when STILLHARBOUR_REACT_PROFILE=1; it never changes production React or dependencies. Profiler actualDuration measures React render work, not browser layout/commit/presentation.
-
-Core traces and renderer traces each stop retaining after4096 numeric observations and report drops. Core recording uses nonblocking admission;16 opaque logical filesystem-volume aliases stay separate from source/cache/catalog roles. Alias0 means unknown/overflow. SQLite pager bytes and process I/O are separate from payload bytes; no universal physical-device/transfer cap is implemented. Raw device IDs, request contents, paths, GPS and secrets are not exported. Python's500ms sampler records only numeric core/observed-descendant data, capped at4096 samples/identities, and discloses omitted XPC/GPU/short-lived children. No telemetry upload is provided.
-
-The normal app supports `--diagnostic-sqlite` with no additional arguments. It reports the actually linked SQLite version/source/options using an in-memory connection and exits before application/user-catalog setup. The private trace/fixture command remains desktop-test-only and cannot ship in release. Rebuild the default app/frontend before release:check, which verifies the normal bundle excludes the renderer harness and test capability.
-
-## P1 catalog-read diagnostics
-
-The owner approved P1 after P0. Read [ADR-0009](decisions/ADR-0009-catalog-read-performance.md) and [PERFORMANCE_P1.md](PERFORMANCE_P1.md). The normal app now uses compact, versioned native page transport and a per-database-worker bounded count/bucket LRU. Regenerate/check the Rust-owned IPC types with npm run bindings / npm run bindings:check; keep the shared tests/fixtures/catalog-page-v1.json contract fixture in sync only through a reviewed wire-version change. Existing UI state stays AssetPage.
-
-```sh
-npm run perf:catalog:build
-npm run perf:p1 -- --rows 10000 100000 1000000
-node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes boundary_neighbors_use_a_bounded_index_seek -- --nocapture
-npm test -- --run src/pageTransport.test.tsx
-```
-
-P1 uses the existing independently manifested, freshly seeded owned fixtures and retains phase=P1 in baseline.json. No user catalog paths are accepted. It measures uncached summaries separately from cached summaries; reset_for_probe clears only this owned connection's derived summaries. One PRAGMA shrink_memory run resets only its SQLite pager, not the OS filesystem cache. The first/last-neighbor and exact payload measurements supplement P0; they do not rerun or replace P0 full-reopen/selection baselines. Do not compare a cached P1 summary with an uncached P0 summary without labeling that difference. Run without concurrent builds. Existing native perf:desktop and desktop:test commands exercise the real wire decoder as part of the app.
-
-Native evidence can be labeled with STILLHARBOUR_PERF_PHASE=P1; it defaults to historical P0. The harness overwrites one bounded progress.json per owned run. Summaries must match phases:
-
-```sh
-python3 scripts/performance/summarize.py --phase P1 --catalog-run UUID_FROM_RUN
-python3 -m unittest discover -s scripts/performance -p 'test_*.py'
-```
-
-The phase regression rejects cross-phase catalog input and excludes native observations from other phases. Missing/unmeasured values remain null. Preserve P0 reports; never use a later P1 native result to retroactively improve a P0 baseline.
-
-Jobs renders within main, without a portal or a second polling loop. The previous workspace remains mounted while hidden; its controls are inert until Back or sidebar navigation restores it.
-
-## Common-format preview diagnostics
-
-See [FORMAT_SUPPORT.md](FORMAT_SUPPORT.md) for exact reproduction commands, format matrix, owned public fixtures and native test isolation. `npm run formats:build` builds the release fixture probe; `npm run formats:test -- --packaged --camera-samples` drives the real packaged worker, with independent source manifests. `npm run desktop:test:formats` runs the generated HEIC gallery/viewer case separately from `npm run desktop:test`. Build once with `npm run desktop:test:build` before those two serial invocations; the pinned driver shares a catalog within a single invocation.
-
-The owned C11 adapter uses installed ImageIO/CoreGraphics/CoreFoundation/ColorSync frameworks and already locked cc 1.10.0. Input is bytes plus a fixed numeric RAW hint, not a path. The native format adapter is macOS-only; Windows baseline remains unchanged. Preview failure records are policy-versioned in the existing column, and compatible indexed M1 cache entries remain available offline. No user catalog migration, codec download or cache purge is required. Provisionally compiling for macOS 13 does not pass its native compatibility gate.
-
-## Gallery balancing
-
-[GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md) documents the bounded row-break algorithm, compact headings and anchored frame-coalesced resize behavior. Reuse photoRows for geometry; keep raw catalog/decoder work outside the renderer. Native foundation tests now record independent Python source manifests under `.context/gallery/native-<UUID>/` and capture balanced-gallery desktop/minimum states. Run desktop-test build, native suite and full check serially; do not rebuild shared dist during an active driver.
-
-## Git publication hygiene
-
-The repository's `paseo.json` configures worktree setup with `npm install` and a Dev action using `npm run desktop:dev`. These are development convenience commands; the reproducible clean dependency install remains `npm ci`. The configuration contains no credentials or machine-specific paths.
-
-Commit application sources, specifications, tests, pinned lockfiles and reviewed vendor resources. Keep .context evidence/attachments, build output, installed dependencies and local settings excluded through .gitignore. .gitattributes enforces LF for owned text on both Windows and macOS regardless of core.autocrlf, while preserving vendor bytes without line-ending conversion or upstream whitespace rewriting, so helper manifests remain authoritative; Markdown hard breaks are intentional. Owned-file validation still rejects accidental whitespace. Check the staged diff before publication and use a normal push on the existing branch.
-
-## Node download-cache cleanup
-
-To reclaim space from shared npm/npx download caches with the installed npm11.16 toolchain, inspect the configured location, then use npm's own cleanup commands:
-
-```sh
-npm config get cache
-npm cache clean --force
-npm cache npx rm --force
-```
-
-These remove downloaded package/execution caches, not the project's node_modules, Node installations, source files, lockfiles or photo preview cache. Later installs and one-off npx tools may download again. Keep installed dependencies and running development processes in place when only reclaiming download-cache space; inspect cache paths for links/ownership and active one-off npx tools before cleanup. Do not substitute a broad process kill or recursive deletion of unrelated build/library data.
-
-## Cross-platform CI and filesystem gates
-
-RootSetup renders missing identity as the existing highlighted error surface with role=alert and a stable useId referenced by the disabled scan button's aria-describedby. Its submit handler also blocks unverified new selections; backend selection/root checks remain unchanged. The message explains the build/platform limitation instead of instructing all Windows users to choose another folder. Run npm test -- src/components/RootSetup/RootSetup.test.tsx src/components/App/App.test.tsx, then the full check/native sequence. The Windows-only desktop alert case uses a clearly named mocked picker selection and confirms zero native roots/jobs, retaining desktop/minimum screenshots under .context/screenshots/identity-alert-*.png. This does not pass the missing Windows identity/volume/traversal gates or enable scanning.
-
-Windows folder selection uses `filesystem::open_directory_readonly`: a metadata-only handle with `FILE_READ_ATTRIBUTES`, `FILE_FLAG_BACKUP_SEMANTICS` and `FILE_FLAG_OPEN_REPARSE_POINT`, followed by directory/reparse-attribute checks. It does not enumerate the selected drive or open photo content. This fixes drive-root and ordinary-directory selection failing with OS error 5 through the former file-only opener. Regular content-file opens stay separate. Final-component reparse points are refused; this is not an ancestor-race containment implementation. The NTFS continuation now supplies native file identity plus a volume GUID; unsupported volumes still report identity unavailable and keep Save & Start scanning disabled. No catalog identity or root registration changes.
-
-Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib windows_directory_selection -- --nocapture` on Windows. The second regression creates an owned junction through a static PowerShell command with fixture paths passed as environment data, requires its rejection and checks preserved target bytes. The directory/drive-root regression opens a generated directory and only the containing drive's root metadata handle, checks that writes fail, rejects a file/missing folder, and preserves fixture bytes. Never enumerate a real drive or scan a user library to validate this picker fix. Microsoft's [directory-handle requirements](https://learn.microsoft.com/en-us/windows/win32/fileio/obtaining-a-handle-to-a-directory), [access rights](https://learn.microsoft.com/en-us/windows/win32/fileio/file-access-rights-constants) and [Rust OpenOptionsExt](https://doc.rust-lang.org/std/os/windows/fs/trait.OpenOptionsExt.html) describe the flags/access mode. Full frontend/Rust checks and the instrumented native smoke remain required; selection success does not establish Windows scanning support.
-
-Windows checkout must pass the same LF formatter, strict frontend checks and denied-warning Rust checks as macOS. Keep platform-only imports in their implementation/test branches. The native path codec preserves UTF-16 units, including non-Unicode surrogates, and rejects odd byte lengths; portable unit tests exercise pair decoding on either host. Physical Windows fixtures use valid Win32 names, while Unix fixtures retain quote/newline coverage.
-
-Source-read tests also preserve native identity gates: Unix verifies cancellation and retry, and Windows local NTFS now verifies cancellation/retry and preserved bytes through its validated identity adapter. Never move checks or invent identity evidence to make an unsupported read succeed.
-
-Successful native write/publication tests run only where that primitive is implemented; Windows explicitly tests Unsupported results and unchanged files/preferences rather than treating an unverified durability or identity implementation as available. This is not a claim of Windows original-file mutation, settings-write or broad-format support; the separately documented NTFS read adapter does not implement these write primitives. Keep those platform gates in place when fixing CI.
-
-Native evidence setup must work from an empty checkout: create shared evidence parents recursively, then create each UUID run directory exclusively before writing its ownership marker or touching a generated source. The live-library test creates `.context/live-library` itself; developers must not need to precreate it. Keep test-only Rust helpers under the same platform/feature conditions as their callers. In addition to the fixture-enabled matrix, `node scripts/cargo.mjs clippy --locked -p stillharbour-core --all-targets -- -D warnings` checks the default-feature test build for unused helpers. Do not suppress denied warnings to make a platform pass.
-
-Native completion tests must observe creation of the separate thumbnail job as well as terminal states. The scan can publish completion before its thumbnail job is enqueued; an all-terminal snapshot containing only the scan is a handoff gap, not proof that thumbnail generation finished. Keep the explicit partial-result/error-count assertions.
-
-Native Jobs tests must allow a real scan to complete before the Jobs page opens, expanding Recent jobs and validating the displayed state instead of depending on a transient running interval. To deterministically exercise that schedule, run `STILLHARBOUR_TEST_JOBS_COMPLETED=1 npm run desktop:test` on macOS after the desktop-test build; the test waits for backend and UI completion before opening Jobs. This harness-only environment switch is not an application feature or throttle. Production controls and all geometry/source-preservation assertions remain unchanged.
-
-### Generated large-image preview diagnostics
-
-Build the standalone worker with `node scripts/cargo.mjs build --locked -p stillharbour-core --bin stillharbour-media-worker`, then run `python3 scripts/renditions/run.py` on macOS. The runner generates its own sources and independent before/after manifests; it accepts no source-library path and retains its owned evidence. For a packaged worker, use `python3 scripts/renditions/run.py --worker target/debug/stillharbour` after the native test build; the documented `--media-worker-file` mode dispatches before app startup. Unknown `--media-worker*` modes fail closed. [Progressive preview documentation](PROGRESSIVE_PREVIEWS.md) defines scope and remaining gates. Serialize native drivers and frontend builds.
-
-### P2 rendition and native diagnostics
-
-[PERFORMANCE_P2.md](PERFORMANCE_P2.md) defines the current tier/admission/worker protocol limits and reproduction commands. Build the standalone worker, then run python3 scripts/renditions/p2_probe.py --build debug; release measurements require --build release --worker target/release/stillharbour-media-worker after the corresponding release build. The runner owns and manifests every generated source, retains summaries/observations and enforces a4GiB reserve. It accepts no user-library path and performs no cleanup. Optional --legacy-worker compares an explicitly saved legacy binary's512px output; never mix debug/release timings without identifying them.
-
-The native diagnostic route accepts STILLHARBOUR_PERF_PHASE=P2; use the existing10k/100k/1m size options and retain separate phase-labelled outputs. Do not feed P2 runs into the historical P0/P1 summarizer or relabel old catalog results. Native driver input/presentation/memory limits remain documented. Run native drivers and frontend builds serially and restore the production build before release:check. The new --media-worker-file-v2 and --media-worker-stdin-v2 modes are internal decoder modes, not GUI startup or source-library commands.
-
-## Live library monitoring
-
-Normal desktop startup enables backend library monitoring. See [LIVE_LIBRARY_UPDATES.md](LIVE_LIBRARY_UPDATES.md) for debounce/fallback limits, durable change history and focused tests. Desktop-test startup deliberately leaves monitoring off so synthetic catalog fixtures are not reconciled against empty generated directories; the dedicated live-library test explicitly enables it against actual generated sources. Native test execution includes this additional spec through the existing desktop glob. Test-only monitor/stop actions remain in the existing diagnostic command and are absent from production. Library removal retains observed change history, disclosed in its review.
-
-## P3 shared source diagnostics
-
-[PERFORMANCE_P3.md](PERFORMANCE_P3.md) documents the read-only scheduler, commands and evidence. Build the fixture-only release example with `node scripts/cargo.mjs build --locked --release -p stillharbour-core --features fixture-probes --example scheduler_probe`, then run `python3 scripts/performance/scheduling.py`. Each invocation creates a fresh UUID-owned `.context/scheduling/` tree with four generated files, raw timings and independent before/after manifests. No user path, actual backup or cleanup is accepted. Use `npm run check` for scheduler/failure/viewport regressions and the existing generated native suite for integration; never scan a real library for development. Hard-byte pacing, real backup/NAS/HDD and full native performance gates remain explicitly blocked/unrun.
-
-## Gallery date sections and cache-only scrolling
-
-The gallery's date sections retain full calculated extents while their photo rows remain virtual. Avoid transforms/filters on section parents that could change sticky containment or introduce filtered image seams. [GALLERY_REFINEMENT.md](GALLERY_REFINEMENT.md) defines the current behavior and evidence. Run `npm test -- src/library/model.test.tsx src/components/AssetBrowser/AssetBrowser.test.tsx src/components/AssetTile/AssetTile.test.tsx src/library/previews.test.tsx src/library/renditionPlan.test.tsx` and `npm run check`; the native foundation suite checks aligned/sticky dates, a diagnostic short-scrollport handoff, filter-free layers and warm cached scrolling. Its ordinary desktop/minimum screenshots preserve the real viewport size; the short scrollport is solely a contained sticky-transition diagnostic and is restored in finally. Native test builds/production frontend builds must run serially. The backend cache-only regression proves no source-job admission/cancellation or generation change; original preservation still requires independent generated-source manifests.
-
-## Native fixture restart ownership
-
-Job completion or a ready cached preview can become visible before a worker releases its Library/Catalog reference. Native Rust restart fixtures must use their bounded close helper: cancel the library, drop the fixture's Library reference, obtain sole Catalog ownership with Arc::try_unwrap (45-second deadline), then drop Catalog on the fixture thread so its actor joins before reopening. Reuse this boundary for removal, reconciliation and ordinary restart checks. Never disable the lifetime lock, force an unlock or retry Catalog::open to hide a live owner. The controlled-owner regression retains a background reference, verifies competing opens still return CatalogInUse, releases it, then checks the same catalog identity reopens. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --test library_flow fixture_restart_waits_for_the_last_background_catalog_owner -- --exact`, then the full native Rust suite. This is fixture synchronization, not a new production shutdown API.
-
-## Warm-scroll native test preconditions
-
-The warm-scroll test must start at a controlled offset with a decoded photo fully inside the viewport, matching its final aspect ratio and settled viewport width. The first image in a virtualized DOM can be an overscan or unsettled tile. Use the self-contained tests/desktop/warmPhoto.mjs selector through browser.execute; its three jsdom regressions run through npm test alongside the existing frontend tests. The native check still requires the same preview source and decoded pixels throughout ten scroll steps, zero source reads and zero trace drops. Write bounded per-step observations/trace before assertions so a failing CI run retains evidence; upload the generated gallery warm-scroll JSON and source manifests alongside existing native screenshots/driver logs. These are warm functional checks, not cold-decode or presented-frame benchmarks; ordinary unavailable-image states remain explicit.
-
-## P4 local stress diagnostics
-
-[PERFORMANCE_P4.md](PERFORMANCE_P4.md) owns exact commands, measurement scopes and results. The native performance route now accepts STILLHARBOUR_PERF_PHASE=P4, preserving the standard10k/100k/1m and120-step controls. It drains fixed4096-event frontend/backend buffers into at most32 sequential files, retaining lost counts and source manifests on route failure. The fixture-only native drain action has no production capability. STILLHARBOUR_PERF_APP selects a separately symbol-verified isolated debug test executable for both driver service and capability; the route records and rechecks its SHA-256. The production release compile-time automation guard remains unchanged.
-
-Summarize explicitly selected P4 native run names with python3 scripts/performance/p4_report.py --native-run native-UUID-10000 (repeat up to three sizes). Short routes, trace loss, source changes, non-lossless manifests, incomplete date/resize work, over720 resident summaries or nonempty text image requests fail the report; absent metrics remain unknown. Existing P0/P1 summarization stays separate. Run python3 -m unittest discover -s scripts/performance -p 'test_*.py' for manifest/evidence regressions, then full repository/native checks. Release core/packaged-worker checks and instrumented debug UI routes must never be combined into a release UI performance claim.
-
-Current release catalog evidence uses python3 scripts/performance/run.py --phase p4 after the fixture example build. P4 reuses P1 stopwatch samples while draining traces between timed groups; it rejects catalog trace loss without changing P0/P1 measurement behavior. Keep all earlier runs rather than overwriting their evidence.
-
-The native performance harness retains bounded sampler stdout, stderr and exit/signal/truncation metadata even when memory JSON cannot be parsed. Missing process samples remain unavailable; a successful UI route cannot pass complete memory attribution. Short six-step harness diagnostics are deliberately rejected by the strict60-second P4 evidence gate.
-
-Register sampler completion immediately after spawn and await the child close event before parsing stdout; process exit alone does not guarantee drained streams. tests/performance/samplerStop.mjs owns this behavior. Run npm test -- tests/desktop/samplerStop.test.mjs for a deterministic exit/data/close-order regression, a real bounded Node-child report and repeated teardown of its own sampler. All three tests run on both CI platforms without skips. The ordering test models an already exited child with pending stdout and rejects exit-only teardown; the real-child tests check complete JSON and termination independently. Do not depend on passing a parent's pipe-backed stdout descriptor into a grandchild: [Node documents platform limits on stdio sharing](https://nodejs.org/download/release/v24.10.0/docs/api/child_process.html#optionsstdio), and that old fixture returned empty output on Windows. Keep the original Unix reproduction as historical evidence. Prior missing-memory runs remain unavailable.
-
-## Filtered read diagnostics
-
-[PERFORMANCE_FILTERED_READS.md](PERFORMANCE_FILTERED_READS.md) and [the bounded task](../tasks/P4_EMPTY_RESULTS.md) define the P4 continuation. Build filtered_probe with node scripts/cargo.mjs build --locked --release -p stillharbour-core --features fixture-probes --example filtered_probe, then run python3 scripts/performance/filtered.py --fixture-run UUID --rows 1000000 against a catalog previously generated by the existing performance runner. No library path is accepted. Ownership/row-count checks constrain the input; a fresh UUID output retains source manifests, raw samples, executable/lock/SQLite identity and percentile summaries. Reopening may checkpoint app-owned fixture catalog state, so preserve media manifests separately. No cleanup, source scan or production authorization claim.
-
-The deterministic Rust regressions run with node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes empty_pages -- --nocapture. They measure connection pager misses after clearing only that disposable connection's pager, not physical disk traffic or wall-clock latency. Existing native foundation coverage includes an escaped literal no-match search and return to populated photos. Run full checks/native build/tests and restore production output before release exclusion checks, following the existing serial workflow.
-
-The [positive-total continuation](PERFORMANCE_POSITIVE_TOTALS.md) reuses the same filtered_probe and runner. Their additional timelineFirst samples reset derived summaries before each timeline/page pair, separately from the unchanged page-first protocol. Run node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes positive_timeline_supplies_exact_page_and_seek_counts -- --nocapture for the five-sort pager regression. Its budget is relative to the same count-cached projection because capture projection can still scan. Positive scope/write-invalidation and inventory-lag cases remain in the existing summary/empty regressions. No source scan, schema change or eager summary calculation is introduced.
-
-The [selective filename continuation](PERFORMANCE_FILENAME_READS.md) adds lateBroad/lateNarrow controls and bounded candidate diagnostics to the same release runner. bucketPlan is the unmodified fallback/cold-timeline plan; pageFirstBucketPlan/pagePlan use actual known-count preparation, and candidateProbe records the covering-index lookup separately. Never parse EXPLAIN text at runtime. Run node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes library::performance_probe::tests -- --nocapture for projection/threshold/filter/paging regressions; the corresponding release invocation measures the same fixture behavior. Only an existing small exact filename-only count enables preparation. Candidate rowids remain within one database request, with no persistent identity or selection authority. Preserve the rejected eager-policy evidence and all earlier platform/preservation gates.
-
-## Initial library preparation
-
-UI follow-up (2026-10-31): LibraryScreen owns PreparationBanner directly under the unpadded library-content; library-content-body owns the existing responsive content padding. PhotoCollection no longer owns the banner or its refresh callback. The banner uses native discovered-file counts during scanning and thumbnailProgress.processed during previews, while percentage/indeterminate and stop/pause semantics stay unchanged. Run the PreparationBanner/ScanJobProgress/AssetBrowser suites, full checks and the generated native fixture workflow. Windows now reuses the existing owned initial-preview hold to verify full-width alignment, child padding and actual processed counts at desktop/minimum sizes before releasing real preview work. Always release the hold in finally and preserve the existing source/destination verifier; never scan a personal library to check layout.
-
-[INITIAL_LIBRARY_PREPARATION.md](INITIAL_LIBRARY_PREPARATION.md) owns the first-scan visibility and temporary banner. The optional typed deferPendingPreviews query flag applies only to roots with an unfinished initial thumbnail job; legacy callers default to the prior raw catalog scope. Optional preparingPreviews root status identifies paused preparation without scanning every asset on each poll. No schema/index migration occurs. Keep initial job admission/cancellation under the same thumbnail mutex, make successful/partial completion conditional on current pending rows, and publish revision changes when preview states change.
-
-Run the focused store/native-media/frontend commands in that report, then full checks and native tests. The existing desktop-test performance command's initial_previews_hold/release actions require an owned fixture and are absent from production. A 45-second bounded source-admission hold makes the native progress/empty-canvas/pause/resume checks deterministic; it is never a production feature or a latency result. Release it in finally, preserve source manifests on failure, and serialize native drivers/frontend builds. Restore the production build before release exclusions and packaged smoke checks.
-
-## Page-scoped single-photo viewer — 2026-10-30
-
-PhotoViewer now uses an open nonmodal HTML dialog inside LibraryScreen/FolderExplorer's library-page, with an inert underlay and usable sidebar. viewerMotion owns measured fitted-frame transforms, Reduced Motion, resize/animation cleanup and completion guards. ViewerImage owns actual loading feedback and loading-only glare. CachedPreviewImage shares one cache-URL retry; explicit gallery Retry clears usePreviews results and remounts visible request attempts before existing native revalidation. Protocol 404s are no-store. No dependency or IPC/schema migration.
-
-Run npm run check, changed-scope React Doctor, desktop:test:build, desktop:test, desktop:build and release:check. Component tests cover deterministic loading/glare states; native screenshots and navigation checks use the real preview pipeline. Do not rely on the pinned driver mock to hold imported library calls. See [VIEWER_PRESENTATION.md](VIEWER_PRESENTATION.md) and [ADR-0017](decisions/ADR-0017-page-photo-viewer.md) for requirements, evidence and limits. Existing fixture-only initial-preparation holds remain separate and production-excluded.
-
-## Original-image viewer — 2026-10-30
-
-OriginalPhoto layers a guarded original-protocol image over the existing ViewerImage fallback. Its actual load state controls glare, accessible fallback visibility and original-ready zoom. Library::original_image resolves IDs/revisions through the existing catalog/native adapters, bounded source reader and supervised worker; library/original.rs (nested under the service module) owns static format/container checks and the one-read gate. Tauri registers the main-webview GET-only route and image-only CSP mapping. The generated ORIGINAL_IMAGE_POLICY constant comes from this module; no renderer source path or general filesystem permission is introduced. FavoriteHeart is composed into ViewerControls immediately before Info; X is last in the toolbar. Favorites remain the existing catalog-only operation, with confirmed fill, click animation and late-response guards.
-
-See [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) and [ADR-0018](decisions/ADR-0018-original-image-viewing.md). Run npm run check, changed-scope React Doctor, desktop:test:build, desktop:test, desktop:build, release:check and packaged smoke/SQLite probes. Use generated temporary media and independent source manifests only. The original format/size envelope and fallback are intentional; do not bypass limits or put an arbitrary file URL into the viewer.
-
-## Floating photo controls — 2026-10-30
-
-ViewerControls renders zoom, FavoriteHeart, Info and Filmstrip as one accessible icon group, with the heart immediately before Info. PhotoViewer owns per-asset/revision zoom and original readiness; PhotoStage keeps image/pan/transition rendering. The elevated, content-sized bar overlays the bottom of viewer-photo with absolute positioning, can wrap at narrow widths and remains outside the scrolling/panning canvas. Only the bar receives pointer events; its positioning wrapper passes them through. At narrow widths the Info panel stacks below the photo/filmstrip with bounded scrolling, keeping the overlaid controls reachable. Existing tooltips/names and pressed/disabled states remain. Validate the existing PhotoViewer tests, frontend checks, changed-scope React Doctor and native desktop/minimum/Info/filmstrip flow. See [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md); no native operation, dependency or permission changes.
-
-## P4 cold filename summaries — 2026-10-30
-
-[PERFORMANCE_COLD_SUMMARIES.md](PERFORMANCE_COLD_SUMMARIES.md) uses the existing filtered_probe build and scripts/performance/filtered.py runner against a UUID-owned generated catalog. Its optional summaryProbe diagnostics compare legacyNameLast with currentNameEarly in the same release executable, verify complete count/month results, and retain plans plus three raw samples of count/bucket time, SQLite VM steps and logical pager bytes after connection-only pager resets. Reports label this separately from page-first/timeline-first endpoints and old runs without summaryProbe remain readable. Run probes without concurrent builds; no OS cache purge, user-catalog path or source scan is accepted. The production change only reorders the shared validated predicate; full source/platform/preservation gates remain unchanged.
-
-## Local P4 closeout before M2 — 2026-10-30
-
-Follow [PERFORMANCE_LOCAL_CLOSEOUT.md](PERFORMANCE_LOCAL_CLOSEOUT.md) and [ADR-0019](decisions/ADR-0019-p4-local-evidence.md). The same fixed 4,096-event diagnostic recorder now uses sixteen 256-event lanes with stable internal producer preference. Recorders retain nonblocking try-lock fallback and visible full/contention losses; consuming reads swap buffers before flattening. Tests instantiate the same recorder privately instead of enabling the singleton across unrelated parallel tests. No production instrumentation or dependency is added.
-
-Run node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes performance::tests::opt_in_trace_is_bounded_numeric_and_stops -- --nocapture for capacity/privacy/held/concurrent/drain regressions; run the analogous catalog::tests filter for lifetime-lock checks. The owned pre-exec child test uses only async-signal-safe syscalls and a bounded socket timeout; it does not exercise real libraries or native Windows locking. Full repository checks remain mandatory.
-
-After desktop:test:build, use STILLHARBOUR_PERF_PHASE=P4 STILLHARBOUR_PERF_ROWS=10000 STILLHARBOUR_PERF_STEPS=120 npm run perf:desktop, then repeat serially at100000/1000000. Pin the executable SHA-256 throughout and retain each UUID run, including failures. Use python3 scripts/performance/p4_report.py --native-run native-UUID-10000 (repeat up to three sizes). The report labels observed memory collection separately; core/descendant data never grants full XPC/GPU/WebContent ownership. A privileged ownership diagnostic is not run with surprise elevation.
-
-## P4 final evidence ledger — 2026-10-30
-
-Use [PERFORMANCE_P4_STATUS.md](PERFORMANCE_P4_STATUS.md) for current dispositions and [the final audit task](../tasks/P4_FINISH.md) for scope. Existing release commands remain: build performance_probe/scheduler_probe with fixture-probes, run python3 scripts/performance/run.py --phase p4, python3 scripts/performance/scheduling.py, and python3 scripts/renditions/p2_probe.py --build release --worker target/release/bundle/macos/Stillharbour.app/Contents/MacOS/stillharbour. Serialize builds/measurements, retain all owned sources and verify unchanged production executable hashes. Catalog and packaged-worker runners now emit exact decimal size/mtime/inode/device fields; old numeric manifests are not rewritten. Existing manifest/Node round-trip tests cover the transport.
-
-The ledger keeps P4-06’s native profiling/platform and M4 backup/physical-endpoint prerequisites explicit. CommandLineTools alone does not supply this host’s missing xctrace tool, and the owned-process ownership probe cannot elevate itself. Do not substitute debug rAF, descendant RSS or simulated backup reads for those missing results.
-
-HEIC original-viewer fix (2026-10-30): original.rs now admits bounded, detected HEIC/HEIF still-image containers on macOS through the existing supervised original route. Bump ORIGINAL_IMAGE_POLICY to original-v2-static-heic-32mib-32mp and regenerate bindings. Keep the existing worker/size/pixel/source checks and renderer fallback; never convert a source or claim a cached rendition is original. library_flow covers 3,072×2,048 HEIC/aliases/byte preservation, while original.rs tests bounded container admission. The existing native format spec now requires full-size original-protocol pixels and no fallback warning; generate_native_formats builds its HEIC from a temporary generated 3,072×2,048 PNG before the source baseline. The packaged probe uses that fixture (24 indexed media/36 source entries) and asserts exact HEIC bytes. Run npm run check, changed-scope React Doctor, desktop:test:build, desktop:test and desktop:test:formats as separate serial native invocations, then desktop:build, release:check and the packaged original/SQLite probes. See ORIGINAL_IMAGE_VIEWING.md for limitations and actual results.
-
-## M2 organization template previews — 2026-10-30
-
-Read [M2_ORGANIZATION_PREVIEWS.md](M2_ORGANIZATION_PREVIEWS.md) and [ADR-0020](decisions/ADR-0020-organization-template-previews.md). The organization_preview library request accepts only explicit catalog UUIDs and a bounded Rust-owned template. One catalog read transaction snapshots inputs; the pure renderer runs outside the actor. This reads no original/destination filesystem and changes no catalog data. Original native locators stay in backend fingerprint inputs. The result has executionAvailable=false and cannot be approved or started.
-
-Use node scripts/cargo.mjs test -p stillharbour-core --lib organization for focused parser/catalog coverage, npm test -- src/components/OrganizationPreview/OrganizationPreview.test.tsx for the interface, and npm run bindings after changing the Rust schema. Run npm run check, then desktop:test:build and desktop:test sequentially for the generated-library native flow. The native spec records lossless-stat before/after source inventories (including in failure cleanup) and actual preview data under its unique .context/gallery/native-UUID folder, plus desktop/minimum screenshots under .context/screenshots/organization-*.png. No test accepts a personal photo root. Complete ordinary unsigned packaging/release exclusions when validating the production app; native Windows and executor failure/recovery remain unpassed.
-
-## Restrained interface polish — 2026-10-30
-
-[INTERFACE_POLISH.md](INTERFACE_POLISH.md) and DESIGN.md own the approved presentation changes. Reuse shared CSS values for 36px fields/selects, 8px control corners and the existing ease-out curve; keep 44px primary/viewer controls and compact chip/checkbox/range exceptions. The closed select uses appearance:none with a local authored chevron, retaining the native menu/keyboard behavior. The native generated-library suite checks actual field/select alignment/readability and viewer hit targets at desktop/minimum sizes. OrganizationPreview receives display-only root names from existing status, uses the existing BigInt grouping pattern and keeps its ID-based IPC unchanged. Run npm run check, changed/untracked React Doctor, desktop:test:build and desktop:test sequentially, then the normal unsigned build/release exclusions. Use only generated fixtures; do not start a development scan of a real library for visual QA.
-
-## M2 indexed companion review — 2026-10-30
-
-OrganizationCompanions loads bounded catalog observations per preview row using organization_companions with one validated asset_id. library/organization.rs owns the read transaction and identity fingerprint; no source/destination filesystem access or confirmed-bundle/approval command is introduced. The new Rust output types extend the existing generated schema without a catalog migration. After changing these types run npm run bindings and npm run bindings:check with the pinned Rust toolchain; the continuation regenerates and checks these declarations with the pinned toolchain once dependencies are available.
-
-Run npm test -- src/components/OrganizationCompanions/OrganizationCompanions.test.tsx src/components/OrganizationPreview/OrganizationPreview.test.tsx and node scripts/cargo.mjs test --locked -p stillharbour-core --lib companion, followed by the ordinary full checks/native build/tests. The generated-library organization scenario now records organization-companions.json and compares rendered candidates to actual IPC inside its existing before/after source-inventory boundary. Do not substitute frontend mocks or Python SQLite checks for those native/Rust gates. See [the M2 contract](M2_ORGANIZATION_PREVIEWS.md) for the 64-candidate cap, heuristic scope, stale-state handling and unfinished persistent destination planning.
-
-Windows validation boundary for this continuation: npm run check passes the platform-applicable frontend/Rust suite, and desktop:test:build plus desktop:test pass the startup/IPC smoke with macOS library scenarios skipped. The existing desktop:build script targets a macOS app bundle and fails on Windows; this slice adds no Windows installer target or scanning capability. Restore ordinary frontend output with npm run build before release:check. Successful production exclusion checks are not packaged-app or macOS companion-integration evidence.
-
-## M2 destination preflight — 2026-10-31
-
-[ADR-0022](decisions/ADR-0022-organization-destination-review.md) and the [M2 contract](M2_ORGANIZATION_PREVIEWS.md) own temporary destination identity/overlap review. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib library::destination -- --nocapture`, the Windows `windows_library` integration target and `npm test -- src/components/OrganizationDestination/OrganizationDestination.test.tsx src/components/OrganizationPreview/OrganizationPreview.test.tsx`, then full checks. Regenerate IPC with `npm run bindings` after changing the Rust response/request. The preflight creates no probe file or reservation. ADR-0023's subsequent schema-3 retained planning is described below.
-
-The Windows native scan scenario now also selects a backend-owned generated destination, performs actual preflight through the UI/IPC and retains source and destination-only preservation receipts. Its two fixture actions take no paths and are absent from production. Run the desktop-test build and native suite serially; when a development app is running, use an isolated `CARGO_TARGET_DIR` plus an ignored WDIO wrapper pointing both service/capability to that executable and retaining absolute spec paths. Desktop/minimum captures are `.context/screenshots/m2-destination-*.png`; receipt output remains under the per-run `.context/windows-directory-selection/native-*` folder. This does not automate the OS chooser or establish target collision, copy, persistence or macOS integration acceptance. Restore production frontend output before release exclusions.
-
-## M2 retained planning — 2026-10-31
-
-Cross-platform check correction: the directory-chain loop iterates components directly, with remaining-component tracking compiled only on Windows for the owned-publication leaf sharing rule. Keep `-D warnings` on both CI targets: an enumerated index consumed only inside `cfg(windows)` becomes unused on macOS and fails Clippy before native tests. The existing destination-chain and snapshot publication fixtures cover the preserved handle/leaf behavior; macOS compilation must be verified by the macos-15 job rather than inferred from Windows checks.
-
-The macOS side-panel native regression checks the named toolbar actions in order: Collapse navigation, Filter, Jobs and Saved plans. Identify Filter by its panel relationship so an active-count label does not change the action identity. The old count of three predated M2 history access and becomes invalid once compilation succeeds. Keep the side-panel keyboard, draft-discard, minimum-window and source-preservation assertions intact.
-
-The conditional M3 continuation retains the M2 gate. OrganizationTrees derives display-only selected-path views from existing bounded preview rows; no schema/IPC/backend authority changes. Run `npm test -- src/components/OrganizationTrees/OrganizationTrees.test.tsx src/components/OrganizationPreview/OrganizationPreview.test.tsx src/components/SavedOrganizationPlans/SavedOrganizationPlans.test.tsx`, then full checks and the isolated native Windows suite. Its real retained-plan scenario records windows-plan-trees.json and m2-plan-trees.png, verifies native summary/file counts and preserves independent source/destination receipts. Do not parse native source display strings into execution paths or call these views a complete companion/source-folder inventory.
-
-[ADR-0023](decisions/ADR-0023-retained-organization-drafts.md) owns schema 3, scoped Windows application-snapshot publication and immutable draft/template history. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib catalog::tests -- --nocapture`, `node scripts/cargo.mjs test --locked -p stillharbour-core --lib operation_store -- --nocapture`, and the existing Windows library integration target. All migrations first retain SQLite-consistent snapshots; never downgrade a live schema-3 catalog. The process-exit migration tests launch only an owned test executable against a generated, token-marked temporary catalog. Environment-driven exits are compiled only in Rust tests, never the application. Process-crash evidence is not power-loss or generic original-publication evidence.
-
-Frontend coverage: `npm test -- src/components/OrganizationTemplates/OrganizationTemplates.test.tsx src/components/SavedOrganizationPlans/SavedOrganizationPlans.test.tsx src/components/OrganizationDestination/OrganizationDestination.test.tsx`. Native Windows coverage saves a draft using real UI/IPC, reopens it from Saved plans and compares JSON review text with the native digest inside the existing independent source/destination fixture baseline. Preserve the isolated target directory workflow when the user's development app is running. Retain windows-saved-plan.json and m2-saved-plan.png with the earlier evidence. Run full checks, native build/tests and production exclusions before recording acceptance. All executable-plan, original-file mutation, import/undo and native platform gates remain open.
-
-## M2 saved-template examples — 2026-10-31
-
-ADR-0025 adds native review-file export via `organization_plan_save_export` with only picker-session/plan IDs and an export enum. `library/review_export.rs` owns output containment, append-only intent/completion, bounded regenerable text, exclusive staging, byte verification and publication. Windows reuses the owned snapshot publisher for this additional app-produced output purpose; original-file guards remain closed. Run the `review_export` Rust test filter, the Windows library integration target and `src/components/SavedOrganizationPlans/SavedOrganizationPlans.test.tsx`, then full/native checks. Instrumented native export fixtures take no paths, and retain `windows-plan-export-files.json`, `windows-export-verification.json` and `m2-export-files.png`. Do not confuse review-file recovery with original-file executor or independent-backup acceptance.
-
-Continuous M2/M3 work: ADR-0024 owns existing-target lookup and optional native source components. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib library::destination`, existing Windows source-lookup regressions, organization/operation_store tests and `npm test -- src/components/OrganizationDestination/OrganizationDestination.test.tsx src/components/OrganizationTrees/OrganizationTrees.test.tsx`, then full/native checks serially. Reuse the isolated native target while the development app runs. The destination response now contains target states and decimal observed space; regenerate IPC bindings. Schema 3/older digests remain unchanged and all executable-plan blockers remain.
-
-The optional `TemplateSave.samples` request carries at most four synthetic source/date/sequence/expected-target examples. Rust validates through the same pure resolver used by catalog previews before appending a version, and the retained JSON payload has an explicit 8,192-byte bound. Existing policy sampleInputs store JSON-encoded `TemplateSample` values, with paired exact sampleOutputs; schema 3 and older immutable records are unchanged. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib template_examples` and `npm test -- src/components/OrganizationTemplates/OrganizationTemplates.test.tsx`, then full checks. Regenerate/check IPC bindings after changing these types.
-
-The Windows generated-library desktop scenario first rejects an incorrect expected target through actual UI/IPC with zero saved versions, then saves the corrected Undated example and records `windows-template-examples.json` inside its independent source/destination preservation boundary. Use an isolated Cargo target and WDIO executable wrapper while the development app is running. This establishes no source mutation, native destination collision, companion or executor acceptance. See [the M2 contract](M2_ORGANIZATION_PREVIEWS.md) for bounds and remaining gates.
-
-## Windows local NTFS scan validation — 2026-10-30
-
-The Windows native harness creates `.context/windows-directory-selection` recursively before scanning and allocates a fresh `native-*` evidence folder per run. No pre-existing ignored folders are required. Actions uploads that folder's status, preview and source-verification JSON receipts even on failure. Run `npx vitest run tests/desktop/evidence.test.mjs` to check missing-parent setup, independent runs and explicit setup errors. The scan poll expires before Mocha's outer timeout so scan diagnostics have time to surface.
-
-[ADR-0021](decisions/ADR-0021-windows-ntfs-scanning.md) owns the read adapter boundary and limitations. Run node scripts/cargo.mjs test --locked -p stillharbour-core --lib filesystem::windows::tests -- --nocapture, node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --test windows_library -- --nocapture, then npm run check. The direct windows-sys pin uses the existing lockfile version; no external native helper is downloaded at startup. The Windows basic metadata path uses the existing executable's isolated worker and retains filesystem date provenance; full ExifTool metadata is not claimed.
-
-For native validation, build with desktop:test:build and run desktop:test serially. If a development executable is running, use an isolated CARGO_TARGET_DIR and an ignored WDIO wrapper setting both the service and capability executable paths plus absolute spec paths. The Windows case creates only backend-owned media, performs real Save & Start scanning and cached-image loading, and calls the native fixture verifier in finally. Evidence includes windows-library-desktop/minimum screenshots and source/preview receipts under .context/windows-directory-selection. Its fixture baseline covers native names and regular-file bytes, sizes, creation/write times and Windows attributes; access-time updates remain OS behavior. An unsupported-selection case separately verifies role=alert, the disabled action's description and zero roots/jobs. It uses mocked picker data, never a real user drive.
-
-Windows membership lookups now use fresh handle-bound exact-name queries for ordinary names, retaining before/after checks and literal enumeration for native DOS search metacharacters. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib filesystem::windows::tests -- --nocapture` for exact names, replacement, sharing, malformed responses and traversal regressions. Separately run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib filesystem::windows::tests::flat_directory_lookup_comparison -- --ignored --exact --nocapture` without concurrent builds to compare the retained enumerated lookup with the new lookup on generated 256/2,048-entry folders. It checks identical IDs and unchanged sampled bytes; reported times are warm lookup observations, not full scan/thumbnail throughput or a timing assertion.
-
-Do not generalize this local fixture evidence to all Windows volumes, remote filesystems, EXIF/RAW/HEIC/ICC support, signed installers or preservation/recovery. Large-library/P4 throughput acceptance remains open. The existing generic original no-replace/durability guard remains closed; only private regenerable cache publication has a Windows hard-link adapter.
-
-## Empty library presentation — 2026-10-31
-
-The no-root welcome restores the original folder icon, “Start by selecting your Photo library folder.” and Choose a folder. It reuses native folder selection and explicit scan setup. PhotoCollection renders src/components/EmptyLibraryArt/EmptyLibraryArt.tsx only after a successful zero-result query with registered roots all online, previously scanned and at zero indexed files, with no active jobs or preview preparation. A populated library hidden by filters, query errors, loading and offline/unscanned roots never qualify. Validate onboarding with src/components/App/App.test.tsx, collection states with src/library/emptyLibrary.test.tsx and native behavior with the foundation suite. Use only generated media for native checks; no copying or mutation capability is added.
-
-Empty illustration palette refinement (2026-10-31): src/styles.css derives frame, paper and shadow colours from --surface, --muted and --border using color-mix. This follows app palette changes without OS-theme listeners or image filters. The supplied SVG and product logo remain unchanged. The current app exposes a dark palette only; light/system theme selection remains future work. For visual QA, inspect the confirmed-empty collection with dark tokens and temporarily override its surface/border/muted tokens with light values, then restore them. This is artwork palette QA, not evidence of a shipped light theme.
-
-## Companion filename confirmation — 2026-10-31
-
-ADR-0026 adds generated inventory/confirmation/history IPC. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib bundle_` and filesystem metadata-only descriptor regressions, then full `npm run check`. UI coverage is in `src/components/BundleInventoryReview/BundleInventoryReview.test.tsx`; Windows integration confirms and reopens retained decisions. The foundation native scenario records windows-complete-companions.json and m2-complete-companions.png on generated sources, followed by independent preservation receipts. Use the isolated native executable when the development app is running. Filename inventory/decision retention does not pass executor, content fidelity, recovery or physical power-loss acceptance.
-
-## Compiled companion scopes — 2026-10-31
-
-ADR-0027 adds ID-only copy-manifest compilation and retained opening. Run pure `copy_manifest` Rust tests and the generated-fixture `companion_confirmation_requires_full_inventory` regression, then full checks. Component coverage is in CopyManifestReview.test.tsx; the foundation scenario records windows-copy-manifest.json and m2-copy-manifest.png. Compile unchanged explicit decisions to retry idempotently; opening history alone is not live validation. Current manifests remain blocked from execution.
-
-## Owned M2 executor fixtures — 2026-10-31
-
-ADR-0028 adds process-wide paced operation I/O and a source-retaining copy engine under fixture-probes/Rust-test capability. CopyFixture accepts no source/destination path; it creates its own generated run. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --lib executor::tests` and `node scripts/cargo.mjs test --locked -p stillharbour-core --lib paced_io`, then full checks and both native CI jobs. Tests spawn their own validated child executable and terminate it at recorded boundaries; never point these tests at a real library. Process-exit/flush evidence does not establish physical power-loss durability. The fixture SQLite journal is not yet the production catalog executor adapter; real copying, import, undo and in-place operations remain unavailable.
-
-## Native future-name fixture preparation — 2026-10-31
-
-ADR-0029 adds executor::preparation tests under the existing fixture capability. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --lib executor::`, then full checks and serial isolated native builds/tests. The existing foundation case also calls organization_name_preparation_fixture and retains owned-name-preparation-OS.json. This route accepts no paths. It checks created names and retained empty stages only; no real destination, approved ready plan or final output publication is claimed. Restore production frontend output and run release exclusions after native tests.
-
-## Copy capacity/fidelity assessment — 2026-10-31
-
-ADR-0030 adds generated ID-only organization_copy_assessment IPC and CopyAssessmentReview. Run the copy_assessment pure Rust tests, companion_confirmation_requires_full_inventory library fixture and CopyAssessmentReview/CopyManifestReview component tests, then ordinary full checks. The Windows foundation flow requests the report from the actual compiled review and records windows-copy-assessment.json and m2-copy-assessment.png before independent preservation checks. Use isolated native builds as above and restore production frontend output before release:check. No probe/real-library mutation or approval is performed. Native space is a changing observation; metadata/journal/headroom values are explicit estimates and application-journal-volume capacity still needs executor integration.
-
-## Shared native operation-scope admission — 2026-10-31
-
-ADR-0031 introduces jobs::operation_locks without IPC/schema changes. Run the operation_locks, scan_scope_conflicts and shared_scope_locks Rust regressions plus the full executor suite, then full checks/native builds/tests. Constructors take backend-owned held DirectoryChain scopes only. Keep the scan lease in its worker closure so failed spawning/early returns release it; reject admission before begin_job. The existing native executor receipt now includes scopeLocks, including zero journal changes on rejection and successful verified completion after release. Other adapters must explicitly integrate; do not treat this as OS locking or all-reader/backup acceptance.
-
-## Schema 4 and catalog copy-stream fixtures — 2026-10-31
-
-ADR-0032 adds two journal indexes to current schema 4; schema-3 historical evidence above stays unchanged. Existing catalogs retain pre-migration-v3-UUID.stillharbour snapshots before the transactional index migration. Never downgrade a live catalog or delete those snapshots as a test. Run the catalog and executor::catalog_journal Rust regressions, then the full executor suite/checks/native build/suites. Existing native foundation now expects schema 4 and asserts catalogJournal within the owned executor receipt: two fully verified outputs/thirteen events, or one publication/five events after interruption. No supplied source/destination paths or real libraries are used. The catalog fixture seeds inventory for generated media and uses actual draft/companion/manifest APIs; it is not a scanned production copy flow. The new adapter still needs actual process-exit recovery gates and production ready-plan/approval/job integration.
-
-The Windows planning scenario switches its already selected asset to Text list before opening immutable planning, stopping new viewport image demand. A disabled companion opener is evidence of busy/stale/blocked input, not permission to synthesize a click. Record reopened plan staleness and failure alert/geometry evidence; never bypass the guard or claim a native pass before rerunning.
-
-Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --lib catalog_actor_process_exit_matrix -- --nocapture` for ADR-0032's new catalog-adapter-specific exits. Its only child entry is an exact Rust test with temporary-root prefix/token/fixed-byte/native-identity checks; it is absent from application builds. The parent closes/reopens its catalog actor and checks two inspections without replay/journal growth. The generated JPEG encoder is shared by constructor/child assertions; no real library is read. Broader full checks and target-platform CI remain necessary; process exits do not prove power-loss behavior.
-
-## Nested native copy locations — 2026-10-31
-
-ADR-0033 adds executor::locations and extends the catalog diagnostic with nested source/output folders. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --lib executor::locations::` and the catalog_journal/executor suites, then full checks and native suites. The private source fixture reads actual compiled native locator bytes, not a display-name join; Windows separator spellings are not interchangeable in immutable locator evidence. Windows output parent handles must use the reviewed owned-directory sharing adapter; source sharing stays strict. The native executor receipt now asserts catalogJournal.nested with two verified outputs/thirteen events, unchanged source/neighbor bytes and replay refusal. Unrepresentable-name tests are core fixtures only, not frontend format/path support. Production preparation/approval/jobs/multi-root and remaining safety gates stay open.
-
-## Prepared-stage copy fixture — 2026-10-31
-
-ADR-0034 joins the actual native preparation diagnostic to the central copier in a separately journaled immutable fixture plan. Run the prepared_stage and native_preparation_checks_actual_future_names Rust cases plus the executor suite, then full/native checks. The test-only preparation receipt adds copyFromPreparedStages with three prepared_empty_stage observations, three published_verified observations and three identical original/final native objects. No existing object is truncated/recreated. The catalog adapter still rejects this proof without its own reviewed namespace/ready-plan authority.
-
-Platform correction for ADR-0033: the macos-15 fixture filesystem returns EILSEQ on attempted invalid UTF-8 name creation. Assert that refusal, preserve codec bytes and use a valid literal-backslash/Unicode name for the macOS native copy test. Windows continues actual invalid UTF-16 copying; other Unix uses its stated fixture path. Do not generalize creation support across filesystems or relabel this as frontend support.
-
-## Catalog-bound native preparation facts - 2026-10-31
-
-ADR-0035 adds executor::catalog_journal::namespace_journal under existing fixture capability. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes --lib namespace_`, then full checks and isolated native suites. The scope-free owned executor receipt includes catalogJournal.namespacePreparation: thirteen retained facts, reopened completion, replay refusal and source/neighbor preservation. Facts and copy events have distinct anchors/phases; limits are 64-KiB anchors, 8-MiB facts, 32-MiB aggregate facts and bounded count. Completed preparation remains execution-disabled. No schema migration or production endpoint is added.
-
-## Prepared namespace catalog copy projection - 2026-10-31
-
-ADR-0036 adds optional private namespace references to catalog copy bindings, preserving omitted legacy encoding. Run namespace_ and executor:: Rust tests, full checks and isolated native suites. The existing namespacePreparation receipt now includes preparedCopy and interruptedAfterPublish.preparedCopy: exact before/after states, thirteen/five events, two/one identical prepared objects and replay/second-stream refusal. Only the constructor-owned fixture can invoke this path. Production ready-plan/session approvals/jobs remain unavailable. Do not treat preparation completion or imported history as approval.
-
-## Native source snapshots and future folders - 2026-10-31
-
-ADR-0037 adds executor::sources. Namespace preparation now uses source-only snapshots and v2 anchor/fact phases; no pre-created destination parent proof is required. Run namespace_ (including native_source_planning and source_snapshot_refuses) and executor:: Rust cases, then full/native checks. Current generated namespace diagnostics use the frozen visible Stillharbour organized UUID folder; generic name-preparation diagnostics retain their pending name. Reopening retained snapshots does not reacquire a conflicting read lease under a live preparation writer. No production command or user-catalog migration is added; v1 disposable diagnostic facts are not upgraded into approval.
-
-## One-use session action approvals - 2026-10-31
-
-ADR-0038 adds executor::approval and exact preparation/copy admission wrappers. Run executor::approval, preparation_action_rejects and approved_copy_rechecks Rust regressions plus executor::, full checks and native suites. The diagnostic receipt adds namespacePreparation.sessionApprovalFixture with foreign-selection rejection before writes and ticket replay refusal. Tickets/proofs remain private in memory and never enter receipts/catalogs. Root grants are rechecked at admission and each scope boundary. Production native selection ownership, approval UI/IPC, job/audit states and controls still need integration.
-
-## Organization workflow and schema 5 - 2026-10-31
-
-ADR-0039 adds executor::workflow, library::operation_jobs/copy_workflow, generated copy DTOs and VerifiedCopyWorkflow/CopyJobProgress. At ADR-0039 the catalog schema became 5; retain pre-migration-v4-UUID.stillharbour snapshots and all older evidence. Default builds leave copy-workflow disabled with an explicit capability reason. Desktop-test enables that feature plus its separately excluded fixture instrumentation. For a production-graph check use `node scripts/cargo.mjs check --locked --workspace --features stillharbour-core/copy-workflow`; ordinary npm run check now covers fixture-probes and copy-workflow together. Do not enable normal-build copying merely because it compiles.
-
-Run application_copy_api, catalog::tests and namespace_ Rust cases, denied-warning feature/default checks and VerifiedCopyWorkflow/CopyManifestReview/JobsPage component tests. Then full checks and serial isolated native build/suite. The Windows planning scenario confirms the constructor-owned destination again and separately approves/starts name preparation and byte copying; it writes windows-verified-copy-jobs.json and windows-verified-copy-output-audit.json. Independent output audit reads only the test host's owned destination, compares complete bytes to constructor source baselines, and retains partial objects without calling them completed. Restore production frontend and run release exclusions afterward. Native filesystem writes remain exclusively in the central adapters; imported jobs/tickets never execute automatically.
-
-## Retained copy inspection - 2026-10-31
-
-ADR-0040 adds RetainedCopyInspection in recent Jobs and an ID-only recovery-inspect request. Run application_copy_api and RetainedCopyInspection/JobsPage regressions, full checks, then the isolated native suite. Its Windows scenario discards live session authority before Jobs inspection and writes windows-retained-copy-inspection.json. Read-only reopening must leave journal count and media unchanged; changed bytes remain structured per-file errors. Incomplete preparation without an existing ready stream, approved resume and imported-catalog authorization are separate gates.
-
-## Reviewed copy continuation fixtures - 2026-10-31
-
-ADR-0041 adds executor::resume under fixture-probes/test only. Run reviewed_ Rust cases plus catalog_stream_uses_actual_retained_scope, full checks and isolated native suites. The reviewed_continuation_process_exit_matrix uses the existing exact owned child entry and a fixed resume-mode flag after all temporary-root/token/native/fixed-source-byte checks. The native receipt adds catalogJournal.reviewedContinuation and namespacePreparation.reviewedContinuation, proving partial-prefix verification, same-stream completion/no-op and original prepared object publication. These are fixture grants, not application resume approvals. Production workflow-only builds must exclude the new module; real retry and complete namespace recovery inventory need separate integration.
-
-## Application continuation integration - 2026-10-31
-
-ADR-0042 adds executor/workflow/recovery.rs and CopyContinuationWorkflow. Run application_copy_api, reviewed_, namespace and component regressions, then full checks and isolated native suites. Continuation job scope records are bounded, linked to the original stream and committed with queued jobs in one transaction; imported records never reconstruct authority. Retained inspection now displays full native relative source paths. Windows inventory seals use the dedicated attribute-only owned-output observer to coexist with the central writer, while source sharing stays strict. No default enablement or incomplete preparation recovery is implied.
-
-Native scenario selection, 2026-10-31: organization workflows legitimately leave their destination selected. A later test needing the generated source must explicitly invoke desktop-test-only fixture_reselect; it verifies the existing owned source baseline and creates a fresh private native selection, accepting no renderer scope. Do not reuse a destination selection as source authority. CI 41241927926 passes the macOS application continuation scenario but exposes the subsequent live-library assumption; the correction requires its own CI.
-
-## Copy effect history and schema 6 - 2026-10-31
-
-Current catalog schema is 6. ADR-0043 adds executor/effects.rs, bounded legacy namespace indexing and atomic effect/namespace reservation. Retain pre-migration-v5-UUID.stillharbour snapshots and all older snapshots. Run effect_, application_copy_api and catalog::tests Rust regressions, VerifiedCopyWorkflow component cases, full checks and isolated native suites. Both Windows and macOS workflow scenarios now recreate an equivalent draft, inspect retained output through the UI and compare unchanged independent destination audits. The equivalent-draft-PLATFORM.json receipt records distinct draft IDs and fresh existing-byte verification. Restored/imported data never restores approval; incomplete preparation remains blocked. Default copy-workflow and original mutation gates are unchanged.
-
-Checkpoint 6515f86 passes both Windows and macOS native CI run 41244041156, including the macOS application continuation UI and explicit owned-source reselection for the later live-library test.
-
-## Reopen complete preparation - 2026-10-31
-
-ADR-0044 adds organization_copy_preparation_reopen and CopyPreparationReopened. Run reopen_prepared_application and preparation_reopen_retains Rust cases, workflow/Jobs component cases, full checks and serial isolated native suites. The native Windows/macOS workflow discards live authority after preparation, clicks Choose destination and reopen prepared review, compares unchanged empty-stage audits and confirms that acknowledgment/approval/start are still required. Its prepared-review-reopened-PLATFORM.json receipt records the original ready identity and unchanged objects; copying then follows the existing full-byte checks. Incomplete facts or changed inventory never trigger creation/adoption. Application-only helpers are excluded from fixture-only builds; separately check that graph with denied-warning Clippy. Restore production assets and run release exclusions after native testing.
-
-The copy-effect checkpoint 5b3fc5f passes both Windows and macOS Foundation native CI run 41245285265, including equivalent-draft history inspection and unchanged preservation audits.
-
-## Indexed import comparison - 2026-10-31
-
-ADR-0045 adds executor/fingerprints.rs, workflow/import_comparison.rs, typed ephemeral read jobs and ImportComparisonReview. Run executor::fingerprints and import_comparison_ Rust cases, comparison/manifest component cases, full checks and isolated native suites. At most eight reports, 512 source files, sixteen indexed roots, 4,096 candidates and four byte-verified matches/file are admitted. Reports are observations, disappear on restart and never authorize skipping/removing a file. Inaccessible indexed rows are unresolved coverage, not missing/excluded rows. Read-only referenced-source snapshots do not change normal managed-copy admission.
-
-The Windows/macOS organization scenario constructs a separate renamed-copy fixture, registers/scans it through M1, chooses its indexed scope in the real comparison UI, inspects the actual polled report, independently audits both generated libraries and unchanged copy outputs, then removes only the comparison root's catalog registration on macOS. Windows retains that disposable registered root until the test app exits, preserving its existing disabled native cleanup gate. Receipts are import-byte-comparison-PLATFORM.json and import-comparison-root-state-PLATFORM.json. The two expanded scenarios have bounded 120-second test timeouts for their additional owned scan; this is not a performance assertion. Constructor helpers accept no supplied root/path/name/content and preserve every generated source entry. Run production-graph/release exclusions after restoring production assets.
-
-Evidence-label clarification: historical fixture verifiedFiles/sourceVerifiedFiles counters count preservation-manifest entries, including directories and any links, rather than only regular files. The preserved entry/byte evidence is unchanged. New comparison fixture receipts use sourceVerifiedEntries/comparisonVerifiedEntries. Do not infer a media-file count from those legacy counters.
-
-Whole-bundle comparison (ADR-0046): `executor/workflow/import_bundles.rs` resolves connected manifest groups from native locators and direct-match evidence; `ImportComparisonReview` validates and displays the observations. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --features copy-workflow import_` and the comparison component suite for focused regressions. No skip execution is implied. The preceding d80cf1e checkpoint passes Windows/macOS full and native CI run 41251665854.
-
-ADR-0047 adds `executor/workflow/import_planning.rs` and `import_execution.rs`, `operations/import_planning.rs` and `ImportPlanReview`. Existing schema-6 journal phases retain immutable decisions and queued/terminal attempts. Retained mapping validation is separate from current native/root grant validation; normal managed-copy checks remain unchanged. Run focused `cargo ... test ... import_` and `ImportPlanReview`/`ImportComparisonReview` component suites, then documented full, feature-graph, native and production release checks. Native tests construct a separate valid generated JPEG/sidecar root (`import_skip_fixture`), execute through actual IPC/UI, reopen history, explicitly retry with fresh bytes and audit unchanged media/outputs. Windows retains both registered disposable comparison roots while its cleanup gate remains disabled. Mixed-copy import execution is unavailable.
-
-Validation note, 2026-11-01: a local pinned-toolchain rebuild encounters an internal import-resolution compiler error in an existing probe. A stable-source complete rerun with `CARGO_BUILD_JOBS=2` and `CARGO_INCREMENTAL=0` passes; this is observed local evidence, not a diagnosed compiler fix or toolchain change. Keep production/test asset builds serial and use the isolated native target.
-
-Native import fixture detail: wait for both the complete scan and `thumbnail:initial:<root-id>` before saving its preview, since thumbnail preparation can change the catalog revision. Assert the reopened draft is fresh. The embedded driver option click does not reliably change a select; the existing `changeSizeUnit` helper dispatches the actual frontend DOM change event for the chosen observed group. This is not evidence of native dropdown-menu automation. Saving, approval, verification, journal history and file audits still use real Rust commands.
-
-Retained import history is also available directly in Saved plans through `SavedImportPlans`, including when a draft is stale. Its bounded owner-ID summary request returns known manifest references; opening uses the read-only retained manifest route and shared `importPlanValidation` rules. It creates no companion decision, compiled manifest or approval. Prospective planning still uses the original freshness gates.
-
-Owned native fault-matrix allowance, 2026-11-01: the batched operation fixture test uses a bounded 120-second WebDriver script timeout and 180-second Mocha timeout, then restores the previous script timeout in `finally`. This accommodates the generated process-exit matrix on CI; it changes no application watchdog or failure assertion and is not a throughput result.
-
-ADR-0048 adds private import selection references to `executor/sources.rs` and exact reconstruction in `workflow/import_planning.rs`. Legacy None serialization remains byte-compatible. Namespace targets use the validated projected source list; effects look up full-manifest memberships by ID. Catalog journals cache expected source mode for small boundary checks. The projection constructor is cfg(test) only. Focused generated/native regressions use `node scripts/cargo.mjs test --locked -p stillharbour-core --features copy-workflow import_copy_projection`. Application mixed-import UI and fresh skip/copy orchestration remain disabled.
-
-ADR-0049 extracts KeeperCheck in executor/workflow/import_execution.rs. copy_scope admits source Read, destination Write and comparison-root Read scopes together. Projected jobs and recovery check keepers before/after successful native work and include those roots in maintenance cancellation. Focused regressions: node scripts/cargo.mjs test --locked -p stillharbour-core --features copy-workflow import_keeper_guard. Constructor remains test-only; no mixed UI acceptance is claimed.
-
-ADR-0050 adds workflow/import_receipts.rs, ImportCopyReceipt, ID-only organization_import_copy_review/receipt and exact subset capacity assessment. VerifiedCopyWorkflow accepts an explicitly saved import plan and validates new-file targets/bytes; ImportPlanReview reads retained receipts through bounded copy-job history. Run import_projected_workflow for actual generated preparation/copy and injected receipt/completion-denial regressions. The native mixed scenario reviews generated inventory through IPC and performs actual UI approvals/jobs; its independent audit adds one PNG and retains the existing JPEG/sidecar, original entries and earlier outputs. Results belong in the log. Default execution and real mutations remain disabled.
-
-Projected-import regression isolation (2026-11-02): `cargo test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow import_projected_workflow` runs six named generated scenarios. Each has its own exact child process and 60-second deadline: normal subset copying, referenced-source recheck, inaccessible keeper, denied receipt/changed output, denied completion/changed parent, and existing managed-source indexing. Do not batch all six under one aggregate deadline or remove their byte/history/approval/recovery assertions. The per-operation wait and production timeouts are unchanged. CI41416975004 previously exhausted the aggregate deadline after five completed variants while the sixth was preparing names.
-
-ADR-0051 adds workflow/import_indexing.rs and ImportOutputIndexReview. Catalog history retains existing completion-event copyRevision in memory for metadata-only output admission. Native job/receipt/namespace/member proofs precede standard referenced-root scan registration. Indexing reports registration and actual scan states separately; retries choose scan jobs rather than newer thumbnail jobs. Run import_projected_workflow and ImportOutputIndexReview tests, then full/native checks. An indexed output root makes its parent overlap-protected for future destinations under current policy; do not bypass the guard. Changed historical publication versions remain blocked rather than adopted.
-
-Native cross-volume fixtures (ADR-0052): npm run native:cross-volume builds the feature-gated cross_volume_probe example and uses an owned Windows VHDX/Storage or macOS APFS image harness. npm run native:cross-volume -- --preflight only reports capabilities and does not establish a passing cross-volume gate. Windows requires an administrator runner; there is no self-elevation. Evidence lives under .context/cross-volume/<uuid>; successful image cleanup is scoped to the exact detached regular image file, while failure retains diagnostics/image. OS helpers are outside application I/O throttling. The Rust negative scope case is cross_volume_scope. The normal CI workflow now runs the strict probe after desktop tests and uploads reports/logs, never images.
-
-Windows disk scope correction: inspect CimInstanceProperties['BusType'] as UInt16, since the adapted PowerShell BusType is display text. Six client-only metadata guard cases run during preflight and strict execution; they do not constitute a mounted-volume pass. macOS 41265781031 passes actual APFS copy/continuation and the catalog-only indexed-root teardown.
-
-ADR-0053 adds pure bounded rename/reverse ordering and a closed native generated-file rename experiment. Run node scripts/cargo.mjs test --locked -p stillharbour-core --features fixture-probes,copy-workflow rename_graph and the native_rename_fixture filter, then full and separate-feature-graph checks. run_fixture_probe returns separate renamePlanning (simulated) and nativeRename receipts. Neither is a production approval or independent-recovery claim. Native reverse execution is implemented in the closed fixture; process-exit recovery and catalog/UI integration remain subsequent gates. Minimum-window viewer native assertions retain pointer hit testing and report navigation bounds on failure.
-
-Rename failure continuation: the closed fixture opens retained versions read-only and checks their exact identity/link count. Focused native_rename_fixture_ tests include actual SQLite query_only denial of intent/completion inserts at stage/publication/final boundaries and changed-source/unavailable-version cases. native_rename_fixture_process_exit runs test-only child exits through a bounded generated-scope record; it never receives a real library path or restores serialized approval. Record actual results before treating these tests as acceptance evidence. Production mutation gates remain unchanged.
-
-2e77a27 native acceptance evidence: CI 41268936481 passes full checks, native desktop/rename-undo receipt assertions, minimum-window viewer hit testing and strict VHDX/APFS cross-volume probes on both target OS runners. The failure continuation after that checkpoint needs its own full/native evidence. Source/version directories are now pinned by native identity; names alone do not authorize replacement roots.
-
-ADR-0054 keeps publish_new callers unchanged and adds fixture-gated relocate_new plus rename_fixture/quarantine.rs. Run relocation_fixture Rust tests and existing copy/rename regressions, full checks and separate feature graphs. Native fixture IPC now reports a separate relocation receipt with two retained companion members, a new reverse plan, all five original objects/bytes verified and production/duplicate authorization false. The strict virtual-volume example adds crossVolumeRelocationRefused for a separate generated probe; actual VHDX/APFS evidence is required. Incomplete relocation records currently refuse replay and require inspection; they are not resumable application jobs. Production original mutations, duplicate quarantine and expiry remain unavailable.
-
-Relocation continuation uses strict generated-relocation-v2 records with whole-scope revisions and a separate ContinueRelocationFixture approval. The v2 policy is private disposable-fixture data, not a catalog migration or imported authority. New immutable continuation observations are capped at 64 per retained plan. Reconcile exact original objects/current bytes/essential metadata, source/quarantine memberships and event order before resuming; never replay completed moves. Native fixture IPC now records two continuation observations across interrupted forward/reverse moves. Run relocation_fixture focused cases plus full/separate-feature/native checks. Production mutation and duplicate authorization remain false.
-
-Owned-operation bridge allowance: the pinned macOS DirectEvalClient has a separate 30-second call limit. The foundation test now starts its single generated operation promise in a short bridge evaluation and polls a UUID-scoped test-window receipt within 120 seconds, as the existing P0 seed does. An actual error or timeout still fails; all original verification assertions remain. Retire the scoped receipt slot so late completion cannot become success. This changes no app watchdog, production route or native filesystem failure gate.
-
-ADR-0055 adds optional OrganizationTemplate.filenameStemCase from the Rust schema and its generated FilenameStemCase union. Preserve is omitted from serialization and UI requests, so legacy preview/draft/effect identity remains stable. Nondefault saved template policies report schema 2/lowercase_stem or uppercase_stem; the catalog schema remains unchanged. Run filename_stem_case Rust cases, saved-version/companion regressions, OrganizationPreview/OrganizationTemplates components, full/separate-feature checks and native suites. Native filename-stem-case-PLATFORM.json and m2-filename-stem-case-PLATFORM.png compare actual uppercase UI targets with real backend output; surrounding fixture audits must remain unchanged. The existing embedded select DOM change helper is disclosed, and Preserve is restored before later workflows.
-
-The desktop-test entry can open the generated rename lab through the test-scoped stillharbour:rename-lab event. Its typed test_generated_rename command accepts no paths, retains one owned scope and performs native work off the UI thread. Normal handlers/capabilities/frontend exclude this route; release:check checks the new exclusions. This is private fixture-journal UI/IPC evidence, not application catalog/jobs or production mutation support (ADR-0056).
-
-The generated rename lab now creates its own actual schema-6 Catalog inside its owned run. Its extra private receipt index/triggers do not migrate production catalogs. Native and catalog stages have distinct completion evidence; failed SQL path/receipt writes leave an explicit needs_catalog_commit state. Fresh approval retries only the verified catalog stage. Actor teardown precedes directory cleanup; the lab remains absent from production (ADR-0057).
-
-The generated catalog process-exit matrix is Rust-test-only (ADR-0058). It launches the current test executable with one exact child case, owns its temporary marker/scope and gives each child 45 seconds. Exits bypass actor/destructor cleanup; the parent cold-validates known payloads, native/version/catalog objects and reopens SQLite. The normal and instrumented desktop runtime is unchanged from ADR-0057; this is not a production recovery/adoption command.
-
-Current catalog schema is 8 (ADR-0063). Migration retains an independently openable prior-version snapshot and preserves IDs/history. Organization plans/jobs/events are separate from copy plans/jobs; only generated-scope writers exist. Startup marks interrupted queued/running original workers needs_recovery as catalog metadata only. LibraryStatus and Jobs show bounded typed history without an execution/adoption route. The generated dialog uses the same truthful job progress component; general original-worker queue/control and watcher integration remain unfinished.
-
-The generated rename dialog starts one backend worker and polls typed test_generated_rename_worker status independently of the native session lock (ADR-0060). Stop accepts only its current job UUID and finishes the current verification/journal boundary; a verified commit already underway may complete. Stopped files/stages require fresh inspection/approval. Closing does not implicitly cancel. Instrumented test_performance action organization_rename_arm_hold accepts no supplied scope and holds the next worker after one durable move for at most fifteen seconds, then stops if not explicitly stopped earlier. All generated routes remain excluded from production; release checks cover the new status/stop permission and string.
-
-ADR-0061 coordination regression uses the generated fixture's actual Catalog and Library scan/removal API. Its owned isolated test process accepts no path and has a sixty-second parent bound; thirty-second scan checks remain enforced. Text payloads intentionally exercise discovery/native identity, with a missing generated decoder rather than format claims. A source-write/version-read lease spans native movement through catalog/job commit. Durable pending original plans block scans/removal until their own verified completion. Run generated_original_coordination, session/catalog exit tests, full feature checks and rebuilt native smoke; pending monitor invalidations must survive Busy.
-
-Native workflow liveness scenarios share cfg(test)-only test_process::isolated. It launches one exact current test with a UUID marker, no supplied paths, a bounded parent deadline and owned-child-only termination. Mixed-import worker assertions retain their ten-second inner wait in an independent desktop-like I/O budget. Run full Rust suites serially within one Windows target directory: a running test executable cannot be relinked by a concurrent full run. Distinguish a build scheduling failure from failed application behavior and rerun the affected checks.
-
-Native CI uploads .context/generated-rename/*.json alongside screenshots and existing owned picker/cross-volume receipts. Older worker checkpoint artifacts omitted this JSON directory; do not claim those past receipts were retained. Inspect available native screenshots/assertions and distinguish them from future uploaded bounded generated-scope records.
-
-ADR-0062 adds optional destinationRootId to drafts/plans and destination_root_id to typed destination requests. Missing fields preserve legacy external policy identity; current catalog schema stays 7. Native-picker identity must match the explicit managed root itself. Copy scope validation rechecks its grant/recovery binding. Managed import output indexing reuses the root/filter; scanStarted distinguishes a newly requested scan from one already active. Generated native diagnostics organization_managed_destination_fixture and organization_managed_destination_audit_remove accept no supplied scope and preserve the owned destination neighbor. Run managed_destination_requires, the six-variant import_projected_workflow case, destination/index components, full/separate-feature/native checks and release exclusions. Preferred-root persistence and multiple-source execution remain open.
-
-ADR-0063 (2026-11-01): schema 8 stores a catalog-scoped preferred import root, separate from base/browsing defaults and native grants. The independent Settings save validates the catalog UUID and managed root transactionally, permits an offline hint and clears deleted-root references. New plans preselect only a matching-catalog hint; unavailable, read-only and selected-source choices remain blocked without fallback. Existing plans and global Windows settings durability gates are unchanged. Run migration cases (eighteen actual child boundaries through v7), managed-destination context, preference/destination components, full feature checks and rebuilt native UI save/clear. Multiple-source execution and remaining M2 gates precede M3.
-
-Native Unicode rename continuation, 2026-11-01 (ADR-0064): generated composed/decomposed media/companion names now exercise interrupted rename, fresh continuation and undo. A separate pair uses actual-parent equivalence evidence: aliasing targets must block both participants before any event, while distinct native targets must publish separately and undo. Full inventory, object, complete-byte and metadata checks remain required. Instrumented desktop probes return bounded branch evidence; this is partial AC-028/029 coverage pending executed results, not production mutation authority or full M2 acceptance.
-
-Multiple-source copy continuation, 2026-11-01 (ADR-0065): explicit managed-root reviews retain one complete immutable manifest and separate per-root output namespaces/approvals/jobs. Optional source_root_id requests and root_partition snapshot metadata preserve absent-field single-root compatibility. Exact subset capacity/membership and validated namespace source grants remain required; ordinary referenced/offline roots stay blocked. Earlier partition outputs do not authorize overwrites: each new prefix receives native exclusive preparation and separate consent. This is independent per-root execution, not an atomic all-roots job or multiple-root import-comparison support. Focused checks pass; complete/native validation is pending and M2 remains open before M3.
-
-The generated multi-source desktop fixture creates two closed media scopes without starting scans. Its no-input organization_multisource_next diagnostic admits one owned source at a time; automation waits for each actual scan/metadata result before the next and retries only structured BUSY within fifteen seconds. Do not enlarge the application worker pool to make fixture setup pass. organization_multisource_audit independently checks both source baselines and each output against generated bytes; no renderer paths, root IDs or content enter these diagnostics.
-
-Root-scoped import continuation, 2026-11-01 (ADR-0066): optional sourceRootId selects one complete confirmed root of a multiple-library manifest for read-only comparison and immutable import decisions. Full manifest identity/digest and whole-bundle guards remain; referenced sources stay readable without original-write grants. Exact stored import projections may carry a validated partition marker. Separate source/report selection, safe report closing, source-specific history and retained labels prevent other roots' results from appearing as this root's success. A generated coherent two-file comparison keeper receives an actual complete scan; malformed partial scopes stay incomplete. Focused native/core and component tests pass; full/native validation follows. Schema/dependencies and production mutation gates are unchanged before M3.
-
-Project formatting/lint traversal ignores local .agents/.codex/.cursor/.kiro tooling directories. These are not application modules; their contents are neither formatted nor edited by repository checks, and Git visibility is unchanged. Keep source, tests, scripts and owned configuration in the normal strict checks.
-
-The embedded native service can reuse its application across foundation/live-library specs. On macOS the multi-source scenario must retire its constructor-returned source/keeper registrations through ordinary previewed maintenance, assert zero roots and re-audit unchanged files before the live-library test. Preserve durable operation history. Windows retains the registrations under its existing cleanup gate. Do not weaken the live-library empty-catalog assertion or enable unsupported Windows cleanup to hide test-state leakage.
-
-Generated template continuation (ADR-0069): the desktop-test rename lab can construct its closed five-member scope from a filename template and event. It uses the normal pure resolver and companion target rule, rejects nested targets and blocked missing dates, and retains the policy for exact recomputation during owned reopening. This adds no permission to adopt existing libraries. Run template_ core regressions, the generated-lab components, full/separate-feature checks and the rebuilt native rename/undo scenario.
-
-Isolation diagnostic continuation, 2026-11-01: test_process drains both owned child output pipes concurrently, retaining a bounded initial proof and diagnostic tail. EOF waiting after process exit is bounded. Existing sixty-second scenarios and inner operation deadlines remain unchanged. The real-child pipe-capacity regression and bounded-capture case must pass; a previously observed projected-import CI timeout is not explained merely by adding this fix.
-
-M2 fixture-stage acceptance is recorded in M2_VALIDATION.md against complete Windows/macOS application CI 41308576901 (b41833f). This authorizes the already-requested M3 continuation, not production original mutation. Historical pending statements below describe earlier checkpoints. The separate cfg(test)-only child-output checkpoint 269c2be also passes both OS jobs in CI 41309765574; application gate evidence remains separately identified.
-
-The no-root welcome uses the owner-supplied assets/branding/empty-library.svg, a short source-preservation description and Import photos. This action reuses native folder selection and explicit scan setup. Existing filtered-empty, loading, scan and preparation states remain distinct. Validate onboarding with src/components/App/App.test.tsx and the native foundation suite; use only generated media for native checks. No copying or mutation capability is added.
-
-## Scan reasons, pause and filename progress — 2026-11-01
-
-Mac test repair (2026-11-01): CI 41336134337 first fails at the stale initial-preview pause assertion, before the gallery failures cascade. `pauseResumePreparation` now checks native paused/running states, unchanged counters and the same job ID through the actual banner controls on both platforms. Paused jobs show **Preparation paused** / **Resume job**; **Preview preparation paused** / **Resume previews** remains the separate canceled/no-active-job state after removal review. Do not call `generate_thumbnails` to resume an active paused job. The artifact workflow retains the Mac `preparation-pause.json` and `job-pause.json` receipts. Run `npm test -- src/components/PreparationBanner/PreparationBanner.test.tsx`, strict types/lint/format, and `npm run desktop:test` against a matching instrumented app; Windows evidence cannot pass the Mac gate.
-
-The isolated test fix is validated by [CI 41342274242](https://github.com/gil00pita/Stillharbour/actions/runs/41342274242) at 2b25927: full checks, production exclusions, instrumented builds, native UI suites and cross-volume fixtures pass on both OS jobs. Native macOS passes 21 cases and Windows seven; inspected pause receipts retain identity/counters and Mac source manifests compare unchanged. [Draft PR #12](https://github.com/gil00pita/Stillharbour/pull/12) contains only this test/evidence/documentation fix. M4 code remains separate and has not acquired macOS acceptance from this run.
-
-See [ADR-0071](decisions/ADR-0071-scan-control-progress.md) and the [initial preparation refinement](INITIAL_LIBRARY_PREPARATION.md). Schema 10 adds total_files/processed_files to scans; migration retains a schema-9 snapshot with unchanged UUID. Rebuild bindings from the shared Rust schema. Pause/Resume uses backend job IDs; Retry reuses the saved root/filter and never accepts a path or overrides protections. Paused workers retain their bounded admission slot until resume/cancel. Both pause_requested and paused remain active for status, watcher, settings and shutdown/removal handling; restart makes them interrupted.
-
-Regression scope: service maintenance_tests checks in-place pause/resume, cancellation wakeup, restart interruption, filename totals, hidden-file reasons and source-preserving retry. Catalog tests cover schema-9 to 10 and legacy scan-branch schema-4 retained snapshots and existing migration failures. JobsPage, PreparationBanner and ScanJobProgress tests cover native-ID actions/errors, details and progress including changed totals. Native foundation tests pause/resume the held initial-preview worker on both platform scenarios before removal review, saving windows-job-pause.json/job-pause.json in the owned evidence directory. Run npm run check, desktop:test:build, desktop:test and release:check; browser/component tests alone do not establish native results. Reduced debug output can be used for constrained local validation via CARGO_PROFILE_DEV_DEBUG=0, CARGO_PROFILE_TEST_DEBUG=0 and CARGO_INCREMENTAL=0 without changing production profiles.
-
-## Integrating scan controls with M2/M3 — 2026-11-01
-
-The merge of 93fd459 into clarify-slash-request prefers the incoming scan behavior and retains compatible target operation/inspection work. ADR-0071 avoids the target's existing ADR-0024 number. The merge introduced schema 10 (profiles now use schema 11): standard schema-9 data receives nullable scan counters after a retained snapshot; incoming scan-branch schema 4 keeps those counters while adding the target's journal indexes and subsequent operation/inspection schema. Partial counter layouts fail closed. Migration tests retain UUID, history, counters and snapshots; existing target schema-4 journal migration evidence remains historical. Generated bindings combine both branches' APIs. Run full checks with fixture-probes and copy-workflow, then native Windows desktop and production exclusions. These merge checks do not repeat macOS CI or authorize M4/real-library mutation.
-
-Debug builds optimize the existing sha2 dependency because each helper invocation freshly verifies full executable pins. This changes compiler optimization only; no hash read, pin check, fixture or production gate is skipped. Test profiles inherit the dev package override. Release builds retain their existing optimization policy.
-
-### Missing pinned helper during desktop startup
-
-If desktop:dev reports `Missing or changed pinned helper: restic`, run `node scripts/backup-helpers.mjs --download`, then `node scripts/backup-helpers.mjs --check` before retrying. A changed existing executable requires review; the script will not overwrite it. On this host Python HTTPS certificate validation failed during the 2026-11-02 setup. The successful recovery downloaded the exact manifest archives with system curl and verified their archive hashes before caching; the normal preparation script still verified executable hashes. Never disable TLS or checksum verification. Helpers and archive caches are ignored and must be prepared separately in fresh workspaces.
-
-## M5 catalog metadata checks
-
-[M5_METADATA.md](M5_METADATA.md) documents the schema-16 catalog-only continuation and exact selection/version limits. `npm run desktop:test:map` stages an isolated instrumented executable and now checks both geographic navigation and metadata organization with unchanged generated sources. Run the production frontend build afterward, then `npm run release:check`. Bound schema-13/14/15 startup must pass historical fingerprint checks before migration; current restore activation requires schema 17. Never reset a user catalog or Keychain to bypass schema validation.
-
-### Inspection, backup and map UI polish
-
-The 2026-11-02 owner-approved unslop pass is scoped to inspection.css, backup.css, map.css and presentation copy in InspectionScreen, StorageReview, BackupScreen and SnapshotWorkflow. Global button rules have higher specificity than simple component class selectors; scoped map/treemap selectors deliberately include the same exclusions to prevent geometry and preview padding regressions. Keep Map's title visible despite the shared narrow photo-toolbar rule. Verify with `npm test -- src/inspection src/backup src/map`, typecheck, lint, build and browser fixture checks; browser fixtures do not establish native safety or platform acceptance.
-
-## Chakra UI
-
-The owner requested Chakra UI with the supplied Next.js boilerplate as a reference. Stillharbour uses exact Chakra 3.37.0/Emotion 11.14.0 pins within Tauri/React/Vite. [UI_FRAMEWORK.md](UI_FRAMEWORK.md) and [ADR-0083](decisions/ADR-0083-chakra-ui-design-system.md) describe the product token system, shared control contracts and native evidence. Use the `@/components/Button`, `Input`, `NativeSelect` and `Textarea` barrels for ordinary form controls and `src/test/render.tsx` for provider-backed component tests. Theme changes belong in `src/theme`; keep CSS layout/specialized control geometry and native approval semantics. No external font or color-mode service is required. Run instrumented native checks before rebuilding the production frontend and running release checks.
-
-## M5 tag history and metadata exports
-
-[ADR-0084](decisions/ADR-0084-reviewed-metadata-exports-and-tag-history.md) and [M5 validation](M5_VALIDATION.md) define schema 17 and the final implementation scope. The backend metadata adapter creates only new reviewed outputs, outside indexed roots/app data, with native picker authority, expiry/session checks, fresh sidecar inventory, paced streams, cancellation, no-replace publication and durable completion history. Unknown/conflicting XMP structures fail explicitly. Portable catalog roots are unbound; credentials, schedules and runtime approvals are absent. In-app import/relink and full recovery are separate workflows.
-
-Run the focused `catalog_metadata::`, `metadata_export::` and `catalog::` commands from M5 validation, the combined generated `npm run desktop:test:map`, then the standard frontend/bindings/Rust checks. Rebuild production frontend and application after instrumented native testing. `npm run desktop:test:metadata` builds/stages the same native application and runs export/tag acceptance independently through its photo-list alternative; it asserts no GPU/foreground rendering capability. Production scheduling, bundled local module worker and restricted CSP remain unchanged. Never reset Keychain or bypass imported-schema validation for a migration error.
-
-### Critique-driven UI regression scope
-
-For the 2026-11-02 draft/dialog/search/map polish, run src/metadata and src/map component suites plus the normal frontend checks. Native map/metadata helpers assert the stationary dialog header at minimum width and draft retention across Info closure before explicit saving. Keep these generated-fixture assertions when reorganizing the desktop harness. Draft memory is owned by a catalog-keyed provider in App.tsx; it is neither global nor a persisted catalog write.
-
-## Native preservation acceptance repair
-
-[ADR-0085](decisions/ADR-0085-exact-native-provenance-preservation.md) records macOS provenance policy v2 and v1 digest compatibility. Reproduce with `node scripts/cargo.mjs test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow,backup-workflow backup::native_metadata::tests`, then the `executor::sync_workflow::tests` filter and full documented workspace checks. Never ignore OS attributes or replace failures with unconditional fixture success.
-
-The pinned embedded driver's `click_element` implementation calls `click()` before `focus()`, which can overwrite the app's intentional focus destination. The generated M5 navigation fixture explicitly focuses its action before clicking, then asserts the real application moved focus to the section heading. It does not directly focus the destination or bypass the assertion. Native graphics testing needs an awake/unlocked visible session; `document.visibilityState` and an actual animation-frame observation distinguish a suspended host from a map failure. Real screen-reader automation additionally requires macOS Accessibility trust; component accessible-name checks do not establish VoiceOver acceptance.
-
-The default Foundation desktop run now executes both generated M5 map and metadata/export specs on Windows and macOS; their former Mac-only skips are removed. Both use the existing constructor-owned fixture and independent source/neighbor/output auditor. Keep keyboard zoom, exact section focus and unchanged-source assertions enabled on both platforms; a graphics/driver/platform failure must be reported and repaired rather than silently skipped. This does not certify actual VoiceOver/NVDA interaction.
-
-Windows now uses `--metadata-worker-stdin-v1` for bounded EXIF/GPS under ADR-0087, with the existing process deadline, memory/cancellation and byte limits. Reproduce parser tests with `node scripts/cargo.mjs test --locked -p stillharbour-core --lib --features fixture-probes media::metadata::tests` and policy refresh with the `legacy_metadata_refresh` filter. The default desktop runner creates its screenshot directory before workers; foundation schema expectations are 17. Setup-input focus testing models pointer focus before activation and retains the actual destination assertion.
-
-On macOS 27, the app-control permission is named **Device Control and Data Access** under Privacy & Security. Its former Accessibility deep link still opens the pane. The separate VoiceOver Utility → General AppleScript option is needed for scripting; native trust, checkbox changes or AX tree inspection alone do not certify spoken output. Record actual rejections or manual reviewer results rather than assuming success.
-
-The standalone media-worker and Tauri executable both implement the metadata stdin protocol; run `node scripts/cargo.mjs test --locked -p stillharbour-core --test media_process --features fixture-probes,copy-workflow,backup-workflow` to exercise real child-process dispatch and extra-argument rejection. Native UI acceptance needs an unlocked console; a background/locked run must retain its limitations. Keep the live development app separate from test executables: a dev watcher can relink target/debug/stillharbour. The M5 staging script retains a separate executable name; equivalent full-suite diagnostics can build in a separate CARGO_TARGET_DIR and stage the resulting executable beside the normal debug resources. Never terminate the user's normal app or bypass OS authentication to obtain a test pass.
-
-The 2026-11-03 owner-performed VoiceOver review passes the bounded map names, heading announcements and Catalog-dialog label/focus checks in M5 validation. Record manual reviewer statements separately from automatic transcripts and source audits. If a held native session disconnects before verification, retain that failure and collect fresh independent generated-source evidence; do not attach a later fixture's audit to the disconnected lease. Native-test builds share frontend output, so restore the production frontend and run release checks afterward.
-
-M5 export harness regression: `npm test -- tests/desktop/metadata-export-evidence.test.mjs` verifies plan-scoped evidence for repeated source-sidecar exports. The test-only native auditor hashes output bytes using the same BLAKE3 algorithm as reviewed plans; JavaScript compares these opaque digests, exact names and byte lengths. Keep unrelated prior exports in the output folder: a second legitimate preserved pair must not fail a global count, and must not satisfy another plan's missing pair. `npm run desktop:test:map` and `npm run desktop:test:metadata` both exercise this shared assertion and retain the explicit reviewed file list in their receipts. Passing older CI artifacts are evidence for their own tree; replaying downloaded JSON is not new native execution or a fresh source manifest.
-
-## M6 development dependency remediation — 2026-11-04
-
-Diagnostic privacy assertions validate the exact numeric trace schema and permitted metric names, never absence of GPS substrings in serialized numbers. A legitimate elapsed time of 51.125 ms contains `51.1`; `src/performance.test.tsx` fixes the clock at that collision and verifies exact UTF-8 payload size, bounded counts, numeric-only observations and no extra fields. Run `npm test -- src/performance.test.tsx` or the complete frontend suite. The diagnostic recorder remains restricted to explicitly started `desktop-test` builds.
-
-Managed-destination native tests must wait for the generated policy option and the chooser to be enabled, not merely present. The scan's native status can precede the renderer's refreshed root snapshot (a scanning root is unavailable for destination review). The pinned embedded driver uses DOM `click()`, which silently ignores a disabled button. Preserve the UI guards, identity/overlap review and destination-only-file audit; do not force activation, retry approvals or increase a timeout to conceal a missed action. A focused Windows reproduction command is `npm run desktop:test -- --spec ./tests/desktop/foundation.e2e.mjs --mochaOpts.grep "saves and scans a generated NTFS library"`. If the local driver fails before session creation on its default loopback port, retain that startup failure separately; `TAURI_WEBDRIVER_PORT` can select an available local test port without changing shipped configuration.
-
-`npm run test:release` now includes four locked-dependency safety/compatibility cases alongside the five production-preflight cases. Generated ZIP symlink and traversal-cancellation cases fail against the prior lock and pass with exact glob/minimatch/browser-helper overrides. The browser helper resolves through the Tauri service's actual utility dependency; tests also import that consumer and exercise CommonJS archive matching. No browser/driver download, server or photo library is needed for these Node tests. Run `npm ci --ignore-scripts`, `npm run check`, current native tests and production resource preflight; the full npm audit must be rechecked after lock changes. See [ADR-0088](decisions/ADR-0088-development-dependency-advisory-remediation.md) and [M6 evidence](M6_DEPENDENCY_HARDENING.md) for version, license and platform qualifications.
-
-The evidence document gives the exact isolated `cargo-audit 0.22.2` install/run commands. This developer tool and its RustSec checkout live under `.context/` and are not bundled or application dependencies. Keep the database commit and informational warnings with the report; do not turn a zero vulnerability count into a universal safety or native-platform claim.
-
-## Studio interface refinement — 2026-11-05
-
-The visual authority remains DESIGN.md, with the latest studio values taking precedence over historical captures. Shared surfaces live in src/theme/index.ts and src/styles.css; the existing App sidebar and LibraryHeader own their semantic groups and responsive toolbar actions. Regenerate the custom Chakra types after theme changes with `npx --yes @chakra-ui/cli@3.38.0 typegen ./src/theme/index.ts`, then run `npm run typecheck`, `npm run lint`, `npm test` and `npm run build`. The theme explicitly includes the pinned default Field slot recipe; omitting it from a custom base system removes Field recipe typing during generation.
-
-For native checks, prepare the existing pinned helpers with `node scripts/backup-helpers.mjs --download` before `npm run rust:check` and `npm run desktop:test:build`, then `npm run desktop:test` sequentially. Keep TLS and checksum verification enabled; a missing helper or local trust-store error is a failed prerequisite, not a native pass. Browser visual checks may use an isolated ignored .context configuration and generated catalog responses; never point them at a personal library or ship their adapters/media. See INTERFACE_POLISH.md and the implementation log for observed results.
-
-Avoid rebuilding the same target/debug executable from a development run while native automation is using it. The studio validation retained a hash-matched desktop-test artifact under a separate ignored executable name and used a local WDIO configuration pointing to that exact binary. Its commands/receipts are evidence for that local run, not committed test infrastructure or authorization to open a personal catalog.
-
-## Timeline navigation refinement — 2026-11-05
-
-DateTimeline remains the UI adapter for filtered DateBucket data; timeline.ts owns pure real-month marker sampling. Source/acceptance details are in TIMELINE_NAVIGATION.md. Focused regressions: `npm test -- --run src/components/DateTimeline/DateTimeline.test.tsx src/library/timeline.test.tsx`. Native foundation tests retain actual wheel/drag/year-seek/endpoints and add hit/marker/coordinate checks. When desktop-dev is running, build native test output with `CARGO_TARGET_DIR="$PWD/.context/timeline-native/target" npm run desktop:test:build` and point the local test configuration at that directory's instrumented executable. Do not overwrite or test through an independently rebuilt development binary. Local ignored configs are diagnostic artifacts; the committed default native configuration is unchanged.
-
-### Duplicate matching card validation (2026-11-05)
-
-The illustrated controls, generated bundled assets and unchanged inspection boundaries are documented in [DUPLICATE_MATCH_CARDS.md](DUPLICATE_MATCH_CARDS.md). Run `npx vitest run src/components/InspectionScreen/InspectionScreen.test.tsx` for selection/payload/disabled-state regressions. After `npm run desktop:test:build`, run `npm run desktop:test -- --spec tests/desktop/duplicate-cards.e2e.mjs` for the disposable native fixture flow. When a user development executable is active, build into an absolute `CARGO_TARGET_DIR` ending in `/target` under the root ignored `.context`, and use an ignored WDIO config selecting that executable plus an unused `TAURI_WEBDRIVER_PORT`; do not overwrite or stop the independent dev app. The card test verifies three viewport sizes, card selection, an actual read-only job and unchanged generated originals. Theme changes require the pinned Chakra CLI typegen before strict type checking: `npx --yes @chakra-ui/cli@3.38.0 typegen ./src/theme/index.ts`. No new runtime dependency is needed.
-
-### Favorite heart motion (2026-11-05)
-
-See [ORIGINAL_IMAGE_VIEWING.md](ORIGINAL_IMAGE_VIEWING.md) for the owner-requested CSS heart/ring/particle sequence. Focused regressions: `npx vitest run src/components/FavoriteHeart/FavoriteHeart.test.tsx src/components/PhotoViewer/PhotoViewer.test.tsx src/components/OriginalPhoto/OriginalPhoto.test.tsx`. After an instrumented build, run `npm run desktop:test -- --spec tests/desktop/favorite-heart.e2e.mjs`; use the isolated target/port procedure above when a separate dev app is active. Browser visual QA should inspect in-flight layers, repeat clicks, keyboard activation and emulated Reduced Motion. Never toggle favorites on a personal catalog as a development fixture.
-
-### Importing offline search into the studio UI (2026-11-05)
-
-Commit `9837ae6` is integrated with the quiet studio toolbar, timeline, illustrated duplicate choices and favorite animation. The shared theme registers Field, RadioCard and Places Popover recipes together, retaining the search tokens and studio palette/control radius. The toolbar keeps its search glyph, date-search label/title, Places picker and compact secondary actions. `src/components/LibraryHeader/LibraryHeader.test.tsx` checks the combined search label/availability and disabled state alongside the existing action callbacks. Regenerate Chakra types after recipe integration, run the repository checks, and validate native place search at desktop/minimum widths using the isolated target procedure above. The source commit’s data/format/performance and release limits remain in PLACE_SEARCH.md.
-
-### Reference-aligned live timeline (2026-11-05)
-
-ADR-0090 replaces the previous release-only, equal-month adapter. Focused checks: `npx vitest run src/components/DateTimeline/DateTimeline.test.tsx src/library/timeline.test.tsx src/hooks/use-asset-feed.test.tsx src/components/AssetBrowser/AssetBrowser.test.tsx src/pageTransport.test.tsx`; `node scripts/cargo.mjs test --locked -p stillharbour-core --lib timeline_tests`. Regenerate bindings after seek_index/startIndex contract changes. After the isolated instrumented build, run `npm run desktop:test -- --spec tests/desktop/timeline-navigation.e2e.mjs`. Match output **bottom**/underline coordinates when checking geometry; hover preview may differ from the selected line. The upstream MIT notice ships through public/licenses. Actual results, limitations and failures remain in IMPLEMENTATION_LOG.md; this read-only navigation change grants no original-file authority.
-
-### Catalog Keychain startup — 2026-11-05
-
-[KEYCHAIN_STARTUP.md](KEYCHAIN_STARTUP.md) and ADR-0091 describe the no-prompt native adapter and single explicit startup authorization exception. Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib backup::credentials` and `node scripts/cargo.mjs test --locked -p stillharbour catalog_startup`, then the standard checks and generated three-process catalog restart suite with an isolated instrumented executable. Keep real user credentials/catalogs untouched. The original process-policy regression fails before the fix (allowed 1) and passes afterward (allowed 0); it never reads a saved user item. Ad-hoc executable hashes change on rebuild, so Always Allow cannot promise trust across different builds. Tauri bundle signing configuration does not sign the ordinary `tauri dev` executable. Do not reset Keychain, relax item ACLs or remove activation authority to unblock testing.
-
-The startup repair also fixes activation-lock inheritance across unrelated Unix
-helper fork/exec. Run `node scripts/cargo.mjs test --locked -p stillharbour-core
---lib closing_activation_releases_lock_while_an_unrelated_child_is_pre_exec`.
-This controlled generated regression initially fails CatalogInUse after owner
-closure. ActivationLock now matches the existing CatalogLock RAII unlock policy;
-a still-active owner must continue rejecting another writer. Preserve the first
-aggregate run's failure, even after the deterministic fix and final rerun pass.
-
-### Catalog queue diagnostics — 2026-11-05
-
-Run `node scripts/cargo.mjs test --locked -p stillharbour-core --lib queue_tests`
-for the real actor saturation, stopped-receiver and committed-but-lost-reply
-regressions in catalog_queue_tests.rs. catalog.rs owns the single 16-slot bound,
-submission classification and controlled operation labels. Full means BUSY;
-disconnected/reply loss means CATALOG. Keep raw SQL, paths and panic payloads out
-of IPC. This diagnostic change introduces no automatic retries or capacity
-change; a lost reply cannot certify that a write did not happen. Run the normal
-checks and generated native catalog restart smoke with an isolated executable;
-never stress a personal catalog to reproduce saturation.
-
-A full recovery-freeze request specifically requires closing and reopening before
-retrying: the recovery workflow has already closed ordinary session admission.
-Other rejected requests retain the brief-wait/retry advice.
-
-### Error toast presentation — 2026-11-05
-
-ErrorToast owns one session-scoped Chakra v3 createToaster instance and the
-colocated toast slot recipe. Its composition follows the pinned Chakra CLI
-snippet; no module-global notification store survives application unmount.
-The global App error source remains useFoundation; memoize Reconnect so normal
-status polling cannot recreate the notification. Library read failure retains
-its unavailable heading/retry action and forwards detailed messages to that
-same global source. Do not move field-validation or blocking recovery outcomes
-into this notification.
-
-Run `npx vitest run src/components/ErrorToast/ErrorToast.test.tsx src/components/App/App.test.tsx
-src/library/failures.test.tsx`, the normal frontend/format/type/binding/release
-checks and `npx react-doctor@latest --verbose --scope changed`. After theme
-changes regenerate with the pinned `@chakra-ui/cli@3.37.0 typegen
-./src/theme/index.ts`. The native `tests/desktop/error-toast.e2e.mjs` uses only
-an existing test-only picker fault interceptor, verifies both window sizes,
-deduplication/dismissal/Escape/no layout shift and saves generated captures under
-.context/error-toast. Build with an isolated target when the developer app is
-active, then restore the normal production frontend and release preflight.
-
-## Utilities interface revision — 2026-11-05
-
-[UTILITIES_UI.md](UTILITIES_UI.md) documents the revised sidebar, unified search and distinct inspection workflows. New shared components and keeper/accounting fixtures are colocated under `src/components/DuplicateStudio`, `DuplicateComparison` and `IntegrityFindings`. The studio owns its Chakra recipe; native root/operation authority and IPC types are unchanged. Run full checks and the existing generated-only desktop suite after updating selectors. Its inspection checks now validate health and size tables separately, and duplicate clusters instead of the shared findings table. Native captures live under `.context/screenshots/duplicates-*.png`; their presence alone is not a pass. Rebuild ordinary frontend output after instrumented tests. Missing pinned helpers use the verified preparation workflow above; no application-data reset or personal library is needed.
-
-When a desktop development watcher is active, isolate instrumented validation from its relinks, as the existing `scripts/map-desktop-test.mjs` does. The 2026-11-05 utilities run copies the completed instrumented executable beside the ordinary binary as `stillharbour-utilities-test` and points both WebdriverIO service/capability paths at that copy through an ignored config. It uses port 15445 and retains the copied binary hash. Do not terminate another development process or infer that a later default binary has the tested instrumentation. Native outcomes and artifact paths are in IMPLEMENTATION_LOG.md.
-
-## Map marker and zoom regression — 2026-11-05
-
-[M5_MAP.md](M5_MAP.md) records contained marker images and explicit photo-strip loading. Run `npm test -- src/components/MapScreen/MapScreen.test.tsx`, then normal frontend/workspace checks. `npm run desktop:test:map` builds the isolated instrumented executable and runs generated GPS, image-boundary, retained-canvas, click-to-load, place and metadata/source-audit checks. The standalone metadata scenario now clicks **Show photos in view**, retaining its graphics-independent scope. Native results must use the changed build; old map receipts do not validate this repair. Prepare missing pinned helpers using the existing verified workflow above, and rebuild the ordinary frontend after native checks. Browser fixtures, if used, must remain labelled and cannot establish native acceptance.
-
-## NASA view controls — 2026-11-05
-
-[ADR-0092](decisions/ADR-0092-nasa-satellite-overview.md) and assets/maps/satellite-provider.json define the optional, explicitly selected NASA overview. Run `npm test -- src/components/Basemap/Basemap.test.tsx src/components/MapScreen/MapScreen.test.tsx` and `npm run test:release` for layer/network/CSP regressions, then normal checks. Native `tests/desktop/map-satellite.mjs` runs after the offline-place assertions in the map scenario: use only generated GPS fixtures, real public NASA tiles and a bounded simulated fetch failure. Captures are satellite.png and satellite-minimum.png under .context/m5-native. NASA availability is an external prerequisite for that live-provider assertion, not a reason to invent a pass. Continue using a fresh exclusive copy of the instrumented executable and an unused port if the fixed copied filename is killed during startup; record exact hashes/logs. Restore ordinary frontend output before release preflight. Windows/native and OS-wide traffic evidence require separate execution.
-
-## Compact map filters — 2026-11-05
-
-The folder/date/no-location popover is owned by src/components/MapFilters, with a colocated state/focus regression; MapScreen keeps native query ownership. The shared .fixed-search icon has an explicit foreground stacking level so the Field/input background cannot cover it. Run focused MapFilters, MapScreen and PlaceSearch tests, full frontend types/lint/tests/build and release preflight. The generated native map scenario opens Filters before accessing the no-location control and verifies default-collapsed state, search/icon geometry, focus return, Escape and viewport containment; captures are toolbar-filters.png, toolbar-filters-minimum.png and toolbar-collapsed.png under .context/m5-native. Use a fresh exclusive instrumented executable copy and restore production frontend output afterward. This UI-only continuation does not change Rust, IPC, schema, network policy or preservation gates; preceding Rust results retain their recorded scope.
-
-## Main integration and build validation — 2026-11-05
-
-The map branch integrates main's sidebar-local collapse control, title version and scrollbar alignment from 4419abd. Keep those changes alongside the map toolbar/provider behavior. Run `npm run check` to completion before compiling instrumented native output; concurrent native relinking has invalidated core doctest dependencies in earlier attempts. Then build the instrumented desktop app, validate generated map/sidebar behavior using an exclusive executable copy, and restore the ordinary frontend before `npm run release:check`. Actual receipts and unexecuted platform gates belong in IMPLEMENTATION_LOG.md.
-
-## Reproducible Chakra compilation — 2026-11-06
-
-Latest main's direct `useSlotRecipe({ recipe })` implementation keeps custom presentation variants typed within InspectionChoiceCards, without generated installed declarations. Retain that implementation alongside the map controls and Storage recipes. The initial integration's CLI dependency and build hooks are superseded and removed. Validate `npm ci --ignore-scripts`, direct `tsc -b --force` against stock installed types, then the normal build, strict types, lint and tests. No manual type generation or cast is needed to compile the current app; theme-edit type generation guidance remains separate.
-
-### Storage content and clean-install build — 2026-11-05
-
-InspectionChoiceCards now consumes its colocated slot recipe with `useSlotRecipe({ recipe })` and applies typed slot styles directly. Its presentation variant therefore compiles with the published Chakra types after `npm ci --ignore-scripts`; no generated files in node_modules are required for that component. Theme changes still follow the documented typegen procedure. See [Chakra slot recipes](https://chakra-ui.com/docs/theming/slot-recipes) for the direct recipe API and [Utilities UI](UTILITIES_UI.md) for Storage data boundaries, focused tests and native smoke commands. Storage visual fixtures and screenshots belong in ignored `.context`, never a production demo adapter.
-
-The later filters-top HTML reference changes Storage's content order to filters/chips → overview → workspace. StorageExplorer's component and native smoke assertions cover that ordering. Native captures start at the top filters; UI adapters and source authority remain unchanged. Use the same focused/native commands above; this presentation-only follow-up does not require a new Rust implementation.
-
-After a first saved result, Storage's inspection setup/current job/issues/coverage lives in the header's Storage measurement dialog; retained version selection and version/background status stay in the header, and the retained-results canvas begins at its filters. First use keeps the utility welcome and real setup inline. Focused validation remains InspectionScreen and StorageExplorer tests. The native Storage smoke opens the header dialog to start a generated inspection, closes it to inspect the unobstructed workspace, and verifies Escape/opener focus. Keep instrumented builds isolated when desktop-dev is active, as documented above; do not rebuild or automate through a personal-catalog development process.
-
-## Albums / Tags — 2026-11-06
-
-[ALBUMS_TAGS.md](ALBUMS_TAGS.md) documents the unified album grid, atomic custom creation, catalog-only memberships, per-photo menus and scan keyword import. Run `npm test -- src/components/AlbumsPage src/components/AlbumEditor src/components/PhotoAlbumActions`, the ordinary checks, and `npm run desktop:test:albums` for the generated native scan/picker/menu/persistence/layout smoke. Run instrumented and ordinary builds sequentially; rebuild production output afterward. Rust regressions are `library::catalog_metadata::album_tests` and `media::metadata`; the latter's full generated JPEG cases need `--features fixture-probes`. No real user library is a fixture. [ADR-0093](decisions/ADR-0093-tag-albums-and-atomic-creation.md) records reuse of existing storage without a schema migration.
-
-Focused Jobs native smoke: after `npm run desktop:test:build`, run
-`npm run desktop:test -- --spec tests/desktop/jobs-page.e2e.mjs`. It uses
-constructor-owned generated media, verifies source preservation, page/main
-semantics, native history/counts and retained selection/scroll. Existing
-embedded-driver focus-after-click behavior requires the same focus-first DOM
-activation used by catalog navigation; this does not prove physical keyboard
-input. Use an exclusive instrumented executable/configuration when a development
-app is running; keep its Cargo resource-directory layout and record its hash.
-Do not relink a running development app or automate a personal catalog. Actual
-full-suite failures and the focused smoke outcome belong in IMPLEMENTATION_LOG.
-
-### Header and photo context-menu smoke — 2026-11-06
-
-`tests/desktop/page-chrome.e2e.mjs` joins the default desktop suite. It measures
-64 px title/brand alignment at 1180/660 px across all destinations, checks
-sidebar/title context suppression, explicit photo selection and hit testing,
-and opens the relocated Catalog/Saved plans dialogs. It uses generated media
-and verifies the fixture manifest afterward. Alongside the updated Albums and
-Jobs specs, it covers context-menu membership and retained selection. Context
-input is DOM-dispatched inside native WKWebView because the embedded driver
-does not synthesize OS secondary clicks; do not report physical-pointer or
-Windows certification from this test.
-
-For an isolated build while development is running, set
-`CARGO_TARGET_DIR="$PWD/.context/chrome-selection/target"` for
-`npm run desktop:test:build`, then use an ignored WDIO configuration pointing
-to that target's executable and the required specs. This prevents relinking
-the active development binary. Restore ordinary production output with
-`npm run build` and run `npm run release:check` after native testing.
-
-The photo-menu regression in `page-chrome.e2e.mjs` also measures the portalled
-menu at its context point, reopens it at the bottom-right edge while still open,
-checks viewport containment, then returns to the photo point before selecting.
-This catches an origin-positioned menu even when every action remains operable.
-Local repair logs and native captures are under `.context/menu-position/`.
-
-### Explicit Map → Photos navigation regression — 2026-11-06
-
-`tests/desktop/map-photos.e2e.mjs` uses the generated geographic fixture and real scan/query commands. It checks the renamed Show in photos action, scope inside the shared search frame and in Filters, with a separate × remove control, one logical spatial filter, desktop/660 px chip hit testing, preserving filename text when clearing map scope, and repeated ordinary Photos navigation after explicit transfers. The fixture source audit must remain unchanged. Component cases cover the parent navigation boundary, search indicator, all four spatial labels and selective clearing. Use an isolated instrumented executable while development runs, restore production output afterward and retain exact platform/results in the implementation log. This smoke does not assert GPU/map-renderer capabilities or real-library access.
-
-## Workspace consistency and Chakra coverage — 2026-11-07
-
-[UI_WORKSPACE_AUDIT.md](UI_WORKSPACE_AUDIT.md) records the full page review,
-reference rationale, migration exceptions and changed-file inventory. Use the
-full frontend suite for this shared presentation pass, plus types, lint, build,
-formatting and whitespace checks. No theme token or dependency changes require
-new type generation. Native image dimensions on Chakra Image use htmlWidth/
-htmlHeight, preserving intrinsic aspect and avoiding invalid unitless CSS lengths.
-
-The shared search Field root needs a zero flex base so width:100% cannot crowd
-out compact-header actions. Map search is a direct peer of title/actions. Keep
-menu/dialog contexts and dynamic canvas geometry intact when migrating JSX.
-Structure Formater mounts independently of Photos and consumes no gallery
-selection/query. Its preview uses native TEMP membership/results and global
-conflict indexes. For changes to this path run the organization Rust tests,
-IPC drift, focused core Clippy, frontend tests/build and generated native
-`structure-formatter.e2e.mjs`. See ADR-0095 for the paging/revision contract and
-unqualified large-catalog performance limits.
-
-After an instrumented build, run the focused page-chrome, timeline-navigation,
-structure-formatter, utilities-scans and m4-application native specs sequentially
-with an exclusive driver. Page-chrome waits for the actual destination title
-before measuring/capturing and saves each page at 1180/660 px. Timeline checks
-label containment against the visible/clipping browser column; Text list's inner
-viewport intentionally spans horizontally scrollable columns. Foundation's
-organization cases retain the separate selected-photo modal planning contract.
-Structure Formater independently tests whole-library rules and bounded native pages. Restore ordinary production output after tests.
-Its protection prerequisite tests live in the `organization_protection` Rust
-module and StructureFormatter's private StructureProtection component tests.
-`cargo test --locked -p stillharbour-core --lib organization_protection` covers
-retained job/schedule blockers using disposable catalogs; the native structure
-spec verifies typed IPC, the clear-but-disabled state and panel fit at both widths.
-Recurring OS-consent integration tests remain explicit opt-ins, not evidence
-provided by these read-only prerequisite checks.
-
-Custom folder-chip reordering is frontend-only: `StructurePathBuilder` owns its
-presentation, `use-folder-reorder.ts` owns pointer/click/keyboard lifecycles, and
-`reorder.ts` owns bounded ordering, wrapped-row geometry and edge scrolling. It
-uses Pointer Events with capture instead of HTML5 drag/drop, keeping Tauri's
-existing native file-drop configuration intact; [Tauri documents the Windows
-HTML5-handler conflict](https://v2.tauri.app/reference/config/#dragdropenabled).
-The click-to-place alternative follows [WCAG's dragging-movement
-guidance](https://www.w3.org/WAI/WCAG22/Understanding/dragging-movements.html).
-Run the builder, presets and organization/structure component suites; the native
-structure smoke additionally drags across wrapped chips, captures the ghost and
-confirms the actual reordered native request and unchanged generated originals.
-Pointer capture follows the [standard browser
-API](https://developer.mozilla.org/en-US/docs/Web/API/Element/setPointerCapture).
-These checks use generated fixtures; no personal catalog or library is a test.
-
-Native visibility diagnostics: retain document.hidden and document.hasFocus()
-in menu-position failures. A hidden/unfocused WKWebView can suspend floating-menu
-positioning and driver scrolling even when native screenshots are available.
-Do not treat a successful header screenshot as proof of interactive positioning.
-The attempted test-only app/window show and focus calls did not consistently
-unhide this local WebView; no new permission or foreground hook is retained.
-Chakra Table.Caption explicitly uses captionSide=top to preserve native caption
-ordering and preview-result focus/scroll behavior.
-
-The dedicated organization fixture and Foundation organization helpers reveal
-review controls through Element.scrollIntoView and activate the organization
-entry with focus before click, matching normal pointer ordering. The embedded
-driver otherwise focuses after click, and its wheel/animation-frame scroll path
-can time out before falling back to the same DOM method in an occluded WebView.
-Keep selection, focus-return, path/companion and unchanged-source assertions;
-these fixture setup calls do not establish physical wheel/secondary-click input.
-The page-chrome fixture seeds its library in a before hook so header checks run
-independently of context-menu positioning; the default suite retains both cases.
-
-Structure rule cards (2026-11-07): OrganizationPresets owns the date patterns,
-inline SVG example renderer and colocated slot recipe. SegmentedControl owns the
-shared typed radio-group adapter/recipe. Register recipes in the theme and run
-the pinned Chakra CLI typegen. Test both rule-editor consumers and existing
-inspection cards; native `structure-formatter.e2e.mjs` verifies keyboard choices,
-actual whole-library requests, window fit and unchanged generated sources.
-Foundation's selected-name case helper now operates the case segment; standard
-field geometry excludes hidden radio inputs and checks segment containment
-separately. No dependency, IPC schema or native execution gate changes.
-
-The embedded WebDriver 1.5.1 arrow-key default moves radio focus/checked state
-and dispatches change, omitting the native activation click consumed by Ark.
-The formatter's test helper asserts that focused/checked radio and completes
-its click before inspecting the application request. This is instrumented DOM
-input evidence, not physical keyboard certification; production event handling
-is unchanged. Keep this limit explicit in results.
-
-Expanded structure naming (2026-11-07): ADR-0096 covers optional metadata source/
-example context and policy-v2 naming tokens, with v1 legacy serialization retained.
-Run the organization, metadata projection and saved-plan/template consumers;
-changes to the resolver warrant the generated original/copy regressions as well.
-The actual focused/default and feature/full outcomes belong in IMPLEMENTATION_LOG.
-Check IPC drift after exporting OrganizationMetadata/TemplateSample. Run the
-whole-library native structure spec, the affected Foundation flows and timeline
-spec sequentially; the latter shares the generated scroll-catalog hook. That
-hook now adds explicit catalog-only naming observations and tag categories, while
-its placeholder originals remain unavailable. This is not decoder/extraction
-proof. The macOS helper read list adds embedded naming tags, with no silent
-reindex and no expanded Windows location-label reader claim.
-
-## Structure review workflow — 2026-11-07
-
-[ADR-0097](decisions/ADR-0097-structure-review-and-session-presets.md) defines
-native illustrative examples, Skip compatibility, cached TEMP global summaries
-and bounded typed full-scope review queries. Test `organization` and saved Skip
-policy cases, plus the affected selected-photo planning consumers; for this
-native planning change the full core feature suite was also selected:
-
-```sh
-node scripts/cargo.mjs test --locked -p stillharbour-core --lib --features fixture-probes,copy-workflow
-npm test
-npm run bindings:check
-npm run lint
-npm run typecheck
-```
-
-Frontend tests cover filename transforms, session scope/limits, live example
-error/stale states, complete review/search/skip flow, cancellation and simulation
-revalidation. App navigation tests open Advanced path rule before inspecting the
-raw pattern; the naming controls remain immediately visible. Use focused tests
-while iterating, then the whole frontend suite for these shared consumers.
-
-The generated native case exercises real global paging beyond 240 rows, literal
-search outside page one, Needs attention/missing-date filters, save/load across
-navigation, confirmation/cancellation/simulated completion, custom dragging and
-unchanged source audits. It records all organization request kinds and refuses
-mutation commands. Run sequentially with a current instrumented executable:
-
-```sh
-npm run desktop:test:build
-npm run desktop:test -- --spec tests/desktop/structure-formatter.e2e.mjs
-npm run build
-npm run release:check
-```
-
-Restore ordinary production assets after instrumentation. Receipts/screenshots
-are `.context/ui-redesign/structure-flow*`; they are local macOS evidence, not
-Windows, physical input, source metadata extraction, packaged native release or
-production mutation qualification. Keep actual Run restructure disabled.
-
-The base-only theme requires explicit spacing/size/font/overlay tokens and a
-registered Dialog slot recipe; compose its controlled Root and Portal using the
-[Chakra v3 Dialog API](https://chakra-ui.com/docs/components/dialog). Recipe styles
-are layered, while legacy `.primary` CSS is unlayered: the colocated footer/dialog
-CSS module resets only its conflicting margin/height. Review actual native
-compact/desktop geometry after these changes. Run pinned Chakra CLI typegen and
-the pinned local React Doctor scope command recorded in REACT_DOCTOR_REVIEW.
-
-## Native CI fixture repairs — 2026-11-07
-
-The Map desktop spec locates its shared search frame inside
-`.map-page .app-page-header`, replacing the removed `.map-search-controls`
-wrapper. Retain desktop/minimum containment, magnifier-before-input, input hit,
-filter placement, keyboard dismissal and source-byte assertions. The decorative
-magnifier has `pointer-events: none`: its centre must hit the owning search frame,
-or the icon itself when applicable; an unrelated overlay still fails. Record the
-pointer-transparent state explicitly in the native receipt.
-
-Windows-only `TemplateSample` literals must initialize optional metadata to
-`None` when the historical fixture supplies none. Rust literals require the field
-even though serde omits absent metadata. Preserve expected paths and legacy
-fingerprints; do not invent observations to make fixtures compile. Run focused
-organization and Map/PlaceSearch tests, Rust format, script lint/format and the
-generated Map desktop spec. Windows compilation/execution remains a Windows CI
-check; a macOS run does not exercise `#![cfg(windows)]` integration tests.
-
-Catalog restart navigation (2026-11-07): the separate three-launch catalog suite
-opens the dedicated **Backup** page directly. Its shared helper waits for the
-snapshot profile selector even when preparing a retained-catalog return without
-a selected profile. The removed Backup & Sync navigation and Versioned backup
-mode button must not be used as test locators. Once preparation stops the normal
-application, assert that the actual backup workspace and navigation are absent,
-and retain the native BUSY admission check. Phases two/three require the first
-phase's real receipt; never manufacture receipts or bypass failed preparation.
-Run `npm run desktop:test:catalog` sequentially with a matching instrumented
-executable to exercise all three actual processes, retained generations, byte
-audits and scoped cleanup. Failed owned sessions stay retained under the existing
-harness rules. The main eighteen-spec desktop suite is separate evidence.
+Point an ignored WDIO wrapper at that target's executable in both the service's
+`appBinaryPath` and capability's `application`. Use absolute spec paths and an
+unused driver port. If copying the executable, keep it beside its required helper
+resources. Verify the listening PID and executable before activation or shutdown.
+Keep copied artifacts, receipts and screenshots under `.context/`.
+
+Instrumented native and production frontend builds share `dist`. Keep builds and
+drivers sequential; after an instrumented build, restore ordinary frontend output
+with `npm run build`, then run `npm run release:check`. Default preflight must
+exclude test routes, WebDriver dependencies and experimental owned features.
+Never use `--all-features` for a release.
+
+The default WDIO suite gives each spec a new native process and generated data
+tree. Catalog activation uses its separate three-launch harness and retained
+receipts; never manufacture a receipt to skip failed preparation. Format probes
+use their own configuration and generated/pinned sources. Fixture cleanup must
+prove ownership of the exact directory and preserve failed-session evidence.
+
+## Native fixture preconditions
+
+- Embedded select-option clicks do not reliably change controlled selects. Use
+  the established DOM value/change helper and assert the resulting selected value.
+- Generated managed destinations must finish discovery and the exact root's
+  `thumbnail:initial:<rootId>` job before building a preview. The readiness helper
+  also requires online/prepared roots and no active scan/thumbnail work. Keep
+  stale-preview, identity, overlap and neighbor/source checks; do not force-enable
+  the chooser or loop through approvals to hide invalidation.
+- Move hover and keyboard focus away from thumbnails before checking resting
+  opacity. The pinned embedded driver's `pointerMove` dispatches DOM events and
+  does not move the OS cursor. On Windows the page-chrome fixture uses Tauri's
+  native cursor API with logical window coordinates and deliberately asserts
+  hover before leaving. Non-Windows hosts retain the embedded-driver setup;
+  macOS cursor warping alone does not deliver a mouse-moved event to WKWebView.
+  Wait for generated preparation to settle before measuring stable tiles. The
+  page-chrome readiness helper accepts `completed` or `partial` for both discovery
+  and the exact root's initial-thumbnail job: intentionally invalid media can make
+  both jobs partial on Windows. Require an online, prepared root and no unfinished
+  or failed jobs. This UI fixture rule grants no integrity or mutation authority
+  and does not relax the stricter managed-destination checks above. Setup writes
+  a path-free root/job receipt even when its readiness wait times out.
+  Cursor movement is permitted only by `tauri.test.conf.json` instrumentation;
+  production capabilities are unchanged. Keep exact visible/resting states and
+  menu/hit geometry; do not disable animation or accept partial opacity to pass
+  a test. CI retains page-chrome selection and menu-position receipts/screenshots.
+- A hidden/unfocused WKWebView can suspend floating-menu positioning and physical
+  focus styles. Record `document.hidden`, `document.hasFocus()` and actual DOM
+  focus separately. DOM activation is not proof of physical keyboard/pointer input.
+- Use the existing focus-first/DOM scroll setup where the pinned embedded driver
+  reverses click/focus ordering or stalls wheel/animation-frame scrolling. Do not
+  weaken viewport containment or preservation assertions.
+
+## Documentation changes
+
+Keep current guidance in the pages indexed by [docs/README.md](README.md). Describe
+implemented behavior and distinguish nondefault experimental features from enabled
+capabilities. Keep unresolved safety/release gates in [Release status](RELEASE_STATUS.md).
+
+Append a concise dated record to [IMPLEMENTATION_LOG.md](IMPLEMENTATION_LOG.md)
+with the request, scope, decisions, actual checks, limitations and next gate.
+Architecture changes receive an ADR under `docs/decisions/`; existing numbered
+records are preserved in the changelog and must not be reused.
+
+Superseded plans, prompts, task lists and long dated evidence belong in
+`docs/changelog/`. Preserve their limitations and distinguish them from current
+instructions. Update incoming/outgoing links when moving a page. The archive is
+excluded from automatic formatting so historical text does not receive unrelated
+rewrites. Archiving does not waive an acceptance obligation.
+
+## Optional editor setup
+
+`.vscode/` contains extension recommendations, formatting settings and the owner's
+optional MCP definitions. These are editor configuration, separate from the pinned
+application toolchain. Availability and authentication depend on the editor;
+checking in an entry does not start or connect a server.

@@ -3,7 +3,7 @@ import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import type { AssetQuery, AppPreferences, LibraryStatus } from '../../bindings';
-import type { Section, ViewMode } from '../../library/model';
+import type { Section } from '../../library/model';
 import { defaultQuery } from '../../library/model';
 import {
   QueryFields,
@@ -11,7 +11,6 @@ import {
   RootAvailability,
   ActiveFilters,
 } from '@/components/FilterFields';
-import { BrowserControls } from '@/components/BrowserControls';
 import type { LibraryController } from '@/hooks/use-library-controller';
 export type GalleryDisplay = {
   size: AppPreferences['thumbnailSize'];
@@ -21,8 +20,6 @@ export function FilterPanel({
   controller: c,
   status,
   section,
-  mode,
-  display,
   onApply,
   onClose,
   onSettings,
@@ -31,17 +28,13 @@ export function FilterPanel({
   controller: LibraryController;
   status: LibraryStatus;
   section: Section;
-  mode: ViewMode;
-  display: GalleryDisplay;
-  onApply: (query: AssetQuery, mode: ViewMode, display: GalleryDisplay) => void;
+  onApply: (query: AssetQuery) => void;
   onClose: () => void;
   onSettings: (id: string) => void;
   onRelink: (id: string) => Promise<void>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [draft, setDraft] = useState(c.query);
-  const [draftMode, setMode] = useState(mode);
-  const [draftDisplay, setDisplay] = useState(display);
   const [version, resetFields] = useState(0);
   const [selecting, setSelecting] = useState(false);
   const [selectionError, setSelectionError] = useState<string | null>(null);
@@ -62,15 +55,43 @@ export function FilterPanel({
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (event.currentTarget.reportValidity()) {
-      onApply(draft, draftMode, draftDisplay);
+      onApply(draft);
       onClose();
     }
   }
   return (
-    <dialog
+    <chakra.dialog
       ref={dialog}
       id="library-filter-panel"
       className="filter-panel"
+      css={{
+        position: 'fixed',
+        inset: '0 0 0 auto',
+        margin: '0',
+        width: 'min(380px, 92vw)',
+        height: '100vh',
+        maxHeight: 'none',
+        maxWidth: 'none',
+        padding: '0',
+        border: '0',
+        borderLeft: '1px solid {colors.border}',
+        background: '{colors.bg.panel}',
+        color: 'inherit',
+        '&::backdrop': { background: '#0005' },
+        '& > form': { display: 'flex', flexDirection: 'column', height: '100%', minHeight: '0' },
+        '& .panel-query-fields': {
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr)',
+          gap: '16px',
+        },
+        '& .form-grid': { display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: '16px' },
+        '& label': { minWidth: '0', maxWidth: '100%' },
+        '& select': { minWidth: '0', maxWidth: '100%' },
+        '& input': { minWidth: '0', maxWidth: '100%' },
+        '& .root-status': { flexWrap: 'wrap' },
+        '& .folder-strip': { flexWrap: 'wrap' },
+        '& .availability-note': { marginTop: '10px' },
+      }}
       aria-labelledby="filter-panel-title"
       onCancel={(event) => {
         event.preventDefault();
@@ -78,7 +99,18 @@ export function FilterPanel({
       }}
     >
       <chakra.form onSubmit={submit} aria-busy={selecting}>
-        <chakra.header className="filter-panel-header">
+        <chakra.header
+          className="filter-panel-header"
+          css={{
+            background: '{colors.bg.toolbar}',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 20px',
+            borderBottom: '1px solid {colors.border}',
+            '& h2': { margin: '0', fontSize: '18px', letterSpacing: '0' },
+          }}
+        >
           <Heading as="h2" unstyled id="filter-panel-title">
             Filters
           </Heading>
@@ -86,8 +118,30 @@ export function FilterPanel({
             Close
           </Button>
         </chakra.header>
-        <chakra.fieldset className="filter-panel-body" disabled={selecting}>
-          <Text className="help">
+        <chakra.fieldset
+          className="filter-panel-body"
+          css={{
+            flex: '1',
+            minHeight: '0',
+            overflowY: 'auto',
+            padding: '16px 20px',
+            '& section': { padding: '16px 0', borderBottom: '1px solid {colors.border}' },
+            '& h3': { fontSize: '13px', margin: '0 0 12px' },
+            minWidth: '0',
+            border: '0',
+            margin: '0',
+          }}
+          disabled={selecting}
+        >
+          <Text
+            className="help"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '20px',
+              margin: '8px 0',
+            }}
+          >
             {c.page?.total.toLocaleString() ?? '…'} matching photos &amp; videos
           </Text>
           <ActiveFilters
@@ -103,19 +157,6 @@ export function FilterPanel({
               query={draft}
               status={status}
               filter={(patch) => setDraft((value) => ({ ...value, ...patch }))}
-            />
-          </chakra.section>
-          <chakra.section>
-            <Heading as="h3" unstyled>
-              Display
-            </Heading>
-            <BrowserControls
-              mode={draftMode}
-              size={draftDisplay.size}
-              fit={draftDisplay.fit}
-              onMode={setMode}
-              onSize={(size) => setDisplay((value) => ({ ...value, size }))}
-              onFit={(fit) => setDisplay((value) => ({ ...value, fit }))}
             />
           </chakra.section>
           <chakra.section>
@@ -166,10 +207,32 @@ export function FilterPanel({
           </Button>
           {selectionError && <Text role="alert">{selectionError}</Text>}
           {dirty && (
-            <Text className="help">Apply changes before selecting all matching results.</Text>
+            <Text
+              className="help"
+              css={{
+                fontSize: '13px',
+                color: '{colors.fg.muted}',
+                lineHeight: '20px',
+                margin: '8px 0',
+              }}
+            >
+              Apply changes before selecting all matching results.
+            </Text>
           )}
         </chakra.fieldset>
-        <chakra.footer className="filter-panel-actions">
+        <chakra.footer
+          className="filter-panel-actions"
+          css={{
+            background: '{colors.bg.toolbar}',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '8px',
+            padding: '16px 20px',
+            borderTop: '1px solid {colors.border}',
+            '& .primary': { marginTop: '0' },
+          }}
+        >
           <Button
             type="button"
             disabled={selecting}
@@ -188,6 +251,6 @@ export function FilterPanel({
           </Button>
         </chakra.footer>
       </chakra.form>
-    </dialog>
+    </chakra.dialog>
   );
 }

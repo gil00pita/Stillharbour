@@ -83,12 +83,37 @@ export function RetainedCopyInspection({
       <Button type="button" disabled={pending} onClick={() => void inspect()}>
         {pending ? 'Inspecting retained bytes…' : 'Choose original destination and inspect'}
       </Button>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Inspection compares actual files with their sources. It grants no permission to resume or
         change files. Originals and retained outputs remain in place.
       </Text>
       {error && (
-        <Text role="alert" className="error">
+        <Text
+          role="alert"
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+        >
           {error}
         </Text>
       )}
@@ -116,7 +141,29 @@ export function RetainedCopyInspection({
                   {result.issues
                     .filter((issue) => issue.fileId === file.id)
                     .map((issue) => (
-                      <Text className="error" key={issue.fileId}>
+                      <Text
+                        className="error"
+                        css={{
+                          border: '1px solid {colors.border.control}',
+                          borderRadius: 'var(--control-radius)',
+                          background: '{colors.danger.bg}',
+                          color: '{colors.danger.fg}',
+                          padding: '16px 20px',
+                          margin: '24px 0 0',
+                          fontSize: '13px',
+                          lineHeight: '1.6',
+                          '& p': { margin: '0' },
+                          '& button': {
+                            marginTop: '12px',
+                            border: '1px solid currentColor',
+                            background: 'transparent',
+                            color: 'inherit',
+                            borderRadius: '4px',
+                            padding: '7px 12px',
+                          },
+                        }}
+                        key={issue.fileId}
+                      >
                         {issue.error.code}: {issue.error.message}
                       </Text>
                     ))}

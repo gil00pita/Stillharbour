@@ -1,3 +1,4 @@
+import { chakra } from '@chakra-ui/react';
 import { Input } from '@/components/Input';
 import { Field, IconButton, Box, List } from '@chakra-ui/react';
 import { useId, useState } from 'react';
@@ -26,13 +27,85 @@ export function TagInput({
   }
   return (
     <Field.Root asChild unstyled id={id} disabled={disabled}>
-      <div className="tag-field" data-field={name}>
+      <chakra.div
+        className="tag-field"
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '8px',
+          minWidth: '0',
+          "&[data-field='extensions']": { gridColumn: '1 / -1' },
+        }}
+        data-field={name}
+      >
         <Field.Label asChild unstyled>
           <label htmlFor={id}>{label}</label>
         </Field.Label>
-        <Box className={`tag-editor ${disabled ? 'is-disabled' : ''}`}>
+        <Box
+          className={`tag-editor ${disabled ? 'is-disabled' : ''}`}
+          css={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '4px',
+            minHeight: 'var(--control-height)',
+            padding: '4px',
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.bg.input}',
+            fontSize: '12px',
+            '&:focus-within': { outline: '2px solid {colors.brand.solid}', outlineOffset: '2px' },
+            '&.is-disabled': { opacity: '0.55' },
+            '& > input': {
+              flex: '1 1 90px',
+              width: '90px',
+              minWidth: '60px',
+              padding: '4px',
+              minHeight: '28px',
+              border: '0',
+              background: 'transparent',
+            },
+            '& > input:focus-visible': { outline: '0' },
+          }}
+        >
           {values.length > 0 && (
-            <List.Root unstyled className="tag-values" aria-label={`${label} values`}>
+            <List.Root
+              unstyled
+              className="tag-values"
+              css={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: '4px',
+                maxWidth: '100%',
+                listStyle: 'none',
+                padding: '0',
+                margin: '0',
+                '& li': {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  minWidth: '0',
+                  maxWidth: '100%',
+                  paddingLeft: '8px',
+                  borderRadius: '4px',
+                  background: '{colors.bg.navigation}',
+                  color: '{colors.fg}',
+                },
+                '& bdi': { minWidth: '0', overflowWrap: 'anywhere', lineHeight: '1.5' },
+                "& button[type='button']": {
+                  display: 'grid',
+                  placeItems: 'center',
+                  flex: '0 0 28px',
+                  minHeight: '28px',
+                  width: '28px',
+                  padding: '5px',
+                  border: '0',
+                  background: 'transparent',
+                },
+                '& button:focus-visible': { outlineOffset: '-2px' },
+              }}
+              aria-label={`${label} values`}
+            >
               {values.map((value) => (
                 <List.Item unstyled key={value}>
                   <bdi>{value}</bdi>
@@ -91,7 +164,7 @@ export function TagInput({
             }}
           />
         </Box>
-      </div>
+      </chakra.div>
     </Field.Root>
   );
 }

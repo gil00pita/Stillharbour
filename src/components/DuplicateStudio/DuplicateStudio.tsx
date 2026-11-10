@@ -111,7 +111,18 @@ export function DuplicateStudio({
               Duplicate clusters
             </Heading>
             <Field.Root>
-              <Field.Label className="screen-reader-status">Search duplicate groups</Field.Label>
+              <Field.Label
+                className="screen-reader-status"
+                css={{
+                  position: 'absolute',
+                  width: '1px',
+                  height: '1px',
+                  overflow: 'hidden',
+                  clipPath: 'inset(50%)',
+                }}
+              >
+                Search duplicate groups
+              </Field.Label>
               <Input
                 type="search"
                 placeholder="Search observed files or evidence…"

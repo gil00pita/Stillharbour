@@ -151,6 +151,7 @@ export function AlbumEditor({
                 mode="grid"
                 display={{ size: 'compact', fit: 'cover' }}
                 selected={selected}
+                selectionActive
                 selectionFrozen={busy}
                 activeId={null}
                 onSelect={toggle}

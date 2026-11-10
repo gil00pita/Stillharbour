@@ -309,7 +309,18 @@ function ImportComparisonSession({
   }
   const pages = Math.max(1, Math.ceil((report?.files.length ?? 0) / 64));
   return (
-    <chakra.section aria-label="Import byte comparison" className="organization-destination">
+    <chakra.section
+      aria-label="Import byte comparison"
+      className="organization-destination"
+      css={{
+        margin: '24px 0',
+        padding: '16px',
+        border: '1px solid {colors.border}',
+        borderRadius: 'var(--control-radius)',
+        '& h3': { marginTop: '0' },
+        '& bdi': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' },
+      }}
+    >
       <Heading as="h3" unstyled>
         Compare before importing
       </Heading>

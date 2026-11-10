@@ -56,8 +56,35 @@ export function PhotoCollection({
     viewportHandle.current?.scrollBy(delta, mode);
   }
   return (
-    <Box className="collection-layout">
-      <Box className="collection-main" data-feed-count={page?.assets.length ?? 0}>
+    <Box
+      className="collection-layout"
+      css={{
+        display: 'flex',
+        gridTemplateColumns: 'minmax(0, 1fr) auto',
+        flex: '1',
+        minHeight: '0',
+        gap: '0',
+        '&.with-inspector': { gridTemplateColumns: 'minmax(0, 1fr) auto 280px' },
+        '@media (max-width: 1050px)': {
+          '&.with-inspector': { gridTemplateColumns: 'minmax(0, 1fr) 250px' },
+        },
+        '@media (max-width: 760px)': {
+          '&.with-inspector': { display: 'flex', flexDirection: 'column' },
+        },
+      }}
+    >
+      <Box
+        className="collection-main"
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: '0',
+          minHeight: '0',
+          flex: '1',
+          position: 'relative',
+        }}
+        data-feed-count={page?.assets.length ?? 0}
+      >
         {page?.assets.length ? (
           <AssetBrowser
             display={display}
@@ -70,6 +97,10 @@ export function PhotoCollection({
             onNearStart={feed.hasBefore ? feed.previous : undefined}
             onNearEnd={feed.hasAfter ? feed.next : undefined}
             assets={page.assets}
+            favoriteBusy={batchBusy}
+            onFavorite={async (id, favorite) => {
+              await c.annotate({ favorite, rating: null, tags: null }, id);
+            }}
             startIndex={page.startIndex ?? 0}
             mode={mode}
             selected={selected}
@@ -148,7 +179,26 @@ export function PhotoCollection({
           />
         )}
         {(feed.busy || feed.error) && (
-          <Box className="feed-status" role="status">
+          <Box
+            className="feed-status"
+            css={{
+              position: 'absolute',
+              bottom: '12px',
+              left: '12px',
+              right: '12px',
+              zIndex: '3',
+              width: 'fit-content',
+              maxWidth: 'calc(100% - 24px)',
+              padding: '8px 12px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '{colors.bg.panel}',
+              border: '1px solid {colors.border}',
+              fontSize: '12px',
+            }}
+            role="status"
+          >
             {feed.error ? (
               <>
                 <Text as="span">{feed.error.message}</Text>
@@ -159,7 +209,17 @@ export function PhotoCollection({
             )}
           </Box>
         )}
-        <Text className="screen-reader-status" aria-live="polite">
+        <Text
+          className="screen-reader-status"
+          css={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            overflow: 'hidden',
+            clipPath: 'inset(50%)',
+          }}
+          aria-live="polite"
+        >
           {page?.total.toLocaleString() ?? 0} matching photos and videos
         </Text>
       </Box>
@@ -189,7 +249,17 @@ function CollectionEmpty({
 }) {
   const showIllustration = emptyLibrary && !loading && !scanning && !preparing;
   return (
-    <Box className="empty-results">
+    <Box
+      className="empty-results"
+      css={{
+        flex: '1',
+        textAlign: 'center',
+        alignContent: 'center',
+        padding: '50px 20px',
+        '& h2': { fontSize: '22px' },
+        '& p': { fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '1.6' },
+      }}
+    >
       {(preparing || scanning) && <PhotoScanningArt active={animating} />}
       {showIllustration && <EmptyLibraryArt />}
       <Heading as="h2" unstyled>

@@ -51,7 +51,18 @@ export function PhotoAlbumActions({
   return (
     <AlbumActions.Provider value={{ show, selection }}>
       {children}
-      <Text as="span" className="screen-reader-status" role="status">
+      <Text
+        as="span"
+        className="screen-reader-status"
+        css={{
+          position: 'absolute',
+          width: '1px',
+          height: '1px',
+          overflow: 'hidden',
+          clipPath: 'inset(50%)',
+        }}
+        role="status"
+      >
         {notice}
       </Text>
       <Menu.Root
@@ -237,7 +248,17 @@ function AlbumChooser({
         <Button className="primary" disabled={busy} onClick={() => setCreating(true)}>
           + Create new album
         </Button>
-        <Text className="help">Tag albums follow photo tags automatically.</Text>
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
+          Tag albums follow photo tags automatically.
+        </Text>
         {busy && <Text role="status">Adding photo…</Text>}
       </Box>
     </InspectionDialog>

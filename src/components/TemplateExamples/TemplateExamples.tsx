@@ -32,7 +32,10 @@ export function TemplateExamples({
   return (
     <chakra.fieldset disabled={disabled}>
       <chakra.legend>Template examples</chakra.legend>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Test up to four independent examples when saving. Enter portable source names with / between
         folders and capture-local dates such as 2026-10-31T14:30:00, without a timezone. Examples
         use no files and do not check destination collisions or companions.

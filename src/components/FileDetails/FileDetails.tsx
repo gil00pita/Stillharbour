@@ -19,16 +19,41 @@ export function FileDetails({
     return () => element?.close();
   }, []);
   return (
-    <dialog
+    <chakra.dialog
       ref={dialog}
       className="file-details"
+      css={{
+        background: '{colors.bg.panel}',
+        color: 'inherit',
+        border: '1px solid {colors.border}',
+        padding: '22px',
+        width: 'min(500px, 92vw)',
+        maxHeight: '90vh',
+        '&::backdrop': { background: '#0005' },
+        '& dl': {
+          display: 'grid',
+          gridTemplateColumns: 'auto minmax(0, 1fr)',
+          gap: '12px 18px',
+          fontSize: '12px',
+        },
+        '& dd': { margin: '0', overflowWrap: 'anywhere' },
+        '& h3': { overflowWrap: 'anywhere' },
+      }}
       aria-labelledby="file-details-title"
       onCancel={(event) => {
         event.preventDefault();
         onClose();
       }}
     >
-      <chakra.header className="section-heading">
+      <chakra.header
+        className="section-heading"
+        css={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '12px',
+        }}
+      >
         <Heading as="h2" unstyled id="file-details-title">
           File details
         </Heading>
@@ -37,7 +62,17 @@ export function FileDetails({
       <Heading as="h3" unstyled>
         <bdi>{asset.name}</bdi>
       </Heading>
-      <Text className="path">
+      <Text
+        className="path"
+        css={{
+          fontSize: '13px',
+          lineHeight: '1.6',
+          overflowWrap: 'anywhere',
+          whiteSpace: 'pre-wrap',
+          margin: '8px 0 0',
+          color: '{colors.fg.muted}',
+        }}
+      >
         <bdi>{asset.relativePath}</bdi>
       </Text>
       <dl>
@@ -52,10 +87,13 @@ export function FileDetails({
         <dt>Original library</dt>
         <dd>{root?.availability.replaceAll('_', ' ') ?? 'Unavailable'}</dd>
       </dl>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         This indexed file has no media preview. Browsing does not open external applications or
         change the original.
       </Text>
-    </dialog>
+    </chakra.dialog>
   );
 }

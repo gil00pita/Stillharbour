@@ -18,6 +18,7 @@ import { CachedPreviewImage } from '@/components/CachedPreviewImage';
 import { previewKey, previewUrl } from '../../library/previews';
 import { normalizeViewport } from '../../map/state';
 import { Button } from '@/components/Button';
+import { colors } from '../../theme/colors';
 import {
   SATELLITE_SOURCE,
   SATELLITE_CREDIT,
@@ -82,12 +83,20 @@ export default function Basemap({
           version: 8,
           sources: { land: { type: 'geojson', data: landData } },
           layers: [
-            { id: 'ocean', type: 'background', paint: { 'background-color': '#171f24' } },
+            {
+              id: 'ocean',
+              type: 'background',
+              // MapLibre parses color literals itself, outside Chakra's CSS system.
+              paint: { 'background-color': colors.neutral[900].value },
+            },
             {
               id: 'land',
               type: 'fill',
               source: 'land',
-              paint: { 'fill-color': '#344344', 'fill-outline-color': '#5b6a65' },
+              paint: {
+                'fill-color': colors.neutral[700].value,
+                'fill-outline-color': colors.neutral[500].value,
+              },
             },
           ],
         },
@@ -211,7 +220,11 @@ export default function Basemap({
     }
   }
   return (
-    <Box className="map-basemap" ref={container}>
+    <Box
+      className="map-basemap"
+      css={{ position: 'relative', height: '100%', width: '100%' }}
+      ref={container}
+    >
       {map &&
         clusters.map((cluster) => (
           <PhotoMarker
@@ -224,13 +237,41 @@ export default function Basemap({
             onClick={() => onCluster(cluster)}
           />
         ))}
-      <Text className="map-attribution">
+      <Text
+        className="map-attribution"
+        css={{
+          position: 'absolute',
+          zIndex: '2',
+          bottom: '8px',
+          right: '12px',
+          margin: '0',
+          padding: '4px 8px',
+          borderRadius: '4px',
+          fontSize: '11px',
+          color: '{colors.fg}',
+          background: '{colors.bg.elevated}',
+          pointerEvents: 'none',
+        }}
+      >
         {view === 'satellite'
           ? SATELLITE_CREDIT
           : 'Made with Natural Earth · Offline world overview'}
       </Text>
       {map && (
-        <Box className="map-layers" role="group" aria-label="Map view">
+        <Box
+          className="map-layers"
+          css={{
+            position: 'absolute',
+            zIndex: '2',
+            top: '12px',
+            left: '56px',
+            display: 'flex',
+            gap: '4px',
+            "& button[aria-pressed='true']": { background: '{colors.bg.hover}' },
+          }}
+          role="group"
+          aria-label="Map view"
+        >
           <Button type="button" aria-pressed={view === 'map'} onClick={() => changeView('map')}>
             Map
           </Button>
@@ -245,7 +286,23 @@ export default function Basemap({
         </Box>
       )}
       {(view === 'satellite' || satelliteFailed) && (
-        <Text className="map-view-note" role="status">
+        <Text
+          className="map-view-note"
+          css={{
+            position: 'absolute',
+            zIndex: '2',
+            top: '56px',
+            left: '12px',
+            maxWidth: 'calc(100% - 72px)',
+            margin: '0',
+            padding: '6px 10px',
+            borderRadius: '4px',
+            color: '{colors.fg}',
+            background: '{colors.bg.elevated}',
+            fontSize: '12px',
+          }}
+          role="status"
+        >
           {satelliteFailed
             ? 'Satellite imagery could not be loaded. Map view is available; check your connection and try Satellite again.'
             : satelliteLoaded
@@ -254,7 +311,19 @@ export default function Basemap({
         </Text>
       )}
       {map && (
-        <Box className="map-zoom" role="group" aria-label="Map zoom">
+        <Box
+          className="map-zoom"
+          css={{
+            position: 'absolute',
+            zIndex: '2',
+            top: '12px',
+            right: '12px',
+            display: 'grid',
+            gap: '4px',
+          }}
+          role="group"
+          aria-label="Map zoom"
+        >
           <ChakraButton
             unstyled
             type="submit"
@@ -278,6 +347,7 @@ export default function Basemap({
       {map && (
         <IconButton
           className="map-world"
+          css={{ '& svg': { width: '20px', height: '20px' } }}
           aria-label="Whole world"
           title="Show whole world"
           variant="outline"
@@ -343,6 +413,10 @@ function PhotoMarker({
       unstyled
       type="submit"
       className={`map-marker${selected ? ' selected' : ''}`}
+      css={{
+        '&.selected': { outline: '3px solid {colors.brand.solid}', outlineOffset: '3px' },
+        '&:focus-visible': { outline: '3px solid {colors.brand.solid}', outlineOffset: '3px' },
+      }}
       aria-pressed={selected}
       disabled={disabled}
       onPointerDown={(event) => event.stopPropagation()}
@@ -352,7 +426,29 @@ function PhotoMarker({
       }}
       aria-label={`${cluster.count} ${cluster.count === 1 ? 'photo' : 'photos'} in this area; sample location ${cluster.latitude.toFixed(3)}, ${cluster.longitude.toFixed(3)}`}
     >
-      <Text as="span" className="map-marker-image">
+      <Text
+        as="span"
+        className="map-marker-image"
+        css={{
+          display: 'grid',
+          placeItems: 'center',
+          width: '100%',
+          height: '100%',
+          minWidth: '0',
+          minHeight: '0',
+          overflow: 'hidden',
+          borderRadius: '4px',
+          '& img': {
+            display: 'block',
+            minWidth: '0',
+            minHeight: '0',
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            borderRadius: '4px',
+          },
+        }}
+      >
         {edge ? (
           <CachedPreviewImage src={previewUrl(asset, edge)} alt="" />
         ) : (
@@ -361,7 +457,22 @@ function PhotoMarker({
           </Text>
         )}
       </Text>
-      <Text as="span" className="map-marker-count">
+      <Text
+        as="span"
+        className="map-marker-count"
+        css={{
+          position: 'absolute',
+          bottom: '-8px',
+          right: '-8px',
+          minWidth: '22px',
+          padding: '2px 5px',
+          borderRadius: '10px',
+          background: '{colors.fg}',
+          color: '{colors.bg.panel}',
+          fontSize: '11px',
+          fontWeight: '600',
+        }}
+      >
         {cluster.count}
       </Text>
     </ChakraButton>,

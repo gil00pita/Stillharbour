@@ -10,6 +10,8 @@ import { photoAlbumActionsRecipe } from '../components/PhotoAlbumActions/PhotoAl
 import { createSystem, defaultBaseConfig, defaultConfig, defineConfig } from '@chakra-ui/react';
 import { colors } from './colors';
 import { fonts } from './fonts';
+import { globalCss } from './global-css';
+import { keyframes } from './keyframes';
 import { semanticTokens } from './semantic-tokens';
 import { buttonRecipe } from '../components/Button/Button.recipe';
 import { inputRecipe } from '../components/Input/Input.recipe';
@@ -26,11 +28,15 @@ export const system = createSystem(
     cssVarsPrefix: 'stillharbour',
     // Retain the desktop's native form, dialog and photographic canvas behavior.
     preflight: false,
+    globalCss,
     theme: {
+      breakpoints: { sm: '480px', md: '768px', lg: '1024px', xl: '1280px', '2xl': '1536px' },
+      keyframes,
       tokens: {
         spacing: {
           controlY: { value: '7px' },
           1: { value: '0.25rem' },
+          1.5: { value: '6px' },
           2: { value: '0.5rem' },
           3: { value: '0.75rem' },
           4: { value: '1rem' },
@@ -50,7 +56,7 @@ export const system = createSystem(
         zIndex: { popover: { value: 1500 }, modal: { value: 1400 }, tooltip: { value: 1600 } },
         colors,
         fonts,
-        radii: { control: { value: '6px' }, panel: { value: '12px' } },
+        radii: { control: { value: '8px' }, panel: { value: '12px' } },
         sizes: {
           appHeader: { value: '64px' },
           control: { value: '36px' },

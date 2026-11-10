@@ -40,7 +40,36 @@ export function InspectionIssues({ jobId }: { jobId: string }) {
       {error && <Text role="alert">{error}</Text>}
       {page && (
         <>
-          <Box className="inspection-table-wrap">
+          <Box
+            className="inspection-table-wrap"
+            css={{
+              width: '100%',
+              overflow: 'auto',
+              margin: '16px 0',
+              '& table': { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
+              '& caption': { textAlign: 'left', marginBottom: '8px' },
+              '& th': {
+                textAlign: 'left',
+                verticalAlign: 'top',
+                padding: '12px',
+                borderBottom: '1px solid {colors.border}',
+                fontWeight: '500',
+              },
+              '& td': {
+                textAlign: 'left',
+                verticalAlign: 'top',
+                padding: '12px',
+                borderBottom: '1px solid {colors.border}',
+              },
+              '& th small': {
+                display: 'block',
+                maxWidth: '32rem',
+                overflowWrap: 'anywhere',
+                fontWeight: '400',
+                color: '{colors.fg.muted}',
+              },
+            }}
+          >
             <Table.Root unstyled>
               <Table.Caption unstyled captionSide="top">
                 Incomplete, missing or unreadable scope · retained observations

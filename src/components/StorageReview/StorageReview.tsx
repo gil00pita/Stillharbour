@@ -68,7 +68,16 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
     setTrail([...trail, { id, name }]);
   }
   return (
-    <chakra.section className="inspection-storage" aria-labelledby="storage-totals-title">
+    <chakra.section
+      className="inspection-storage"
+      css={{
+        '& .inspection-table-wrap :is(th, td):not(:first-child)': {
+          textAlign: 'right',
+          fontVariantNumeric: 'tabular-nums',
+        },
+      }}
+      aria-labelledby="storage-totals-title"
+    >
       <Heading as="h2" unstyled id="storage-totals-title">
         Storage in this inspection
       </Heading>
@@ -76,7 +85,17 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
         Total file size: {displayBytes(summary.total.logicalBytes)}. Logical sizes count hard-linked
         paths separately; allocation is not recoverable space.
       </Text>
-      <chakra.nav className="inspection-breadcrumbs" aria-label="Storage folders">
+      <chakra.nav
+        className="inspection-breadcrumbs"
+        css={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: '8px 20px',
+          alignItems: 'center',
+          margin: '16px 0',
+        }}
+        aria-label="Storage folders"
+      >
         {trail.map((node, index) => (
           <Button
             key={node.id}
@@ -105,7 +124,49 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
             Map area: observed logical file bytes. Small or zero-byte entries may have no visible
             area; the table retains their counts.
           </Text>
-          <Box className="inspection-map" aria-label="Logical-byte storage map">
+          <Box
+            className="inspection-map"
+            css={{
+              position: 'relative',
+              height: '340px',
+              border: '1px solid {colors.border}',
+              borderRadius: '8px',
+              overflow: 'hidden',
+              background: '{colors.bg}',
+              '& > button:not(.primary):not(.asset-open)': {
+                position: 'absolute',
+                overflow: 'hidden',
+                border: '2px solid {colors.bg}',
+                borderRadius: '3px',
+                background: 'hsl(var(--map-hue, 205) 32% 24%)',
+                color: '{colors.fg}',
+                padding: '8px',
+                minWidth: '0',
+                minHeight: '0',
+                textAlign: 'left',
+              },
+              '& > button:disabled': { opacity: '1' },
+              '& > button span': {
+                display: 'block',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+              },
+              '& > button small': {
+                display: 'block',
+                whiteSpace: 'nowrap',
+                textOverflow: 'ellipsis',
+                overflow: 'hidden',
+              },
+              '& > button:focus-visible': {
+                outline: '3px solid {colors.brand.solid}',
+                outlineOffset: '-5px',
+                zIndex: '1',
+              },
+              '@media (max-width: 800px)': { height: '260px' },
+            }}
+            aria-label="Logical-byte storage map"
+          >
             {tiles.map((tile, index) => (
               <Button
                 key={tile.id}
@@ -128,7 +189,36 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
               </Button>
             ))}
           </Box>
-          <Box className="inspection-table-wrap">
+          <Box
+            className="inspection-table-wrap"
+            css={{
+              width: '100%',
+              overflow: 'auto',
+              margin: '16px 0',
+              '& table': { width: '100%', borderCollapse: 'collapse', fontSize: '13px' },
+              '& caption': { textAlign: 'left', marginBottom: '8px' },
+              '& th': {
+                textAlign: 'left',
+                verticalAlign: 'top',
+                padding: '12px',
+                borderBottom: '1px solid {colors.border}',
+                fontWeight: '500',
+              },
+              '& td': {
+                textAlign: 'left',
+                verticalAlign: 'top',
+                padding: '12px',
+                borderBottom: '1px solid {colors.border}',
+              },
+              '& th small': {
+                display: 'block',
+                maxWidth: '32rem',
+                overflowWrap: 'anywhere',
+                fontWeight: '400',
+                color: '{colors.fg.muted}',
+              },
+            }}
+          >
             <Table.Root unstyled>
               <Table.Caption unstyled captionSide="top">
                 Folder totals for {current.parent.name}
@@ -187,7 +277,10 @@ export function StorageReview({ jobId, summary }: { jobId: string; summary: Stor
               </Table.Body>
             </Table.Root>
           </Box>
-          <Box className="inspection-actions">
+          <Box
+            className="inspection-actions"
+            css={{ display: 'flex', flexWrap: 'wrap', gap: '8px 20px', alignItems: 'center' }}
+          >
             <Button
               disabled={!cursor}
               onClick={() => {

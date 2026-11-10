@@ -31,9 +31,21 @@ export function OriginalPhoto({
   return (
     <Box
       className={`original-photo ${state === 'loaded' ? 'has-original' : ''} ${state === 'failed' ? 'has-failed' : ''}`}
+      css={{
+        position: 'absolute',
+        inset: '0',
+        '&.has-original .original-image': { opacity: '1' },
+        '&.has-original .original-fallback': { visibility: 'hidden' },
+        '&:not(.has-failed) .viewer-quality': { display: 'none' },
+        '&:not(.has-failed) .viewer-loading p': { display: 'none' },
+      }}
       aria-busy={state === 'loading'}
     >
-      <Box className="original-fallback" aria-hidden={state === 'loaded'}>
+      <Box
+        className="original-fallback"
+        css={{ position: 'absolute', inset: '0', '& .preview-loading-sheen': { display: 'none' } }}
+        aria-hidden={state === 'loaded'}
+      >
         <ViewerImage
           asset={asset}
           results={results}
@@ -46,6 +58,12 @@ export function OriginalPhoto({
         <CachedPreviewImage
           key={attempt}
           className="original-image"
+          css={{
+            position: 'absolute',
+            inset: '0',
+            opacity: '0',
+            '@media (prefers-reduced-motion: reduce)': { transition: 'none !important' },
+          }}
           src={source}
           aria-hidden={state !== 'loaded'}
           alt={asset.name}
@@ -63,7 +81,21 @@ export function OriginalPhoto({
       {state === 'loading' && (
         <>
           <LoadingSheen />
-          <Text className="original-notice" role="status">
+          <Text
+            className="original-notice"
+            css={{
+              position: 'absolute',
+              top: '8px',
+              left: '8px',
+              right: '8px',
+              margin: '0',
+              padding: '8px',
+              background: '{colors.bg.panel}',
+              color: '{colors.fg.muted}',
+              fontSize: '12px',
+            }}
+            role="status"
+          >
             Loading original…
           </Text>
         </>
@@ -71,6 +103,17 @@ export function OriginalPhoto({
       {state === 'failed' && (
         <Text
           className="original-notice"
+          css={{
+            position: 'absolute',
+            top: '8px',
+            left: '8px',
+            right: '8px',
+            margin: '0',
+            padding: '8px',
+            background: '{colors.bg.panel}',
+            color: '{colors.fg.muted}',
+            fontSize: '12px',
+          }}
           role="status"
           title="Original viewing supports static JPEG, PNG and WebP, plus HEIC/HEIF on compatible macOS webviews, up to 32 MiB and 32 megapixels. Offline originals must be reconnected."
         >

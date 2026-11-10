@@ -55,7 +55,24 @@ export function ComparisonPreviews({ runId, entryId }: { runId: string; entryId:
         Explicit read-only previews use the shared byte budget and bounded decoder. Unsupported,
         missing or changed files retain their text observations.
       </Text>
-      <Box className="backup-scope" aria-label="Side-by-side comparison previews">
+      <Box
+        className="backup-scope"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '24px',
+          marginBlock: '24px',
+          '& section': {
+            minWidth: '0',
+            overflowWrap: 'anywhere',
+            border: '1px solid {colors.border}',
+            padding: '20px',
+            borderRadius: '8px',
+          },
+          '@media (max-width: 850px)': { gridTemplateColumns: '1fr' },
+        }}
+        aria-label="Side-by-side comparison previews"
+      >
         {(['source', 'destination'] as const).map((side) => (
           <chakra.section key={side}>
             <Heading as="h5" unstyled>

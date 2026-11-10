@@ -36,8 +36,20 @@ export function OrganizationTrees({
     node.files.push(row);
   }
   return (
-    <chakra.section className="organization-trees" aria-label="Organization path trees">
-      <Text className="help">
+    <chakra.section
+      className="organization-trees"
+      css={{
+        marginBlock: '16px',
+        '& details': { marginBlock: '8px' },
+        '& summary': { cursor: 'pointer' },
+        '& ul': { paddingInlineStart: '20px' },
+      }}
+      aria-label="Organization path trees"
+    >
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Selected paths only. Source folders use components supplied by the backend; excluded,
         unknown and unselected files are outside this view. Proposed folders are not created here.
       </Text>
@@ -54,7 +66,15 @@ export function OrganizationTrees({
                 {files.some(
                   (row) => !row.sourceComponents?.length || row.sourceComponents.length > 65,
                 ) && (
-                  <Text className="help">
+                  <Text
+                    className="help"
+                    css={{
+                      fontSize: '13px',
+                      color: '{colors.fg.muted}',
+                      lineHeight: '20px',
+                      margin: '8px 0',
+                    }}
+                  >
                     Source hierarchy unavailable for some retained paths; those paths are shown
                     literally.
                   </Text>
@@ -70,7 +90,15 @@ export function OrganizationTrees({
           After · {rows.length - unresolved.length} proposed paths · {unresolved.length} without a
           target
         </summary>
-        <Text className="help">
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
           Relative to the selected destination. Paths with review issues stay blocked even when a
           proposed name is shown.
         </Text>

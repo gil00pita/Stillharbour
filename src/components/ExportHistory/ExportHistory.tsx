@@ -22,7 +22,10 @@ export function ExportHistory() {
   return (
     <details>
       <summary>Export completion and retained partials</summary>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Only a completed receipt proves that the reviewed export finished. Interrupted outputs and
         stages are retained. Preview a new copy to retry; old approvals are never replayed after
         restart.

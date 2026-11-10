@@ -17,7 +17,6 @@ import { PhotoViewer } from '@/components/PhotoViewer';
 import { CachedPreviewImage } from '@/components/CachedPreviewImage';
 import { previewKey, previewUrl, usePreviews } from '../../library/previews';
 import { mapPhotoQuery, WORLD, type MapBrowseState } from '../../map/state';
-import '../../map/map.css';
 import { PlaceSearch } from '@/components/PlaceSearch';
 
 const Basemap = lazy(() => import('@/components/Basemap'));
@@ -146,10 +145,112 @@ export function MapScreen({
   }
   const activeViewer = viewer?.scope === viewerScope ? viewer.asset : null;
   return (
-    <Box className="library-page map-page">
-      <Box className="map-underlay" inert={Boolean(activeViewer)}>
+    <Box
+      className="library-page map-page"
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        flex: '1',
+        minWidth: '0',
+        minHeight: '0',
+        position: 'relative',
+        overflow: 'hidden',
+        isolation: 'isolate',
+        '& .map-world': {
+          position: 'absolute',
+          zIndex: '2',
+          top: '12px',
+          left: '12px',
+          width: '36px',
+          height: '36px',
+          padding: '0',
+        },
+        '& .map-zoom button:not(.primary):not(.asset-open)': {
+          width: '36px',
+          height: '36px',
+          padding: '0',
+          fontSize: '22px',
+          lineHeight: '1',
+        },
+        '& button.map-marker:not(.primary):not(.asset-open)': {
+          display: 'grid',
+          placeItems: 'center',
+          gridTemplate: 'minmax(0, 1fr) / minmax(0, 1fr)',
+          position: 'relative',
+          padding: '4px',
+          width: '48px',
+          height: '48px',
+          border: '2px solid {colors.fg}',
+          borderRadius: '8px',
+          background: '{colors.border.control}',
+          color: 'white',
+          boxShadow: '0 3px 12px #0008',
+        },
+        '& button.map-marker:disabled': { opacity: '1' },
+        '& .map-filmstrip button:not(.primary):not(.asset-open)': {
+          width: '100%',
+          display: 'grid',
+          gap: '8px',
+          textAlign: 'left',
+          padding: '0',
+          border: '0',
+          background: 'transparent',
+        },
+        '& .photo-toolbar h1': { display: 'block' },
+        '& .map-filmstrip button:hover:enabled': { background: '{colors.bg.hover}' },
+      }}
+    >
+      <Box
+        className="map-underlay"
+        css={{
+          display: 'flex',
+          flexDirection: 'column',
+          minHeight: '0',
+          flex: '1',
+          overflow: 'auto',
+        }}
+        inert={Boolean(activeViewer)}
+      >
         <PageHeader>
-          <chakra.header className="toolbar photo-toolbar">
+          <chakra.header
+            className="toolbar photo-toolbar"
+            css={{
+              flexShrink: '0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              minHeight: '64px',
+              padding: '12px 24px',
+              borderBottom: '1px solid {colors.border}',
+              background: '{colors.bg.toolbar}',
+              '@media (max-width: 600px)': { minHeight: '64px', padding: '18px 24px' },
+              '& h1': { flex: '0 0 auto' },
+              '& > .toolbar-secondary': {
+                background: 'transparent',
+                borderColor: 'transparent',
+                color: '{colors.fg.muted}',
+                padding: '7px 12px',
+              },
+              '& .jobs-trigger': {
+                background: 'transparent',
+                borderColor: 'transparent',
+                color: '{colors.fg.muted}',
+              },
+              '& > .toolbar-secondary:hover:enabled': {
+                background: '{colors.bg.hover}',
+                color: 'var(--stillharbour-colors-fg, {colors.fg})',
+              },
+              '& .jobs-trigger:hover:enabled': {
+                background: '{colors.bg.hover}',
+                color: 'var(--stillharbour-colors-fg, {colors.fg})',
+              },
+              '@media (max-width: 760px)': {
+                '& .toolbar-action-label': { display: 'none' },
+                '& > .toolbar-secondary': { width: 'var(--control-height)', padding: '0' },
+              },
+            }}
+          >
             {navigationControl}
             <Heading as="h1" unstyled>
               Map
@@ -178,7 +279,10 @@ export function MapScreen({
                 });
               }}
             />
-            <Box className="header-actions">
+            <Box
+              className="header-actions"
+              css={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
               <MapFilters
                 query={state.query}
                 roots={status.roots}
@@ -195,9 +299,23 @@ export function MapScreen({
           </chakra.header>
         </PageHeader>
         {!state.unlocated && (
-          <chakra.section className="map-geography" aria-label="Geographic overview">
+          <chakra.section
+            className="map-geography"
+            css={{
+              position: 'relative',
+              height: 'clamp(260px, 45vh, 520px)',
+              flexShrink: '0',
+              background: '{colors.bg.sidebar}',
+              '@media (max-width: 760px)': { height: '280px' },
+            }}
+            aria-label="Geographic overview"
+          >
             {mapUnavailable ? (
-              <Box className="map-fallback" role="status">
+              <Box
+                className="map-fallback"
+                css={{ padding: '28px', color: '{colors.fg}' }}
+                role="status"
+              >
                 <Text>
                   The map could not be displayed. Your photos and location filters remain available
                   below.
@@ -226,10 +344,23 @@ export function MapScreen({
         )}
         <chakra.section
           className="map-photos"
+          css={{ padding: '20px 24px', '@media (max-width: 760px)': { padding: '12px' } }}
           aria-label={state.unlocated ? 'Photos without usable location' : 'Photos in map area'}
           aria-busy={photosRequested && !current && !error}
         >
-          <Box className="map-photo-heading">
+          <Box
+            className="map-photo-heading"
+            css={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '16px',
+              alignItems: 'center',
+              marginBottom: '16px',
+              '& > div:first-child': { marginRight: 'auto' },
+              '& h2': { margin: '0 0 8px', fontSize: '16px', fontWeight: '550' },
+              '& p': { margin: '0', color: '{colors.fg.muted}', fontSize: '13px' },
+            }}
+          >
             <Box>
               <Heading as="h2" unstyled>
                 {state.unlocated
@@ -297,7 +428,35 @@ export function MapScreen({
                 : 'No located photos in this area. Try another area or view photos with no usable location.'}
             </Text>
           )}
-          <List.Root unstyled className="map-filmstrip">
+          <List.Root
+            unstyled
+            className="map-filmstrip"
+            css={{
+              display: 'flex',
+              overflow: 'auto',
+              gap: '12px',
+              listStyle: 'none',
+              margin: '0',
+              padding: '4px 4px 16px',
+              '& li': { flex: '0 0 132px', minWidth: '0' },
+              '& img': {
+                display: 'grid',
+                placeItems: 'center',
+                width: '132px',
+                height: '92px',
+                objectFit: 'cover',
+                borderRadius: '4px',
+                background: '{colors.bg.panel}',
+              },
+              '& button > span:last-child': {
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                width: '132px',
+                fontSize: '13px',
+              },
+            }}
+          >
             {assets.map((asset) => {
               const preview =
                 previews.results[
@@ -313,7 +472,20 @@ export function MapScreen({
                     {edge ? (
                       <CachedPreviewImage src={previewUrl(asset, edge)} alt="" />
                     ) : (
-                      <Text as="span" className="map-photo-placeholder" aria-hidden="true">
+                      <Text
+                        as="span"
+                        className="map-photo-placeholder"
+                        css={{
+                          display: 'grid',
+                          placeItems: 'center',
+                          width: '132px',
+                          height: '92px',
+                          objectFit: 'cover',
+                          borderRadius: '4px',
+                          background: '{colors.bg.panel}',
+                        }}
+                        aria-hidden="true"
+                      >
                         ◇
                       </Text>
                     )}
@@ -324,7 +496,7 @@ export function MapScreen({
             })}
           </List.Root>
           {current && (
-            <Box className="map-paging">
+            <Box className="map-paging" css={{ display: 'flex', gap: '12px', padding: '8px 0' }}>
               {pageCursor && <Button onClick={() => setCursor(null)}>First photos</Button>}
               {current.page.nextCursor && (
                 <Button onClick={() => setCursor({ scope, value: current.page.nextCursor! })}>
@@ -333,7 +505,15 @@ export function MapScreen({
               )}
             </Box>
           )}
-          <Text className="map-disclosure">
+          <Text
+            className="map-disclosure"
+            css={{
+              fontSize: '13px',
+              color: '{colors.fg.muted}',
+              lineHeight: '1.6',
+              maxWidth: '100ch',
+            }}
+          >
             Locations are last observed catalog metadata. Offline originals remain offline. Missing,
             invalid or unextracted coordinates appear under “No usable location”. The offline
             overview has no street detail; polar markers are shown at the map edge. Satellite is an

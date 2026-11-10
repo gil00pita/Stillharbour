@@ -172,6 +172,13 @@ export function SyncWorkflow({
       aria-label="Safe-copy workflow"
       aria-busy={busy}
       className="backup-operation"
+      css={{
+        marginBlock: '28px',
+        paddingTop: '24px',
+        borderTop: '1px solid {colors.border}',
+        minWidth: '0',
+        '& code': { overflowWrap: 'anywhere' },
+      }}
       id="safe-copy-workflow"
     >
       <Heading as="h2" unstyled>
@@ -189,8 +196,21 @@ export function SyncWorkflow({
       )}
       {capabilityError && <Text role="alert">{capabilityError}</Text>}
       {difference && selected && (
-        <Box className="backup-decision">
-          <Text className="backup-path">Different destination: {selected.displayPath}</Text>
+        <Box
+          className="backup-decision"
+          css={{
+            border: '1px solid {colors.border}',
+            borderRadius: '8px',
+            padding: '20px',
+            marginBlock: '20px',
+            minWidth: '0',
+            '& label': { display: 'flex', alignItems: 'flex-start', gap: '8px' },
+            "& input[type='checkbox']": { flex: '0 0 auto', marginTop: '4px' },
+          }}
+        >
+          <Text className="backup-path" css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+            Different destination: {selected.displayPath}
+          </Text>
           <label>
             <input
               type="checkbox"
@@ -323,11 +343,58 @@ export function SyncWorkflow({
         />
       )}
       {error && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {error}
         </Text>
       )}
-      <details className="backup-io">
+      <chakra.details
+        className="backup-io"
+        css={{
+          '& form': {
+            display: 'grid',
+            gap: '16px',
+            minWidth: '0',
+            border: '1px solid {colors.border}',
+            borderRadius: '6px',
+            padding: '16px',
+            marginBlock: '20px',
+          },
+          '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+          '& input': {
+            width: '100%',
+            boxSizing: 'border-box',
+            minWidth: '0',
+            border: '1px solid {colors.border}',
+            borderRadius: '6px',
+            background: '{colors.bg}',
+            color: 'inherit',
+            padding: '8px 10px',
+            font: 'inherit',
+          },
+        }}
+      >
         <summary>Application I/O budget</summary>
         <Text>
           {capabilities?.ioScope ??
@@ -391,8 +458,38 @@ export function SyncWorkflow({
           Changes affect comparison, copying and verification using this shared application budget.
           Allowed range: 1 KiB/s–1 GiB/s.
         </Text>
-      </details>
-      <Box className="backup-controls">
+      </chakra.details>
+      <Box
+        className="backup-controls"
+        css={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          marginBlock: '16px',
+          '& select': { marginInlineStart: '0' },
+          '& .primary': { marginTop: '0' },
+          '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+          '& > p': {
+            flexBasis: '100%',
+            margin: '0',
+            color: '{colors.fg.muted}',
+            fontSize: '13px',
+            maxWidth: '70ch',
+          },
+          "& label:not(:has(> input[type='checkbox']))": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+          '@media (max-width: 760px)': {
+            "& > [data-scope='field']": { flexBasis: '100%' },
+            '& > label': { flexBasis: '100%' },
+          },
+        }}
+      >
         <Heading as="h3" unstyled>
           Transfer history and recovery
         </Heading>
@@ -407,7 +504,29 @@ export function SyncWorkflow({
         </Button>
       </Box>
       {historyError && (
-        <Text className="error" role="alert">
+        <Text
+          className="error"
+          css={{
+            border: '1px solid {colors.border.control}',
+            borderRadius: 'var(--control-radius)',
+            background: '{colors.danger.bg}',
+            color: '{colors.danger.fg}',
+            padding: '16px 20px',
+            margin: '24px 0 0',
+            fontSize: '13px',
+            lineHeight: '1.6',
+            '& p': { margin: '0' },
+            '& button': {
+              marginTop: '12px',
+              border: '1px solid currentColor',
+              background: 'transparent',
+              color: 'inherit',
+              borderRadius: '4px',
+              padding: '7px 12px',
+            },
+          }}
+          role="alert"
+        >
           {historyError}
         </Text>
       )}
@@ -415,13 +534,33 @@ export function SyncWorkflow({
       {!jobs.length && !historyError && !historyLoading && (
         <Text>No safe-copy jobs are recorded in this catalog.</Text>
       )}
-      <List.Root unstyled className="backup-job-list">
+      <List.Root
+        unstyled
+        className="backup-job-list"
+        css={{ listStyle: 'none', margin: '16px 0', padding: '0', display: 'grid', gap: '16px' }}
+      >
         {jobs.map((job) => (
-          <List.Item unstyled key={job.id} className="backup-job">
+          <List.Item
+            unstyled
+            key={job.id}
+            className="backup-job"
+            css={{
+              border: '1px solid {colors.border}',
+              padding: '16px',
+              borderRadius: '8px',
+              minWidth: '0',
+              '& h4': { margin: '0 0 12px', fontSize: '1rem' },
+              '& h5': { margin: '0 0 12px', fontSize: '1rem' },
+              '& small': { color: '{colors.fg.muted}' },
+            }}
+          >
             <Heading as="h4" unstyled>
               {actionNames[job.action]} · {job.state.replaceAll('_', ' ')}
             </Heading>
-            <Text className="backup-path">
+            <Text
+              className="backup-path"
+              css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+            >
               {job.sourceDisplayPath} → {job.datasetDisplayPath}
             </Text>
             <Text role="status">{job.message}</Text>
@@ -441,7 +580,42 @@ export function SyncWorkflow({
               </Text>
             )}
             <small>Updated {job.updatedAt}</small>
-            <Box className="backup-controls">
+            <Box
+              className="backup-controls"
+              css={{
+                display: 'flex',
+                gap: '12px',
+                alignItems: 'flex-end',
+                flexWrap: 'wrap',
+                marginBlock: '16px',
+                '& select': { marginInlineStart: '0' },
+                '& .primary': { marginTop: '0' },
+                '& > label': {
+                  flex: '0 1 360px',
+                  maxWidth: '480px',
+                  fontSize: '13px',
+                  minWidth: '0',
+                },
+                '& > p': {
+                  flexBasis: '100%',
+                  margin: '0',
+                  color: '{colors.fg.muted}',
+                  fontSize: '13px',
+                  maxWidth: '70ch',
+                },
+                "& label:not(:has(> input[type='checkbox']))": {
+                  display: 'grid',
+                  gap: '8px',
+                  minWidth: '0',
+                  margin: '0',
+                },
+                "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+                '@media (max-width: 760px)': {
+                  "& > [data-scope='field']": { flexBasis: '100%' },
+                  '& > label': { flexBasis: '100%' },
+                },
+              }}
+            >
               {job.action === 'replace_retaining' && (
                 <Button
                   disabled={busy}
@@ -542,7 +716,12 @@ export function SyncWorkflow({
                 <List.Root unstyled>
                   {versions[job.id]?.map((version) => (
                     <List.Item unstyled key={version.id}>
-                      <Text className="backup-path">{version.displayPath}</Text>
+                      <Text
+                        className="backup-path"
+                        css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+                      >
+                        {version.displayPath}
+                      </Text>
                       <Text>
                         {version.bytes} bytes · Full digest: {version.fullDigest}
                       </Text>
@@ -620,13 +799,94 @@ function SyncReviewPanel({
   const [offset, setOffset] = useState(0);
   const items = review.items.slice(offset, offset + 200);
   return (
-    <chakra.section className="backup-review" aria-label="Safe-copy action review">
+    <chakra.section
+      className="backup-review"
+      css={{
+        border: '1px solid {colors.border}',
+        borderRadius: '8px',
+        padding: '20px',
+        marginBlock: '20px',
+        minWidth: '0',
+        background: '{colors.bg.panel}',
+        '& fieldset': {
+          display: 'grid',
+          gap: '16px',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          padding: '16px',
+          marginBlock: '20px',
+        },
+        '& legend': { fontWeight: '600', paddingInline: '6px' },
+        '& label': { display: 'grid', gap: '8px', minWidth: '0' },
+        "& label:has(> input[type='checkbox'])": {
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '8px',
+        },
+        "& input[type='checkbox']": { flex: '0 0 auto', marginTop: '4px' },
+        "& input:not([type='checkbox'])": {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& textarea': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+          resize: 'vertical',
+          minHeight: '100px',
+        },
+        '& select': {
+          width: '100%',
+          boxSizing: 'border-box',
+          minWidth: '0',
+          border: '1px solid {colors.border}',
+          borderRadius: '6px',
+          background: '{colors.bg}',
+          color: 'inherit',
+          padding: '8px 10px',
+          font: 'inherit',
+        },
+        '& .backup-form-grid': { gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' },
+        '& small': { color: '{colors.fg.muted}' },
+        '& .backup-table': { maxHeight: '360px' },
+        '@media (max-width: 850px)': { '& .backup-form-grid': { gridTemplateColumns: '1fr' } },
+      }}
+      aria-label="Safe-copy action review"
+    >
       <Heading as="h3" unstyled>
         {actionNames[review.action]}
       </Heading>
-      <Text className="backup-path">Source: {review.sourceDisplayPath}</Text>
-      <Text className="backup-path">Dataset: {review.datasetDisplayPath}</Text>
-      <dl className="backup-review-totals">
+      <Text className="backup-path" css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+        Source: {review.sourceDisplayPath}
+      </Text>
+      <Text className="backup-path" css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+        Dataset: {review.datasetDisplayPath}
+      </Text>
+      <chakra.dl
+        className="backup-review-totals"
+        css={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+          gap: '12px 24px',
+          '& dt': { color: '{colors.fg.muted}' },
+          '& dd': { margin: '2px 0 0', overflowWrap: 'anywhere' },
+          '@media (max-width: 850px)': { gridTemplateColumns: '1fr' },
+        }}
+      >
         <Box>
           <dt>Files proposed for copy</dt>
           <dd>{review.copyFiles}</dd>
@@ -655,13 +915,35 @@ function SyncReviewPanel({
           <dt>Uncopied source revisions</dt>
           <dd>{review.uncopiedSourceRevisions}</dd>
         </Box>
-      </dl>
+      </chakra.dl>
       <Text>{review.metadataWarning}</Text>
       <Text>
         This action includes all {review.items.length} plan entries. Display pages do not change the
         approved scope.
       </Text>
-      <Box className="backup-table">
+      <Box
+        className="backup-table"
+        css={{
+          '& td button': { whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', textAlign: 'left' },
+          overflow: 'auto',
+          maxHeight: '60vh',
+          '& table': { width: '100%', borderCollapse: 'collapse', textAlign: 'left' },
+          '& th': {
+            padding: '12px',
+            borderBottom: '1px solid {colors.border}',
+            verticalAlign: 'top',
+            position: 'sticky',
+            top: '0',
+            background: '{colors.bg.panel}',
+          },
+          '& td': {
+            padding: '12px',
+            borderBottom: '1px solid {colors.border}',
+            verticalAlign: 'top',
+          },
+          '& td:first-child': { minWidth: '160px', maxWidth: '320px' },
+        }}
+      >
         <Table.Root unstyled>
           <Table.Caption unstyled captionSide="top">
             Exact safe-copy plan
@@ -676,7 +958,11 @@ function SyncReviewPanel({
           <Table.Body unstyled>
             {items.map((item) => (
               <Table.Row unstyled key={item.entryId}>
-                <Table.Cell unstyled className="backup-path">
+                <Table.Cell
+                  unstyled
+                  className="backup-path"
+                  css={{ overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}
+                >
                   {item.displayPath}
                 </Table.Cell>
                 <Table.Cell unstyled>{item.action.replaceAll('_', ' ')}</Table.Cell>
@@ -686,7 +972,37 @@ function SyncReviewPanel({
           </Table.Body>
         </Table.Root>
       </Box>
-      <Box className="backup-controls">
+      <Box
+        className="backup-controls"
+        css={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          marginBlock: '16px',
+          '& select': { marginInlineStart: '0' },
+          '& .primary': { marginTop: '0' },
+          '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+          '& > p': {
+            flexBasis: '100%',
+            margin: '0',
+            color: '{colors.fg.muted}',
+            fontSize: '13px',
+            maxWidth: '70ch',
+          },
+          "& label:not(:has(> input[type='checkbox']))": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+          '@media (max-width: 760px)': {
+            "& > [data-scope='field']": { flexBasis: '100%' },
+            '& > label': { flexBasis: '100%' },
+          },
+        }}
+      >
         <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
           Previous plan entries
         </Button>
@@ -735,7 +1051,37 @@ function SyncReviewPanel({
         Approval expires after {review.approvalLifetimeSeconds} seconds. Preparation, copying and
         recovery each require their own review.
       </Text>
-      <Box className="backup-controls">
+      <Box
+        className="backup-controls"
+        css={{
+          display: 'flex',
+          gap: '12px',
+          alignItems: 'flex-end',
+          flexWrap: 'wrap',
+          marginBlock: '16px',
+          '& select': { marginInlineStart: '0' },
+          '& .primary': { marginTop: '0' },
+          '& > label': { flex: '0 1 360px', maxWidth: '480px', fontSize: '13px', minWidth: '0' },
+          '& > p': {
+            flexBasis: '100%',
+            margin: '0',
+            color: '{colors.fg.muted}',
+            fontSize: '13px',
+            maxWidth: '70ch',
+          },
+          "& label:not(:has(> input[type='checkbox']))": {
+            display: 'grid',
+            gap: '8px',
+            minWidth: '0',
+            margin: '0',
+          },
+          "& > [data-scope='field']": { flex: '0 1 360px', minWidth: '0' },
+          '@media (max-width: 760px)': {
+            "& > [data-scope='field']": { flexBasis: '100%' },
+            '& > label': { flexBasis: '100%' },
+          },
+        }}
+      >
         {!approved && (
           <Button
             disabled={

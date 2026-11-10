@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { warmPhotoForScroll } from './warmPhoto.mjs';
 import { assertViewerControlsOverlay } from './viewer-controls.mjs';
 import { createEvidenceDirectory } from './evidence.mjs';
+import { managedDestinationReady } from './managed-destination.mjs';
 
 // Prepare viewport/focus through the same native DOM operations used by the
 // instrumented Jobs tests. WebDriver's wheel/animation-frame scrolling stalls
@@ -625,16 +626,17 @@ async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
   const picker = existingPicker ?? (await browser.tauri.mock('foundation_request'));
   try {
     await picker.mockReturnValue({ kind: 'directory', data: generated.selection });
+    let readyStatus;
     await browser.waitUntil(
       async () => {
-        const status = (await native({ kind: 'status' })).data;
-        return (
-          status.roots.some(
-            (root) => root.id === generated.rootId && root.availability === 'online',
-          ) && status.jobs.some((job) => job.id === generated.jobId && job.state === 'completed')
-        );
+        readyStatus = (await native({ kind: 'status' })).data;
+        return managedDestinationReady(readyStatus, generated);
       },
-      { timeout: 15000, timeoutMsg: 'Generated managed root scan did not settle' },
+      {
+        timeout: 15000,
+        timeoutMsg:
+          'Generated managed destination discovery and preview preparation did not settle',
+      },
     );
     await $('button=Build preview').click();
     const policy = await $('select[aria-label="Destination library policy"]');
@@ -712,6 +714,10 @@ async function reviewManagedDestinationPolicy(evidence, existingPicker = null) {
       `${evidence}/managed-destination-${process.platform}.json`,
       JSON.stringify({
         rootId: generated.rootId,
+        readyRevision: readyStatus.revision,
+        readyJobs: readyStatus.jobs
+          .filter((job) => job.rootId === generated.rootId)
+          .map(({ kind, state }) => ({ kind, state })),
         reviewed: true,
         policyChangeRetiredReview: true,
         audit,
@@ -1824,6 +1830,8 @@ async function assertPhotoScanningArt() {
       active: image?.getAttribute('data-active'),
       decorative: image?.getAttribute('aria-hidden'),
       fits: box?.width > 0 && box.left >= 0 && box.right <= window.innerWidth,
+      width: box?.width,
+      height: box?.height,
       animation: lens && getComputedStyle(lens).animationName,
       expectedAnimation: matchMedia('(prefers-reduced-motion: reduce)').matches
         ? 'none'
@@ -1833,10 +1841,12 @@ async function assertPhotoScanningArt() {
   assert.equal(art.active, 'true');
   assert.equal(art.decorative, 'true');
   assert.equal(art.fits, true);
+  assert.equal(art.width, 160);
+  assert.ok(art.height > 0 && art.height <= 120);
   assert.equal(art.animation, art.expectedAnimation);
   const palettes = await browser.execute(() => {
     const root = document.documentElement;
-    const previous = root.getAttribute('data-theme');
+    const previous = root.className;
     const image = document.querySelector('.photo-scanning-art');
     const lens = image.querySelector('.photo-scanning-lens');
     const frame = image.querySelector('.photo-scanning-card rect');
@@ -1845,18 +1855,19 @@ async function assertPhotoScanningArt() {
       frame: getComputedStyle(frame).fill,
     });
     try {
-      root.setAttribute('data-theme', 'light');
+      root.classList.remove('dark');
+      root.classList.add('light');
       const light = palette();
-      root.setAttribute('data-theme', 'dark');
+      root.classList.remove('light');
+      root.classList.add('dark');
       return { light, dark: palette() };
     } finally {
-      if (previous === null) root.removeAttribute('data-theme');
-      else root.setAttribute('data-theme', previous);
+      root.className = previous;
     }
   });
   assert.deepEqual(palettes, {
-    light: { accent: 'rgb(55, 120, 89)', frame: 'rgb(255, 255, 255)' },
-    dark: { accent: 'rgb(193, 208, 181)', frame: 'rgb(33, 36, 32)' },
+    light: { accent: 'rgb(32, 35, 43)', frame: 'rgb(241, 242, 245)' },
+    dark: { accent: 'rgb(216, 219, 226)', frame: 'rgb(25, 28, 35)' },
   });
 }
 async function assertFormControlsAligned(selector) {
@@ -1938,11 +1949,12 @@ async function openFilters() {
   await $('#library-filter-panel[open]').waitForDisplayed();
 }
 async function galleryView(label) {
-  await openFilters();
-  await (await $('#library-filter-panel')).$(`button=${label}`).click();
-  await $('button=Apply filters').click();
+  await $('button[aria-controls="library-display-panel"]').click();
+  await $('#library-display-panel[open]').waitForDisplayed();
+  await $('#library-display-panel').$(`button=${label}`).click();
+  await $('button=Apply display').click();
   await browser.waitUntil(async () =>
-    browser.execute(() => !document.querySelector('#library-filter-panel[open]')),
+    browser.execute(() => !document.querySelector('#library-display-panel[open]')),
   );
 }
 async function explorerLayoutReady() {
@@ -3880,14 +3892,14 @@ describeMac('macOS M1 library — generated native fixtures', () => {
             );
             return tiles
               .slice(1)
-              .every((tile, index) => Math.abs(tile.left - tiles[index].right - 4) < 1);
+              .every((tile, index) => Math.abs(tile.left - tiles[index].right - 6) < 1);
           }),
           noVerticalGaps: rows
             .slice(1)
             .every(
               (row, index) =>
                 Math.abs(
-                  row.getBoundingClientRect().top - rows[index].getBoundingClientRect().bottom - 4,
+                  row.getBoundingClientRect().top - rows[index].getBoundingClientRect().bottom - 6,
                 ) < 1,
             ),
         };
@@ -4474,17 +4486,19 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     if (await $('button[aria-label="Expand navigation"]').isExisting())
       await $('button[aria-label="Expand navigation"]').click();
   });
-  it('puts query and display controls in a keyboard-accessible side panel', async () => {
+  it('keeps query and display controls in separate keyboard-accessible side panels', async () => {
     assert.equal((await $$('.filter-bar')).length, 0);
     assert.deepEqual(
       await browser.execute(() =>
         [...document.querySelectorAll('.photo-toolbar button')].map((button) =>
           button.getAttribute('aria-controls') === 'library-filter-panel'
             ? 'Filter'
-            : (button.getAttribute('aria-label') ?? button.textContent.trim()),
+            : /^Switch to (light|dark) appearance$/.test(button.getAttribute('aria-label') ?? '')
+              ? 'Appearance'
+              : (button.getAttribute('aria-label') ?? button.textContent.trim()),
         ),
       ),
-      ['Filter', 'Select'],
+      ['Display options', 'Filter', 'Select', 'Appearance'],
     );
     assert.equal((await $$('.pagination')).length, 0);
     assert.equal((await $$('.view-switch')).length, 0);
@@ -5047,7 +5061,7 @@ describeMac('macOS M1 library — generated native fixtures', () => {
     await $('button=Clear selection').click();
     // Clearing the batch leaves explicit selection mode active. Finish it
     // before clicking a photo to open the viewer.
-    await $('button=Done selecting').click();
+    await $('button[aria-label="Done selecting"]').click();
     // Inject one transport-error event; the follow-up PNG read is real native
     // owned-cache traffic and must recover without a catalog rescan.
     await browser.execute(() => {
@@ -6769,5 +6783,6 @@ async function openSavedPlans() {
   await $('button[aria-label="Saved plans"]').click();
 }
 async function enterPhotoSelection() {
-  if (await $('button=Select').isExisting()) await $('button=Select').click();
+  if (await $('button[aria-label="Select"]').isExisting())
+    await $('button[aria-label="Select"]').click();
 }

@@ -1,6 +1,6 @@
+import { chakra } from '@chakra-ui/react';
 import { Input } from '@/components/Input';
-import { NativeSelect } from '@/components/NativeSelect';
-import { Field, Box } from '@chakra-ui/react';
+import { Field, InputGroup, NativeSelect } from '@chakra-ui/react';
 import { useId, useState } from 'react';
 
 const units = [
@@ -60,12 +60,74 @@ export function FileSizeField({
   }
   return (
     <Field.Root asChild unstyled id={id} disabled={disabled} invalid={Boolean(error)}>
-      <div className="file-size-field">
+      <chakra.div
+        className="file-size-field"
+        css={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '0' }}
+      >
         <Field.Label asChild unstyled>
           <label htmlFor={id}>{label}</label>
         </Field.Label>
-        <Box className="file-size-controls">
+        <InputGroup
+          className="file-size-controls"
+          endElementProps={{ px: '0', width: '72px', height: 'control' }}
+          endElement={
+            <Field.Root unstyled display="flex" minW="0" disabled={disabled}>
+              <NativeSelect.Root
+                unstyled
+                disabled={disabled}
+                position="relative"
+                display="flex"
+                height="control"
+                width="72px"
+              >
+                <NativeSelect.Field
+                  unstyled
+                  className="chakra-native-select"
+                  css={{
+                    font: 'inherit',
+                    fontSize: 'sm',
+                    color: 'fg',
+                    height: 'control',
+                    width: 'full',
+                    border: '0',
+                    backgroundColor: 'transparent',
+                    backgroundImage: 'none',
+                    borderStartRadius: '0',
+                    paddingInlineStart: '2',
+                    paddingInlineEnd: '8',
+                    _focusVisible: { outlineOffset: '-3px' },
+                  }}
+                  aria-label={`${label} unit`}
+                  value={draft.unit.label}
+                  onChange={(event) => {
+                    const unit = units.find((unit) => unit.label === event.target.value);
+                    if (unit) update(draft.amount, unit);
+                  }}
+                >
+                  {units.map((unit) => (
+                    <option key={unit.label} value={unit.label}>
+                      {unit.label}
+                    </option>
+                  ))}
+                </NativeSelect.Field>
+                <NativeSelect.Indicator
+                  unstyled
+                  position="absolute"
+                  insetInlineEnd="3"
+                  top="0"
+                  height="full"
+                  display="flex"
+                  alignItems="center"
+                  pointerEvents="none"
+                  color="fg.muted"
+                  css={{ '& svg': { width: '16px', height: '16px' } }}
+                />
+              </NativeSelect.Root>
+            </Field.Root>
+          }
+        >
           <Input
+            pe="72px"
             id={id}
             name={name}
             inputMode="decimal"
@@ -79,28 +141,16 @@ export function FileSizeField({
             }}
             onChange={(event) => update(event.target.value, draft.unit)}
           />
-          <Field.Root unstyled display="flex" minW="0" disabled={disabled}>
-            <NativeSelect
-              aria-label={`${label} unit`}
-              disabled={disabled}
-              value={draft.unit.label}
-              onChange={(event) => {
-                const unit = units.find((unit) => unit.label === event.target.value);
-                if (unit) update(draft.amount, unit);
-              }}
-            >
-              {units.map((unit) => (
-                <option key={unit.label} value={unit.label}>
-                  {unit.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </Field.Root>
-        </Box>
+        </InputGroup>
         <Field.ErrorText asChild unstyled>
-          <p className="field-error">{error}</p>
+          <chakra.p
+            className="field-error"
+            css={{ color: '{colors.danger.fg}', fontSize: '12px', lineHeight: '1.6', margin: '0' }}
+          >
+            {error}
+          </chakra.p>
         </Field.ErrorText>
-      </div>
+      </chakra.div>
     </Field.Root>
   );
 }

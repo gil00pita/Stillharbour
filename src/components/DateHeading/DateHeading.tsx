@@ -15,7 +15,37 @@ export function DateHeading({
 }) {
   const selection = usePhotoSelection();
   return (
-    <Box className="date-heading" data-day={heading.date} style={{ width: heading.width }}>
+    <Box
+      className="date-heading"
+      css={{
+        position: 'sticky',
+        zIndex: '3',
+        background: '{colors.bg}',
+        top: '0',
+        height: '36px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '7px',
+        minWidth: '0',
+        overflow: 'hidden',
+        '& h2': {
+          fontSize: '13px',
+          fontWeight: '600',
+          letterSpacing: '0',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          textOverflow: 'ellipsis',
+          margin: '0',
+        },
+        '& small': { fontSize: '11px', color: '{colors.fg.muted}', whiteSpace: 'nowrap' },
+        '& input': { opacity: '0', margin: '0' },
+        '&:hover input': { opacity: '1' },
+        '&:focus-within input': { opacity: '1' },
+        '& input:checked': { opacity: '1' },
+      }}
+      data-day={heading.date}
+      style={{ width: heading.width }}
+    >
       {(!selection || selection.active) && (
         <input
           type="checkbox"

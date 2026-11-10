@@ -93,14 +93,40 @@ export function SettingsScreen({
     }
   }
   return (
-    <Box className="settings-page">
+    <Box
+      className="settings-page"
+      css={{
+        width: '100%',
+        padding: '0',
+        margin: '0',
+        '@media (max-width: 760px)': { padding: '0' },
+      }}
+    >
       <SettingsHeading
         heading={heading}
         jobsControl={jobsControl}
         navigationControl={navigationControl}
       />
-      <Box className="settings-content">
-        <Text className="help">Choose your photo folders and the defaults for your workspace.</Text>
+      <Box
+        className="settings-content"
+        css={{
+          width: 'min(100%, 1040px)',
+          padding: '24px 40px 56px',
+          margin: '0 auto',
+          '@media (max-width: 760px)': { paddingInline: '16px' },
+        }}
+      >
+        <Text
+          className="help"
+          css={{
+            fontSize: '13px',
+            color: '{colors.fg.muted}',
+            lineHeight: '20px',
+            margin: '8px 0',
+          }}
+        >
+          Choose your photo folders and the defaults for your workspace.
+        </Text>
         <LibraryLocations
           status={status}
           busy={formsBusy}
@@ -163,7 +189,11 @@ export function SettingsScreen({
           onInput={() => setSaved(false)}
           onSubmit={(event) => void save(event)}
         >
-          <chakra.fieldset disabled={formsBusy} className="settings-fields">
+          <chakra.fieldset
+            disabled={formsBusy}
+            className="settings-fields"
+            css={{ border: '0', padding: '0', margin: '0', minWidth: '0' }}
+          >
             <BrowsingDefaults draft={draft} status={status} onChange={update} />
             <FolderDefaults
               draft={draft}
@@ -172,7 +202,18 @@ export function SettingsScreen({
               onChange={update}
               onError={onError}
             />
-            <Box className="settings-save">
+            <Box
+              className="settings-save"
+              css={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: '8px',
+                justifyContent: 'flex-end',
+                paddingTop: '24px',
+                '& .primary': { marginTop: '0' },
+              }}
+            >
               <Button
                 type="button"
                 onClick={() => {
@@ -190,12 +231,38 @@ export function SettingsScreen({
             </Box>
           </chakra.fieldset>
           {error && (
-            <Text role="alert" className="error">
+            <Text
+              role="alert"
+              className="error"
+              css={{
+                border: '1px solid {colors.border.control}',
+                borderRadius: 'var(--control-radius)',
+                background: '{colors.danger.bg}',
+                color: '{colors.danger.fg}',
+                padding: '16px 20px',
+                margin: '24px 0 0',
+                fontSize: '13px',
+                lineHeight: '1.6',
+                '& p': { margin: '0' },
+                '& button': {
+                  marginTop: '12px',
+                  border: '1px solid currentColor',
+                  background: 'transparent',
+                  color: 'inherit',
+                  borderRadius: '4px',
+                  padding: '7px 12px',
+                },
+              }}
+            >
               {error}
             </Text>
           )}
           {saved && (
-            <Text role="status" className="settings-saved">
+            <Text
+              role="status"
+              className="settings-saved"
+              css={{ color: '{colors.brand.solid}', marginTop: '16px' }}
+            >
               Defaults saved. Existing photo folders are unchanged.
             </Text>
           )}

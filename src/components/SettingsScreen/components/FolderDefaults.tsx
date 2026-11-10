@@ -17,11 +17,33 @@ export function FolderDefaults({
   onError: (error: unknown) => void;
 }) {
   return (
-    <chakra.section className="settings-section" aria-labelledby="folder-defaults-title">
+    <chakra.section
+      className="settings-section"
+      css={{
+        padding: '32px 0',
+        borderBottom: '1px solid {colors.border}',
+        '& h2': {
+          fontSize: '16px',
+          fontWeight: '600',
+          letterSpacing: '-0.01em',
+          margin: '0 0 8px',
+        },
+        '& h3': { fontSize: '14px', margin: '0 0 8px' },
+        '& > .help': { maxWidth: '72ch' },
+        '& .view-switch': { margin: '16px 0', flexWrap: 'wrap', gap: '8px' },
+        '& .view-switch > button': { fontSize: '13px !important' },
+        '& .thumbnail-control': { fontSize: '13px' },
+        '& .scan-options': { marginTop: '20px' },
+      }}
+      aria-labelledby="folder-defaults-title"
+    >
       <Heading as="h2" unstyled id="folder-defaults-title">
         New folder defaults
       </Heading>
-      <Text className="help">
+      <Text
+        className="help"
+        css={{ fontSize: '13px', color: '{colors.fg.muted}', lineHeight: '20px', margin: '8px 0' }}
+      >
         Used for folders you add next. Existing folders keep their saved mode and scan filters.
       </Text>
       <Switch
